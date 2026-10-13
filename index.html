@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14233B">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>CS Attendance</title>
+<style>
+:root{
+  --paper:#F2F4F7; --card:#FFFFFF; --ink:#14233B; --muted:#5B6B82; --line:#D5DCE6;
+  --bar:#14233B; --bar-ink:#F2F4F7;
+  --present:#1B7F4B; --absent:#D62828; --warn:#B26A00;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --paper:#0C1522; --card:#152238; --ink:#E8EEF7; --muted:#9AABC2; --line:#2A3A52;
+         --bar:#0A111C; --bar-ink:#E8EEF7; --present:#35B26E; --absent:#F0504F; --warn:#E3A33B; }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--paper);color:var(--ink);
+  font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+body{padding-bottom:calc(88px + env(safe-area-inset-bottom,0px))}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid #3B82F6;outline-offset:2px}
+
+.top{position:sticky;top:0;z-index:5;background:var(--bar);color:var(--bar-ink);
+  padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;display:flex;align-items:center;gap:10px}
+.top h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.2px;flex:1;min-width:0}
+.top h1 small{display:block;font-size:12px;font-weight:400;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,.28);background:transparent;
+  color:inherit;border-radius:999px;padding:7px 12px;font-size:13px;white-space:nowrap}
+.dot{width:9px;height:9px;border-radius:50%;background:#35B26E}
+.chip.off .dot{background:#E3A33B}
+.chip.busy .dot{background:#60A5FA}
+
+.controls{position:sticky;top:calc(56px + env(safe-area-inset-top,0px));z-index:4;background:var(--paper);
+  display:grid;grid-template-columns:1fr 112px;gap:10px;padding:12px 14px 8px}
+.controls label{display:block;font-size:12px;color:var(--muted);margin-bottom:3px}
+select{width:100%;height:46px;border:1.5px solid var(--line);border-radius:10px;background:var(--card);padding:0 10px}
+.tally{display:flex;gap:18px;padding:2px 16px 10px;font-size:14px;color:var(--muted)}
+.tally b{font-size:20px;font-variant-numeric:tabular-nums;color:var(--ink);margin-right:4px}
+.tally .p b{color:var(--present)} .tally .a b{color:var(--absent)}
+
+ul.list{list-style:none;margin:0;padding:0 14px}
+.row{display:grid;grid-template-columns:30px 1fr auto;align-items:center;gap:8px;
+  background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 8px 8px 10px;margin-bottom:8px}
+.no{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.who{min-width:0}
+.who b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.who small{color:var(--muted);font-size:12px}
+.seg{display:flex;gap:6px}
+.seg button{width:50px;height:44px;border-radius:8px;border:2px solid var(--line);background:transparent;
+  font-weight:700;font-size:17px;color:var(--muted)}
+.seg button[aria-pressed="true"].p{background:var(--present);border-color:var(--present);color:#fff}
+.seg button[aria-pressed="true"].a{background:var(--absent);border-color:var(--absent);color:#fff}
+
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--card);border-top:1px solid var(--line);
+  padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));display:grid;grid-template-columns:1fr 1.4fr;gap:10px}
+.btn{height:50px;border-radius:12px;border:2px solid var(--ink);background:transparent;font-weight:700}
+.btn.primary{background:var(--ink);color:var(--paper)}
+.btn.small{height:40px;padding:0 14px;font-size:14px}
+.btn.danger{border-color:var(--absent);color:var(--absent)}
+
+.note{margin:18px 14px;padding:14px;border:1px dashed var(--line);border-radius:10px;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:9;
+  background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:999px;font-size:14px;max-width:90vw;display:none}
+
+.login{max-width:380px;margin:0 auto;padding:calc(48px + env(safe-area-inset-top,0px)) 20px 20px}
+.login h1{font-size:26px;margin:0 0 4px}
+.login p{color:var(--muted);margin:0 0 22px}
+.login input{width:100%;height:50px;border:1.5px solid var(--line);border-radius:10px;background:var(--card);padding:0 12px;margin:6px 0 14px}
+.err{color:var(--absent);min-height:22px;margin:0 0 10px}
+
+dialog{border:none;border-radius:14px;padding:0;width:min(520px,94vw);background:var(--card);color:var(--ink)}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+.dlg{padding:16px}
+.dlg h2{margin:0 0 4px;font-size:18px}
+.dlg .meta{color:var(--muted);font-size:13px;margin-bottom:12px}
+.q{display:flex;align-items:center;gap:10px;border-top:1px solid var(--line);padding:10px 0}
+.q div{flex:1;min-width:0}
+.q small{display:block;color:var(--muted)}
+.q .bad{color:var(--absent)}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+@media (prefers-reduced-motion:no-preference){ .toast{transition:opacity .2s} }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast" role="status"></div>
+<dialog id="dlg"><div class="dlg" id="dlgBody"></div></dialog>
+
+<script>
+/* ====== SET THIS after deploying Code.gs as a Web app ====== */
+const API_URL = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm7d7-UKg0W-OoWAiuRBHe4mjlRgMQXIHuLm6zi--i/exec';
+/* =========================================================== */
+
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem('csa_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem('csa_' + k, JSON.stringify(v)); }catch(e){} }
+};
+
+let pin    = store.get('pin', '');
+let sheets = store.get('sheets', []);
+let data   = store.get('data', {});      // sheet -> {title, days, students, marks}
+let queue  = store.get('queue', []);     // [{id, sheet, day, marks, ts, error?}]
+let lastSync = store.get('lastSync', 0);
+let sel    = { sheet: store.get('sheet', ''), day: new Date().getDate() };
+let draft  = {};
+let dirty  = false, syncing = false, refreshing = false;
+
+/* ---------- network ---------- */
+async function api(payload, ms = 25000){
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms);
+  try{
+    const r = await fetch(API_URL, { method:'POST', body: JSON.stringify({ pin, ...payload }), signal: ctl.signal, redirect:'follow' });
+    return await r.json();
+  } finally { clearTimeout(t); }
+}
+
+async function refreshAll(){
+  if(!pin || refreshing || !navigator.onLine) return;
+  refreshing = true; updateStatus();
+  try{
+    const s = await api({ action:'sheets' });
+    if(!s.ok){ if(s.error === 'BAD_PIN') return signOut('The PIN was changed. Sign in again.'); throw new Error(s.error); }
+    sheets = s.sheets; store.set('sheets', sheets);
+    for(const name of sheets){
+      const d = await api({ action:'sheet', sheet:name });
+      if(d.ok){ data[name] = { title:d.title, days:d.days, students:d.students, marks:d.marks }; store.set('data', data); }
+    }
+    if(!sheets.includes(sel.sheet)) sel.sheet = sheets[0] || '';
+    toast('Student lists updated');
+    if(!dirty){ pickDay(); loadDraft(); render(); }
+  }catch(e){ /* offline or timeout: keep cached data */ }
+  finally{ refreshing = false; updateStatus(); }
+}
+
+async function syncQueue(){
+  if(syncing || !queue.length || !pin || !navigator.onLine) return;
+  syncing = true; updateStatus();
+  try{
+    const batch = queue.map(q => ({ ...q }));
+    const res = await api({ action:'save', records: batch });
+    if(res.ok){
+      const saved = res.saved || [];
+      saved.forEach(id => {
+        const b = batch.find(x => x.id === id);
+        if(b && data[b.sheet]){
+          const m = data[b.sheet].marks = data[b.sheet].marks || {};
+          m[b.day] = Object.assign({}, m[b.day], b.marks);
+        }
+      });
+      queue = queue.filter(x => { const b = batch.find(y => y.id === x.id); return !(saved.includes(x.id) && b && b.ts === x.ts); });
+      (res.failed || []).forEach(f => { const x = queue.find(q => q.id === f.id); if(x) x.error = f.error; });
+      lastSync = Date.now(); store.set('lastSync', lastSync);
+      store.set('queue', queue); store.set('data', data);
+      if(saved.length) toast('Synced to the sheet');
+    } else if(res.error === 'BAD_PIN'){ signOut('The PIN was changed. Sign in again.'); }
+  }catch(e){ /* stays in queue, retried later */ }
+  finally{ syncing = false; updateStatus(); }
+}
+
+/* ---------- state helpers ---------- */
+function isCurrentMonth(title){
+  const m = MONTHS.findIndex(x => new RegExp(x, 'i').test(title || ''));
+  const y = ((title || '').match(/\b(20\d\d)\b/) || [])[1];
+  const now = new Date();
+  return m === now.getMonth() && (!y || Number(y) === now.getFullYear());
+}
+function pickDay(){
+  const d = data[sel.sheet]; if(!d) return;
+  const days = d.days && d.days.length ? d.days : null;
+  const today = new Date().getDate();
+  if(isCurrentMonth(d.title) && (!days || days.includes(today))) sel.day = today;
+  else if(days && !days.includes(sel.day)) sel.day = days[0];
+}
+function loadDraft(){
+  draft = {}; dirty = false;
+  const d = data[sel.sheet]; if(!d) return;
+  Object.assign(draft, (d.marks && d.marks[sel.day]) || {});
+  const q = queue.find(x => x.sheet === sel.sheet && x.day === sel.day);
+  if(q) Object.assign(draft, q.marks);
+}
+function counts(){
+  const d = data[sel.sheet]; let p = 0, a = 0, n = 0;
+  (d ? d.students : []).forEach(s => { const v = draft[s.roll]; if(v === 'P') p++; else if(v === 'A') a++; else n++; });
+  return { p, a, n };
+}
+
+/* ---------- views ---------- */
+function render(){ pin ? renderMain() : renderLogin(); }
+
+function renderLogin(msg){
+  $('#app').innerHTML = `
+    <div class="login">
+      <h1>CS Attendance</h1>
+      <p>Sign in once while you have internet. After that the app works offline.</p>
+      <label for="pin">PIN</label>
+      <input id="pin" type="password" autocomplete="off" enterkeyhint="go">
+      <div class="err" id="loginErr">${esc(msg || '')}</div>
+      <button class="btn primary" style="width:100%" id="loginBtn">Sign in</button>
+    </div>`;
+  $('#loginBtn').onclick = login;
+  $('#pin').onkeydown = e => { if(e.key === 'Enter') login(); };
+}
+
+async function login(){
+  const p = $('#pin').value.trim(); if(!p) return;
+  if(API_URL.startsWith('PASTE')){ $('#loginErr').textContent = 'The app is not connected yet: set API_URL in index.html.'; return; }
+  $('#loginErr').textContent = 'Signing in...';
+  pin = p;
+  try{
+    const r = await api({ action:'sheets' });
+    if(!r.ok){ pin = ''; $('#loginErr').textContent = r.error === 'BAD_PIN' ? 'Wrong PIN. Try again.' : 'Could not sign in: ' + r.error; return; }
+    store.set('pin', pin); sheets = r.sheets; store.set('sheets', sheets);
+    if(!sheets.includes(sel.sheet)) sel.sheet = sheets[0] || '';
+    store.set('sheet', sel.sheet);
+    render(); refreshAll();
+  }catch(e){ pin = ''; $('#loginErr').textContent = 'No internet. Connect once to sign in.'; }
+}
+
+function signOut(msg){
+  if(queue.length && !msg && !confirm(queue.length + ' record(s) are not synced yet and would be lost. Sign out anyway?')) return;
+  pin = ''; store.set('pin', ''); queue = msg ? queue : []; store.set('queue', queue);
+  $('#dlg').close && $('#dlg').open && $('#dlg').close();
+  renderLogin(msg);
+}
+
+function renderMain(){
+  if(!sheets.includes(sel.sheet)) sel.sheet = sheets[0] || '';
+  const d = data[sel.sheet];
+  pickDay();
+  if(!dirty) loadDraft();
+  const days = d && d.days && d.days.length ? d.days : Array.from({ length:31 }, (_, i) => i + 1);
+  const cur = d && isCurrentMonth(d.title);
+  const today = new Date().getDate();
+
+  let body;
+  if(!sheets.length) body = `<div class="note">No sheets on this phone yet. Connect to the internet and tap Sync.</div>`;
+  else if(!d) body = `<div class="note">This sheet is not on the phone yet. Connect to the internet once and tap Sync, then it will work offline.</div>`;
+  else if(!d.students.length) body = `<div class="note">This sheet has no students.</div>`;
+  else body = '<ul class="list" id="list">' + d.students.map((s, i) => `
+      <li class="row" data-roll="${esc(s.roll)}">
+        <span class="no">${i + 1}</span>
+        <span class="who"><b>${esc(s.name)}</b><small>${esc(s.roll)}</small></span>
+        <span class="seg">
+          <button class="p" data-v="P" aria-label="Present" aria-pressed="${draft[s.roll] === 'P'}">P</button>
+          <button class="a" data-v="A" aria-label="Absent" aria-pressed="${draft[s.roll] === 'A'}">A</button>
+        </span>
+      </li>`).join('') + '</ul>';
+
+  $('#app').innerHTML = `
+    <header class="top">
+      <h1>CS Attendance<small id="sub">${esc(d && d.title ? d.title : sel.sheet)}</small></h1>
+      <button class="chip" id="statusChip"><span class="dot"></span><span id="statusTxt"></span></button>
+    </header>
+    <div class="controls">
+      <div><label for="sheetSel">Sheet</label>
+        <select id="sheetSel">${sheets.map(n => `<option ${n === sel.sheet ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>
+      <div><label for="daySel">Day</label>
+        <select id="daySel">${days.map(n => `<option value="${n}" ${n === sel.day ? 'selected' : ''}>${n}${cur && n === today ? ' (today)' : ''}</option>`).join('')}</select></div>
+    </div>
+    <div class="tally" id="tally"></div>
+    ${body}
+    <div class="bar">
+      <button class="btn" id="restBtn">Mark rest present</button>
+      <button class="btn primary" id="saveBtn">Save attendance</button>
+    </div>`;
+
+  $('#sheetSel').onchange = e => switchTo(() => { sel.sheet = e.target.value; store.set('sheet', sel.sheet); });
+  $('#daySel').onchange = e => switchTo(() => { sel.day = Number(e.target.value); });
+  $('#statusChip').onclick = openDialog;
+  $('#saveBtn').onclick = save;
+  $('#restBtn').onclick = markRest;
+  const list = $('#list');
+  if(list) list.onclick = e => {
+    const b = e.target.closest('button[data-v]'); if(!b) return;
+    const roll = b.closest('.row').dataset.roll, v = b.dataset.v;
+    if(draft[roll] === v) delete draft[roll]; else draft[roll] = v;
+    dirty = true; paintRow(b.closest('.row')); updateTally();
+  };
+  updateTally(); updateStatus();
+}
+
+function switchTo(fn){
+  if(dirty && !confirm('Discard the changes you have not saved?')){ renderMain(); return; }
+  dirty = false; fn(); loadDraft(); renderMain();
+}
+function paintRow(row){
+  const v = draft[row.dataset.roll];
+  row.querySelectorAll('button[data-v]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+}
+function updateTally(){
+  const c = counts();
+  $('#tally').innerHTML = `<span class="p"><b>${c.p}</b>present</span><span class="a"><b>${c.a}</b>absent</span><span><b>${c.n}</b>not marked</span>`;
+}
+function markRest(){
+  const d = data[sel.sheet]; if(!d) return;
+  d.students.forEach(s => { if(!draft[s.roll]) draft[s.roll] = 'P'; });
+  dirty = true; document.querySelectorAll('#list .row').forEach(paintRow); updateTally();
+}
+function save(){
+  const d = data[sel.sheet]; if(!d) return toast('This sheet is not on the phone yet');
+  const marks = {};
+  d.students.forEach(s => { if(draft[s.roll] === 'P' || draft[s.roll] === 'A') marks[s.roll] = draft[s.roll]; });
+  const n = Object.keys(marks).length;
+  if(!n) return toast('Mark at least one student first');
+  const id = sel.sheet + '|' + sel.day;
+  queue = queue.filter(x => x.id !== id);
+  queue.push({ id, sheet:sel.sheet, day:sel.day, marks, ts:Date.now() });
+  store.set('queue', queue); dirty = false;
+  const left = counts().n;
+  toast(navigator.onLine ? 'Saved' + (left ? ' (' + left + ' not marked)' : '') : 'Saved on this phone. It will sync when internet returns.');
+  updateStatus(); syncQueue();
+}
+
+/* ---------- status + dialog ---------- */
+function updateStatus(){
+  const chip = $('#statusChip'), txt = $('#statusTxt'); if(!chip) return;
+  const on = navigator.onLine;
+  chip.classList.toggle('off', !on); chip.classList.toggle('busy', syncing || refreshing);
+  txt.textContent = (syncing || refreshing) ? 'Syncing...'
+    : queue.length ? queue.length + ' to sync'
+    : on ? 'Synced' : 'Offline';
+}
+function openDialog(){
+  const dlg = $('#dlg');
+  const when = lastSync ? new Date(lastSync).toLocaleString() : 'never';
+  $('#dlgBody').innerHTML = `
+    <h2>Sync</h2>
+    <div class="meta">${navigator.onLine ? 'Online' : 'Offline. Everything you save stays on this phone.'}<br>Last synced: ${esc(when)}</div>
+    ${queue.length ? queue.map(q => `
+      <div class="q"><div><b>${esc(q.sheet)}</b>, day ${q.day}
+        <small>${Object.keys(q.marks).length} students waiting</small>
+        ${q.error ? `<small class="bad">${esc(q.error)}</small>` : ''}</div>
+        <button class="btn small danger" data-discard="${esc(q.id)}">Discard</button></div>`).join('')
+      : '<div class="q"><div>Nothing is waiting to sync.</div></div>'}
+    <div class="acts">
+      <button class="btn small primary" id="syncNow">Sync now</button>
+      <button class="btn small" id="closeDlg">Close</button>
+      <button class="btn small danger" id="outBtn">Sign out</button>
+    </div>`;
+  dlg.showModal();
+  $('#closeDlg').onclick = () => dlg.close();
+  $('#syncNow').onclick = async () => { await syncQueue(); await refreshAll(); dlg.close(); };
+  $('#outBtn').onclick = () => { dlg.close(); signOut(); };
+  dlg.querySelectorAll('[data-discard]').forEach(b => b.onclick = () => {
+    queue = queue.filter(x => x.id !== b.dataset.discard); store.set('queue', queue);
+    dlg.close(); updateStatus(); loadDraft(); renderMain();
+  });
+}
+
+let toastTimer;
+function toast(msg){
+  const t = $('#toast'); t.textContent = msg; t.style.display = 'block';
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.style.display = 'none', 2800);
+}
+
+/* ---------- start ---------- */
+window.addEventListener('online',  () => { updateStatus(); syncQueue().then(refreshAll); });
+window.addEventListener('offline', updateStatus);
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') syncQueue(); });
+setInterval(syncQueue, 30000);
+
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+render();
+if(pin){ syncQueue().then(refreshAll); }
+</script>
+</body>
+</html>
