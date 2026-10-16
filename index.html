@@ -3,364 +3,1151 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#14233B">
+<meta name="theme-color" content="#0F1B2D">
+<meta name="color-scheme" content="light dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>CS Attendance</title>
 <style>
+/* ============ Design tokens ============ */
 :root{
-  --paper:#F2F4F7; --card:#FFFFFF; --ink:#14233B; --muted:#5B6B82; --line:#D5DCE6;
-  --bar:#14233B; --bar-ink:#F2F4F7;
-  --present:#1B7F4B; --absent:#D62828; --warn:#B26A00;
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#0F1B2D; --muted:#667085; --line:#E3E7EE;
+  --accent:#0F1B2D; --on-accent:#FFFFFF; --ring:#2F5BEA;
+  --present:#12805C; --present-bg:#E6F4EE;
+  --absent:#D92D20;  --absent-bg:#FDECEA;
+  --leave:#B7791F;   --leave-bg:#FFF4DB;
+  --bb:#5B3FD1;      --bb-bg:#EEE9FF;
+  --none:#D5DAE3;
+  --hero:#0F1B2D; --hero2:#1C3158;
+  --shadow:0 1px 2px rgba(15,27,45,.06),0 2px 8px rgba(15,27,45,.05);
+  --r:14px;
+  --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
+  --sal:env(safe-area-inset-left,0px); --sar:env(safe-area-inset-right,0px);
 }
 @media (prefers-color-scheme:dark){
-  :root{ --paper:#0C1522; --card:#152238; --ink:#E8EEF7; --muted:#9AABC2; --line:#2A3A52;
-         --bar:#0A111C; --bar-ink:#E8EEF7; --present:#35B26E; --absent:#F0504F; --warn:#E3A33B; }
+  :root{
+    --bg:#0B1220; --surface:#141E31; --ink:#EAF0FA; --muted:#9AA9C0; --line:#25324A;
+    --accent:#EAF0FA; --on-accent:#0B1220; --ring:#7AA2FF;
+    --present:#3CC38A; --present-bg:#12302A;
+    --absent:#F26B60;  --absent-bg:#3A1C1F;
+    --leave:#E8B04A;   --leave-bg:#3A2F14;
+    --bb:#9C86FF;      --bb-bg:#2A2450;
+    --none:#33425E; --hero:#16233D; --hero2:#233B68;
+    --shadow:0 1px 2px rgba(0,0,0,.4);
+  }
 }
+
+/* ============ Base ============ */
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;background:var(--paper);color:var(--ink);
-  font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
-body{padding-bottom:calc(88px + env(safe-area-inset-bottom,0px))}
-button,select,input{font:inherit;color:inherit}
-button{cursor:pointer}
-:focus-visible{outline:3px solid #3B82F6;outline-offset:2px}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;padding-bottom:calc(84px + var(--sab))}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;touch-action:manipulation}
+button:active:not(:disabled){transform:scale(.97)}
+:focus-visible{outline:3px solid var(--ring);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
-.top{position:sticky;top:0;z-index:5;background:var(--bar);color:var(--bar-ink);
-  padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;display:flex;align-items:center;gap:10px}
-.top h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.2px;flex:1;min-width:0}
-.top h1 small{display:block;font-size:12px;font-weight:400;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.chip{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,.28);background:transparent;
-  color:inherit;border-radius:999px;padding:7px 12px;font-size:13px;white-space:nowrap}
-.dot{width:9px;height:9px;border-radius:50%;background:#35B26E}
-.chip.off .dot{background:#E3A33B}
-.chip.busy .dot{background:#60A5FA}
+/* ============ Sticky header + control panel ============ */
+.stick{position:sticky;top:0;z-index:5;background:var(--bg);box-shadow:0 10px 14px -12px rgba(15,27,45,.45)}
+.top{background:var(--surface);border-bottom:1px solid var(--line);
+  padding:calc(8px + var(--sat)) max(14px,var(--sar)) 8px max(14px,var(--sal))}
+.row1{display:flex;align-items:center;gap:8px;max-width:560px;margin:0 auto}
+.ttl{flex:1 1 0;min-width:0}
+.ttl h1{margin:0;font-size:16px;font-weight:750;letter-spacing:-.2px;line-height:1.2}
+.teacher{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-.controls{position:sticky;top:calc(56px + env(safe-area-inset-top,0px));z-index:4;background:var(--paper);
-  display:grid;grid-template-columns:1fr 112px;gap:10px;padding:12px 14px 8px}
-.controls label{display:block;font-size:12px;color:var(--muted);margin-bottom:3px}
-select{width:100%;height:46px;border:1.5px solid var(--line);border-radius:10px;background:var(--card);padding:0 10px}
-.tally{display:flex;gap:18px;padding:2px 16px 10px;font-size:14px;color:var(--muted)}
-.tally b{font-size:20px;font-variant-numeric:tabular-nums;color:var(--ink);margin-right:4px}
-.tally .p b{color:var(--present)} .tally .a b{color:var(--absent)}
+.hideBtn{width:40px;height:40px;padding:0;border-radius:999px;border:1px solid var(--line);
+  background:var(--bg);display:grid;place-items:center;flex:none}
+.hideBtn svg{transition:transform .2s}
+.hideBtn[aria-expanded="false"] svg{transform:rotate(180deg)}
 
-ul.list{list-style:none;margin:0;padding:0 14px}
-.row{display:grid;grid-template-columns:30px 1fr auto;align-items:center;gap:8px;
-  background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 8px 8px 10px;margin-bottom:8px}
-.no{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.sync{display:inline-flex;align-items:center;gap:7px;height:40px;border:1px solid var(--line);background:var(--bg);
+  border-radius:999px;padding:0 13px;font-size:13px;font-weight:650;white-space:nowrap;flex:none}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--present)}
+.sync.off .dot{background:#E3A33B}
+.sync.busy .dot{background:var(--ring);animation:pulse 1s ease-in-out infinite}
+.sync.err{border-color:var(--absent)} .sync.err .dot{background:var(--absent)}
+@keyframes pulse{50%{opacity:.35}}
+
+.panel{max-width:560px;margin:0 auto;padding:8px 12px 10px}
+.panel.hid{display:none!important}
+.pcard{border-radius:18px;padding:10px;color:#fff;background:linear-gradient(160deg,var(--hero2) 0%,var(--hero) 70%);box-shadow:var(--shadow)}
+
+.pk{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr) minmax(0,.8fr);gap:6px}
+.pk select{width:100%;height:42px;border:1px solid rgba(255,255,255,.22);border-radius:11px;background-color:rgba(255,255,255,.1);
+  color:#fff;padding:0 24px 0 10px;font-weight:650;font-size:16px;appearance:none;-webkit-appearance:none;
+  text-overflow:ellipsis;white-space:nowrap;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 9px center}
+.pk select:focus{border-color:#8FB0FF;outline:none}
+.pk option{color:#0F1B2D;background:#fff}
+
+.mrow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}
+.tabs2{display:flex;gap:2px;padding:3px;border-radius:12px;background:rgba(255,255,255,.12)}
+.tabs2 button{height:34px;padding:0 12px;border:0;border-radius:9px;background:transparent;color:rgba(255,255,255,.75);font-weight:700;font-size:13px;white-space:nowrap}
+.tabs2 button.on{background:#fff;color:#0F1B2D}
+.tabs2 .sm{display:none}
+.ibtns{display:flex;gap:6px}
+.ib{width:40px;height:40px;padding:0;border-radius:11px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.1);color:#fff;display:grid;place-items:center}
+
+/* date strip */
+.strip{display:flex;align-items:flex-start;gap:6px;overflow-x:auto;margin:9px -10px 0;padding:2px 10px 4px;
+  scrollbar-width:none;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+.strip::-webkit-scrollbar{display:none}
+.day{flex:none;width:44px;height:52px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.08);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;position:relative;color:#fff;
+  margin:0;appearance:none;-webkit-appearance:none;scroll-snap-align:center}
+.day span{font-size:10px;font-weight:600;color:rgba(255,255,255,.65)}
+.day b{font-size:16px;font-weight:750;font-variant-numeric:tabular-nums}
+.day.sun span{color:#FF9C93}
+.day.today{border:1.5px solid #8FB0FF}
+.day.sel{background:#fff;border-color:#fff}
+.day.sel span,.day.sel b{color:#0F1B2D}
+.day.has::after{content:"";position:absolute;bottom:4px;width:5px;height:5px;border-radius:50%;background:#5FD3A2}
+.day:disabled{opacity:.28;cursor:not-allowed}
+
+/* progress */
+.prow{display:flex;align-items:center;gap:10px;margin-top:8px}
+.bar3{display:flex;height:6px;border-radius:99px;overflow:hidden;background:rgba(255,255,255,.16);flex:1;min-width:40px}
+.bar3 i{display:block;height:100%;transition:width .2s}
+.bar3 .p{background:#5FD3A2} .bar3 .a{background:#FF8A80} .bar3 .l{background:#FFD166} .bar3 .b{background:#A99BFF}
+.nums{display:flex;flex:none;gap:9px;white-space:nowrap;font-size:11px;color:rgba(255,255,255,.7)}
+.nums b{font-size:14px;color:#fff;font-variant-numeric:tabular-nums;margin-right:2px}
+.nums .p b{color:#5FD3A2} .nums .a b{color:#FF9C93} .nums .l b{color:#FFD166} .nums .b b{color:#B9AEFF}
+
+/* monthly test header */
+.tot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px}
+.tot span{font-size:13px;font-weight:700;color:rgba(255,255,255,.78)}
+.tot input{width:120px;height:42px;border-radius:12px;border:1.5px solid rgba(255,255,255,.25);background:rgba(255,255,255,.1);
+  color:#fff;font-weight:800;font-size:17px;text-align:center;padding:0 8px}
+.tot input::placeholder{color:rgba(255,255,255,.4)}
+.cnt{margin-top:6px;font-size:12px;color:rgba(255,255,255,.65)}
+
+/* ============ Messages above the list ============ */
+.wrap{max-width:560px;margin:0 auto;padding:10px 12px 0}
+.badge,.noteLine,.lowCnt{display:none;margin:0 0 8px;padding:9px 12px;border-radius:12px;font-size:13px;font-weight:650;word-break:break-word}
+.badge{background:var(--surface);color:var(--muted);border:1px solid var(--line)}
+.badge.ok{background:var(--present-bg);color:var(--present);border-color:transparent}
+.badge.wait{background:var(--leave-bg);color:var(--leave);border-color:transparent}
+.badge.err{background:var(--absent-bg);color:var(--absent);border-color:transparent}
+.noteLine{background:var(--leave-bg);color:var(--leave)}
+.lowCnt{background:var(--absent-bg);color:var(--absent)}
+
+/* ============ Student list ============ */
+ul.list{list-style:none;margin:0;padding:0}
+.row{display:grid;grid-template-columns:22px minmax(0,1fr) auto;align-items:center;gap:6px;background:var(--surface);
+  border:1px solid var(--line);border-left:5px solid var(--none);border-radius:var(--r);padding:7px 7px 7px 8px;margin-bottom:8px;box-shadow:var(--shadow)}
+.row.is-p{border-left-color:var(--present)}
+.row.is-a{border-left-color:var(--absent);background:var(--absent-bg)}
+.row.is-l{border-left-color:var(--leave);background:var(--leave-bg)}
+.row.is-b{border-left-color:var(--bb);background:var(--bb-bg)}
+.row.low{box-shadow:inset 0 0 0 1.5px var(--absent)}
+.row.mtlow{background:var(--absent-bg);box-shadow:inset 0 0 0 1.5px var(--absent)}
+.no{color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums;text-align:center}
 .who{min-width:0}
-.who b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.who small{color:var(--muted);font-size:12px}
-.seg{display:flex;gap:6px}
-.seg button{width:50px;height:44px;border-radius:8px;border:2px solid var(--line);background:transparent;
-  font-weight:700;font-size:17px;color:var(--muted)}
-.seg button[aria-pressed="true"].p{background:var(--present);border-color:var(--present);color:#fff}
-.seg button[aria-pressed="true"].a{background:var(--absent);border-color:var(--absent);color:#fff}
+.who b{display:block;font-weight:650;font-size:14.5px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.who small{color:var(--muted);font-size:11.5px;display:flex;flex-wrap:wrap;gap:2px 6px;align-items:center;margin-top:1px}
+.pct,.mtp{font-size:11.5px;color:var(--muted);font-weight:600}
+.pct.lowp,.mtp.lowm{background:var(--absent);color:#fff;padding:1px 8px;border-radius:99px;font-weight:800}
 
-.bar{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--card);border-top:1px solid var(--line);
-  padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));display:grid;grid-template-columns:1fr 1.4fr;gap:10px}
-.btn{height:50px;border-radius:12px;border:2px solid var(--ink);background:transparent;font-weight:700}
-.btn.primary{background:var(--ink);color:var(--paper)}
-.btn.small{height:40px;padding:0 14px;font-size:14px}
+.seg{display:flex;gap:4px}
+.seg button{width:38px;height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);
+  font-weight:800;font-size:15px;color:var(--muted);transition:background .12s,border-color .12s}
+.seg button[aria-pressed="true"]{color:#fff}
+.seg button[aria-pressed="true"].p{background:var(--present);border-color:var(--present)}
+.seg button[aria-pressed="true"].a{background:var(--absent);border-color:var(--absent)}
+.seg button[aria-pressed="true"].l{background:var(--leave);border-color:var(--leave)}
+.seg button[aria-pressed="true"].b{background:var(--bb);border-color:var(--bb)}
+.seg button:disabled{opacity:.4;cursor:not-allowed}
+
+/* mark-all row */
+.allrow{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:6px;align-items:center;padding:2px 7px 8px 13px}
+.allrow .lbl{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;grid-column:2}
+.allrow .seg{grid-column:3}
+.ck{width:38px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;font-weight:800;color:var(--muted);cursor:pointer}
+.ck input{appearance:none;-webkit-appearance:none;margin:0;width:26px;height:26px;border-radius:8px;
+  border:2px solid var(--line);background:var(--surface);display:grid;place-content:center}
+.ck input:checked{background:var(--c);border-color:var(--c)}
+.ck input:checked::after{content:"\2713";color:#fff;font-size:15px;font-weight:800;line-height:1}
+.ck input:disabled{opacity:.4}
+.ck.p{--c:var(--present)} .ck.a{--c:var(--absent)} .ck.l{--c:var(--leave)} .ck.b{--c:var(--bb)}
+
+/* monthly-test input */
+.mk{width:84px;height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);
+  font-weight:800;font-size:17px;text-align:center;padding:0 6px}
+.mk:focus{border-color:var(--ring);outline:none}
+.mk.bad{border-color:var(--absent);background:var(--absent-bg);color:var(--absent)}
+
+/* ============ Bottom bar ============ */
+.bottom{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);
+  padding:8px max(12px,var(--sar)) calc(8px + var(--sab)) max(12px,var(--sal))}
+.bottom .in{max-width:560px;margin:0 auto}
+.btn{height:48px;border-radius:14px;border:1.5px solid var(--line);background:var(--surface);font-weight:700;padding:0 16px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.bottom .btn{width:100%;font-size:16px}
+.btn.primary.incomplete{opacity:.6}
+.btn.small{height:42px;padding:0 14px;font-size:14px;border-radius:12px}
 .btn.danger{border-color:var(--absent);color:var(--absent)}
 
-.note{margin:18px 14px;padding:14px;border:1px dashed var(--line);border-radius:10px;color:var(--muted)}
-.toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:9;
-  background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:999px;font-size:14px;max-width:90vw;display:none}
+.note{margin:10px 0;padding:14px;border:1px dashed var(--line);border-radius:var(--r);color:var(--muted);background:var(--surface)}
+.note .bad{color:var(--absent);display:block;margin-bottom:10px;word-break:break-word}
+.toast{position:fixed;left:50%;bottom:calc(92px + var(--sab));transform:translateX(-50%);z-index:20;
+  background:var(--accent);color:var(--on-accent);padding:11px 16px;border-radius:14px;font-size:13.5px;font-weight:600;
+  width:max-content;max-width:min(92vw,420px);display:none;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 
-.login{max-width:380px;margin:0 auto;padding:calc(48px + env(safe-area-inset-top,0px)) 20px 20px}
-.login h1{font-size:26px;margin:0 0 4px}
-.login p{color:var(--muted);margin:0 0 22px}
-.login input{width:100%;height:50px;border:1.5px solid var(--line);border-radius:10px;background:var(--card);padding:0 12px;margin:6px 0 14px}
-.err{color:var(--absent);min-height:22px;margin:0 0 10px}
+/* ============ Login ============ */
+.login{max-width:380px;margin:0 auto;padding:calc(56px + var(--sat)) 22px 22px}
+.login h1{font-size:28px;margin:0 0 6px;letter-spacing:-.4px}
+.login p{color:var(--muted);margin:0 0 24px}
+.login label,.dlg label{font-size:13px;font-weight:650;color:var(--muted)}
+.login input,.dlg input{width:100%;height:50px;border:1.5px solid var(--line);border-radius:14px;background:var(--surface);
+  padding:0 14px;margin:6px 0 14px;font-size:16px}
+.err{color:var(--absent);min-height:22px;margin:0 0 10px;word-break:break-word;font-size:14px}
 
-dialog{border:none;border-radius:14px;padding:0;width:min(520px,94vw);background:var(--card);color:var(--ink)}
-dialog::backdrop{background:rgba(0,0,0,.5)}
-.dlg{padding:16px}
-.dlg h2{margin:0 0 4px;font-size:18px}
-.dlg .meta{color:var(--muted);font-size:13px;margin-bottom:12px}
+/* ============ Dialogs ============ */
+dialog{border:none;border-radius:20px;padding:0;width:min(440px,94vw);max-height:90vh;overflow:auto;background:var(--surface);color:var(--ink)}
+dialog::backdrop{background:rgba(8,14,26,.55)}
+.dlg{padding:18px}
+.dlg h2{margin:0 0 4px;font-size:19px}
+.dlg .meta{color:var(--muted);font-size:13px;margin-bottom:12px;word-break:break-word}
+.dlg textarea{width:100%;min-height:96px;border:1.5px solid var(--line);border-radius:14px;background:var(--surface);
+  padding:10px 12px;margin:8px 0 4px;resize:vertical;font-size:16px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.chip{height:36px;padding:0 13px;border-radius:999px;border:1px solid var(--line);background:var(--bg);font-size:13px;font-weight:650}
 .q{display:flex;align-items:center;gap:10px;border-top:1px solid var(--line);padding:10px 0}
-.q div{flex:1;min-width:0}
-.q small{display:block;color:var(--muted)}
-.q .bad{color:var(--absent)}
+.q div{flex:1;min-width:0} .q small{display:block;color:var(--muted)} .q .bad{color:var(--absent)}
+.diag{margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--absent-bg);color:var(--absent);font-size:13px;word-break:break-word}
 .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
-@media (prefers-reduced-motion:no-preference){ .toast{transition:opacity .2s} }
+.acts .grow{flex:1 1 auto}
+
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:8px}
+.grid .h{text-align:center;font-size:12px;font-weight:650;color:var(--muted);padding:4px 0}
+.grid .h.sun{color:var(--absent)}
+.cell{aspect-ratio:1/1;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-weight:700;position:relative}
+.cell.today{border:2px solid var(--ring)}
+.cell.sel{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.cell.has::after{content:"";position:absolute;bottom:5px;left:50%;margin-left:-2.5px;width:5px;height:5px;border-radius:50%;background:var(--present)}
+.cell.sel.has::after{background:var(--on-accent)}
+.cell.note::before{content:"";position:absolute;top:5px;right:5px;width:6px;height:6px;border-radius:50%;background:var(--leave)}
+.cell:disabled{opacity:.3}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:12px}
+
+/* ============ Responsive ============ */
+@media (max-width:400px){
+  .tabs2 .lg{display:none} .tabs2 .sm{display:inline}
+  .sync{padding:0 11px}
+}
+@media (max-width:360px){
+  .seg button,.ck{width:34px}
+  .day{width:41px}
+  .row{grid-template-columns:18px minmax(0,1fr) auto;gap:4px}
+  .allrow{grid-template-columns:18px minmax(0,1fr) auto}
+  .mk{width:72px}
+}
+@media (min-width:600px){
+  .row:hover{border-color:var(--ring)}
+}
+
+/* landscape phones: controls left (frozen), students right */
+@media (orientation:landscape) and (max-height:520px){
+  #app{display:grid;grid-template-columns:minmax(290px,42%) minmax(0,1fr);align-items:start}
+  .stick{display:contents}
+  .stick .top{grid-column:1 / -1;position:sticky;top:0;z-index:5}
+  .panel{grid-column:1;position:sticky;top:calc(56px + var(--sat));max-width:none;margin:0;padding:8px 6px 8px max(10px,var(--sal))}
+  .wrap{grid-column:2;max-width:none;margin:0;padding:8px max(12px,var(--sar)) 0 6px}
+  #app.phid{grid-template-columns:minmax(0,1fr)}
+  #app.phid .wrap{grid-column:1}
+}
 </style>
 </head>
 <body>
 <div id="app"></div>
-<div class="toast" id="toast" role="status"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 <dialog id="dlg"><div class="dlg" id="dlgBody"></div></dialog>
 
 <script>
-/* ====== SET THIS after deploying Code.gs as a Web app ====== */
 const API_URL = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm7d7-UKg0W-OoWAiuRBHe4mjlRgMQXIHuLm6zi--i/exec';
-/* =========================================================== */
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MARKS = ['P','A','L','B'];            // only P is counted in the sheet
+const LOW_ATT = 73, MIN_LECT = 1;           // red below 73%; MIN_LECT = lectures needed before a % is shown
+
+const allRow = locked => `<div class="allrow"><span class="lbl">Mark all</span><span class="seg">` +
+  ['P','A','L','B'].map(v => `<label class="ck ${v.toLowerCase()}">${v}<input type="checkbox" data-all="${v}" aria-label="Mark all ${v}" ${locked ? 'disabled' : ''}></label>`).join('') +
+  `</span></div>`;
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const store = {
-  get(k, d){ try{ const v = localStorage.getItem('csa_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
-  set(k, v){ try{ localStorage.setItem('csa_' + k, JSON.stringify(v)); }catch(e){} }
+  get(k, d){ try{ const v = localStorage.getItem('csa2_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem('csa2_' + k, JSON.stringify(v)); }catch(e){} }
 };
-
-let pin    = store.get('pin', '');
-let sheets = store.get('sheets', []);
-let data   = store.get('data', {});      // sheet -> {title, days, students, marks}
-let queue  = store.get('queue', []);     // [{id, sheet, day, marks, ts, error?}]
+const API = (typeof API_URL === 'string') ? API_URL : '';
+let mode = store.get('mode', 'att');   // 'att' or 'mt'
+let panelHidden = store.get('phide', false);
+let mtDraft = { total:'', marks:{} };
+let user    = store.get('user', '');
+let pass    = store.get('pass', '');
+let teacher = store.get('teacher', '');
+let isAdmin = store.get('admin', false);
+let sheets  = store.get('sheets', []);     // [{name, cls, sub, mon, teacher}]
+let data    = store.get('data', {});       // sheet name -> {title, m, y, days, students, marks, notes, mt}
+let queue   = store.get('queue', []);      // [{id, sheet, day, marks, note?, ts, error?}]
+let confirms = store.get('confirms', {});  // 'sheet|day' -> {at, p, a, l, b, note}
 let lastSync = store.get('lastSync', 0);
-let sel    = { sheet: store.get('sheet', ''), day: new Date().getDate() };
+let lastError = '';
+let sel    = { cls: store.get('cls', ''), sub: store.get('sub', ''), mon: store.get('mon', ''), day: 0 };
 let draft  = {};
-let dirty  = false, syncing = false, refreshing = false;
+let dirty = false, syncing = false, refreshing = false, prefetching = false, syncPromise = null;
+const tried = {}, loading = new Set(), sheetErr = {}, fresh = {};
+
+const authed = () => !!(user && pass);
+
+/* ---------- sheet / class / subject / month helpers ---------- */
+const uniq = a => [...new Set(a)];
+const titleCase = s => String(s).toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+const monIdx = tok => MONTHS.findIndex(m => m.slice(0, 3).toUpperCase() === String(tok).slice(0, 3).toUpperCase());
+const monLabel = tok => { const i = monIdx(tok); return i >= 0 ? MONTHS[i].slice(0, 3) : tok; };
+const classes   = () => uniq(sheets.map(s => s.cls));
+const subjects  = cls => uniq(sheets.filter(s => s.cls === cls).map(s => s.sub));
+const monthsOf  = (cls, sub) => uniq(sheets.filter(s => s.cls === cls && s.sub === sub).map(s => s.mon));
+const entry     = () => sheets.find(s => s.cls === sel.cls && s.sub === sel.sub && s.mon === sel.mon);
+const sheetName = () => { const e = entry(); return e ? e.name : ''; };
+
+function bestMonth(list, want){
+  if(list.includes(want)) return want;
+  const now = new Date().getMonth();
+  return list.find(t => monIdx(t) === now) || list[list.length - 1] || '';
+}
+function ensureSel(){
+  if(!sheets.length || entry()) return;
+  const cl = classes(); if(!cl.includes(sel.cls)) sel.cls = cl[0];
+  const sb = subjects(sel.cls); if(!sb.includes(sel.sub)) sel.sub = sb[0];
+  sel.mon = bestMonth(monthsOf(sel.cls, sel.sub), sel.mon);
+  initDay();
+}
+function choose(kind, value){
+  if(kind === 'cls'){
+    sel.cls = value;
+    const sb = subjects(value); if(!sb.includes(sel.sub)) sel.sub = sb[0];
+    sel.mon = bestMonth(monthsOf(sel.cls, sel.sub), sel.mon);
+  } else if(kind === 'sub'){
+    sel.sub = value; sel.mon = bestMonth(monthsOf(sel.cls, value), sel.mon);
+  } else sel.mon = value;
+  store.set('cls', sel.cls); store.set('sub', sel.sub); store.set('mon', sel.mon);
+  initDay();
+}
+function monthYear(){
+  const d = data[sheetName()];
+  if(d && d.m != null && d.y) return { m: d.m, y: d.y };
+  const e = entry(), now = new Date();
+  let m = e ? monIdx(e.mon) : -1; if(m < 0) m = now.getMonth();
+  const start = (now.getMonth() > 7 || (now.getMonth() === 7 && now.getDate() >= 15)) ? now.getFullYear() : now.getFullYear() - 1;
+  return { m, y: m >= 7 ? start : start + 1 };
+}
+function dayInfo(){
+  const { m, y } = monthYear();
+  const n = new Date(y, m + 1, 0).getDate();
+  const d = data[sheetName()];
+  const srv = d && d.days && d.days.length >= 25 ? d.days : null;
+  // Sundays are blacked out in the sheet, so they cannot be marked
+  const avail = Array.from({ length: n }, (_, i) => i + 1)
+    .filter(x => (!srv || srv.includes(x)) && new Date(y, m, x).getDay() !== 0);
+  const now = new Date();
+  return { m, y, n, avail, isCur: now.getMonth() === m && now.getFullYear() === y, today: now.getDate() };
+}
+function initDay(){
+  const { isCur, today, avail } = dayInfo();
+  sel.day = isCur && avail.includes(today) ? today : (avail[0] || 1);
+}
+function fixDay(){
+  const { avail } = dayInfo();
+  if(!sel.day || !avail.includes(sel.day)) initDay();
+}
+function queued(day){ const name = sheetName(); return queue.find(q => q.sheet === name && q.day === day); }
+function noteFor(day){
+  const q = queued(day);
+  if(q && q.note !== undefined) return q.note;
+  const d = data[sheetName()];
+  return (d && d.notes && d.notes[day]) || '';
+}
+function hasData(day){
+  const d = data[sheetName()], q = queued(day);
+  return !!((d && d.marks && d.marks[day] && Object.keys(d.marks[day]).length) || (q && Object.keys(q.marks).length));
+}
+function loadDraft(){
+  draft = {}; dirty = false;
+  const d = data[sheetName()]; if(!d) return;
+  Object.assign(draft, (d.marks && d.marks[sel.day]) || {});
+  const q = queued(sel.day);
+  if(q) Object.keys(q.marks).forEach(r => { if(q.marks[r] === '') delete draft[r]; else draft[r] = q.marks[r]; });
+}
+function counts(){
+  const d = data[sheetName()]; let p = 0, a = 0, l = 0, b = 0, n = 0;
+  (d ? d.students : []).forEach(s => {
+    const v = draft[s.roll];
+    if(v === 'P') p++; else if(v === 'A') a++; else if(v === 'L') l++; else if(v === 'B') b++; else n++;
+  });
+  return { p, a, l, b, n, total: p + a + l + b + n };
+}
 
 /* ---------- network ---------- */
-async function api(payload, ms = 25000){
+function errText(e){
+  if(!e) return 'Unknown error';
+  if(e.name === 'AbortError') return 'The server took too long to answer. It will retry.';
+  if(e instanceof TypeError) return 'Could not reach the server (network blocked or wrong API_URL).';
+  return e.message || String(e);
+}
+
+async function api(payload, ms = 45000){
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), ms);
   try{
-    const r = await fetch(API_URL, { method:'POST', body: JSON.stringify({ pin, ...payload }), signal: ctl.signal, redirect:'follow' });
-    return await r.json();
+    const r = await fetch(API, { method:'POST', body: JSON.stringify({ username:user, password:pass, ...payload }), signal: ctl.signal, redirect:'follow' });
+    const txt = await r.text();
+    try{ return JSON.parse(txt); }
+    catch(e){ throw new Error('Server sent a web page instead of data. Check that the Apps Script web app is deployed with access "Anyone" and that API_URL is the latest URL.'); }
   } finally { clearTimeout(t); }
 }
 
-async function refreshAll(){
-  if(!pin || refreshing || !navigator.onLine) return;
-  refreshing = true; updateStatus();
+/** Loads one sheet. create=true makes the sheet on the server if it does not exist yet. */
+async function loadSheet(e, create){
+  loading.add(e.name);
   try{
-    const s = await api({ action:'sheets' });
-    if(!s.ok){ if(s.error === 'BAD_PIN') return signOut('The PIN was changed. Sign in again.'); throw new Error(s.error); }
-    sheets = s.sheets; store.set('sheets', sheets);
-    for(const name of sheets){
-      const d = await api({ action:'sheet', sheet:name });
-      if(d.ok){ data[name] = { title:d.title, days:d.days, students:d.students, marks:d.marks }; store.set('data', data); }
-    }
-    if(!sheets.includes(sel.sheet)) sel.sheet = sheets[0] || '';
-    toast('Student lists updated');
-    if(!dirty){ pickDay(); loadDraft(); render(); }
-  }catch(e){ /* offline or timeout: keep cached data */ }
-  finally{ refreshing = false; updateStatus(); }
+    const d = await api({ action:'sheet', sheet:e.name, create: !!create }, 90000);
+    if(d.ok && d.missing){ delete data[e.name]; }
+    else if(d.ok){ data[e.name] = { title:d.title, m:d.m, y:d.y, days:d.days, students:d.students, marks:d.marks, notes:d.notes || {}, mt:d.mt || { total:0, marks:{} } }; delete sheetErr[e.name]; }
+    else if(d.error === 'BAD_LOGIN'){ signOut('Your username or password was changed. Sign in again.'); return false; }
+    else throw new Error(d.error || 'Could not load the sheet');
+    fresh[e.name] = Date.now();
+    store.set('data', data);
+    return true;
+  } finally { loading.delete(e.name); }
 }
 
-async function syncQueue(){
-  if(syncing || !queue.length || !pin || !navigator.onLine) return;
+const isCurMonth = e => monIdx(e.mon) === new Date().getMonth();
+
+async function refreshAll(){
+  if(!authed() || refreshing || prefetching) return;
+  refreshing = true; updateStatus();
+  let rest = [];
+  try{
+    const s = await api({ action:'sheets' });
+    if(!s.ok){ if(s.error === 'BAD_LOGIN') return signOut('Your username or password was changed. Sign in again.'); throw new Error(s.error); }
+    sheets = s.sheets; teacher = s.teacher || teacher; isAdmin = !!s.admin;
+    store.set('sheets', sheets); store.set('teacher', teacher); store.set('admin', isAdmin);
+    ensureSel();
+    const cur = entry();
+    if(cur){
+      try{ await loadSheet(cur, true); }
+      catch(err){ sheetErr[cur.name] = errText(err); }
+      if(!dirty){ fixDay(); loadDraft(); }
+    }
+    rest = sheets.filter(x => x !== cur);
+    if(!dirty){ ensureSel(); fixDay(); loadDraft(); if(mode === 'mt') loadMtDraft(); render(); }
+  }catch(e){ lastError = errText(e); }
+  finally{ refreshing = false; updateStatus(); }
+
+  if(!rest.length || !authed()) return;
+  prefetching = true;
+  try{
+    for(const e of rest){
+      if(!authed()) break;
+      if(queue.length && !syncing) await syncQueue();
+      if(fresh[e.name] && Date.now() - fresh[e.name] < 120000) continue;
+      try{ await loadSheet(e, isCurMonth(e)); }
+      catch(err){ sheetErr[e.name] = errText(err); }
+    }
+  } finally { prefetching = false; }
+}
+
+/* ---------- saving to the sheet ---------- */
+function syncQueue(){
+  if(syncPromise) return syncPromise;
+  if(!queue.length || !authed()) return Promise.resolve(false);
+  syncPromise = doSync().finally(() => { syncPromise = null; });
+  return syncPromise;
+}
+
+async function doSync(){
   syncing = true; updateStatus();
+  let ok = false;
   try{
     const batch = queue.map(q => ({ ...q }));
-    const res = await api({ action:'save', records: batch });
+    const res = await api({ action:'save', records: batch }, 90000);
     if(res.ok){
       const saved = res.saved || [];
       saved.forEach(id => {
         const b = batch.find(x => x.id === id);
-        if(b && data[b.sheet]){
-          const m = data[b.sheet].marks = data[b.sheet].marks || {};
-          m[b.day] = Object.assign({}, m[b.day], b.marks);
+        if(b && b.kind === 'mt'){
+          if(data[b.sheet]) data[b.sheet].mt = { total:b.total, marks:Object.assign({}, b.marks) };
+          if(res.confirmed && res.confirmed[id]) confirms[id] = res.confirmed[id];
+          return;
         }
+        if(b && data[b.sheet]){
+          const D = data[b.sheet];
+          const m = D.marks = D.marks || {};
+          const day = Object.assign({}, m[b.day]);
+          Object.keys(b.marks).forEach(r => { if(b.marks[r] === '') delete day[r]; else day[r] = b.marks[r]; });
+          if(Object.keys(day).length) m[b.day] = day; else delete m[b.day];
+          if(b.note !== undefined){
+            D.notes = D.notes || {};
+            if(b.note) D.notes[b.day] = b.note; else delete D.notes[b.day];
+          }
+        }
+        if(res.confirmed && res.confirmed[id]) confirms[id] = res.confirmed[id];
       });
       queue = queue.filter(x => { const b = batch.find(y => y.id === x.id); return !(saved.includes(x.id) && b && b.ts === x.ts); });
       (res.failed || []).forEach(f => { const x = queue.find(q => q.id === f.id); if(x) x.error = f.error; });
       lastSync = Date.now(); store.set('lastSync', lastSync);
-      store.set('queue', queue); store.set('data', data);
-      if(saved.length) toast('Synced to the sheet');
-    } else if(res.error === 'BAD_PIN'){ signOut('The PIN was changed. Sign in again.'); }
-  }catch(e){ /* stays in queue, retried later */ }
-  finally{ syncing = false; updateStatus(); }
-}
-
-/* ---------- state helpers ---------- */
-function isCurrentMonth(title){
-  const m = MONTHS.findIndex(x => new RegExp(x, 'i').test(title || ''));
-  const y = ((title || '').match(/\b(20\d\d)\b/) || [])[1];
-  const now = new Date();
-  return m === now.getMonth() && (!y || Number(y) === now.getFullYear());
-}
-function pickDay(){
-  const d = data[sel.sheet]; if(!d) return;
-  const days = d.days && d.days.length ? d.days : null;
-  const today = new Date().getDate();
-  if(isCurrentMonth(d.title) && (!days || days.includes(today))) sel.day = today;
-  else if(days && !days.includes(sel.day)) sel.day = days[0];
-}
-function loadDraft(){
-  draft = {}; dirty = false;
-  const d = data[sel.sheet]; if(!d) return;
-  Object.assign(draft, (d.marks && d.marks[sel.day]) || {});
-  const q = queue.find(x => x.sheet === sel.sheet && x.day === sel.day);
-  if(q) Object.assign(draft, q.marks);
-}
-function counts(){
-  const d = data[sel.sheet]; let p = 0, a = 0, n = 0;
-  (d ? d.students : []).forEach(s => { const v = draft[s.roll]; if(v === 'P') p++; else if(v === 'A') a++; else n++; });
-  return { p, a, n };
+      store.set('queue', queue); store.set('data', data); store.set('confirms', confirms);
+      lastError = (res.failed && res.failed.length) ? res.failed[0].error : '';
+      ok = !lastError;
+      if(saved.length){
+        const c = res.confirmed && res.confirmed[saved[saved.length - 1]];
+        toast(c && c.p != null ? 'Saved in sheet and verified: P ' + c.p + ', A ' + c.a + (c.l ? ', L ' + c.l : '') + (c.b ? ', B ' + c.b : '')
+                               : 'Saved in sheet and verified');
+      }
+    } else if(res.error === 'BAD_LOGIN'){ signOut('Your username or password was changed. Sign in again.'); }
+    else { lastError = res.error || 'The server refused the save.'; }
+  }catch(e){ lastError = errText(e); }
+  finally{ syncing = false; updateStatus(); if(authed() && sheetName()){ if(!dirty) loadDraft(); } }
+  if(ok && queue.length) setTimeout(syncQueue, 300);
+  return ok;
 }
 
 /* ---------- views ---------- */
-function render(){ pin ? renderMain() : renderLogin(); }
+function render(){ authed() ? renderMain() : renderLogin(); }
 
 function renderLogin(msg){
   $('#app').innerHTML = `
     <div class="login">
       <h1>CS Attendance</h1>
-      <p>Sign in once while you have internet. After that the app works offline.</p>
-      <label for="pin">PIN</label>
-      <input id="pin" type="password" autocomplete="off" enterkeyhint="go">
-      <div class="err" id="loginErr">${esc(msg || '')}</div>
+      <p>Sign in once while you have internet, with the same username and password as the portal. After that the app works offline.</p>
+      <label for="user">Username</label>
+      <input id="user" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" value="${esc(store.get('lastUser', ''))}">
+      <label for="pass">Password</label>
+      <input id="pass" type="password" autocomplete="current-password" enterkeyhint="go">
+      <div class="err" id="loginErr" role="alert">${esc(msg || '')}</div>
       <button class="btn primary" style="width:100%" id="loginBtn">Sign in</button>
     </div>`;
+  $('#app').classList.remove('phid');
   $('#loginBtn').onclick = login;
-  $('#pin').onkeydown = e => { if(e.key === 'Enter') login(); };
+  $('#user').onkeydown = e => { if(e.key === 'Enter') $('#pass').focus(); };
+  $('#pass').onkeydown = e => { if(e.key === 'Enter') login(); };
 }
 
 async function login(){
-  const p = $('#pin').value.trim(); if(!p) return;
-  if(API_URL.startsWith('PASTE')){ $('#loginErr').textContent = 'The app is not connected yet: set API_URL in index.html.'; return; }
+  const u = $('#user').value.trim(), p = $('#pass').value;
+  if(!u || !p) { $('#loginErr').textContent = 'Enter your username and password.'; return; }
+  if(!API || API.startsWith('PASTE')){ $('#loginErr').textContent = 'Not connected yet: set API_URL.'; return; }
   $('#loginErr').textContent = 'Signing in...';
-  pin = p;
+  user = u; pass = p;
   try{
     const r = await api({ action:'sheets' });
-    if(!r.ok){ pin = ''; $('#loginErr').textContent = r.error === 'BAD_PIN' ? 'Wrong PIN. Try again.' : 'Could not sign in: ' + r.error; return; }
-    store.set('pin', pin); sheets = r.sheets; store.set('sheets', sheets);
-    if(!sheets.includes(sel.sheet)) sel.sheet = sheets[0] || '';
-    store.set('sheet', sel.sheet);
-    render(); refreshAll();
-  }catch(e){ pin = ''; $('#loginErr').textContent = 'No internet. Connect once to sign in.'; }
+    if(!r.ok){
+      user = ''; pass = '';
+      $('#loginErr').textContent = r.error === 'BAD_LOGIN' ? 'Wrong username or password. Try again.' : 'Could not sign in: ' + r.error;
+      return;
+    }
+    const prev = store.get('lastUser', '');
+    if(prev && prev.toLowerCase() !== u.toLowerCase()){
+      data = {}; queue = []; confirms = {}; sel = { cls:'', sub:'', mon:'', day:0 };
+      store.set('data', data); store.set('queue', queue); store.set('confirms', confirms);
+    }
+    teacher = r.teacher || ''; isAdmin = !!r.admin; sheets = r.sheets || [];
+    store.set('user', user); store.set('pass', pass); store.set('lastUser', user);
+    store.set('teacher', teacher); store.set('admin', isAdmin); store.set('sheets', sheets);
+    ensureSel(); loadDraft(); render(); refreshAll();
+  }catch(e){ user = ''; pass = ''; $('#loginErr').textContent = errText(e); }
 }
 
-function signOut(msg){
-  if(queue.length && !msg && !confirm(queue.length + ' record(s) are not synced yet and would be lost. Sign out anyway?')) return;
-  pin = ''; store.set('pin', ''); queue = msg ? queue : []; store.set('queue', queue);
-  $('#dlg').close && $('#dlg').open && $('#dlg').close();
+function clearLocal(){
+  queue = []; data = {}; sheets = []; teacher = ''; isAdmin = false; confirms = {};
+  store.set('queue', []); store.set('data', {}); store.set('sheets', []); store.set('teacher', ''); store.set('admin', false); store.set('confirms', {});
+}
+
+/** msg given = forced sign-out (password changed): keep local data. No msg = manual: save first, then wipe. */
+async function signOut(msg){
+  if(!msg && queue.length){
+    toast('Saving your attendance before signing out...');
+    if(navigator.onLine){ await syncQueue(); if(queue.length) await syncQueue(); }
+    if(queue.length){
+      if(!confirm(queue.length + ' record(s) could not be saved to the sheet yet and would be lost. Sign out anyway?')) { renderMain(); return; }
+    } else toast('Saved in sheet. Signed out.');
+  }
+  user = ''; pass = ''; store.set('user', ''); store.set('pass', '');
+  if(!msg) clearLocal();
   renderLogin(msg);
 }
 
-function renderMain(){
-  if(!sheets.includes(sel.sheet)) sel.sheet = sheets[0] || '';
-  const d = data[sel.sheet];
-  pickDay();
-  if(!dirty) loadDraft();
-  const days = d && d.days && d.days.length ? d.days : Array.from({ length:31 }, (_, i) => i + 1);
-  const cur = d && isCurrentMonth(d.title);
-  const today = new Date().getDate();
+function centerStrip(){
+  const st = $('#strip'); if(!st) return;
+  const cur = st.querySelector('.sel'); if(!cur) return;
+  st.scrollLeft = cur.offsetLeft - (st.clientWidth - cur.offsetWidth) / 2;
+}
 
-  let body;
-  if(!sheets.length) body = `<div class="note">No sheets on this phone yet. Connect to the internet and tap Sync.</div>`;
-  else if(!d) body = `<div class="note">This sheet is not on the phone yet. Connect to the internet once and tap Sync, then it will work offline.</div>`;
-  else if(!d.students.length) body = `<div class="note">This sheet has no students.</div>`;
-  else body = '<ul class="list" id="list">' + d.students.map((s, i) => `
+/* ---------- attendance % (this month's sheet) ---------- */
+function dayMarks(day){
+  if(day === sel.day) return draft;                       // what is on screen right now
+  const d = data[sheetName()], q = queued(day);
+  const base = Object.assign({}, (d && d.marks && d.marks[day]) || {});
+  if(q) Object.keys(q.marks).forEach(r => { if(q.marks[r] === '') delete base[r]; else base[r] = q.marks[r]; });
+  return base;
+}
+function attStats(){
+  const d = data[sheetName()]; if(!d) return { lect:0, pct:{}, pres:{} };
+  const days = d.days && d.days.length ? d.days : Array.from({ length:31 }, (_, i) => i + 1);
+  const per = {}; let lect = 0;
+  d.students.forEach(s => per[s.roll] = 0);
+  days.forEach(day => {
+    const m = dayMarks(day); let any = false;
+    Object.keys(m).forEach(r => { if(m[r] === 'P'){ any = true; if(r in per) per[r]++; } else if(m[r] === 'A') any = true; });
+    if(any) lect++;
+  });
+  const pct = {};
+  d.students.forEach(s => { pct[s.roll] = lect >= MIN_LECT ? Math.round(per[s.roll] / lect * 1000) / 10 : null; });
+  return { lect, pct, pres: per };
+}
+function paintPct(){
+  const { lect, pct, pres } = attStats(); let low = 0;
+  document.querySelectorAll('.list .row').forEach(row => {
+    const roll = row.dataset.roll, p = pct[roll], el = row.querySelector('.pct'), isLow = p != null && p < LOW_ATT;
+    if(isLow) low++;
+    row.classList.toggle('low', isLow && mode === 'att');
+    if(el){
+      el.textContent = p == null ? '' : 'Attend: ' + pres[roll] + '/' + lect + ' = ' + p + '%';
+      el.className = 'pct' + (isLow ? ' lowp' : '');
+    }
+  });
+  const lc = $('#lowCnt');
+  if(lc){
+    lc.style.display = low ? 'block' : 'none';
+    lc.textContent = low + ' student' + (low > 1 ? 's' : '') + ' below ' + LOW_ATT + '% attendance (' + lect + ' lectures held)';
+  }
+}
+
+/* ---------- monthly test ---------- */
+const ABS_WORDS = ['A', 'AB', 'ABSENT'];
+function mtParse(raw, total){
+  const s = String(raw == null ? '' : raw).trim().toUpperCase().replace(',', '.');
+  if(s === '') return { k:'empty' };
+  if(ABS_WORDS.includes(s)) return { k:'abs' };
+  if(/^\d+(\.\d*)?$/.test(s)){
+    const v = Number(s);
+    if(total > 0 && v > total) return { k:'over', v };
+    return { k:'num', v };
+  }
+  return { k:'bad' };
+}
+function mtQueued(){ const name = sheetName(); return queue.find(q => q.sheet === name && q.kind === 'mt'); }
+function loadMtDraft(){
+  const d = data[sheetName()], q = mtQueued();
+  const src = q ? { total:q.total, marks:q.marks } : ((d && d.mt) || { total:0, marks:{} });
+  mtDraft = { total: src.total ? String(src.total) : '', marks: Object.assign({}, src.marks) };
+}
+function enqueueMt(total, marks){
+  const name = sheetName(), id = name + '|MT';
+  queue = queue.filter(x => x.id !== id);
+  queue.push({ id, kind:'mt', sheet:name, total, marks, ts:Date.now() });
+  store.set('queue', queue); delete confirms[id]; store.set('confirms', confirms);
+}
+
+function saveMt(){
+  const name = sheetName(), d = data[name];
+  if(!d) return toast('This sheet is not on the phone yet');
+  const total = Number(mtDraft.total);
+  if(!(total > 0)) return toast('Enter the total marks first.');
+  const marks = {}; let missing = 0;
+  for(const s of d.students){
+    const p = mtParse(mtDraft.marks[s.roll], total);
+    if(p.k === 'empty'){ missing++; continue; }
+    if(p.k === 'abs'){ marks[s.roll] = 'A'; continue; }
+    if(p.k === 'over') return toast(s.name + ': marks cannot be more than ' + total + '.');
+    if(p.k === 'bad') return toast(s.name + ': enter marks, or A / AB / Absent.');
+    marks[s.roll] = String(p.v);
+  }
+  if(missing) return toast(missing + ' student' + (missing > 1 ? 's have' : ' has') + ' no marks. Enter marks, or A for absent.');
+  enqueueMt(total, marks); dirty = false;
+  toast('Saved on phone. Sending to the sheet...');
+  renderMain();
+  syncQueue().then(ok => { if(!ok && queue.length) toast('Saved on this phone. Tap the status chip to see why it has not reached the sheet.'); });
+}
+
+function updateMt(d){
+  paintPct();
+  const total = Number(mtDraft.total) || 0; let filled = 0, left = 0, bad = 0, low = 0;
+  document.querySelectorAll('#mtList .row').forEach(row => {
+    const p = mtParse(mtDraft.marks[row.dataset.roll], total);
+    const inp = row.querySelector('.mk'), chip = row.querySelector('.mtp');
+    const invalid = p.k === 'over' || p.k === 'bad';
+    const isLow = p.k === 'num' && total > 0 && p.v / total < 0.5;
+    const flag = isLow || p.k === 'abs';          // below 50% or absent
+    inp.classList.toggle('bad', invalid);
+    row.classList.toggle('mtlow', flag);
+    if(chip){
+      chip.className = 'mtp' + (flag ? ' lowm' : '');
+      chip.textContent = p.k === 'num' && total > 0
+        ? 'Test: ' + p.v + '/' + total + ' = ' + (Math.round(p.v / total * 1000) / 10) + '%'
+        : (p.k === 'abs' ? 'Test: Absent' : '');
+    }
+    if(p.k === 'empty') left++; else filled++;
+    if(invalid) bad++;
+    if(flag) low++;
+  });
+  const info = $('#mtInfo');
+  if(info) info.textContent = (d ? d.students.length : 0) + ' students \u00b7 ' + filled + ' entered' + (left ? ' \u00b7 ' + left + ' left' : '') + ' \u00b7 type A, AB or Absent';
+  const lm = $('#mtLow');
+  if(lm){ lm.style.display = low ? 'block' : 'none'; lm.textContent = low + ' student' + (low > 1 ? 's' : '') + ' below 50% or absent in the monthly test'; }
+  const sb = $('#saveBtn');
+  if(sb){ sb.textContent = left ? 'Save test marks (' + left + ' left)' : 'Save test marks'; sb.classList.toggle('incomplete', left > 0 || bad > 0 || !(total > 0)); }
+}
+
+/* ---------- list bodies ---------- */
+function attBodyHtml(d){
+  return allRow(false) + '<ul class="list" id="list">' + d.students.map((s, i) => `
       <li class="row" data-roll="${esc(s.roll)}">
         <span class="no">${i + 1}</span>
-        <span class="who"><b>${esc(s.name)}</b><small>${esc(s.roll)}</small></span>
+        <span class="who"><b>${esc(s.name)}</b><small><span>${esc(s.roll)}</span><span class="pct"></span></small></span>
         <span class="seg">
-          <button class="p" data-v="P" aria-label="Present" aria-pressed="${draft[s.roll] === 'P'}">P</button>
-          <button class="a" data-v="A" aria-label="Absent" aria-pressed="${draft[s.roll] === 'A'}">A</button>
+          <button class="p" data-v="P" aria-label="Present" aria-pressed="false">P</button>
+          <button class="a" data-v="A" aria-label="Absent" aria-pressed="false">A</button>
+          <button class="l" data-v="L" aria-label="Leave" aria-pressed="false">L</button>
+          <button class="b" data-v="B" aria-label="B" aria-pressed="false">B</button>
         </span>
       </li>`).join('') + '</ul>';
+}
+function mtBodyHtml(d){
+  return '<ul class="list" id="mtList">' + d.students.map((s, i) => `
+      <li class="row" data-roll="${esc(s.roll)}">
+        <span class="no">${i + 1}</span>
+        <span class="who"><b>${esc(s.name)}</b><small><span>${esc(s.roll)}</span><span class="pct"></span><span class="mtp"></span></small></span>
+        <input class="mk" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" placeholder="Marks" aria-label="Marks for ${esc(s.name)}" value="${esc(mtDraft.marks[s.roll] || '')}">
+      </li>`).join('') + '</ul>';
+}
+const IC = {
+  cal:  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>',
+  note: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v11l-5 5H4z"/><path d="M15 20v-5h5"/><path d="M8 9h8M8 13h4"/></svg>',
+  print:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 9V3h10v6"/><rect x="4" y="9" width="16" height="8" rx="2"/><path d="M7 14h10v7H7z"/></svg>'
+};
 
-  $('#app').innerHTML = `
-    <header class="top">
-      <h1>CS Attendance<small id="sub">${esc(d && d.title ? d.title : sel.sheet)}</small></h1>
-      <button class="chip" id="statusChip"><span class="dot"></span><span id="statusTxt"></span></button>
-    </header>
-    <div class="controls">
-      <div><label for="sheetSel">Sheet</label>
-        <select id="sheetSel">${sheets.map(n => `<option ${n === sel.sheet ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>
-      <div><label for="daySel">Day</label>
-        <select id="daySel">${days.map(n => `<option value="${n}" ${n === sel.day ? 'selected' : ''}>${n}${cur && n === today ? ' (today)' : ''}</option>`).join('')}</select></div>
-    </div>
-    <div class="tally" id="tally"></div>
-    ${body}
-    <div class="bar">
-      <button class="btn" id="restBtn">Mark rest present</button>
-      <button class="btn primary" id="saveBtn">Save attendance</button>
+function renderMain(){
+  const sy = window.scrollY;
+  ensureSel(); fixDay();
+  if(!dirty){ loadDraft(); if(mode === 'mt') loadMtDraft(); }
+  const e = entry(), name = sheetName(), d = data[name];
+  const { m, y, n, avail, isCur, today } = dayInfo();
+  const on = (q, fn) => { const el = $(q); if(el) el.onclick = fn; };
+
+  const strip = Array.from({ length: n }, (_, i) => {
+    const day = i + 1, wd = new Date(y, m, day).getDay();
+    return `<button class="day ${day === sel.day ? 'sel' : ''} ${isCur && day === today ? 'today' : ''} ${wd === 0 ? 'sun' : ''} ${hasData(day) ? 'has' : ''}"
+      data-day="${day}" ${avail.includes(day) ? '' : 'disabled'} aria-label="${day} ${MONTHS[m]}"><span>${WD[wd]}</span><b>${day}</b></button>`;
+  }).join('');
+
+  let body = '', ready = false;
+  if(!sheets.length) body = `<div class="note">No sections are assigned to you in the timetable yet. Ask the admin, then open the status chip and tap Sync now.</div>`;
+  else if(!d){
+    if(loading.has(name)) body = `<div class="note">Setting up this sheet. It is created automatically the first time, please wait...</div>`;
+    else if(sheetErr[name]) body = `<div class="note"><span class="bad">${esc(sheetErr[name])}</span><button class="btn small" id="retryBtn">Try again</button></div>`;
+    else body = `<div class="note">This sheet is not on the phone yet. Connect to the internet and it will be created and loaded automatically.</div>`;
+  }
+  else if(!d.students.length) body = `<div class="note">This sheet has no students.</div>`;
+  else ready = true;
+  if(ready) body = mode === 'mt' ? mtBodyHtml(d) : attBodyHtml(d);
+
+  const subs = subjects(sel.cls);
+  const note = noteFor(sel.day);
+
+  const selects = `
+    <div class="pk">
+      <select id="selCls" aria-label="Class">${classes().map(x => `<option value="${esc(x)}" ${x === sel.cls ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>
+      <select id="selSub" aria-label="Subject">${subs.map(x => `<option value="${esc(x)}" ${x === sel.sub ? 'selected' : ''}>${esc(titleCase(x))}</option>`).join('')}</select>
+      <select id="selMon" aria-label="Month">${monthsOf(sel.cls, sel.sub).map(x => `<option value="${esc(x)}" ${x === sel.mon ? 'selected' : ''}>${esc(monLabel(x))}</option>`).join('')}</select>
     </div>`;
 
-  $('#sheetSel').onchange = e => switchTo(() => { sel.sheet = e.target.value; store.set('sheet', sel.sheet); });
-  $('#daySel').onchange = e => switchTo(() => { sel.day = Number(e.target.value); });
-  $('#statusChip').onclick = openDialog;
-  $('#saveBtn').onclick = save;
-  $('#restBtn').onclick = markRest;
+  const modeRow = `
+    <div class="mrow">
+      <div class="tabs2" role="group" aria-label="Mode">
+        <button data-mode="att" class="${mode === 'att' ? 'on' : ''}">Attendance</button>
+        <button data-mode="mt" class="${mode === 'mt' ? 'on' : ''}"><span class="lg">Monthly test</span><span class="sm">Test</span></button>
+      </div>
+      <div class="ibtns">
+        ${mode === 'att' ? `<button class="ib" id="calBtn" aria-label="Calendar" title="Calendar">${IC.cal}</button>
+        <button class="ib" id="noteBtn" aria-label="${note ? 'Edit note' : 'Add note'}" title="${note ? 'Edit note' : 'Add note'}">${IC.note}</button>` : ''}
+        <button class="ib" id="printBtn" aria-label="Print sheet" title="Print sheet">${IC.print}</button>
+      </div>
+    </div>`;
+
+  const attRows = `
+    <div class="strip" id="strip">${strip}</div>
+    <div class="prow"><div class="bar3" id="bar3"></div><div class="nums" id="nums"></div></div>`;
+
+  const mtRows = `
+    <label class="tot"><span>Total marks</span>
+      <input id="mtTotal" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 20" value="${esc(mtDraft.total)}"></label>
+    <div class="cnt" id="mtInfo"></div>`;
+
+  $('#app').innerHTML = `
+    <div class="stick">
+      <header class="top"><div class="row1">
+        <div class="ttl"><h1>CS Attendance</h1>${teacher ? `<div class="teacher">${esc(teacher)}${isAdmin ? ' (admin)' : ''}</div>` : ''}</div>
+        <button class="hideBtn" id="panelBtn" aria-expanded="${!panelHidden}" aria-label="${panelHidden ? 'Show' : 'Hide'} controls" title="${panelHidden ? 'Show' : 'Hide'} controls"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>
+        <button class="sync" id="statusChip" aria-label="Account and sync"><span class="dot"></span><span id="statusTxt"></span></button>
+      </div></header>
+      <div class="panel ${panelHidden ? 'hid' : ''}"><div class="pcard">
+        ${selects}
+        ${modeRow}
+        ${mode === 'mt' ? mtRows : attRows}
+      </div></div>
+    </div>
+    <div class="wrap">
+      <div class="badge" id="saveBadge"></div>
+      ${mode === 'mt'
+        ? '<div class="lowCnt" id="mtLow"></div>'
+        : `<div class="noteLine" id="noteLine" ${note ? 'style="display:block"' : ''}>Note: ${esc(note)}</div><div class="lowCnt" id="lowCnt"></div>`}
+      ${body}
+    </div>
+    <div class="bottom"><div class="in">
+      <button class="btn primary" id="saveBtn">Save attendance</button>
+    </div></div>`;
+  $('#app').classList.toggle('phid', panelHidden);
+  on('#retryBtn', () => { delete tried[name]; delete sheetErr[name]; fresh[name] = 0; renderMain(); });
+
   const list = $('#list');
-  if(list) list.onclick = e => {
-    const b = e.target.closest('button[data-v]'); if(!b) return;
-    const roll = b.closest('.row').dataset.roll, v = b.dataset.v;
-    if(draft[roll] === v) delete draft[roll]; else draft[roll] = v;
-    dirty = true; paintRow(b.closest('.row')); updateTally();
+  if(list){
+    list.onclick = ev => {
+      const b = ev.target.closest('button[data-v]'); if(!b) return;
+      const row = b.closest('.row'), roll = row.dataset.roll, v = b.dataset.v;
+      if(draft[roll] === v) delete draft[roll]; else draft[roll] = v;
+      dirty = true; paintRow(row); updateTally();
+    };
+    list.querySelectorAll('.row').forEach(paintRow);
+  }
+  document.querySelectorAll('input[data-all]').forEach(cb => cb.onchange = () => {
+    const d2 = data[sheetName()]; if(!d2) return;
+    const v = cb.dataset.all;
+    d2.students.forEach(s => { if(cb.checked) draft[s.roll] = v; else if(draft[s.roll] === v) delete draft[s.roll]; });
+    dirty = true; document.querySelectorAll('#list .row').forEach(paintRow); updateTally();
+  });
+
+  const mtList = $('#mtList');
+  if(mtList) mtList.oninput = ev => {
+    const inp = ev.target.closest('.mk'); if(!inp) return;
+    const roll = inp.closest('.row').dataset.roll, total = Number(mtDraft.total) || 0;
+    const val = inp.value.replace(',', '.').toUpperCase().trim(), prev = mtDraft.marks[roll] || '';
+    const typingAbs = /^(A|AB|ABS|ABSE|ABSEN|ABSENT)$/.test(val);
+    const typingNum = /^\d{0,4}(\.\d{0,2})?$/.test(val);
+    if(!typingAbs && !typingNum){ inp.value = prev; return toast('Enter marks, or A / AB / Absent.'); }
+    if(val !== '' && !total){ inp.value = prev; return toast('Enter the total marks first.'); }
+    if(typingNum && val !== '' && total > 0 && Number(val) > total){ inp.value = prev; return toast('Marks cannot be more than ' + total + '.'); }
+    inp.value = val; mtDraft.marks[roll] = val;
+    dirty = true; updateTally();
   };
+  const tot = $('#mtTotal');
+  if(tot) tot.oninput = () => { mtDraft.total = tot.value.trim().replace(',', '.'); dirty = true; updateTally(); };
+
+  window.scrollTo(0, sy);
+  centerStrip(); requestAnimationFrame(centerStrip);
   updateTally(); updateStatus();
+
+  // sheet missing or old on the phone and we are online: load / create it in the background
+  if(e && navigator.onLine && authed() && !loading.has(name)){
+    const stale = !d ? !tried[name] : (Date.now() - (fresh[name] || 0) > 120000);
+    if(stale){
+      tried[name] = true; fresh[name] = Date.now();
+      loadSheet(e, !d || isCurMonth(e))
+        .catch(err => { if(!d) sheetErr[name] = errText(err); })
+        .finally(() => { if(!authed() || sheetName() !== name) return; if(!dirty){ loadDraft(); if(mode === 'mt') loadMtDraft(); } renderMain(); });
+      if(!d) setTimeout(() => { if(loading.has(name)) renderMain(); }, 0);
+    }
+  }
+}
+
+function togglePanel(){
+  panelHidden = !panelHidden; store.set('phide', panelHidden);
+  const p = $('.panel'), b = $('#panelBtn');
+  if(p) p.classList.toggle('hid', panelHidden);
+  $('#app').classList.toggle('phid', panelHidden);
+  if(b){
+    b.setAttribute('aria-expanded', String(!panelHidden));
+    b.setAttribute('aria-label', (panelHidden ? 'Show' : 'Hide') + ' controls');
+    b.title = (panelHidden ? 'Show' : 'Hide') + ' controls';
+  }
+  if(!panelHidden) centerStrip();
 }
 
 function switchTo(fn){
   if(dirty && !confirm('Discard the changes you have not saved?')){ renderMain(); return; }
-  dirty = false; fn(); loadDraft(); renderMain();
+  dirty = false; fn(); loadDraft(); if(mode === 'mt') loadMtDraft(); renderMain();
 }
 function paintRow(row){
   const v = draft[row.dataset.roll];
+  ['p','a','l','b'].forEach(k => row.classList.toggle('is-' + k, v === k.toUpperCase()));
   row.querySelectorAll('button[data-v]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
 }
+
 function updateTally(){
-  const c = counts();
-  $('#tally').innerHTML = `<span class="p"><b>${c.p}</b>present</span><span class="a"><b>${c.a}</b>absent</span><span><b>${c.n}</b>not marked</span>`;
+  const d = data[sheetName()];
+  if(mode === 'mt') return updateMt(d);
+  const c = counts(), t = c.total || 1;
+  $('#bar3').innerHTML = ['p','a','l','b'].map(k => `<i class="${k}" style="width:${c[k] / t * 100}%"></i>`).join('');
+  $('#nums').innerHTML = `<span class="p"><b>${c.p}</b>P</span><span class="a"><b>${c.a}</b>A</span><span class="l"><b>${c.l}</b>L</span><span class="b"><b>${c.b}</b>B</span><span><b>${c.n}</b>left</span>`;
+  document.querySelectorAll('input[data-all]').forEach(cb => {
+    cb.checked = !!d && d.students.length > 0 && d.students.every(s => draft[s.roll] === cb.dataset.all);
+  });
+  const sb = $('#saveBtn');
+  if(sb){ sb.textContent = c.n ? 'Save attendance (' + c.n + ' left)' : 'Save attendance'; sb.classList.toggle('incomplete', c.n > 0); }
+  paintPct();
 }
-function markRest(){
-  const d = data[sel.sheet]; if(!d) return;
-  d.students.forEach(s => { if(!draft[s.roll]) draft[s.roll] = 'P'; });
-  dirty = true; document.querySelectorAll('#list .row').forEach(paintRow); updateTally();
+/** Puts a record in the queue (one per sheet+day). Marks are replaced; a note is kept unless a new one is given. */
+function enqueue(marks, note){
+  const name = sheetName(), id = name + '|' + sel.day;
+  const old = queue.find(x => x.id === id);
+  const rec = { id, sheet:name, day:sel.day, marks, ts:Date.now() };
+  const nt = note !== undefined ? note : (old ? old.note : undefined);
+  if(nt !== undefined) rec.note = nt;
+  queue = queue.filter(x => x.id !== id);
+  queue.push(rec);
+  store.set('queue', queue);
+  delete confirms[id]; store.set('confirms', confirms);
+}
+function buildMarks(){
+  const d = data[sheetName()], srv = (d.marks && d.marks[sel.day]) || {}, marks = {};
+  d.students.forEach(s => {
+    const v = draft[s.roll];
+    if(MARKS.includes(v)) marks[s.roll] = v;
+    else if(srv[s.roll]) marks[s.roll] = '';      // un-marked on screen: clear it in the sheet too
+  });
+  return marks;
 }
 function save(){
-  const d = data[sel.sheet]; if(!d) return toast('This sheet is not on the phone yet');
-  const marks = {};
-  d.students.forEach(s => { if(draft[s.roll] === 'P' || draft[s.roll] === 'A') marks[s.roll] = draft[s.roll]; });
-  const n = Object.keys(marks).length;
-  if(!n) return toast('Mark at least one student first');
-  const id = sel.sheet + '|' + sel.day;
-  queue = queue.filter(x => x.id !== id);
-  queue.push({ id, sheet:sel.sheet, day:sel.day, marks, ts:Date.now() });
-  store.set('queue', queue); dirty = false;
-  const left = counts().n;
-  toast(navigator.onLine ? 'Saved' + (left ? ' (' + left + ' not marked)' : '') : 'Saved on this phone. It will sync when internet returns.');
-  updateStatus(); syncQueue();
+  if(mode === 'mt') return saveMt();
+  const name = sheetName(), d = data[name];
+  if(!d) return toast('This sheet is not on the phone yet');
+  const c = counts();
+  if(c.n > 0) return toast(c.n + ' student' + (c.n > 1 ? 's are' : ' is') + ' not marked. Mark everyone P, A, L or B first.');
+  const marks = buildMarks();
+  if(!Object.keys(marks).length) return toast('No students to save');
+  enqueue(marks); dirty = false;
+  toast('Saved on phone. Sending to the sheet...');
+  renderMain();
+  syncQueue().then(ok => { if(!ok && queue.length) toast('Saved on this phone. Tap the status chip to see why it has not reached the sheet.'); });
 }
 
-/* ---------- status + dialog ---------- */
-function updateStatus(){
-  const chip = $('#statusChip'), txt = $('#statusTxt'); if(!chip) return;
-  const on = navigator.onLine;
-  chip.classList.toggle('off', !on); chip.classList.toggle('busy', syncing || refreshing);
-  txt.textContent = (syncing || refreshing) ? 'Syncing...'
-    : queue.length ? queue.length + ' to sync'
-    : on ? 'Synced' : 'Offline';
+/* ---------- note for a day (college off, holiday, ...) ---------- */
+function openNote(){
+  const name = sheetName(), d = data[name];
+  if(!d) return toast('This sheet is not on the phone yet');
+  const { m } = dayInfo(), cur = noteFor(sel.day), dlg = $('#dlg');
+  $('#dlgBody').innerHTML = `
+    <h2>Note for ${sel.day} ${MONTHS[m].slice(0, 3)}</h2>
+    <div class="meta">Saved in the sheet as a note on this date (the date header turns yellow). Use it when college is closed or the class did not happen.</div>
+    <div class="chips">
+      ${['College closed','Public holiday','Emergency closure','Class not held','Exam day'].map(t => `<button class="chip" data-chip="${esc(t)}">${esc(t)}</button>`).join('')}
+    </div>
+    <textarea id="noteTxt" maxlength="500" placeholder="Type the reason here...">${esc(cur)}</textarea>
+    <div class="acts">
+      <button class="btn small primary" id="noteSave">Save note</button>
+      ${cur ? '<button class="btn small danger" id="noteClear">Remove note</button>' : ''}
+      <button class="btn small" id="noteCancel">Cancel</button>
+    </div>`;
+  dlg.showModal();
+  const ta = $('#noteTxt');
+  dlg.querySelectorAll('[data-chip]').forEach(b => b.onclick = () => { ta.value = b.dataset.chip; ta.focus(); });
+  const commit = text => {
+    const old = queued(sel.day);
+    enqueue(old ? old.marks : {}, text);
+    dlg.close(); renderMain();
+    toast(text ? 'Note saved on phone. Sending to the sheet...' : 'Removing note...');
+    syncQueue();
+  };
+  $('#noteSave').onclick = () => commit(ta.value.trim());
+  const c = $('#noteClear'); if(c) c.onclick = () => commit('');
+  $('#noteCancel').onclick = () => dlg.close();
 }
-function openDialog(){
+
+/* ---------- print the underlying sheet ---------- */
+async function printSheet(){
+  const name = sheetName();
+  if(!name || !data[name]) return toast('This sheet is not on the phone yet');
+  if(!navigator.onLine) return toast('Printing needs an internet connection');
+  const w = window.open('', '_blank');           // opened now so the browser does not block it
+  try{
+    if(queue.some(q => q.sheet === name)){
+      toast('Sending your latest attendance first...');
+      await syncQueue(); if(queue.some(q => q.sheet === name)) await syncQueue();
+      if(queue.some(q => q.sheet === name)) throw new Error('Latest attendance is not in the sheet yet. Try again.');
+    }
+    toast('Preparing the PDF...');
+    const r = await api({ action:'pdf', sheet:name }, 90000);
+    if(!r.ok) throw new Error(r.error || 'Could not create the PDF');
+    const bin = atob(r.pdf), arr = new Uint8Array(bin.length);
+    for(let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([arr], { type:'application/pdf' }));
+    if(w) w.location.href = url;
+    else { const a = document.createElement('a'); a.href = url; a.download = name + '.pdf'; document.body.appendChild(a); a.click(); a.remove(); }
+  }catch(e){ if(w) w.close(); toast('Could not print: ' + errText(e)); }
+}
+
+/* ---------- dialogs ---------- */
+function openCalendar(){
+  const { m, y, n, avail, isCur, today } = dayInfo();
+  const offset = (new Date(y, m, 1).getDay() + 6) % 7;   // Monday first
+  const heads = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(h => `<div class="h ${h === 'Sun' ? 'sun' : ''}">${h}</div>`).join('');
+  const cells = Array.from({ length: offset }, () => '<div></div>').join('') +
+    Array.from({ length: n }, (_, i) => {
+      const day = i + 1;
+      return `<button class="cell ${day === sel.day ? 'sel' : ''} ${isCur && day === today ? 'today' : ''} ${hasData(day) ? 'has' : ''} ${noteFor(day) ? 'note' : ''}"
+        data-pick="${day}" ${avail.includes(day) ? '' : 'disabled'}>${day}</button>`;
+    }).join('');
+  $('#dlgBody').innerHTML = `
+    <h2>${MONTHS[m]} ${y}</h2>
+    <div class="meta">${esc(sheetName())}</div>
+    <div class="grid">${heads}${cells}</div>
+    <div class="legend"><span>Green dot: has attendance</span><span>Yellow dot: note</span><span>Ring: today</span></div>
+    <div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>`;
+  const dlg = $('#dlg'); dlg.showModal();
+  $('#closeDlg').onclick = () => dlg.close();
+  dlg.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => { dlg.close(); switchTo(() => { sel.day = Number(b.dataset.pick); }); });
+}
+
+function openSync(){
   const dlg = $('#dlg');
   const when = lastSync ? new Date(lastSync).toLocaleString() : 'never';
   $('#dlgBody').innerHTML = `
-    <h2>Sync</h2>
-    <div class="meta">${navigator.onLine ? 'Online' : 'Offline. Everything you save stays on this phone.'}<br>Last synced: ${esc(when)}</div>
+    <h2>Account and sync</h2>
+    <div class="meta"><b>${esc(teacher || user)}</b>${isAdmin ? ' (admin)' : ''}<br>${esc(user)}<br>
+      ${navigator.onLine ? 'Online' : 'Phone reports no internet. Everything you save stays on this phone.'}<br>Last synced: ${esc(when)}<br>Server ends with: ${esc(API.slice(-12))}</div>
     ${queue.length ? queue.map(q => `
-      <div class="q"><div><b>${esc(q.sheet)}</b>, day ${q.day}
-        <small>${Object.keys(q.marks).length} students waiting</small>
+      <div class="q"><div><b>${esc(q.sheet)}</b>, ${q.kind === 'mt' ? 'monthly test' : 'day ' + q.day}
+        <small>${Object.keys(q.marks).length} students${q.note !== undefined ? ' + note' : ''} waiting</small>
         ${q.error ? `<small class="bad">${esc(q.error)}</small>` : ''}</div>
         <button class="btn small danger" data-discard="${esc(q.id)}">Discard</button></div>`).join('')
-      : '<div class="q"><div>Nothing is waiting to sync.</div></div>'}
+      : '<div class="q"><div>Nothing is waiting to sync. Everything is in the sheet.</div></div>'}
+    ${lastError && queue.length ? `<div class="diag">${esc(lastError)}</div>` : ''}
     <div class="acts">
-      <button class="btn small primary" id="syncNow">Sync now</button>
-      <button class="btn small" id="closeDlg">Close</button>
-      <button class="btn small danger" id="outBtn">Sign out</button>
+      <button class="btn small primary grow" id="syncNow">Sync now</button>
+      <button class="btn small grow" id="pwBtn">Change password</button>
+    </div>
+    <div class="acts">
+      <button class="btn small danger grow" id="signOutBtn">Sign out</button>
+      <button class="btn small grow" id="closeDlg">Close</button>
     </div>`;
   dlg.showModal();
   $('#closeDlg').onclick = () => dlg.close();
-  $('#syncNow').onclick = async () => { await syncQueue(); await refreshAll(); dlg.close(); };
-  $('#outBtn').onclick = () => { dlg.close(); signOut(); };
+  $('#pwBtn').onclick = openPassword;
+  $('#signOutBtn').onclick = () => { dlg.close(); signOut(); };
+  $('#syncNow').onclick = async () => {
+    dlg.close();
+    toast('Syncing...');
+    const ok = await syncQueue();
+    if(!ok && queue.length) toast('Not synced: ' + (lastError || 'unknown problem'));
+    if(!queue.length){ fresh[sheetName()] = 0; }
+    refreshAll();
+  };
   dlg.querySelectorAll('[data-discard]').forEach(b => b.onclick = () => {
     queue = queue.filter(x => x.id !== b.dataset.discard); store.set('queue', queue);
-    dlg.close(); updateStatus(); loadDraft(); renderMain();
+    dlg.close(); loadDraft(); renderMain();
   });
+}
+
+function openPassword(){
+  const dlg = $('#dlg');
+  $('#dlgBody').innerHTML = `
+    <h2>Change password</h2>
+    <div class="meta">This changes the password for the portal as well.</div>
+    <label for="pwOld">Current password</label>
+    <input id="pwOld" type="password" autocomplete="current-password">
+    <label for="pwNew">New password (at least 4 characters)</label>
+    <input id="pwNew" type="password" autocomplete="new-password">
+    <label for="pwNew2">New password again</label>
+    <input id="pwNew2" type="password" autocomplete="new-password">
+    <div class="err" id="pwErr" role="alert"></div>
+    <div class="acts">
+      <button class="btn small primary grow" id="pwSave">Save password</button>
+      <button class="btn small grow" id="pwCancel">Cancel</button>
+    </div>`;
+  $('#pwCancel').onclick = () => dlg.close();
+  $('#pwSave').onclick = async () => {
+    const o = $('#pwOld').value, nw = $('#pwNew').value, n2 = $('#pwNew2').value, err = $('#pwErr');
+    if(!o || !nw) { err.textContent = 'Fill in all the fields.'; return; }
+    if(nw !== n2) { err.textContent = 'The two new passwords do not match.'; return; }
+    err.textContent = 'Saving...';
+    try{
+      const r = await api({ action:'password', oldPass:o, newPass:nw });
+      if(r.ok){ pass = nw; store.set('pass', pass); dlg.close(); toast('Password changed'); }
+      else err.textContent = r.error === 'WRONG_OLD' ? 'The current password is wrong.'
+        : r.error === 'TOO_SHORT' ? 'The new password must be at least 4 characters.' : (r.error || 'Could not change the password.');
+    }catch(e){ err.textContent = errText(e); }
+  };
+}
+
+/** Shows whether THIS day is really in the sheet (confirmed by the server), waiting, or failed. */
+function updateBadge(){
+  const el = $('#saveBadge'); if(!el) return;
+  const name = sheetName(), id = name + '|' + sel.day, d = data[name];
+  const q = queue.find(x => x.id === id), c = confirms[id];
+  let cls = '', txt = '';
+  if(q){
+    if(q.error){ cls = 'err'; txt = 'Not in the sheet yet: ' + q.error; }
+    else if(syncing){ cls = 'wait'; txt = 'Sending to the sheet...'; }
+    else { cls = 'wait'; txt = navigator.onLine ? 'Saved on phone, waiting to reach the sheet' : 'Saved on phone, will go to the sheet when online'; }
+  } else if(c){
+    const t = new Date(c.at).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+    cls = 'ok';
+    txt = c.p == null ? '\u2713 Note confirmed in the sheet at ' + t
+      : '\u2713 Confirmed in the sheet at ' + t + ' (P ' + c.p + ', A ' + c.a + (c.l ? ', L ' + c.l : '') + (c.b ? ', B ' + c.b : '') + ')';
+  } else {
+    const m = d && d.marks && d.marks[sel.day], k = m ? Object.keys(m).length : 0;
+    if(k){ cls = 'ok'; txt = '\u2713 In the sheet (' + k + ' students marked)'; }
+  }
+  el.className = 'badge ' + cls; el.textContent = txt; el.style.display = txt ? 'block' : 'none';
+}
+
+function updateStatus(){
+  const chip = $('#statusChip'), txt = $('#statusTxt'); if(!chip) return;
+  const on = navigator.onLine, busy = syncing || refreshing;
+  chip.classList.toggle('off', !on); chip.classList.toggle('busy', busy);
+  chip.classList.toggle('err', !busy && !!queue.length && !!lastError);
+  txt.textContent = syncing ? 'Saving...' : refreshing ? 'Updating...' : queue.length ? queue.length + ' to sync' : on ? 'Synced' : 'Offline';
+  updateBadge();
 }
 
 let toastTimer;
 function toast(msg){
   const t = $('#toast'); t.textContent = msg; t.style.display = 'block';
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.style.display = 'none', 2800);
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.style.display = 'none', 4000);
 }
+document.addEventListener('click', ev => {
+  const t = ev.target; if(!t.closest) return;
+  let b;
+  if((b = t.closest('[data-mode]'))){
+    if(b.dataset.mode !== mode) switchTo(() => { mode = b.dataset.mode; store.set('mode', mode); });
+    return;
+  }
+  if((b = t.closest('#strip [data-day]'))){
+    if(!b.disabled) switchTo(() => { sel.day = Number(b.dataset.day); });
+    return;
+  }
+  if(t.closest('#calBtn'))     return openCalendar();
+  if(t.closest('#noteBtn'))    return openNote();
+  if(t.closest('#printBtn'))   return printSheet();
+  if(t.closest('#statusChip')) return openSync();
+  if(t.closest('#saveBtn'))    return save();
+  if(t.closest('#panelBtn'))   return togglePanel();
+});
+document.addEventListener('change', ev => {
+  const id = ev.target && ev.target.id, v = ev.target && ev.target.value;
+  if(id === 'selCls') switchTo(() => choose('cls', v));
+  else if(id === 'selSub') switchTo(() => choose('sub', v));
+  else if(id === 'selMon') switchTo(() => choose('mon', v));
+});
 
 /* ---------- start ---------- */
 window.addEventListener('online',  () => { updateStatus(); syncQueue().then(refreshAll); });
@@ -368,9 +1155,13 @@ window.addEventListener('offline', updateStatus);
 document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') syncQueue(); });
 setInterval(syncQueue, 30000);
 
-if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-render();
-if(pin){ syncQueue().then(refreshAll); }
+if('serviceWorker' in navigator){
+  const had = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if(had && !dirty) location.reload(); });
+}
+ensureSel(); initDay(); render();
+if(authed()){ syncQueue().then(refreshAll); }
 </script>
 </body>
 </html>
