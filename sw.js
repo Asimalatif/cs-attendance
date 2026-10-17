@@ -1,5 +1,5 @@
 // Bump VERSION every time you change index.html so phones pick up the update.
-const VERSION = 'csa-v1';
+const VERSION = 'csa-v2';
 const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -34,3 +34,67 @@ self.addEventListener('fetch', e => {
   // Other files: saved copy first, then network
   e.respondWith(caches.match(req).then(hit => hit || fetch(req)));
 });
+
+/* ===== Background sync: sends queued attendance when internet returns, even with the app closed ===== */
+function kvDb() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('csa_bg', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function kvGet(k) {
+  const db = await kvDb();
+  return new Promise((res, rej) => {
+    const r = db.transaction('kv').objectStore('kv').get(k);
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function kvSet(k, v) {
+  const db = await kvDb();
+  return new Promise((res, rej) => {
+    const t = db.transaction('kv', 'readwrite');
+    t.objectStore('kv').put(v, k);
+    t.oncomplete = () => res();
+    t.onerror = () => rej(t.error);
+  });
+}
+
+self.addEventListener('sync', e => {
+  if (e.tag === 'csa-sync') e.waitUntil(bgSync());
+});
+
+async function bgSync() {
+  const job = await kvGet('job');
+  if (!job || !job.user || !job.pass || !job.queue || !job.queue.length) return;
+  const batch = job.queue.map(q => Object.assign({}, q));
+
+  // a network failure throws here, so the browser retries automatically later
+  const r = await fetch(job.api, {
+    method: 'POST',
+    redirect: 'follow',
+    body: JSON.stringify({ username: job.user, password: job.pass, action: 'save', records: batch })
+  });
+  let res;
+  try { res = JSON.parse(await r.text()); } catch (err) { throw new Error('bad response'); }   // retry later
+  if (!res.ok) return;                       // e.g. BAD_LOGIN: the app explains it when opened
+
+  const saved = res.saved || [];
+  const savedBatch = batch.filter(b => saved.includes(b.id));
+  if (!savedBatch.length) return;
+
+  // remove saved records from the mirrored queue (keep anything newer the page added meanwhile)
+  const cur = (await kvGet('job')) || job;
+  cur.queue = (cur.queue || []).filter(x => !savedBatch.some(b => b.id === x.id && b.ts === x.ts));
+  await kvSet('job', cur);
+
+  // leave a note for the page to absorb when it opens
+  const done = (await kvGet('done')) || [];
+  done.push({ batch: savedBatch, res: { saved: saved, failed: res.failed || [], confirmed: res.confirmed || {} } });
+  await kvSet('done', done);
+
+  const cl = await self.clients.matchAll({ includeUncontrolled: true });
+  cl.forEach(c => c.postMessage({ type: 'bg-synced' }));
+}
