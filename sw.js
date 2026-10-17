@@ -1,5 +1,5 @@
 // Bump VERSION every time you change index.html so phones pick up the update.
-const VERSION = 'csa-v2';
+const VERSION = 'csa-v4';
 const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -68,14 +68,14 @@ self.addEventListener('sync', e => {
 
 async function bgSync() {
   const job = await kvGet('job');
-  if (!job || !job.user || !job.pass || !job.queue || !job.queue.length) return;
+  if (!job || !job.user || !job.token || !job.queue || !job.queue.length) return;
   const batch = job.queue.map(q => Object.assign({}, q));
 
   // a network failure throws here, so the browser retries automatically later
   const r = await fetch(job.api, {
     method: 'POST',
     redirect: 'follow',
-    body: JSON.stringify({ username: job.user, password: job.pass, action: 'save', records: batch })
+    body: JSON.stringify({ username: job.user, token: job.token, action: 'save', records: batch })
   });
   let res;
   try { res = JSON.parse(await r.text()); } catch (err) { throw new Error('bad response'); }   // retry later
@@ -97,4 +97,22 @@ async function bgSync() {
 
   const cl = await self.clients.matchAll({ includeUncontrolled: true });
   cl.forEach(c => c.postMessage({ type: 'bg-synced' }));
+
+  // tell the teacher, but only if the app is not already open on screen
+  const visible = cl.some(c => c.visibilityState === 'visible');
+  if (!visible && self.Notification && Notification.permission === 'granted') {
+    await self.registration.showNotification('Attendance synced \u2713', {
+      body: savedBatch.length + ' record(s) reached the sheet.',
+      icon: './icon-192.png',
+      tag: 'csa-synced'
+    });
+  }
 }
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    for (const c of list) { if ('focus' in c) return c.focus(); }
+    return self.clients.openWindow('./');
+  }));
+});

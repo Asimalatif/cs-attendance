@@ -263,6 +263,28 @@ dialog::backdrop{background:rgba(8,14,26,.55)}
   #app.phid{grid-template-columns:minmax(0,1fr)}
   #app.phid .wrap{grid-column:1}
 }
+
+/* ===== v2 additions ===== */
+.day.hasnote{outline:2px solid #FFD166;outline-offset:-2px}
+.cell.note{outline:2px solid var(--leave);outline-offset:-2px}
+.row{transition:background .15s,border-color .15s}
+.mrow{flex-wrap:wrap}
+.ibtns{margin-left:auto}
+.ib{width:38px;height:38px}
+.sq{width:100%;height:44px;border:1.5px solid var(--line);border-radius:12px;background:var(--surface);padding:0 14px;margin:0 0 8px;font-size:16px}
+.sq:focus{border-color:var(--ring);outline:none}
+.skel-msg{font-size:13px;color:var(--muted);font-weight:650;margin:2px 2px 10px}
+.skel{height:58px;border-radius:var(--r);margin-bottom:8px;border:1px solid var(--line);
+  background:linear-gradient(90deg,var(--surface) 25%,var(--line) 50%,var(--surface) 75%);background-size:200% 100%;animation:shimmer 1.3s linear infinite}
+@keyframes shimmer{to{background-position:-200% 0}}
+.toastBtn{margin-left:12px;border:0;background:transparent;color:inherit;font-weight:800;text-decoration:underline;padding:4px 2px}
+.sp{font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap}
+.sp.lowp{background:var(--absent);color:#fff;padding:2px 9px;border-radius:99px}
+.ov{font-size:12px;font-weight:800;padding:3px 10px;border-radius:99px;white-space:nowrap}
+.ov.none{background:var(--absent-bg);color:var(--absent)}
+.ov.part{background:var(--leave-bg);color:var(--leave)}
+.ov.ok{background:var(--present-bg);color:var(--present)}
+.bginfo{font-size:12.5px;line-height:1.6;color:var(--muted);margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--bg)}
 </style>
 </head>
 <body>
@@ -287,7 +309,7 @@ const store = {
   get(k, d){ try{ const v = localStorage.getItem('csa2_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
   set(k, v){
     try{ localStorage.setItem('csa2_' + k, JSON.stringify(v)); }catch(e){}
-    if(k === 'queue' || k === 'user' || k === 'pass') mirrorBg();   // keep the service worker's copy up to date
+    if(k === 'queue' || k === 'user' || k === 'token') mirrorBg();   // keep the service worker's copy up to date
   }
 };
 const API = (typeof API_URL === 'string') ? API_URL : '';
@@ -295,7 +317,9 @@ let mode = store.get('mode', 'att');   // 'att' or 'mt'
 let panelHidden = store.get('phide', false);
 let mtDraft = { total:'', marks:{} };
 let user    = store.get('user', '');
-let pass    = store.get('pass', '');
+let token   = store.get('token', '');   // login token (the password is never kept)
+let legacyPass = store.get('pass', ''); // only from an old install; replaced by a token on first online start
+let searchQ = '';
 let teacher = store.get('teacher', '');
 let isAdmin = store.get('admin', false);
 let sheets  = store.get('sheets', []);     // [{name, cls, sub, mon, teacher}]
@@ -309,7 +333,7 @@ let draft  = {};
 let dirty = false, syncing = false, refreshing = false, prefetching = false, syncPromise = null;
 const tried = {}, loading = new Set(), sheetErr = {}, fresh = {};
 
-const authed = () => !!(user && pass);
+const authed = () => !!(user && (token || legacyPass));
 
 /* ---------- background sync (mirror of the queue for the service worker) ---------- */
 function bgDb(){ return new Promise((res, rej) => {
@@ -334,8 +358,8 @@ async function registerBgSync(){
 }
 async function mirrorBg(){
   try{
-    await bgSet('job', { api: API, user, pass, queue: JSON.parse(JSON.stringify(queue)) });
-    if(queue.length && user && pass) registerBgSync();
+    await bgSet('job', { api: API, user, token, queue: JSON.parse(JSON.stringify(queue)) });
+    if(queue.length && user && token) registerBgSync();
   }catch(e){}
 }
 
@@ -403,6 +427,7 @@ function ensureSel(){
   initDay();
 }
 function choose(kind, value){
+  searchQ = '';
   if(kind === 'cls'){
     sel.cls = value;
     const sb = subjects(value); if(!sb.includes(sel.sub)) sel.sub = sb[0];
@@ -475,11 +500,13 @@ function errText(e){
   return e.message || String(e);
 }
 
+const authBody = () => token ? { username:user, token } : (legacyPass ? { username:user, password:legacyPass } : { username:user });
+
 async function api(payload, ms = 45000){
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), ms);
   try{
-    const r = await fetch(API, { method:'POST', body: JSON.stringify({ username:user, password:pass, ...payload }), signal: ctl.signal, redirect:'follow' });
+    const r = await fetch(API, { method:'POST', body: JSON.stringify({ ...authBody(), ...payload }), signal: ctl.signal, redirect:'follow' });
     const txt = await r.text();
     try{ return JSON.parse(txt); }
     catch(e){ throw new Error('Server sent a web page instead of data. Check that the Apps Script web app is deployed with access "Anyone" and that API_URL is the latest URL.'); }
@@ -595,12 +622,14 @@ async function login(){
   if(!u || !p) { $('#loginErr').textContent = 'Enter your username and password.'; return; }
   if(!API || API.startsWith('PASTE')){ $('#loginErr').textContent = 'Not connected yet: set API_URL.'; return; }
   $('#loginErr').textContent = 'Signing in...';
-  user = u; pass = p;
+  user = u; token = ''; legacyPass = '';
   try{
-    const r = await api({ action:'sheets' });
-    if(!r.ok){
-      user = ''; pass = '';
-      $('#loginErr').textContent = r.error === 'BAD_LOGIN' ? 'Wrong username or password. Try again.' : 'Could not sign in: ' + r.error;
+    const r = await api({ action:'login', username:u, password:p });
+    if(!r.ok || !r.token){
+      user = ''; token = '';
+      $('#loginErr').textContent = r.error === 'BAD_LOGIN' ? 'Wrong username or password. Try again.'
+        : r.error === 'UNKNOWN_ACTION' ? 'The server has not been updated yet. Deploy the new backend first.'
+        : 'Could not sign in: ' + (r.error || 'unknown error');
       return;
     }
     const prev = store.get('lastUser', '');
@@ -608,11 +637,21 @@ async function login(){
       data = {}; queue = []; confirms = {}; sel = { cls:'', sub:'', mon:'', day:0 };
       store.set('data', data); store.set('queue', queue); store.set('confirms', confirms);
     }
+    token = r.token;
     teacher = r.teacher || ''; isAdmin = !!r.admin; sheets = r.sheets || [];
-    store.set('user', user); store.set('pass', pass); store.set('lastUser', user);
+    store.set('user', user); store.set('token', token); store.set('pass', ''); store.set('lastUser', user);
     store.set('teacher', teacher); store.set('admin', isAdmin); store.set('sheets', sheets);
     ensureSel(); loadDraft(); render(); refreshAll();
-  }catch(e){ user = ''; pass = ''; $('#loginErr').textContent = errText(e); }
+  }catch(e){ user = ''; token = ''; $('#loginErr').textContent = errText(e); }
+}
+
+/** Old installs stored the password. Swap it for a token the first time the phone is online. */
+async function migrateToken(){
+  if(token || !legacyPass || !user || !navigator.onLine) return;
+  try{
+    const r = await api({ action:'login', username:user, password:legacyPass });
+    if(r.ok && r.token){ token = r.token; legacyPass = ''; store.set('token', token); store.set('pass', ''); }
+  }catch(e){}
 }
 
 function clearLocal(){
@@ -629,7 +668,7 @@ async function signOut(msg){
       if(!confirm(queue.length + ' record(s) could not be saved to the sheet yet and would be lost. Sign out anyway?')) { renderMain(); return; }
     } else toast('Saved in sheet. Signed out.');
   }
-  user = ''; pass = ''; store.set('user', ''); store.set('pass', '');
+  user = ''; token = ''; legacyPass = ''; store.set('user', ''); store.set('token', ''); store.set('pass', '');
   if(!msg) clearLocal();
   renderLogin(msg);
 }
@@ -779,6 +818,7 @@ function mtBodyHtml(d){
       </li>`).join('') + '</ul>';
 }
 const IC = {
+  sum:  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
   cal:  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>',
   note: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v11l-5 5H4z"/><path d="M15 20v-5h5"/><path d="M8 9h8M8 13h4"/></svg>',
   print:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 9V3h10v6"/><rect x="4" y="9" width="16" height="8" rx="2"/><path d="M7 14h10v7H7z"/></svg>'
@@ -794,14 +834,14 @@ function renderMain(){
 
   const strip = Array.from({ length: n }, (_, i) => {
     const day = i + 1, wd = new Date(y, m, day).getDay();
-    return `<button class="day ${day === sel.day ? 'sel' : ''} ${isCur && day === today ? 'today' : ''} ${wd === 0 ? 'sun' : ''} ${hasData(day) ? 'has' : ''}"
+    return `<button class="day ${day === sel.day ? 'sel' : ''} ${isCur && day === today ? 'today' : ''} ${wd === 0 ? 'sun' : ''} ${hasData(day) ? 'has' : ''} ${noteFor(day) ? 'hasnote' : ''}"
       data-day="${day}" ${avail.includes(day) ? '' : 'disabled'} aria-label="${day} ${MONTHS[m]}"><span>${WD[wd]}</span><b>${day}</b></button>`;
   }).join('');
 
   let body = '', ready = false;
   if(!sheets.length) body = `<div class="note">No sections are assigned to you in the timetable yet. Ask the admin, then open the status chip and tap Sync now.</div>`;
   else if(!d){
-    if(loading.has(name)) body = `<div class="note">Setting up this sheet. It is created automatically the first time, please wait...</div>`;
+    if(loading.has(name)) body = '<div class="skel-msg">Setting up this sheet. It is created automatically the first time...</div>' + '<div class="skel"></div>'.repeat(6);
     else if(sheetErr[name]) body = `<div class="note"><span class="bad">${esc(sheetErr[name])}</span><button class="btn small" id="retryBtn">Try again</button></div>`;
     else body = `<div class="note">This sheet is not on the phone yet. Connect to the internet and it will be created and loaded automatically.</div>`;
   }
@@ -827,7 +867,8 @@ function renderMain(){
       </div>
       <div class="ibtns">
         ${mode === 'att' ? `<button class="ib" id="calBtn" aria-label="Calendar" title="Calendar">${IC.cal}</button>
-        <button class="ib" id="noteBtn" aria-label="${note ? 'Edit note' : 'Add note'}" title="${note ? 'Edit note' : 'Add note'}">${IC.note}</button>` : ''}
+        <button class="ib" id="noteBtn" aria-label="${note ? 'Edit note' : 'Add note'}" title="${note ? 'Edit note' : 'Add note'}">${IC.note}</button>
+        <button class="ib" id="sumBtn" aria-label="Monthly summary" title="Monthly summary">${IC.sum}</button>` : ''}
         <button class="ib" id="printBtn" aria-label="Print sheet" title="Print sheet">${IC.print}</button>
       </div>
     </div>`;
@@ -859,6 +900,7 @@ function renderMain(){
       ${mode === 'mt'
         ? '<div class="lowCnt" id="mtLow"></div>'
         : `<div class="noteLine" id="noteLine" ${note ? 'style="display:block"' : ''}>Note: ${esc(note)}</div><div class="lowCnt" id="lowCnt"></div>`}
+      ${ready ? `<input id="sq" class="sq" type="search" placeholder="Search name or roll no" autocomplete="off" value="${esc(searchQ)}">` : ''}
       ${body}
     </div>
     <div class="bottom"><div class="in">
@@ -871,6 +913,7 @@ function renderMain(){
   if(list){
     list.onclick = ev => {
       const b = ev.target.closest('button[data-v]'); if(!b) return;
+      if(navigator.vibrate) navigator.vibrate(8);
       const row = b.closest('.row'), roll = row.dataset.roll, v = b.dataset.v;
       if(draft[roll] === v) delete draft[roll]; else draft[roll] = v;
       dirty = true; paintRow(row); updateTally();
@@ -879,9 +922,12 @@ function renderMain(){
   }
   document.querySelectorAll('input[data-all]').forEach(cb => cb.onchange = () => {
     const d2 = data[sheetName()]; if(!d2) return;
-    const v = cb.dataset.all;
+    const v = cb.dataset.all, snap = Object.assign({}, draft);
     d2.students.forEach(s => { if(cb.checked) draft[s.roll] = v; else if(draft[s.roll] === v) delete draft[s.roll]; });
     dirty = true; document.querySelectorAll('#list .row').forEach(paintRow); updateTally();
+    toast(cb.checked ? 'Marked all ' + v : 'Cleared all ' + v, { label:'Undo', fn: () => {
+      draft = snap; dirty = true; document.querySelectorAll('#list .row').forEach(paintRow); updateTally();
+    } });
   });
 
   const mtList = $('#mtList');
@@ -899,6 +945,8 @@ function renderMain(){
   };
   const tot = $('#mtTotal');
   if(tot) tot.oninput = () => { mtDraft.total = tot.value.trim().replace(',', '.'); dirty = true; updateTally(); };
+  const sq = $('#sq');
+  if(sq){ sq.oninput = () => { searchQ = sq.value; applySearch(); }; applySearch(); }
 
   window.scrollTo(0, sy);
   centerStrip(); requestAnimationFrame(centerStrip);
@@ -980,6 +1028,10 @@ function save(){
   if(!d) return toast('This sheet is not on the phone yet');
   const c = counts();
   if(c.n > 0) return toast(c.n + ' student' + (c.n > 1 ? 's are' : ' is') + ' not marked. Mark everyone P, A, L or B first.');
+  const mi = dayInfo(), today0 = new Date(); today0.setHours(0, 0, 0, 0);
+  const age = Math.round((today0 - new Date(mi.y, mi.m, sel.day)) / 86400000);
+  if(age > 3 && !confirm('This date was ' + age + ' days ago. Save attendance for ' + sel.day + ' ' + MONTHS[mi.m] + ' anyway?')) return;
+  if(age < 0 && !confirm('This date is in the future. Save attendance anyway?')) return;
   const marks = buildMarks();
   if(!Object.keys(marks).length) return toast('No students to save');
   enqueue(marks); dirty = false;
@@ -1058,7 +1110,7 @@ function openCalendar(){
     <h2>${MONTHS[m]} ${y}</h2>
     <div class="meta">${esc(sheetName())}</div>
     <div class="grid">${heads}${cells}</div>
-    <div class="legend"><span>Green dot: has attendance</span><span>Yellow dot: note</span><span>Ring: today</span></div>
+    <div class="legend"><span>Green dot: has attendance</span><span>Yellow outline: note</span><span>Ring: today</span></div>
     <div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>`;
   const dlg = $('#dlg'); dlg.showModal();
   $('#closeDlg').onclick = () => dlg.close();
@@ -1079,6 +1131,11 @@ function openSync(){
         <button class="btn small danger" data-discard="${esc(q.id)}">Discard</button></div>`).join('')
       : '<div class="q"><div>Nothing is waiting to sync. Everything is in the sheet.</div></div>'}
     ${lastError && queue.length ? `<div class="diag">${esc(lastError)}</div>` : ''}
+    <div class="bginfo" id="bgInfo">Checking background sync...</div>
+    <div class="acts">
+      <button class="btn small grow" id="notifBtn">Sync notifications</button>
+      ${isAdmin ? '<button class="btn small grow" id="ovBtn">Today overview</button>' : ''}
+    </div>
     <div class="acts">
       <button class="btn small primary grow" id="syncNow">Sync now</button>
       <button class="btn small grow" id="pwBtn">Change password</button>
@@ -1090,6 +1147,12 @@ function openSync(){
   dlg.showModal();
   $('#closeDlg').onclick = () => dlg.close();
   $('#pwBtn').onclick = openPassword;
+  fillBgInfo();
+  $('#notifBtn').onclick = () => {
+    if(!('Notification' in window)) return toast('Notifications are not supported on this phone.');
+    Notification.requestPermission().then(p => { toast(p === 'granted' ? 'You will get a notification when attendance syncs.' : 'Notifications are blocked in the phone settings.'); fillBgInfo(); });
+  };
+  const ov = $('#ovBtn'); if(ov) ov.onclick = openOverview;
   $('#signOutBtn').onclick = () => { dlg.close(); signOut(); };
   $('#syncNow').onclick = async () => {
     dlg.close();
@@ -1130,7 +1193,7 @@ function openPassword(){
     err.textContent = 'Saving...';
     try{
       const r = await api({ action:'password', oldPass:o, newPass:nw });
-      if(r.ok){ pass = nw; store.set('pass', pass); dlg.close(); toast('Password changed'); }
+      if(r.ok){ if(r.token){ token = r.token; store.set('token', token); } dlg.close(); toast('Password changed'); }
       else err.textContent = r.error === 'WRONG_OLD' ? 'The current password is wrong.'
         : r.error === 'TOO_SHORT' ? 'The new password must be at least 4 characters.' : (r.error || 'Could not change the password.');
     }catch(e){ err.textContent = errText(e); }
@@ -1169,9 +1232,14 @@ function updateStatus(){
 }
 
 let toastTimer;
-function toast(msg){
+function toast(msg, action){
   const t = $('#toast'); t.textContent = msg; t.style.display = 'block';
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.style.display = 'none', 4000);
+  if(action){
+    const b = document.createElement('button'); b.className = 'toastBtn'; b.textContent = action.label;
+    b.onclick = () => { t.style.display = 'none'; action.fn(); };
+    t.appendChild(b);
+  }
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.style.display = 'none', action ? 7000 : 4000);
 }
 document.addEventListener('click', ev => {
   const t = ev.target; if(!t.closest) return;
@@ -1187,6 +1255,7 @@ document.addEventListener('click', ev => {
   if(t.closest('#calBtn'))     return openCalendar();
   if(t.closest('#noteBtn'))    return openNote();
   if(t.closest('#printBtn'))   return printSheet();
+  if(t.closest('#sumBtn'))     return openSummary();
   if(t.closest('#statusChip')) return openSync();
   if(t.closest('#saveBtn'))    return save();
   if(t.closest('#panelBtn'))   return togglePanel();
@@ -1197,6 +1266,85 @@ document.addEventListener('change', ev => {
   else if(id === 'selSub') switchTo(() => choose('sub', v));
   else if(id === 'selMon') switchTo(() => choose('mon', v));
 });
+
+/* ---------- search, summary, admin overview, background-sync status, swipe ---------- */
+function applySearch(){
+  const q = searchQ.trim().toLowerCase();
+  document.querySelectorAll('.list .row').forEach(row => {
+    const txt = (row.querySelector('.who b').textContent + ' ' + row.dataset.roll).toLowerCase();
+    row.style.display = !q || txt.includes(q) ? '' : 'none';
+  });
+}
+
+function openSummary(){
+  const d = data[sheetName()]; if(!d) return toast('This sheet is not on the phone yet');
+  const { lect, pct, pres } = attStats(), { m, y } = dayInfo(), dlg = $('#dlg');
+  const rows = d.students.map(s => ({ s, p: pct[s.roll], n: pres[s.roll] || 0 }))
+    .sort((a, b) => (a.p == null ? 101 : a.p) - (b.p == null ? 101 : b.p));
+  const low = rows.filter(r => r.p != null && r.p < LOW_ATT).length;
+  $('#dlgBody').innerHTML = `
+    <h2>Summary: ${MONTHS[m]} ${y}</h2>
+    <div class="meta">${esc(sheetName())}<br>${lect} lectures held, ${d.students.length} students, ${low} below ${LOW_ATT}%</div>
+    ${rows.map(r => `<div class="q"><div><b>${esc(r.s.name)}</b><small>${esc(r.s.roll)}</small></div>
+      <span class="sp ${r.p != null && r.p < LOW_ATT ? 'lowp' : ''}">${r.p == null ? '-' : r.n + '/' + lect + ' = ' + r.p + '%'}</span></div>`).join('')}
+    <div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>`;
+  dlg.showModal();
+  $('#closeDlg').onclick = () => dlg.close();
+}
+
+async function openOverview(){
+  const dlg = $('#dlg');
+  $('#dlgBody').innerHTML = '<h2>Today overview</h2><div class="meta">Loading...</div><div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>';
+  $('#closeDlg').onclick = () => dlg.close();
+  if(!dlg.open) dlg.showModal();
+  try{
+    const r = await api({ action:'overview' }, 90000);
+    if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'Deploy the new backend first.' : (r.error || 'Could not load the overview'));
+    const rank = { none:0, nosheet:0, error:0, partial:1, done:2 };
+    const items = (r.items || []).slice().sort((a, b) => (rank[a.status] - rank[b.status]) || a.cls.localeCompare(b.cls, undefined, { numeric:true }) || a.sub.localeCompare(b.sub));
+    const done = items.filter(i => i.status === 'done').length;
+    const label = i => i.status === 'done' ? ['ok', 'Marked ' + i.marked + '/' + i.total]
+      : i.status === 'partial' ? ['part', 'Partly ' + i.marked + '/' + i.total]
+      : i.status === 'nosheet' ? ['none', 'No sheet yet'] : i.status === 'error' ? ['none', 'Error'] : ['none', 'Not marked'];
+    $('#dlgBody').innerHTML = `
+      <h2>Today overview</h2>
+      <div class="meta">${r.day ? 'Day ' + r.day + ' of ' + esc(r.month || '') + ': ' : ''}${done} of ${items.length} sections fully marked</div>
+      ${items.map(i => { const l = label(i); return `<div class="q"><div><b>${esc(i.cls)}</b> ${esc(titleCase(i.sub))}<small>${esc(i.teacher || '')}</small></div><span class="ov ${l[0]}">${esc(l[1])}</span></div>`; }).join('') || '<div class="q"><div>Nothing to show.</div></div>'}
+      <div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>`;
+    $('#closeDlg').onclick = () => dlg.close();
+  }catch(e){
+    $('#dlgBody').innerHTML = `<h2>Today overview</h2><div class="diag">${esc(errText(e))}</div><div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>`;
+    $('#closeDlg').onclick = () => dlg.close();
+  }
+}
+
+async function fillBgInfo(){
+  const el = $('#bgInfo'); if(!el) return;
+  const t = [];
+  try{
+    const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : null;
+    t.push(reg && reg.active ? 'Worker: active' : 'Worker: not active yet (open the app online once)');
+    t.push('SyncManager' in window ? 'Background sync: supported' : 'Background sync: not supported here (it syncs when you open the app)');
+    if(reg && reg.sync && reg.sync.getTags){ const tags = await reg.sync.getTags(); t.push(tags.length ? 'A background sync is waiting to run' : 'No background sync waiting'); }
+    t.push('Notifications: ' + ('Notification' in window ? Notification.permission : 'not supported'));
+  }catch(e){ t.push('Could not check: ' + errText(e)); }
+  t.push(queue.length + ' record(s) queued');
+  if(el.isConnected) el.innerHTML = t.map(esc).join('<br>');
+}
+
+// swipe left/right on the student list = next / previous day
+let swX = 0, swY = 0, swT = 0;
+document.addEventListener('touchstart', ev => {
+  const p = ev.touches[0]; swX = p.clientX; swY = p.clientY; swT = Date.now();
+}, { passive:true });
+document.addEventListener('touchend', ev => {
+  if(mode !== 'att' || !authed() || document.querySelector('dialog[open]')) return;
+  const t = ev.target; if(!t.closest || !t.closest('.wrap') || t.closest('input,textarea,select')) return;
+  const p = ev.changedTouches[0], dx = p.clientX - swX, dy = p.clientY - swY;
+  if(Math.abs(dx) < 90 || Math.abs(dy) > 45 || Date.now() - swT > 600) return;
+  const { avail } = dayInfo(), i = avail.indexOf(sel.day), next = avail[i + (dx < 0 ? 1 : -1)];
+  if(next) switchTo(() => { sel.day = next; });
+}, { passive:true });
 
 /* ---------- start ---------- */
 window.addEventListener('online',  () => { updateStatus(); absorbBg().finally(() => syncQueue().then(refreshAll)); });
@@ -1211,7 +1359,7 @@ if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('message', ev => { if(ev.data && ev.data.type === 'bg-synced') absorbBg(); });
 }
 ensureSel(); initDay(); render();
-if(authed()){ mirrorBg(); absorbBg().finally(() => syncQueue().then(refreshAll)); }
+if(authed()){ migrateToken().finally(() => { mirrorBg(); absorbBg().finally(() => syncQueue().then(refreshAll)); }); }
 </script>
 </body>
 </html>

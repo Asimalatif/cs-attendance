@@ -1,16 +1,15 @@
 {
   "name": "CS Attendance",
-  "short_name": "CS Attendance",
-  "description": "Offline attendance and monthly test marks for Jinnah College teachers",
-  "start_url": "./index.html",
+  "short_name": "Attendance",
+  "description": "Offline attendance and monthly test marks for JCW teachers",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#0F1B2D",
   "theme_color": "#0F1B2D",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }
