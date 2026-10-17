@@ -285,7 +285,10 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const store = {
   get(k, d){ try{ const v = localStorage.getItem('csa2_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
-  set(k, v){ try{ localStorage.setItem('csa2_' + k, JSON.stringify(v)); }catch(e){} }
+  set(k, v){
+    try{ localStorage.setItem('csa2_' + k, JSON.stringify(v)); }catch(e){}
+    if(k === 'queue' || k === 'user' || k === 'pass') mirrorBg();   // keep the service worker's copy up to date
+  }
 };
 const API = (typeof API_URL === 'string') ? API_URL : '';
 let mode = store.get('mode', 'att');   // 'att' or 'mt'
@@ -307,6 +310,74 @@ let dirty = false, syncing = false, refreshing = false, prefetching = false, syn
 const tried = {}, loading = new Set(), sheetErr = {}, fresh = {};
 
 const authed = () => !!(user && pass);
+
+/* ---------- background sync (mirror of the queue for the service worker) ---------- */
+function bgDb(){ return new Promise((res, rej) => {
+  const r = indexedDB.open('csa_bg', 1);
+  r.onupgradeneeded = () => r.result.createObjectStore('kv');
+  r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+}); }
+async function bgSet(k, v){ const db = await bgDb(); return new Promise((res, rej) => {
+  const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k);
+  t.oncomplete = () => res(); t.onerror = () => rej(t.error);
+}); }
+async function bgGet(k){ const db = await bgDb(); return new Promise((res, rej) => {
+  const r = db.transaction('kv').objectStore('kv').get(k);
+  r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+}); }
+async function registerBgSync(){
+  try{
+    if(!('serviceWorker' in navigator)) return;
+    const reg = await navigator.serviceWorker.ready;
+    if(reg.sync) await reg.sync.register('csa-sync');
+  }catch(e){}
+}
+async function mirrorBg(){
+  try{
+    await bgSet('job', { api: API, user, pass, queue: JSON.parse(JSON.stringify(queue)) });
+    if(queue.length && user && pass) registerBgSync();
+  }catch(e){}
+}
+
+/** Applies the result of a save (made by the page OR by the service worker) to local data. */
+function applySaved(batch, res){
+  const saved = res.saved || [];
+  saved.forEach(id => {
+    const b = batch.find(x => x.id === id);
+    if(b && b.kind === 'mt'){
+      if(data[b.sheet]) data[b.sheet].mt = { total:b.total, marks:Object.assign({}, b.marks) };
+      if(res.confirmed && res.confirmed[id]) confirms[id] = res.confirmed[id];
+      return;
+    }
+    if(b && data[b.sheet]){
+      const D = data[b.sheet];
+      const m = D.marks = D.marks || {};
+      const day = Object.assign({}, m[b.day]);
+      Object.keys(b.marks).forEach(r => { if(b.marks[r] === '') delete day[r]; else day[r] = b.marks[r]; });
+      if(Object.keys(day).length) m[b.day] = day; else delete m[b.day];
+      if(b.note !== undefined){
+        D.notes = D.notes || {};
+        if(b.note) D.notes[b.day] = b.note; else delete D.notes[b.day];
+      }
+    }
+    if(res.confirmed && res.confirmed[id]) confirms[id] = res.confirmed[id];
+  });
+  queue = queue.filter(x => { const b = batch.find(y => y.id === x.id); return !(saved.includes(x.id) && b && b.ts === x.ts); });
+  (res.failed || []).forEach(f => { const x = queue.find(q => q.id === f.id); if(x) x.error = f.error; });
+  lastSync = Date.now(); store.set('lastSync', lastSync);
+  store.set('queue', queue); store.set('data', data); store.set('confirms', confirms);
+}
+
+/** Picks up records the service worker already sent while the app was closed. */
+async function absorbBg(){
+  try{
+    const done = await bgGet('done');
+    if(!done || !done.length) return;
+    await bgSet('done', []);
+    done.forEach(d => applySaved(d.batch, d.res));
+    if(authed()){ if(!dirty) loadDraft(); renderMain(); toast('Attendance was synced in the background'); }
+  }catch(e){}
+}
 
 /* ---------- sheet / class / subject / month helpers ---------- */
 const uniq = a => [...new Set(a)];
@@ -482,30 +553,7 @@ async function doSync(){
     const res = await api({ action:'save', records: batch }, 90000);
     if(res.ok){
       const saved = res.saved || [];
-      saved.forEach(id => {
-        const b = batch.find(x => x.id === id);
-        if(b && b.kind === 'mt'){
-          if(data[b.sheet]) data[b.sheet].mt = { total:b.total, marks:Object.assign({}, b.marks) };
-          if(res.confirmed && res.confirmed[id]) confirms[id] = res.confirmed[id];
-          return;
-        }
-        if(b && data[b.sheet]){
-          const D = data[b.sheet];
-          const m = D.marks = D.marks || {};
-          const day = Object.assign({}, m[b.day]);
-          Object.keys(b.marks).forEach(r => { if(b.marks[r] === '') delete day[r]; else day[r] = b.marks[r]; });
-          if(Object.keys(day).length) m[b.day] = day; else delete m[b.day];
-          if(b.note !== undefined){
-            D.notes = D.notes || {};
-            if(b.note) D.notes[b.day] = b.note; else delete D.notes[b.day];
-          }
-        }
-        if(res.confirmed && res.confirmed[id]) confirms[id] = res.confirmed[id];
-      });
-      queue = queue.filter(x => { const b = batch.find(y => y.id === x.id); return !(saved.includes(x.id) && b && b.ts === x.ts); });
-      (res.failed || []).forEach(f => { const x = queue.find(q => q.id === f.id); if(x) x.error = f.error; });
-      lastSync = Date.now(); store.set('lastSync', lastSync);
-      store.set('queue', queue); store.set('data', data); store.set('confirms', confirms);
+      applySaved(batch, res);
       lastError = (res.failed && res.failed.length) ? res.failed[0].error : '';
       ok = !lastError;
       if(saved.length){
@@ -1046,6 +1094,7 @@ function openSync(){
   $('#syncNow').onclick = async () => {
     dlg.close();
     toast('Syncing...');
+    await absorbBg();
     const ok = await syncQueue();
     if(!ok && queue.length) toast('Not synced: ' + (lastError || 'unknown problem'));
     if(!queue.length){ fresh[sheetName()] = 0; }
@@ -1150,18 +1199,19 @@ document.addEventListener('change', ev => {
 });
 
 /* ---------- start ---------- */
-window.addEventListener('online',  () => { updateStatus(); syncQueue().then(refreshAll); });
+window.addEventListener('online',  () => { updateStatus(); absorbBg().finally(() => syncQueue().then(refreshAll)); });
 window.addEventListener('offline', updateStatus);
-document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') syncQueue(); });
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') absorbBg().finally(syncQueue); });
 setInterval(syncQueue, 30000);
 
 if('serviceWorker' in navigator){
   const had = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register('sw.js').catch(() => {});
   navigator.serviceWorker.addEventListener('controllerchange', () => { if(had && !dirty) location.reload(); });
+  navigator.serviceWorker.addEventListener('message', ev => { if(ev.data && ev.data.type === 'bg-synced') absorbBg(); });
 }
 ensureSel(); initDay(); render();
-if(authed()){ syncQueue().then(refreshAll); }
+if(authed()){ mirrorBg(); absorbBg().finally(() => syncQueue().then(refreshAll)); }
 </script>
 </body>
 </html>
