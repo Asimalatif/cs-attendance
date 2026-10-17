@@ -358,8 +358,8 @@ async function registerBgSync(){
 }
 async function mirrorBg(){
   try{
-    await bgSet('job', { api: API, user, token, queue: JSON.parse(JSON.stringify(queue)) });
-    if(queue.length && user && token) registerBgSync();
+    await bgSet('job', { api: API, user, token, pass: token ? '' : legacyPass, queue: JSON.parse(JSON.stringify(queue)) });
+    if(queue.length && user && (token || legacyPass)) registerBgSync();
   }catch(e){}
 }
 
@@ -624,11 +624,14 @@ async function login(){
   $('#loginErr').textContent = 'Signing in...';
   user = u; token = ''; legacyPass = '';
   try{
-    const r = await api({ action:'login', username:u, password:p });
-    if(!r.ok || !r.token){
-      user = ''; token = '';
+    let r = await api({ action:'login', username:u, password:p });
+    if(r.error === 'UNKNOWN_ACTION'){           // backend not updated yet: sign in the old way, switch to a token later
+      legacyPass = p;
+      r = await api({ action:'sheets' });
+    }
+    if(!r.ok){
+      user = ''; token = ''; legacyPass = '';
       $('#loginErr').textContent = r.error === 'BAD_LOGIN' ? 'Wrong username or password. Try again.'
-        : r.error === 'UNKNOWN_ACTION' ? 'The server has not been updated yet. Deploy the new backend first.'
         : 'Could not sign in: ' + (r.error || 'unknown error');
       return;
     }
@@ -637,9 +640,9 @@ async function login(){
       data = {}; queue = []; confirms = {}; sel = { cls:'', sub:'', mon:'', day:0 };
       store.set('data', data); store.set('queue', queue); store.set('confirms', confirms);
     }
-    token = r.token;
+    token = r.token || '';
     teacher = r.teacher || ''; isAdmin = !!r.admin; sheets = r.sheets || [];
-    store.set('user', user); store.set('token', token); store.set('pass', ''); store.set('lastUser', user);
+    store.set('pass', legacyPass); store.set('user', user); store.set('token', token); store.set('lastUser', user);
     store.set('teacher', teacher); store.set('admin', isAdmin); store.set('sheets', sheets);
     ensureSel(); loadDraft(); render(); refreshAll();
   }catch(e){ user = ''; token = ''; $('#loginErr').textContent = errText(e); }
@@ -1327,6 +1330,9 @@ async function fillBgInfo(){
     t.push('SyncManager' in window ? 'Background sync: supported' : 'Background sync: not supported here (it syncs when you open the app)');
     if(reg && reg.sync && reg.sync.getTags){ const tags = await reg.sync.getTags(); t.push(tags.length ? 'A background sync is waiting to run' : 'No background sync waiting'); }
     t.push('Notifications: ' + ('Notification' in window ? Notification.permission : 'not supported'));
+    t.push(token ? 'Login: secure token' : (legacyPass ? 'Login: old saved password (open the app online after the backend update to switch to a token)' : 'Login: none'));
+    const lg = await bgGet('bglog');
+    if(lg) t.push('Last background attempt: ' + new Date(lg.at).toLocaleString() + ' - ' + lg.msg);
   }catch(e){ t.push('Could not check: ' + errText(e)); }
   t.push(queue.length + ' record(s) queued');
   if(el.isConnected) el.innerHTML = t.map(esc).join('<br>');

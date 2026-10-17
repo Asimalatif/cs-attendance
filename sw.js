@@ -1,5 +1,5 @@
 // Bump VERSION every time you change index.html so phones pick up the update.
-const VERSION = 'csa-v4';
+const VERSION = 'csa-v6';
 const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -66,24 +66,33 @@ self.addEventListener('sync', e => {
   if (e.tag === 'csa-sync') e.waitUntil(bgSync());
 });
 
+async function log(msg) { try { await kvSet('bglog', { at: Date.now(), msg: msg }); } catch (e) {} }
+
 async function bgSync() {
   const job = await kvGet('job');
-  if (!job || !job.user || !job.token || !job.queue || !job.queue.length) return;
+  if (!job || !job.queue || !job.queue.length) { await log('nothing queued'); return; }
+  if (!job.user || (!job.token && !job.pass)) { await log('no login saved for the worker (open the app online once)'); return; }
   const batch = job.queue.map(q => Object.assign({}, q));
+  const auth = job.token ? { username: job.user, token: job.token } : { username: job.user, password: job.pass };
+  await log('sending ' + batch.length + ' record(s)...');
 
   // a network failure throws here, so the browser retries automatically later
-  const r = await fetch(job.api, {
-    method: 'POST',
-    redirect: 'follow',
-    body: JSON.stringify({ username: job.user, token: job.token, action: 'save', records: batch })
-  });
+  let r;
+  try {
+    r = await fetch(job.api, {
+      method: 'POST',
+      redirect: 'follow',
+      body: JSON.stringify(Object.assign({}, auth, { action: 'save', records: batch }))
+    });
+  } catch (err) { await log('no network yet, will retry'); throw err; }
   let res;
-  try { res = JSON.parse(await r.text()); } catch (err) { throw new Error('bad response'); }   // retry later
-  if (!res.ok) return;                       // e.g. BAD_LOGIN: the app explains it when opened
+  try { res = JSON.parse(await r.text()); } catch (err) { await log('server sent a web page, will retry'); throw new Error('bad response'); }
+  if (!res.ok) { await log('server refused: ' + (res.error || 'unknown') + (res.error === 'BAD_LOGIN' ? ' (open the app and sign in again)' : '')); return; }
 
   const saved = res.saved || [];
   const savedBatch = batch.filter(b => saved.includes(b.id));
-  if (!savedBatch.length) return;
+  if (!savedBatch.length) { await log('server saved nothing: ' + JSON.stringify(res.failed || [])); return; }
+  await log('sent ' + savedBatch.length + ' record(s) OK');
 
   // remove saved records from the mirrored queue (keep anything newer the page added meanwhile)
   const cur = (await kvGet('job')) || job;
@@ -101,11 +110,13 @@ async function bgSync() {
   // tell the teacher, but only if the app is not already open on screen
   const visible = cl.some(c => c.visibilityState === 'visible');
   if (!visible && self.Notification && Notification.permission === 'granted') {
-    await self.registration.showNotification('Attendance synced \u2713', {
-      body: savedBatch.length + ' record(s) reached the sheet.',
-      icon: './icon-192.png',
-      tag: 'csa-synced'
-    });
+    try {
+      await self.registration.showNotification('Attendance synced \u2713', {
+        body: savedBatch.length + ' record(s) reached the sheet.',
+        icon: './icon-192.png',
+        tag: 'csa-synced'
+      });
+    } catch (err) {}
   }
 }
 
