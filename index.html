@@ -221,7 +221,11 @@ async function registerBgSync(){
   try{ if(!('serviceWorker' in navigator)) return; const reg = await navigator.serviceWorker.ready; if(reg.sync) await reg.sync.register('csa-sync'); }catch(e){}
 }
 async function mirrorBg(){
-  try{ await bgSet('job', { api:API, user, pass, queue:JSON.parse(JSON.stringify(queue)) }); if(queue.length && user && pass) registerBgSync(); }catch(e){}
+  try{
+    const labels = {}; queue.forEach(q => { try{ const i = recInfo(q); labels[q.id] = i.who + ' \u00b7 ' + i.what; }catch(e){} });   // readable names for the background notification
+    await bgSet('job', { api:API, user, pass, queue:JSON.parse(JSON.stringify(queue)), labels });
+    if(queue.length && user && pass) registerBgSync();
+  }catch(e){}
 }
 /** Picks up records the service worker already sent while the app was closed. */
 async function absorbBg(){
