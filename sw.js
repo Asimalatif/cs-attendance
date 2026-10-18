@@ -1,5 +1,5 @@
 // Bump VERSION every time you change index.html so phones pick up the update.
-const VERSION = 'csa-v12';
+const VERSION = 'csa-v13';
 const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -124,8 +124,12 @@ async function bgSync() {
   const visible = cl.some(c => c.visibilityState === 'visible');
   if (!visible && self.Notification && Notification.permission === 'granted') {
     try {
+      // one readable line per record, e.g. "C2 Chemistry · Attendance 1 Oct reached the sheet"
+      const labels = job.labels || {};
+      const lines = savedBatch.map(b => '\u2713 ' + (labels[b.id] || b.sheet) + ' reached the sheet');
+      const body = lines.slice(0, 4).join('\n') + (lines.length > 4 ? '\n+' + (lines.length - 4) + ' more' : '');
       await self.registration.showNotification('Attendance synced \u2713', {
-        body: savedBatch.length + ' record(s) reached the sheet.',
+        body: body,
         icon: './icon-192.png',
         tag: 'csa-synced'
       });
