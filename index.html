@@ -14,7 +14,7 @@
 <style>
 :root{--bg:#F2F5FA;--surface:#fff;--ink:#0F1B2D;--muted:#667085;--line:#E3E7EE;--accent:#0F1B2D;--on-accent:#fff;--ring:#2F5BEA;
 --present:#12805C;--present-bg:#E6F4EE;--absent:#D92D20;--absent-bg:#FDECEA;--leave:#B7791F;--leave-bg:#FFF4DB;--bb:#5B3FD1;--bb-bg:#EEE9FF;--none:#D5DAE3;--hero:#0F1B2D;--hero2:#1C3158;
---shadow:0 1px 2px rgba(15,27,45,.06),0 2px 8px rgba(15,27,45,.05);--r:14px;--sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px)}
+--shadow:0 1px 2px rgba(15,27,45,.06),0 2px 8px rgba(15,27,45,.05);--r:14px;--sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);--sal:env(safe-area-inset-left,0px);--sar:env(safe-area-inset-right,0px)}
 @media(prefers-color-scheme:dark){:root{--bg:#0B1220;--surface:#141E31;--ink:#EAF0FA;--muted:#9AA9C0;--line:#25324A;--accent:#EAF0FA;--on-accent:#0B1220;--ring:#7AA2FF;
 --present:#3CC38A;--present-bg:#12302A;--absent:#F26B60;--absent-bg:#3A1C1F;--leave:#E8B04A;--leave-bg:#3A2F14;--bb:#9C86FF;--bb-bg:#2A2450;--none:#33425E;--hero:#16233D;--hero2:#233B68;--shadow:0 1px 2px rgba(0,0,0,.4)}}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -27,7 +27,7 @@ button:active:not(:disabled){transform:scale(.97)}
 :focus-visible{outline:3px solid var(--ring);outline-offset:2px}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 .stick{position:sticky;top:0;z-index:5;background:var(--bg);box-shadow:0 10px 14px -12px rgba(15,27,45,.45)}
-.top{background:var(--surface);border-bottom:1px solid var(--line);padding:calc(8px + var(--sat)) 14px 8px}
+.top{background:var(--surface);border-bottom:1px solid var(--line);padding:calc(8px + var(--sat)) max(14px,var(--sar)) 8px max(14px,var(--sal))}
 .row1{display:flex;align-items:center;gap:8px;max-width:560px;margin:0 auto}
 .ttl{flex:1;min-width:0}.ttl h1{margin:0;font-size:16px;font-weight:750;line-height:1.2}
 .teacher{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -38,7 +38,7 @@ button:active:not(:disabled){transform:scale(.97)}
 .sync.off .dot{background:#E3A33B}.sync.busy .dot{background:var(--ring);animation:pulse 1s infinite}
 .sync.err{border-color:var(--absent)}.sync.err .dot{background:var(--absent)}
 @keyframes pulse{50%{opacity:.35}}
-.panel{max-width:560px;margin:0 auto;padding:8px 12px 10px}.panel.hid{display:none}
+.panel{max-width:560px;margin:0 auto;padding:8px 12px 10px}.panel.hid{display:none!important}
 .pcard{border-radius:18px;padding:10px;color:#fff;background:linear-gradient(160deg,var(--hero2),var(--hero) 70%);box-shadow:var(--shadow)}
 .pk{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr) minmax(0,.8fr);gap:6px}
 .pk select{width:100%;height:42px;border:1px solid rgba(255,255,255,.22);border-radius:11px;background-color:rgba(255,255,255,.1);color:#fff;padding:0 24px 0 10px;font-weight:650;font-size:16px;appearance:none;-webkit-appearance:none;text-overflow:ellipsis;
@@ -104,7 +104,7 @@ ul.list{list-style:none;margin:0;padding:0}
 .ck.p{--c:var(--present)}.ck.a{--c:var(--absent)}.ck.l{--c:var(--leave)}.ck.b{--c:var(--bb)}
 .mk{width:84px;height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);font-weight:800;font-size:17px;text-align:center;padding:0 6px}
 .mk.bad{border-color:var(--absent);background:var(--absent-bg);color:var(--absent)}
-.bottom{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);padding:8px 12px calc(8px + var(--sab))}
+.bottom{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);padding:8px max(12px,var(--sar)) calc(8px + var(--sab)) max(12px,var(--sal))}
 .bottom .in{max-width:560px;margin:0 auto}
 .btn{height:48px;border-radius:14px;border:1.5px solid var(--line);background:var(--surface);font-weight:700;padding:0 16px}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
@@ -147,6 +147,37 @@ dialog::backdrop{background:rgba(8,14,26,.55)}
 .cell.miss::after{background:#F08C1A}.cell.sel.has::after{background:var(--on-accent)}
 .cell.hasnote{outline:2px dotted var(--leave);outline-offset:-3px}.cell:disabled{opacity:.3}
 .legend{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:12px}
+.mini{display:none;width:100%;border:0;border-bottom:1px solid var(--line);background:var(--surface);padding:0 max(14px,var(--sar)) 0 max(14px,var(--sal));height:42px;text-align:left}
+.mini .mi{display:flex;align-items:center;gap:8px;max-width:560px;margin:0 auto;height:100%}
+.mini .mt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13.5px;font-weight:700}
+.mini .mc{color:var(--muted);font-weight:700;font-size:12px;white-space:nowrap}
+.mini svg{flex:none;color:var(--muted)}
+.compact .panel{display:none}.compact .mini{display:block}
+.tabs2 .sm{display:none}
+.pk select:focus{border-color:#8FB0FF;outline:none}
+.tot input::placeholder{color:rgba(255,255,255,.4)}
+.sq:focus,.mk:focus{border-color:var(--ring);outline:none}
+.row{transition:background .15s,border-color .15s}
+.seg button{transition:background .12s,border-color .12s}
+.seg button:disabled{opacity:.4;cursor:not-allowed}
+.day:disabled{cursor:not-allowed}
+.day.hasnote::before{content:"";position:absolute;top:4px;right:5px;width:7px;height:7px;border-radius:50%;background:#FFD166}
+.cell.hasnote::before{content:"";position:absolute;top:5px;right:5px;width:6px;height:6px;border-radius:50%;background:var(--leave)}
+.sline[data-act]::after{content:" \203A";font-weight:800}
+@media (max-width:400px){.tabs2 .lg{display:none}.tabs2 .sm{display:inline}.sync{padding:0 11px}}
+@media (max-width:360px){.seg button,.ck{width:34px}.day{width:41px}.row{grid-template-columns:18px minmax(0,1fr) auto;gap:4px}.allrow{grid-template-columns:18px minmax(0,1fr) auto}.mk{width:72px}}
+@media (min-width:600px){.row:hover{border-color:var(--ring)}}
+@media (orientation:landscape) and (max-height:520px){
+  #app{display:grid;grid-template-columns:minmax(290px,42%) minmax(0,1fr);align-items:start}
+  .stick{display:contents}
+  .stick .top{grid-column:1 / -1;position:sticky;top:0;z-index:5}
+  .panel{grid-column:1;position:sticky;top:calc(56px + var(--sat));max-width:none;margin:0;padding:8px 6px 8px max(10px,var(--sal))}
+  .wrap{grid-column:2;max-width:none;margin:0;padding:8px max(12px,var(--sar)) 0 6px}
+  #app.phid{grid-template-columns:minmax(0,1fr)}
+  #app.phid .wrap{grid-column:1}
+  .mini{display:none!important}
+  #app.compact .panel{display:block}
+}
 </style>
 </head>
 <body>
@@ -163,7 +194,10 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const store = {
   get(k, d){ try{ const v = localStorage.getItem('csa2_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
-  set(k, v){ try{ localStorage.setItem('csa2_' + k, JSON.stringify(v)); }catch(e){} }
+  set(k, v){
+    try{ localStorage.setItem('csa2_' + k, JSON.stringify(v)); }catch(e){}
+    if(k === 'queue' || k === 'user' || k === 'pass') mirrorBg();   // keep the service worker's copy current
+  }
 };
 let mode = store.get('mode', 'att'), panelHidden = store.get('phide', false), mtDraft = { total:'', marks:{} };
 let user = store.get('user', ''), pass = store.get('pass', ''), teacher = store.get('teacher', ''), isAdmin = store.get('admin', false);
@@ -171,16 +205,40 @@ let sheets = store.get('sheets', []), data = store.get('data', {}), queue = stor
 let lastSync = store.get('lastSync', 0), remarks = store.get('remarks', {}), rDirty = store.get('rdirty', {});
 let sel = { cls:store.get('cls', ''), sub:store.get('sub', ''), mon:store.get('mon', ''), day:0 };
 let draft = {}, searchQ = '', filterQ = 'all', lowInfo = '', lastError = '';
-let dirty = false, syncing = false, refreshing = false, syncPromise = null, rSyncing = false;
+let dirty = false, syncing = false, refreshing = false, prefetching = false, syncPromise = null, rSyncing = false;
+let compact = false;   // control panel folded into a one-line bar while scrolling
 const tried = {}, loading = new Set(), sheetErr = {}, fresh = {};
 const authed = () => !!(user && pass);
+
+/* ---------- background sync: lets the service worker send the queue even when the app is closed ---------- */
+function bgDb(){ return new Promise((res, rej) => { const r = indexedDB.open('csa_bg', 1);
+  r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function bgSet(k, v){ const db = await bgDb(); return new Promise((res, rej) => {
+  const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = () => res(); t.onerror = () => rej(t.error); }); }
+async function bgGet(k){ const db = await bgDb(); return new Promise((res, rej) => {
+  const r = db.transaction('kv').objectStore('kv').get(k); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function registerBgSync(){
+  try{ if(!('serviceWorker' in navigator)) return; const reg = await navigator.serviceWorker.ready; if(reg.sync) await reg.sync.register('csa-sync'); }catch(e){}
+}
+async function mirrorBg(){
+  try{ await bgSet('job', { api:API, user, pass, queue:JSON.parse(JSON.stringify(queue)) }); if(queue.length && user && pass) registerBgSync(); }catch(e){}
+}
+/** Picks up records the service worker already sent while the app was closed. */
+async function absorbBg(){
+  try{
+    const done = await bgGet('done'); if(!done || !done.length) return;
+    await bgSet('done', []); done.forEach(d => applySaved(d.batch, d.res));
+    if(authed()){ if(!dirty) loadDraft(); renderMain(); toast('Attendance was synced in the background'); }
+  }catch(e){}
+}
 const greet = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
 const ic = p => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
 const IC = {
   cal: ic('<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/>'),
   note: ic('<path d="M4 4h16v11l-5 5H4z"/><path d="M15 20v-5h5"/><path d="M8 9h8M8 13h4"/>'),
   sum: ic('<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'),
-  print: ic('<path d="M7 9V3h10v6"/><rect x="4" y="9" width="16" height="8" rx="2"/><path d="M7 14h10v7H7z"/>')
+  print: ic('<path d="M7 9V3h10v6"/><rect x="4" y="9" width="16" height="8" rx="2"/><path d="M7 14h10v7H7z"/>'),
+  down: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>'
 };
 
 /* ---------- helpers: class / subject / month / day ---------- */
@@ -278,7 +336,7 @@ async function loadSheet(e, create){
 }
 const isCurMonth = e => monIdx(e.mon) === new Date().getMonth();
 async function refreshAll(){
-  if(!authed() || refreshing) return;
+  if(!authed() || refreshing || prefetching) return;
   refreshing = true; updateStatus(); let rest = [];
   try{
     const s = await api({ action:'sheets' });
@@ -291,12 +349,16 @@ async function refreshAll(){
     if(!dirty){ ensureSel(); fixDay(); loadDraft(); if(mode === 'mt') loadMtDraft(); render(); }
   }catch(e){ lastError = errText(e); }
   finally{ refreshing = false; updateStatus(); }
-  for(const e of rest){
-    if(!authed()) break;
-    if(queue.length && !syncing) await syncQueue();
-    if(fresh[e.name] && Date.now() - fresh[e.name] < 120000) continue;
-    try{ await loadSheet(e, isCurMonth(e)); }catch(err){ sheetErr[e.name] = errText(err); }
-  }
+  if(!rest.length || !authed()) return;
+  prefetching = true;
+  try{
+    for(const e of rest){
+      if(!authed()) break;
+      if(queue.length && !syncing) await syncQueue();
+      if(fresh[e.name] && Date.now() - fresh[e.name] < 120000) continue;
+      try{ await loadSheet(e, isCurMonth(e)); }catch(err){ sheetErr[e.name] = errText(err); }
+    }
+  } finally { prefetching = false; }
 }
 
 /* ---------- saving to the sheet ---------- */
@@ -406,6 +468,7 @@ function openStudent(roll, keep){
 /* ---------- login ---------- */
 const render = () => authed() ? renderMain() : renderLogin();
 function renderLogin(msg){
+  compact = false; $('#app').classList.remove('phid', 'compact');
   $('#app').innerHTML = `<div class="login"><h1>JCW Daily Attendance</h1>
     <p>Sign in once while you have internet, with the same username and password as the portal. After that the app works offline.</p>
     <label for="user">Username</label><input id="user" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" value="${esc(store.get('lastUser', ''))}">
@@ -419,6 +482,7 @@ function renderLogin(msg){
 async function login(){
   const u = $('#user').value.trim(), p = $('#pass').value;
   if(!u || !p){ $('#loginErr').textContent = 'Enter your username and password.'; return; }
+  if(!API || API.startsWith('PASTE')){ $('#loginErr').textContent = 'Not connected yet: set API.'; return; }
   $('#loginErr').textContent = 'Signing in...'; user = u; pass = p;
   try{
     const r = await api({ action:'sheets' });
@@ -437,7 +501,8 @@ async function signOut(msg){
   if(!msg && queue.length){
     toast('Saving your attendance before signing out...');
     if(navigator.onLine){ await syncQueue(); if(queue.length) await syncQueue(); }
-    if(queue.length && !confirm(queue.length + ' record(s) could not be saved to the sheet yet and would be lost. Sign out anyway?')){ renderMain(); return; }
+    if(queue.length){ if(!confirm(queue.length + ' record(s) could not be saved to the sheet yet and would be lost. Sign out anyway?')){ renderMain(); return; } }
+    else toast('Saved in sheet. Signed out.');
   }
   user = ''; pass = ''; store.set('user', ''); store.set('pass', '');
   if(!msg){ queue = []; data = {}; sheets = []; teacher = ''; isAdmin = false; confirms = {}; ['queue','data','sheets','confirms'].forEach(k => store.set(k, k === 'queue' || k === 'sheets' ? [] : {})); store.set('teacher', ''); store.set('admin', false); }
@@ -517,6 +582,7 @@ function updateMt(d){
   const info = $('#mtInfo');
   if(info) info.textContent = (d ? d.students.length : 0) + ' students \u00b7 ' + filled + ' entered' + (left ? ' \u00b7 ' + left + ' left' : '') + ' \u00b7 type A, AB or Absent';
   lowInfo = low ? low + ' below 50% or absent in the monthly test' : '';
+  const mc = $('#miniCnt'); if(mc) mc.textContent = left ? left + ' left' : (filled ? 'all entered' : '');
   const sb = $('#saveBtn');
   if(sb){ sb.textContent = left ? 'Save test marks (' + left + ' left)' : 'Save test marks'; sb.classList.toggle('incomplete', left > 0 || bad > 0 || !(total > 0)); }
   updateBadge(); paintFilters();
@@ -544,7 +610,7 @@ function renderMain(){
   const strip = Array.from({ length:n }, (_, i) => {
     const day = i + 1, wd = new Date(y, m, day).getDay();
     const cls = [day === sel.day ? 'sel' : '', isCur && day === today ? 'today' : '', wd === 0 ? 'sun' : '', hasData(day) ? 'has' : (isMissed(day, fd, info) ? 'miss' : ''), noteFor(day) ? 'hasnote' : ''].filter(Boolean).join(' ');
-    return `<button class="day ${cls}" data-day="${day}" ${avail.includes(day) ? '' : 'disabled'} aria-label="${day} ${MONTHS[m]}"><span>${WD[wd]}</span><b>${day}</b></button>`;
+    return `<button class="day ${cls}" data-day="${day}" ${avail.includes(day) ? '' : 'disabled'} aria-label="${day} ${MONTHS[m]}" ${day === sel.day ? 'aria-current="date"' : ''}><span>${WD[wd]}</span><b>${day}</b></button>`;
   }).join('');
   let body = '', ready = false;
   if(!sheets.length) body = `<div class="note">No sections are assigned to you in the timetable yet. Ask the admin, then open the status chip and tap Sync now.</div>`;
@@ -557,20 +623,22 @@ function renderMain(){
   if(ready) body = mode === 'mt' ? mtBodyHtml(d) : attBodyHtml(d);
   const note = noteFor(sel.day), opts = (arr, cur, f) => arr.map(x => `<option value="${esc(x)}" ${x === cur ? 'selected' : ''}>${esc(f ? f(x) : x)}</option>`).join('');
   const fk = [['all', 'All'], ['un', 'Unmarked'], ['ab', 'Absent'], ['low', mode === 'mt' ? 'Below 50%' : 'Low']];
+  const miniTxt = esc(sel.cls) + ' \u00b7 ' + esc(titleCase(sel.sub)) + ' \u00b7 ' + esc(monLabel(sel.mon)) + (mode === 'att' ? ' ' + sel.day : ' test');
   $('#app').innerHTML = `
     <div class="stick">
       <header class="top"><div class="row1">
         <div class="ttl"><h1>JCW Daily Attendance</h1>${teacher ? `<div class="teacher">${greet()}, ${esc(teacher)}${isAdmin ? ' (admin)' : ''}</div>` : ''}</div>
-        <button class="hideBtn" id="panelBtn" aria-expanded="${!panelHidden}" aria-label="${panelHidden ? 'Show' : 'Hide'} controls"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button>
+        <button class="hideBtn" id="panelBtn" aria-expanded="${!panelHidden}" aria-label="${panelHidden ? 'Show' : 'Hide'} controls" title="${panelHidden ? 'Show' : 'Hide'} controls"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button>
         <button class="sync" id="statusChip" aria-label="Account and sync"><span class="dot"></span><span id="statusTxt"></span></button>
       </div></header>
+      <button class="mini" id="miniBar" aria-label="Show controls"><span class="mi"><span class="mt">${miniTxt}</span><span class="mc" id="miniCnt"></span>${IC.down}</span></button>
       <div class="panel ${panelHidden ? 'hid' : ''}"><div class="pcard">
         <div class="pk"><select id="selCls" aria-label="Class">${opts(classes(), sel.cls)}</select>
           <select id="selSub" aria-label="Subject">${opts(subjects(sel.cls), sel.sub, titleCase)}</select>
           <select id="selMon" aria-label="Month">${opts(monthsOf(sel.cls, sel.sub), sel.mon, monLabel)}</select></div>
-        <div class="mrow"><div class="tabs2" role="group"><button data-mode="att" class="${mode === 'att' ? 'on' : ''}">Attendance</button><button data-mode="mt" class="${mode === 'mt' ? 'on' : ''}">Monthly test</button></div>
-          <div class="ibtns">${mode === 'att' ? `<button class="ib" id="calBtn" aria-label="Calendar">${IC.cal}</button><button class="ib" id="noteBtn" aria-label="${note ? 'Edit note' : 'Add note'}">${IC.note}</button>` : ''}
-            <button class="ib" id="sumBtn" aria-label="Monthly summary">${IC.sum}</button><button class="ib" id="printBtn" aria-label="Print sheet">${IC.print}</button></div></div>
+        <div class="mrow"><div class="tabs2" role="group"><button data-mode="att" class="${mode === 'att' ? 'on' : ''}">Attendance</button><button data-mode="mt" class="${mode === 'mt' ? 'on' : ''}"><span class="lg">Monthly test</span><span class="sm">Test</span></button></div>
+          <div class="ibtns">${mode === 'att' ? `<button class="ib" id="calBtn" aria-label="Calendar" title="Calendar">${IC.cal}</button><button class="ib" id="noteBtn" aria-label="${note ? 'Edit note' : 'Add note'}" title="${note ? 'Edit note' : 'Add note'}">${IC.note}</button>` : ''}
+            <button class="ib" id="sumBtn" aria-label="Monthly summary" title="Monthly summary">${IC.sum}</button><button class="ib" id="printBtn" aria-label="Print sheet" title="Print sheet">${IC.print}</button></div></div>
         ${mode === 'mt' ? `<label class="tot"><span>Total marks</span><input id="mtTotal" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 20" value="${esc(mtDraft.total)}"></label><div class="cnt" id="mtInfo"></div>`
           : `<div class="strip" id="strip">${strip}</div><div class="prow"><div class="bar3" id="bar3"></div><div class="nums" id="nums"></div></div>`}
       </div></div>
@@ -580,6 +648,7 @@ function renderMain(){
         <div class="fl" id="fl">${fk.map(([k, t]) => `<button class="chip ${filterQ === k ? 'on' : ''}" data-f="${k}">${t}</button>`).join('')}</div><div class="nores" id="nores">No student matches.</div>` : ''}
       ${body}</div>
     <div class="bottom"><div class="in"><button class="btn primary" id="saveBtn">Save attendance</button></div></div>`;
+  $('#app').classList.toggle('phid', panelHidden); $('#app').classList.toggle('compact', compact && !panelHidden && !isLandscape());
   const rt = $('#retryBtn'); if(rt) rt.onclick = () => { delete tried[name]; delete sheetErr[name]; fresh[name] = 0; renderMain(); };
   document.querySelectorAll('#list .row').forEach(paintRow);
   window.scrollTo(0, sy); centerStrip(); updateTally(); updateStatus();
@@ -600,6 +669,8 @@ function centerStrip(){
 }
 function togglePanel(){
   panelHidden = !panelHidden; store.set('phide', panelHidden);
+  if(panelHidden){ compact = false; $('#app').classList.remove('compact'); }
+  $('#app').classList.toggle('phid', panelHidden);
   const p = $('.panel'), b = $('#panelBtn'); if(p) p.classList.toggle('hid', panelHidden);
   if(b){ b.setAttribute('aria-expanded', String(!panelHidden)); b.setAttribute('aria-label', (panelHidden ? 'Show' : 'Hide') + ' controls'); }
   if(!panelHidden) centerStrip();
@@ -642,6 +713,7 @@ function updateTally(){
   nums.innerHTML = `<span class="p"><b>${c.p}</b>P</span><span class="a"><b>${c.a}</b>A</span><span class="l"><b>${c.l}</b>L</span><span class="b"><b>${c.b}</b>B</span><span><b>${c.n}</b>left</span>`;
   document.querySelectorAll('input[data-all]').forEach(cb => { cb.checked = !!d && d.students.length > 0 && d.students.every(s => draft[s.roll] === cb.dataset.all); });
   const sb = $('#saveBtn'); if(sb){ sb.textContent = c.n ? 'Save attendance (' + c.n + ' left)' : 'Save attendance'; sb.classList.toggle('incomplete', c.n > 0); }
+  const mc = $('#miniCnt'); if(mc) mc.textContent = 'P ' + c.p + ' \u00b7 A ' + c.a + (c.n ? ' \u00b7 ' + c.n + ' left' : '');
   paintPct(); paintFilters();
 }
 function enqueue(marks, note){
@@ -744,7 +816,7 @@ function openCalendar(){
     return `<button class="cell ${cls}" data-pick="${day}" ${avail.includes(day) ? '' : 'disabled'}>${day}</button>`;
   }).join('');
   $('#dlgBody').innerHTML = `<h2>${MONTHS[m]} ${y}</h2><div class="meta">${esc(sheetName())}</div><div class="grid">${heads}${cells}</div>
-    <div class="legend"><span>Green dot: marked</span><span>Orange dot: not marked</span><span>Dotted ring: note</span><span>Blue ring: today</span></div>
+    <div class="legend"><span>Green dot: marked</span><span>Orange dot: not marked</span><span>Yellow dot: note</span><span>Ring: today</span></div>
     <div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>`;
   const dlg = $('#dlg'); dlg.showModal(); $('#closeDlg').onclick = () => dlg.close();
   dlg.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => { dlg.close(); switchTo(() => { sel.day = Number(b.dataset.pick); }); });
@@ -752,7 +824,7 @@ function openCalendar(){
 function openSync(){
   const dlg = $('#dlg'), when = lastSync ? new Date(lastSync).toLocaleString() : 'never';
   $('#dlgBody').innerHTML = `<h2>Account and sync</h2>
-    <div class="meta"><b>${esc(teacher || user)}</b>${isAdmin ? ' (admin)' : ''}<br>${esc(user)}<br>${navigator.onLine ? 'Online' : 'Phone reports no internet. Everything you save stays on this phone.'}<br>Last synced: ${esc(when)}${Object.keys(rDirty).length ? '<br>' + Object.keys(rDirty).length + ' student comment(s) waiting to upload' : ''}</div>
+    <div class="meta"><b>${esc(teacher || user)}</b>${isAdmin ? ' (admin)' : ''}<br>${esc(user)}<br>${navigator.onLine ? 'Online' : 'Phone reports no internet. Everything you save stays on this phone.'}<br>Last synced: ${esc(when)}<br>Server ends with: ${esc(API.slice(-12))}${Object.keys(rDirty).length ? '<br>' + Object.keys(rDirty).length + ' student comment(s) waiting to upload' : ''}</div>
     ${queue.length ? queue.map(q => `<div class="q"><div><b>${esc(q.sheet)}</b>, ${q.kind === 'mt' ? 'monthly test' : 'day ' + q.day}<small>${Object.keys(q.marks).length} students${q.note !== undefined ? ' + note' : ''} waiting</small>${q.error ? `<small class="bad">${esc(q.error)}</small>` : ''}</div><button class="btn small danger" data-discard="${esc(q.id)}">Discard</button></div>`).join('') : '<div class="q"><div>Nothing is waiting to sync. Everything is in the sheet.</div></div>'}
     ${lastError && queue.length ? `<div class="diag">${esc(lastError)}</div>` : ''}
     <div class="acts"><button class="btn small primary grow" id="syncNow">Sync now</button><button class="btn small grow" id="pwBtn">Change password</button></div>
@@ -761,7 +833,7 @@ function openSync(){
   $('#closeDlg').onclick = () => dlg.close(); $('#pwBtn').onclick = openPassword;
   $('#signOutBtn').onclick = () => { dlg.close(); signOut(); };
   $('#syncNow').onclick = async () => {
-    dlg.close(); toast('Syncing...'); const ok = await syncQueue();
+    dlg.close(); toast('Syncing...'); await absorbBg(); const ok = await syncQueue();
     if(!ok && queue.length) toast('Not synced: ' + (lastError || 'unknown problem'));
     if(!queue.length) fresh[sheetName()] = 0; refreshAll(); syncRemarks();
   };
@@ -830,6 +902,31 @@ function toast(msg, action){
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.style.display = 'none', action ? UNDO_MS : 4000);
 }
 
+/* ---------- auto-fold the control panel while scrolling ---------- */
+const isLandscape = () => window.matchMedia('(orientation:landscape) and (max-height:520px)').matches;
+let lastY = 0, lockUntil = 0, upAcc = 0, dnAcc = 0;
+function setCompact(on){
+  const st = $('.stick'), app = $('#app');
+  if(!st || on === compact) return;
+  if(on && (panelHidden || isLandscape())) return;
+  const before = st.offsetHeight;
+  compact = on; app.classList.toggle('compact', on);
+  const delta = before - st.offsetHeight;
+  if(delta) window.scrollBy(0, -delta);        // keeps the same students under your thumb
+  lockUntil = Date.now() + 350; lastY = window.scrollY; upAcc = dnAcc = 0;
+  if(!on) centerStrip();
+}
+window.addEventListener('scroll', () => {
+  if(!authed() || panelHidden || isLandscape()) return;
+  const y = window.scrollY;
+  if(Date.now() < lockUntil){ lastY = y; return; }
+  const dy = y - lastY; lastY = y;
+  if(y <= 4){ upAcc = dnAcc = 0; setCompact(false); return; }
+  if(dy > 0){ dnAcc += dy; upAcc = 0; } else if(dy < 0){ upAcc -= dy; dnAcc = 0; }
+  if(!compact && y > 260 && dnAcc > 40) setCompact(true);
+  else if(compact && upAcc > 40) setCompact(false);
+}, { passive:true });
+
 /* ---------- events ---------- */
 document.addEventListener('click', ev => {
   const t = ev.target; if(!t.closest) return; let b;
@@ -844,6 +941,7 @@ document.addEventListener('click', ev => {
   if((b = t.closest('#strip [data-day]'))){ if(!b.disabled) switchTo(() => { sel.day = Number(b.dataset.day); }); return; }
   if((b = t.closest('#fl [data-f]'))){ filterQ = b.dataset.f; paintFilters(); return; }
   if((b = t.closest('#sline'))){ if(b.dataset.act === 'low') return openSummary('att'); if(b.dataset.act === 'note') return openNote(); return; }
+  if(t.closest('#miniBar')) return setCompact(false);
   if(t.closest('#calBtn')) return openCalendar();
   if(t.closest('#noteBtn')) return openNote();
   if(t.closest('#sumBtn')) return openSummary('all');
@@ -879,14 +977,19 @@ document.addEventListener('input', ev => {
     t.value = val; mtDraft.marks[roll] = val; dirty = true; updateTally();
   }
 });
-window.addEventListener('online', () => { updateStatus(); syncRemarks(); syncQueue().then(refreshAll); });
+window.addEventListener('online', () => { updateStatus(); syncRemarks(); absorbBg().finally(() => syncQueue().then(refreshAll)); });
 window.addEventListener('offline', updateStatus);
-window.addEventListener('resize', centerStrip);
-document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible'){ syncQueue(); centerStrip(); } });
+window.addEventListener('resize', () => { if(isLandscape()) setCompact(false); else centerStrip(); });
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible'){ absorbBg().finally(syncQueue); centerStrip(); } });
 setInterval(syncQueue, 30000); setInterval(syncRemarks, 60000);
-if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+if('serviceWorker' in navigator){
+  const had = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if(had && !dirty) location.reload(); });
+  navigator.serviceWorker.addEventListener('message', ev => { if(ev.data && ev.data.type === 'bg-synced') absorbBg(); });
+}
 ensureSel(); initDay(); render();
-if(authed()){ syncQueue().then(refreshAll); syncRemarks(); }
+if(authed()){ mirrorBg(); absorbBg().finally(() => syncQueue().then(refreshAll)); syncRemarks(); }
 </script>
 </body>
 </html>
