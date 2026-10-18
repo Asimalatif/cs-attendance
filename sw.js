@@ -1,5 +1,5 @@
 // Bump VERSION every time you change index.html so phones pick up the update.
-const VERSION = 'csa-v11';
+const VERSION = 'csa-v12';
 const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -62,8 +62,21 @@ async function kvSet(k, v) {
   });
 }
 
+// The browser fires this when internet returns (also retried later if the handler fails)
 self.addEventListener('sync', e => {
-  if (e.tag === 'csa-sync') e.waitUntil(bgSync());
+  if (e.tag === 'csa-sync') {
+    e.waitUntil((async () => {
+      await log('background sync started' + (e.lastChance ? ' (last chance)' : ''));
+      await bgSync();
+    })());
+  }
+});
+
+// The app's "Test background send" button asks the worker to run the same job right now
+self.addEventListener('message', e => {
+  if (e.data && e.data.type === 'run-bg') {
+    e.waitUntil(bgSync().catch(err => log('test failed: ' + (err && err.message || err))));
+  }
 });
 
 async function log(msg) { try { await kvSet('bglog', { at: Date.now(), msg: msg }); } catch (e) {} }
