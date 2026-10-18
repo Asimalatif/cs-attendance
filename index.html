@@ -403,6 +403,26 @@ async function doSync(){
   return ok;
 }
 
+async function bgDiagnose(){
+  const el = $('#bgDiag'); if(!el) return;
+  const sup = 'serviceWorker' in navigator && 'SyncManager' in window;
+  let note = null, job = null; try{ note = await bgGet('bglog'); job = await bgGet('job'); }catch(e){}
+  const perm = ('Notification' in window) ? Notification.permission : 'unsupported';
+  el.innerHTML = '<b>Background sync</b><br>Browser support: ' + (sup ? 'yes' : 'NO (iPhone/Safari cannot do this; data goes when the app is opened)') +
+    '<br>Service worker controlling this page: ' + (navigator.serviceWorker && navigator.serviceWorker.controller ? 'yes' : 'no (close and reopen the app once)') +
+    '<br>Records in the worker copy: ' + (job && job.queue ? job.queue.length : 0) +
+    '<br>Last worker note: ' + (note ? esc(new Date(note.at).toLocaleString() + ' - ' + note.msg) : 'none yet') +
+    '<br>Notifications: ' + perm +
+    '<div class="acts"><button class="btn small grow" id="bgTest">Test background send</button>' + (perm === 'default' ? '<button class="btn small grow" id="bgNotif">Allow notifications</button>' : '') + '</div>';
+  const t = $('#bgTest');
+  if(t) t.onclick = async () => {
+    try{ await mirrorBg(); const reg = await navigator.serviceWorker.ready; (reg.active || navigator.serviceWorker.controller).postMessage({ type:'run-bg' });
+      toast('Test started. Details refresh in a few seconds.'); setTimeout(bgDiagnose, 5000); }
+    catch(e){ toast('Could not reach the service worker.'); }
+  };
+  const n = $('#bgNotif'); if(n) n.onclick = () => Notification.requestPermission().then(bgDiagnose);
+}
+
 /* ---------- student remarks (tags + comments), synced to the sheet ---------- */
 const rk = roll => user + '|' + sel.cls + '|' + roll;
 const getR = roll => remarks[rk(roll)] || { tags:[], log:[] };
@@ -827,10 +847,11 @@ function openSync(){
     <div class="meta"><b>${esc(teacher || user)}</b>${isAdmin ? ' (admin)' : ''}<br>${esc(user)}<br>${navigator.onLine ? 'Online' : 'Phone reports no internet. Everything you save stays on this phone.'}<br>Last synced: ${esc(when)}<br>Server ends with: ${esc(API.slice(-12))}${Object.keys(rDirty).length ? '<br>' + Object.keys(rDirty).length + ' student comment(s) waiting to upload' : ''}</div>
     ${queue.length ? queue.map(q => `<div class="q"><div><b>${esc(q.sheet)}</b>, ${q.kind === 'mt' ? 'monthly test' : 'day ' + q.day}<small>${Object.keys(q.marks).length} students${q.note !== undefined ? ' + note' : ''} waiting</small>${q.error ? `<small class="bad">${esc(q.error)}</small>` : ''}</div><button class="btn small danger" data-discard="${esc(q.id)}">Discard</button></div>`).join('') : '<div class="q"><div>Nothing is waiting to sync. Everything is in the sheet.</div></div>'}
     ${lastError && queue.length ? `<div class="diag">${esc(lastError)}</div>` : ''}
+    <div id="bgDiag" style="margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--bg);font-size:12.5px;color:var(--muted);word-break:break-word">Checking background sync...</div>
     <div class="acts"><button class="btn small primary grow" id="syncNow">Sync now</button><button class="btn small grow" id="pwBtn">Change password</button></div>
     <div class="acts"><button class="btn small danger grow" id="signOutBtn">Sign out</button><button class="btn small grow" id="closeDlg">Close</button></div>`;
   dlg.showModal();
-  $('#closeDlg').onclick = () => dlg.close(); $('#pwBtn').onclick = openPassword;
+  $('#closeDlg').onclick = () => dlg.close(); $('#pwBtn').onclick = openPassword; bgDiagnose();
   $('#signOutBtn').onclick = () => { dlg.close(); signOut(); };
   $('#syncNow').onclick = async () => {
     dlg.close(); toast('Syncing...'); await absorbBg(); const ok = await syncQueue();
@@ -980,7 +1001,7 @@ document.addEventListener('input', ev => {
 window.addEventListener('online', () => { updateStatus(); syncRemarks(); absorbBg().finally(() => syncQueue().then(refreshAll)); });
 window.addEventListener('offline', updateStatus);
 window.addEventListener('resize', () => { if(isLandscape()) setCompact(false); else centerStrip(); });
-document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible'){ absorbBg().finally(syncQueue); centerStrip(); } });
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible'){ absorbBg().finally(syncQueue); centerStrip(); } else if(queue.length) mirrorBg(); });
 setInterval(syncQueue, 30000); setInterval(syncRemarks, 60000);
 if('serviceWorker' in navigator){
   const had = !!navigator.serviceWorker.controller;
