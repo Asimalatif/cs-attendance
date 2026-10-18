@@ -87,29 +87,32 @@ button:active:not(:disabled){transform:scale(.97)}
 .pk select:focus{border-color:#8FB0FF;outline:none}
 .pk option{color:#0F1B2D;background:#fff}
 
-.mrow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}
+.mrow{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}
 .tabs2{display:flex;gap:2px;padding:3px;border-radius:12px;background:rgba(255,255,255,.12)}
 .tabs2 button{height:34px;padding:0 12px;border:0;border-radius:9px;background:transparent;color:rgba(255,255,255,.75);font-weight:700;font-size:13px;white-space:nowrap}
 .tabs2 button.on{background:#fff;color:#0F1B2D}
 .tabs2 .sm{display:none}
-.ibtns{display:flex;gap:6px}
-.ib{width:40px;height:40px;padding:0;border-radius:11px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.1);color:#fff;display:grid;place-items:center}
+.ibtns{display:flex;gap:6px;margin-left:auto}
+.ib{width:38px;height:38px;padding:0;border-radius:11px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.1);color:#fff;display:grid;place-items:center}
 
 /* date strip */
 .strip{display:flex;align-items:flex-start;gap:6px;overflow-x:auto;margin:9px -10px 0;padding:2px 10px 4px;
-  scrollbar-width:none;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+  scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .strip::-webkit-scrollbar{display:none}
 .day{flex:none;width:44px;height:52px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.08);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;position:relative;color:#fff;
-  margin:0;appearance:none;-webkit-appearance:none;scroll-snap-align:center}
+  margin:0;appearance:none;-webkit-appearance:none}
 .day span{font-size:10px;font-weight:600;color:rgba(255,255,255,.65)}
 .day b{font-size:16px;font-weight:750;font-variant-numeric:tabular-nums}
 .day.sun span{color:#FF9C93}
 .day.today{border:1.5px solid #8FB0FF}
-.day.sel{background:#fff;border-color:#fff}
+.day.sel{background:#fff;border-color:#fff;box-shadow:0 0 0 3px rgba(143,176,255,.55)}
 .day.sel span,.day.sel b{color:#0F1B2D}
 .day.has::after{content:"";position:absolute;bottom:4px;width:5px;height:5px;border-radius:50%;background:#5FD3A2}
 .day:disabled{opacity:.28;cursor:not-allowed}
+/* day with a note: dotted ring + yellow dot (all orientations) */
+.day.hasnote{outline:2px dotted #FFD166;outline-offset:-3px}
+.day.hasnote::before{content:"";position:absolute;top:4px;right:5px;width:7px;height:7px;border-radius:50%;background:#FFD166}
 
 /* progress */
 .prow{display:flex;align-items:center;gap:10px;margin-top:8px}
@@ -138,10 +141,16 @@ button:active:not(:disabled){transform:scale(.97)}
 .noteLine{background:var(--leave-bg);color:var(--leave)}
 .lowCnt{background:var(--absent-bg);color:var(--absent)}
 
+/* student search */
+.sq{width:100%;height:44px;border:1.5px solid var(--line);border-radius:12px;background:var(--surface);padding:0 14px;margin:0 0 8px;font-size:16px}
+.sq:focus{border-color:var(--ring);outline:none}
+.nores{display:none;margin:0 0 8px;padding:12px;border:1px dashed var(--line);border-radius:var(--r);color:var(--muted);text-align:center;font-size:13px}
+
 /* ============ Student list ============ */
 ul.list{list-style:none;margin:0;padding:0}
 .row{display:grid;grid-template-columns:22px minmax(0,1fr) auto;align-items:center;gap:6px;background:var(--surface);
-  border:1px solid var(--line);border-left:5px solid var(--none);border-radius:var(--r);padding:7px 7px 7px 8px;margin-bottom:8px;box-shadow:var(--shadow)}
+  border:1px solid var(--line);border-left:5px solid var(--none);border-radius:var(--r);padding:7px 7px 7px 8px;margin-bottom:8px;box-shadow:var(--shadow);
+  transition:background .15s,border-color .15s}
 .row.is-p{border-left-color:var(--present)}
 .row.is-a{border-left-color:var(--absent);background:var(--absent-bg)}
 .row.is-l{border-left-color:var(--leave);background:var(--leave-bg)}
@@ -199,6 +208,7 @@ ul.list{list-style:none;margin:0;padding:0}
 .toast{position:fixed;left:50%;bottom:calc(92px + var(--sab));transform:translateX(-50%);z-index:20;
   background:var(--accent);color:var(--on-accent);padding:11px 16px;border-radius:14px;font-size:13.5px;font-weight:600;
   width:max-content;max-width:min(92vw,420px);display:none;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.toastBtn{margin-left:12px;border:0;background:transparent;color:inherit;font-weight:800;text-decoration:underline;padding:4px 2px}
 
 /* ============ Login ============ */
 .login{max-width:380px;margin:0 auto;padding:calc(56px + var(--sat)) 22px 22px}
@@ -219,11 +229,14 @@ dialog::backdrop{background:rgba(8,14,26,.55)}
   padding:10px 12px;margin:8px 0 4px;resize:vertical;font-size:16px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .chip{height:36px;padding:0 13px;border-radius:999px;border:1px solid var(--line);background:var(--bg);font-size:13px;font-weight:650}
+.chip.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 .q{display:flex;align-items:center;gap:10px;border-top:1px solid var(--line);padding:10px 0}
 .q div{flex:1;min-width:0} .q small{display:block;color:var(--muted)} .q .bad{color:var(--absent)}
 .diag{margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--absent-bg);color:var(--absent);font-size:13px;word-break:break-word}
 .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .acts .grow{flex:1 1 auto}
+.sp{font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap}
+.sp.lowp{background:var(--absent);color:#fff;padding:2px 9px;border-radius:99px}
 
 .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:8px}
 .grid .h{text-align:center;font-size:12px;font-weight:650;color:var(--muted);padding:4px 0}
@@ -234,6 +247,7 @@ dialog::backdrop{background:rgba(8,14,26,.55)}
 .cell.has::after{content:"";position:absolute;bottom:5px;left:50%;margin-left:-2.5px;width:5px;height:5px;border-radius:50%;background:var(--present)}
 .cell.sel.has::after{background:var(--on-accent)}
 .cell.note::before{content:"";position:absolute;top:5px;right:5px;width:6px;height:6px;border-radius:50%;background:var(--leave)}
+.cell.note{outline:2px dotted var(--leave);outline-offset:-3px}
 .cell:disabled{opacity:.3}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:12px}
 
@@ -262,8 +276,6 @@ dialog::backdrop{background:rgba(8,14,26,.55)}
   .wrap{grid-column:2;max-width:none;margin:0;padding:8px max(12px,var(--sar)) 0 6px}
   #app.phid{grid-template-columns:minmax(0,1fr)}
   #app.phid .wrap{grid-column:1}
-  .day.hasnote{outline:2px solid #FFD166;outline-offset:-2px}
-.cell.note{outline:2px solid var(--leave);outline-offset:-2px}
 }
 </style>
 </head>
@@ -279,6 +291,7 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const MARKS = ['P','A','L','B'];            // only P is counted in the sheet
 const LOW_ATT = 73, MIN_LECT = 1;           // red below 73%; MIN_LECT = lectures needed before a % is shown
+const UNDO_MS = 7000;                       // how long the Undo button stays after Mark all
 
 const allRow = locked => `<div class="allrow"><span class="lbl">Mark all</span><span class="seg">` +
   ['P','A','L','B'].map(v => `<label class="ck ${v.toLowerCase()}">${v}<input type="checkbox" data-all="${v}" aria-label="Mark all ${v}" ${locked ? 'disabled' : ''}></label>`).join('') +
@@ -308,6 +321,7 @@ let lastSync = store.get('lastSync', 0);
 let lastError = '';
 let sel    = { cls: store.get('cls', ''), sub: store.get('sub', ''), mon: store.get('mon', ''), day: 0 };
 let draft  = {};
+let searchQ = '';
 let dirty = false, syncing = false, refreshing = false, prefetching = false, syncPromise = null;
 const tried = {}, loading = new Set(), sheetErr = {}, fresh = {};
 
@@ -405,6 +419,7 @@ function ensureSel(){
   initDay();
 }
 function choose(kind, value){
+  searchQ = '';
   if(kind === 'cls'){
     sel.cls = value;
     const sb = subjects(value); if(!sb.includes(sel.sub)) sel.sub = sb[0];
@@ -636,10 +651,17 @@ async function signOut(msg){
   renderLogin(msg);
 }
 
+/** Scrolls the date strip so the selected date sits in the middle (works whatever the offsetParent is). */
 function centerStrip(){
-  const st = $('#strip'); if(!st) return;
+  const st = $('#strip'); if(!st || !st.clientWidth) return;
   const cur = st.querySelector('.sel'); if(!cur) return;
-  st.scrollLeft = cur.offsetLeft - (st.clientWidth - cur.offsetWidth) / 2;
+  const sr = st.getBoundingClientRect(), cr = cur.getBoundingClientRect();
+  st.scrollLeft += (cr.left - sr.left) - (st.clientWidth - cr.width) / 2;
+}
+function focusSelectedDay(){
+  centerStrip();
+  requestAnimationFrame(centerStrip);
+  setTimeout(centerStrip, 120);
 }
 
 /* ---------- attendance % (this month's sheet) ---------- */
@@ -783,6 +805,7 @@ function mtBodyHtml(d){
 const IC = {
   cal:  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>',
   note: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v11l-5 5H4z"/><path d="M15 20v-5h5"/><path d="M8 9h8M8 13h4"/></svg>',
+  sum:  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
   print:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 9V3h10v6"/><rect x="4" y="9" width="16" height="8" rx="2"/><path d="M7 14h10v7H7z"/></svg>'
 };
 
@@ -797,7 +820,7 @@ function renderMain(){
   const strip = Array.from({ length: n }, (_, i) => {
     const day = i + 1, wd = new Date(y, m, day).getDay();
     return `<button class="day ${day === sel.day ? 'sel' : ''} ${isCur && day === today ? 'today' : ''} ${wd === 0 ? 'sun' : ''} ${hasData(day) ? 'has' : ''} ${noteFor(day) ? 'hasnote' : ''}"
-      data-day="${day}" ${avail.includes(day) ? '' : 'disabled'} aria-label="${day} ${MONTHS[m]}"><span>${WD[wd]}</span><b>${day}</b></button>`;
+      data-day="${day}" ${avail.includes(day) ? '' : 'disabled'} aria-label="${day} ${MONTHS[m]}" ${day === sel.day ? 'aria-current="date"' : ''}><span>${WD[wd]}</span><b>${day}</b></button>`;
   }).join('');
 
   let body = '', ready = false;
@@ -830,6 +853,7 @@ function renderMain(){
       <div class="ibtns">
         ${mode === 'att' ? `<button class="ib" id="calBtn" aria-label="Calendar" title="Calendar">${IC.cal}</button>
         <button class="ib" id="noteBtn" aria-label="${note ? 'Edit note' : 'Add note'}" title="${note ? 'Edit note' : 'Add note'}">${IC.note}</button>` : ''}
+        <button class="ib" id="sumBtn" aria-label="Monthly summary" title="Monthly summary">${IC.sum}</button>
         <button class="ib" id="printBtn" aria-label="Print sheet" title="Print sheet">${IC.print}</button>
       </div>
     </div>`;
@@ -861,6 +885,7 @@ function renderMain(){
       ${mode === 'mt'
         ? '<div class="lowCnt" id="mtLow"></div>'
         : `<div class="noteLine" id="noteLine" ${note ? 'style="display:block"' : ''}>Note: ${esc(note)}</div><div class="lowCnt" id="lowCnt"></div>`}
+      ${ready ? `<input id="sq" class="sq" type="search" placeholder="Search student name or roll no" autocomplete="off" autocapitalize="none" spellcheck="false" value="${esc(searchQ)}"><div class="nores" id="nores">No student matches your search.</div>` : ''}
       ${body}
     </div>
     <div class="bottom"><div class="in">
@@ -879,11 +904,17 @@ function renderMain(){
     };
     list.querySelectorAll('.row').forEach(paintRow);
   }
+  // Mark all (+ Undo button for 7 seconds)
   document.querySelectorAll('input[data-all]').forEach(cb => cb.onchange = () => {
     const d2 = data[sheetName()]; if(!d2) return;
-    const v = cb.dataset.all;
+    const v = cb.dataset.all, snap = Object.assign({}, draft), wasDirty = dirty;
     d2.students.forEach(s => { if(cb.checked) draft[s.roll] = v; else if(draft[s.roll] === v) delete draft[s.roll]; });
     dirty = true; document.querySelectorAll('#list .row').forEach(paintRow); updateTally();
+    toast(cb.checked ? 'Marked all ' + v : 'Cleared all ' + v, { label:'Undo', fn: () => {
+      draft = snap; dirty = wasDirty;
+      document.querySelectorAll('#list .row').forEach(paintRow); updateTally();
+      toast('Undone');
+    } });
   });
 
   const mtList = $('#mtList');
@@ -901,9 +932,11 @@ function renderMain(){
   };
   const tot = $('#mtTotal');
   if(tot) tot.oninput = () => { mtDraft.total = tot.value.trim().replace(',', '.'); dirty = true; updateTally(); };
+  const sq = $('#sq');
+  if(sq){ sq.oninput = () => { searchQ = sq.value; applySearch(); }; applySearch(); }
 
   window.scrollTo(0, sy);
-  centerStrip(); requestAnimationFrame(centerStrip);
+  focusSelectedDay();
   updateTally(); updateStatus();
 
   // sheet missing or old on the phone and we are online: load / create it in the background
@@ -929,7 +962,7 @@ function togglePanel(){
     b.setAttribute('aria-label', (panelHidden ? 'Show' : 'Hide') + ' controls');
     b.title = (panelHidden ? 'Show' : 'Hide') + ' controls';
   }
-  if(!panelHidden) centerStrip();
+  if(!panelHidden) focusSelectedDay();
 }
 
 function switchTo(fn){
@@ -940,6 +973,20 @@ function paintRow(row){
   const v = draft[row.dataset.roll];
   ['p','a','l','b'].forEach(k => row.classList.toggle('is-' + k, v === k.toUpperCase()));
   row.querySelectorAll('button[data-v]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+}
+
+/** Student search: hides rows that do not match the name or roll number. */
+function applySearch(){
+  const q = searchQ.trim().toLowerCase();
+  let shown = 0, total = 0;
+  document.querySelectorAll('.list .row').forEach(row => {
+    total++;
+    const txt = (row.querySelector('.who b').textContent + ' ' + row.dataset.roll).toLowerCase();
+    const ok = !q || txt.includes(q);
+    row.style.display = ok ? '' : 'none';
+    if(ok) shown++;
+  });
+  const nr = $('#nores'); if(nr) nr.style.display = q && total && !shown ? 'block' : 'none';
 }
 
 function updateTally(){
@@ -1020,6 +1067,45 @@ function openNote(){
   $('#noteSave').onclick = () => commit(ta.value.trim());
   const c = $('#noteClear'); if(c) c.onclick = () => commit('');
   $('#noteCancel').onclick = () => dlg.close();
+}
+
+/* ---------- monthly summary (every student: P, A, L, B and attendance %) ---------- */
+function summaryStats(){
+  const d = data[sheetName()]; if(!d) return null;
+  const days = d.days && d.days.length ? d.days : Array.from({ length:31 }, (_, i) => i + 1);
+  const per = {}; let lect = 0;
+  d.students.forEach(s => per[s.roll] = { p:0, a:0, l:0, b:0 });
+  days.forEach(day => {
+    const m = dayMarks(day); let any = false;
+    Object.keys(m).forEach(r => {
+      const v = m[r];
+      if(v === 'P' || v === 'A') any = true;
+      if(per[r] && v) { const k = v.toLowerCase(); if(k in per[r]) per[r][k]++; }
+    });
+    if(any) lect++;
+  });
+  return { d, per, lect };
+}
+function openSummary(lowOnly){
+  const S = summaryStats(); if(!S) return toast('This sheet is not on the phone yet');
+  const { d, per, lect } = S, { m, y } = dayInfo(), dlg = $('#dlg');
+  const rows = d.students.map(s => {
+    const c = per[s.roll], p = lect >= MIN_LECT ? Math.round(c.p / lect * 1000) / 10 : null;
+    return { s, c, p };
+  }).sort((a, b) => (a.p == null ? 101 : a.p) - (b.p == null ? 101 : b.p));
+  const low = rows.filter(r => r.p != null && r.p < LOW_ATT).length;
+  const shown = lowOnly ? rows.filter(r => r.p != null && r.p < LOW_ATT) : rows;
+  $('#dlgBody').innerHTML = `
+    <h2>Summary: ${MONTHS[m]} ${y}</h2>
+    <div class="meta">${esc(sheetName())}<br>${lect} lectures held, ${d.students.length} students, ${low} below ${LOW_ATT}%</div>
+    <div class="chips"><button class="chip ${lowOnly ? 'on' : ''}" id="lowOnly">Only below ${LOW_ATT}%</button></div>
+    ${shown.map(r => `<div class="q"><div><b>${esc(r.s.name)}</b>
+        <small>${esc(r.s.roll)} \u00b7 P ${r.c.p} \u00b7 A ${r.c.a}${r.c.l ? ' \u00b7 L ' + r.c.l : ''}${r.c.b ? ' \u00b7 B ' + r.c.b : ''}</small></div>
+      <span class="sp ${r.p != null && r.p < LOW_ATT ? 'lowp' : ''}">${r.p == null ? '-' : r.c.p + '/' + lect + ' = ' + r.p + '%'}</span></div>`).join('') || '<div class="q"><div>No students to show.</div></div>'}
+    <div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>`;
+  if(!dlg.open) dlg.showModal();
+  $('#closeDlg').onclick = () => dlg.close();
+  $('#lowOnly').onclick = () => openSummary(!lowOnly);
 }
 
 /* ---------- print the underlying sheet ---------- */
@@ -1171,9 +1257,14 @@ function updateStatus(){
 }
 
 let toastTimer;
-function toast(msg){
+function toast(msg, action){
   const t = $('#toast'); t.textContent = msg; t.style.display = 'block';
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.style.display = 'none', 4000);
+  if(action){
+    const b = document.createElement('button'); b.className = 'toastBtn'; b.textContent = action.label;
+    b.onclick = () => { clearTimeout(toastTimer); t.style.display = 'none'; action.fn(); };
+    t.appendChild(b);
+  }
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.style.display = 'none', action ? UNDO_MS : 4000);
 }
 document.addEventListener('click', ev => {
   const t = ev.target; if(!t.closest) return;
@@ -1188,6 +1279,7 @@ document.addEventListener('click', ev => {
   }
   if(t.closest('#calBtn'))     return openCalendar();
   if(t.closest('#noteBtn'))    return openNote();
+  if(t.closest('#sumBtn'))     return openSummary(false);
   if(t.closest('#printBtn'))   return printSheet();
   if(t.closest('#statusChip')) return openSync();
   if(t.closest('#saveBtn'))    return save();
@@ -1203,7 +1295,8 @@ document.addEventListener('change', ev => {
 /* ---------- start ---------- */
 window.addEventListener('online',  () => { updateStatus(); absorbBg().finally(() => syncQueue().then(refreshAll)); });
 window.addEventListener('offline', updateStatus);
-document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') absorbBg().finally(syncQueue); });
+window.addEventListener('resize', () => centerStrip());
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible'){ absorbBg().finally(syncQueue); focusSelectedDay(); } });
 setInterval(syncQueue, 30000);
 
 if('serviceWorker' in navigator){
