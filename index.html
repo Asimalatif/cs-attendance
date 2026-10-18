@@ -112,7 +112,7 @@ ul.list{list-style:none;margin:0;padding:0}
 .btn.small{height:42px;padding:0 14px;font-size:14px;border-radius:12px}.btn.danger{border-color:var(--absent);color:var(--absent)}
 .note{margin:10px 0;padding:14px;border:1px dashed var(--line);border-radius:var(--r);color:var(--muted);background:var(--surface)}
 .note .bad{color:var(--absent);display:block;margin-bottom:10px;word-break:break-word}
-.toast{position:fixed;left:50%;bottom:calc(92px + var(--sab));transform:translateX(-50%);z-index:20;background:var(--accent);color:var(--on-accent);padding:11px 16px;border-radius:14px;font-size:13.5px;font-weight:600;width:max-content;max-width:min(92vw,420px);display:none;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.toast{position:fixed;left:50%;bottom:calc(92px + var(--sab));transform:translateX(-50%);z-index:20;background:var(--accent);color:var(--on-accent);padding:11px 16px;border-radius:14px;font-size:13.5px;font-weight:600;width:max-content;max-width:min(92vw,420px);display:none;text-align:center;white-space:pre-line;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 .toastBtn{margin-left:12px;border:0;background:transparent;color:inherit;font-weight:800;text-decoration:underline;padding:4px 2px}
 .login{max-width:380px;margin:0 auto;padding:calc(56px + var(--sat)) 22px 22px}
 .login h1{font-size:28px;margin:0 0 6px}.login p{color:var(--muted);margin:0 0 24px}
@@ -227,8 +227,10 @@ async function mirrorBg(){
 async function absorbBg(){
   try{
     const done = await bgGet('done'); if(!done || !done.length) return;
-    await bgSet('done', []); done.forEach(d => applySaved(d.batch, d.res));
-    if(authed()){ if(!dirty) loadDraft(); renderMain(); toast('Attendance was synced in the background'); }
+    await bgSet('done', []);
+    const lines = [];
+    done.forEach(d => { lines.push(...savedLines(d.batch, d.res)); applySaved(d.batch, d.res); });
+    if(authed()){ if(!dirty) loadDraft(); renderMain(); toast(lines.length ? joinLines(lines) : 'Attendance was synced in the background'); }
   }catch(e){}
 }
 const greet = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
@@ -361,6 +363,28 @@ async function refreshAll(){
   } finally { prefetching = false; }
 }
 
+/* ---------- readable notification text (class, subject, day, counts) ---------- */
+function recInfo(b){
+  const e = sheets.find(s => s.name === b.sheet);
+  const who = e ? e.cls + ' ' + titleCase(e.sub) : b.sheet;
+  const mon = e ? monLabel(e.mon) : '';
+  let what;
+  if(b.kind === 'mt') what = 'Monthly test';
+  else if(!Object.keys(b.marks || {}).length && b.note !== undefined) what = 'Note for ' + b.day + ' ' + mon;
+  else what = 'Attendance ' + b.day + ' ' + mon;
+  return { who, what };
+}
+function savedLines(batch, res){
+  return (res.saved || []).map(id => {
+    const b = batch.find(x => x.id === id); if(!b) return null;
+    const { who, what } = recInfo(b), c = res.confirmed && res.confirmed[id]; let d = '';
+    if(b.kind === 'mt') d = c && c.total ? ' (out of ' + c.total + ')' : '';
+    else if(c && c.p != null) d = ' (P ' + c.p + ', A ' + c.a + (c.l ? ', L ' + c.l : '') + (c.b ? ', B ' + c.b : '') + ')';
+    return '\u2713 ' + who + ' \u00b7 ' + what + ' reached the sheet' + d;
+  }).filter(Boolean);
+}
+const joinLines = l => l.slice(0, 4).join('\n') + (l.length > 4 ? '\n+' + (l.length - 4) + ' more' : '');
+
 /* ---------- saving to the sheet ---------- */
 function applySaved(batch, res){
   const saved = res.saved || [];
@@ -389,38 +413,19 @@ async function doSync(){
   try{
     const batch = queue.map(q => ({ ...q })), res = await api({ action:'save', records:batch }, 90000);
     if(res.ok){
-      const saved = res.saved || []; applySaved(batch, res);
-      lastError = (res.failed && res.failed.length) ? res.failed[0].error : ''; ok = !lastError;
-      if(saved.length){
-        const c = res.confirmed && res.confirmed[saved[saved.length - 1]];
-        toast(c && c.p != null ? 'Saved in sheet and verified: P ' + c.p + ', A ' + c.a + (c.l ? ', L ' + c.l : '') + (c.b ? ', B ' + c.b : '') : 'Saved in sheet and verified');
-      }
+      const lines = savedLines(batch, res); applySaved(batch, res);
+      const f = res.failed && res.failed[0];
+      if(f){ const fb = batch.find(x => x.id === f.id), fi = fb ? recInfo(fb) : null; lastError = (fi ? fi.who + ' \u00b7 ' + fi.what + ': ' : '') + f.error; }
+      else lastError = '';
+      ok = !lastError;
+      if(lines.length) toast(joinLines(lines));
+      else if(f) toast('\u2717 Not saved. ' + lastError);
     } else if(res.error === 'BAD_LOGIN') signOut('Your username or password was changed. Sign in again.');
     else lastError = res.error || 'The server refused the save.';
   }catch(e){ lastError = errText(e); }
   finally{ syncing = false; updateStatus(); if(authed() && sheetName() && !dirty) loadDraft(); }
   if(ok && queue.length) setTimeout(syncQueue, 300);
   return ok;
-}
-
-async function bgDiagnose(){
-  const el = $('#bgDiag'); if(!el) return;
-  const sup = 'serviceWorker' in navigator && 'SyncManager' in window;
-  let note = null, job = null; try{ note = await bgGet('bglog'); job = await bgGet('job'); }catch(e){}
-  const perm = ('Notification' in window) ? Notification.permission : 'unsupported';
-  el.innerHTML = '<b>Background sync</b><br>Browser support: ' + (sup ? 'yes' : 'NO (iPhone/Safari cannot do this; data goes when the app is opened)') +
-    '<br>Service worker controlling this page: ' + (navigator.serviceWorker && navigator.serviceWorker.controller ? 'yes' : 'no (close and reopen the app once)') +
-    '<br>Records in the worker copy: ' + (job && job.queue ? job.queue.length : 0) +
-    '<br>Last worker note: ' + (note ? esc(new Date(note.at).toLocaleString() + ' - ' + note.msg) : 'none yet') +
-    '<br>Notifications: ' + perm +
-    '<div class="acts"><button class="btn small grow" id="bgTest">Test background send</button>' + (perm === 'default' ? '<button class="btn small grow" id="bgNotif">Allow notifications</button>' : '') + '</div>';
-  const t = $('#bgTest');
-  if(t) t.onclick = async () => {
-    try{ await mirrorBg(); const reg = await navigator.serviceWorker.ready; (reg.active || navigator.serviceWorker.controller).postMessage({ type:'run-bg' });
-      toast('Test started. Details refresh in a few seconds.'); setTimeout(bgDiagnose, 5000); }
-    catch(e){ toast('Could not reach the service worker.'); }
-  };
-  const n = $('#bgNotif'); if(n) n.onclick = () => Notification.requestPermission().then(bgDiagnose);
 }
 
 /* ---------- student remarks (tags + comments), synced to the sheet ---------- */
@@ -586,7 +591,7 @@ function saveMt(){
   if(missing) return toast(missing + ' student' + (missing > 1 ? 's have' : ' has') + ' no marks. Enter marks, or A for absent.');
   const id = name + '|MT'; queue = queue.filter(x => x.id !== id);
   queue.push({ id, kind:'mt', sheet:name, total, marks, ts:Date.now() }); store.set('queue', queue); delete confirms[id]; store.set('confirms', confirms);
-  dirty = false; toast('Saved on phone. Sending to the sheet...'); renderMain();
+  dirty = false; { const i = recInfo({ sheet:name, kind:'mt' }); toast(i.who + ' \u00b7 ' + i.what + ' saved on phone. Sending to the sheet...'); } renderMain();
   syncQueue().then(ok => { if(!ok && queue.length) toast('Saved on this phone. Tap the status chip to see why it has not reached the sheet.'); });
 }
 function updateMt(d){
@@ -749,7 +754,7 @@ function save(){
   const srv = (d.marks && d.marks[sel.day]) || {}, marks = {};
   d.students.forEach(s => { const v = draft[s.roll]; if(MARKS.includes(v)) marks[s.roll] = v; else if(srv[s.roll]) marks[s.roll] = ''; });
   if(!Object.keys(marks).length) return toast('No students to save');
-  enqueue(marks); dirty = false; toast('Saved on phone. Sending to the sheet...'); renderMain();
+  enqueue(marks); dirty = false; { const i = recInfo({ sheet:name, day:sel.day, marks }); toast(i.who + ' \u00b7 ' + i.what + ' saved on phone. Sending to the sheet...'); } renderMain();
   syncQueue().then(ok => { if(!ok && queue.length) toast('Saved on this phone. Tap the status chip to see why it has not reached the sheet.'); });
 }
 
@@ -765,7 +770,7 @@ function openNote(){
   dlg.showModal();
   const ta = $('#noteTxt');
   dlg.querySelectorAll('[data-chip]').forEach(b => b.onclick = () => { ta.value = b.dataset.chip; ta.focus(); });
-  const commit = text => { const old = queued(sel.day); enqueue(old ? old.marks : {}, text); dlg.close(); renderMain(); toast(text ? 'Note saved on phone. Sending to the sheet...' : 'Removing note...'); syncQueue(); };
+  const commit = text => { const old = queued(sel.day); enqueue(old ? old.marks : {}, text); dlg.close(); renderMain(); { const i = recInfo({ sheet:sheetName(), day:sel.day, marks:{}, note:text }); toast(i.who + ' \u00b7 ' + (text ? 'Note for ' + sel.day + ' saved on phone. Sending to the sheet...' : 'Removing note for ' + sel.day + '...')); } syncQueue(); };
   $('#noteSave').onclick = () => commit(ta.value.trim());
   const c = $('#noteClear'); if(c) c.onclick = () => commit('');
   $('#noteCancel').onclick = () => dlg.close();
@@ -847,11 +852,10 @@ function openSync(){
     <div class="meta"><b>${esc(teacher || user)}</b>${isAdmin ? ' (admin)' : ''}<br>${esc(user)}<br>${navigator.onLine ? 'Online' : 'Phone reports no internet. Everything you save stays on this phone.'}<br>Last synced: ${esc(when)}<br>Server ends with: ${esc(API.slice(-12))}${Object.keys(rDirty).length ? '<br>' + Object.keys(rDirty).length + ' student comment(s) waiting to upload' : ''}</div>
     ${queue.length ? queue.map(q => `<div class="q"><div><b>${esc(q.sheet)}</b>, ${q.kind === 'mt' ? 'monthly test' : 'day ' + q.day}<small>${Object.keys(q.marks).length} students${q.note !== undefined ? ' + note' : ''} waiting</small>${q.error ? `<small class="bad">${esc(q.error)}</small>` : ''}</div><button class="btn small danger" data-discard="${esc(q.id)}">Discard</button></div>`).join('') : '<div class="q"><div>Nothing is waiting to sync. Everything is in the sheet.</div></div>'}
     ${lastError && queue.length ? `<div class="diag">${esc(lastError)}</div>` : ''}
-    <div id="bgDiag" style="margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--bg);font-size:12.5px;color:var(--muted);word-break:break-word">Checking background sync...</div>
     <div class="acts"><button class="btn small primary grow" id="syncNow">Sync now</button><button class="btn small grow" id="pwBtn">Change password</button></div>
     <div class="acts"><button class="btn small danger grow" id="signOutBtn">Sign out</button><button class="btn small grow" id="closeDlg">Close</button></div>`;
   dlg.showModal();
-  $('#closeDlg').onclick = () => dlg.close(); $('#pwBtn').onclick = openPassword; bgDiagnose();
+  $('#closeDlg').onclick = () => dlg.close(); $('#pwBtn').onclick = openPassword;
   $('#signOutBtn').onclick = () => { dlg.close(); signOut(); };
   $('#syncNow').onclick = async () => {
     dlg.close(); toast('Syncing...'); await absorbBg(); const ok = await syncQueue();
@@ -920,7 +924,7 @@ function toast(msg, action){
     const b = document.createElement('button'); b.className = 'toastBtn'; b.textContent = action.label;
     b.onclick = () => { clearTimeout(toastTimer); t.style.display = 'none'; action.fn(); }; t.appendChild(b);
   }
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.style.display = 'none', action ? UNDO_MS : 4000);
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.style.display = 'none', action ? UNDO_MS : 5500);
 }
 
 /* ---------- auto-fold the control panel while scrolling ---------- */
@@ -1001,7 +1005,7 @@ document.addEventListener('input', ev => {
 window.addEventListener('online', () => { updateStatus(); syncRemarks(); absorbBg().finally(() => syncQueue().then(refreshAll)); });
 window.addEventListener('offline', updateStatus);
 window.addEventListener('resize', () => { if(isLandscape()) setCompact(false); else centerStrip(); });
-document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible'){ absorbBg().finally(syncQueue); centerStrip(); } else if(queue.length) mirrorBg(); });
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible'){ absorbBg().finally(syncQueue); centerStrip(); } });
 setInterval(syncQueue, 30000); setInterval(syncRemarks, 60000);
 if('serviceWorker' in navigator){
   const had = !!navigator.serviceWorker.controller;
