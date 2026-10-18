@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
-<title>CS Attendance</title>
+<title>JCW Daily Attendance</title>
 <style>
 :root{--bg:#F2F5FA;--surface:#fff;--ink:#0F1B2D;--muted:#667085;--line:#E3E7EE;--accent:#0F1B2D;--on-accent:#fff;--ring:#2F5BEA;
 --present:#12805C;--present-bg:#E6F4EE;--absent:#D92D20;--absent-bg:#FDECEA;--leave:#B7791F;--leave-bg:#FFF4DB;--bb:#5B3FD1;--bb-bg:#EEE9FF;--none:#D5DAE3;--hero:#0F1B2D;--hero2:#1C3158;
@@ -406,7 +406,7 @@ function openStudent(roll, keep){
 /* ---------- login ---------- */
 const render = () => authed() ? renderMain() : renderLogin();
 function renderLogin(msg){
-  $('#app').innerHTML = `<div class="login"><h1>CS Attendance</h1>
+  $('#app').innerHTML = `<div class="login"><h1>JCW Daily Attendance</h1>
     <p>Sign in once while you have internet, with the same username and password as the portal. After that the app works offline.</p>
     <label for="user">Username</label><input id="user" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" value="${esc(store.get('lastUser', ''))}">
     <label for="pass">Password</label><input id="pass" type="password" autocomplete="current-password">
@@ -560,7 +560,7 @@ function renderMain(){
   $('#app').innerHTML = `
     <div class="stick">
       <header class="top"><div class="row1">
-        <div class="ttl"><h1>CS Attendance</h1>${teacher ? `<div class="teacher">${greet()}, ${esc(teacher)}${isAdmin ? ' (admin)' : ''}</div>` : ''}</div>
+        <div class="ttl"><h1>JCW Daily Attendance</h1>${teacher ? `<div class="teacher">${greet()}, ${esc(teacher)}${isAdmin ? ' (admin)' : ''}</div>` : ''}</div>
         <button class="hideBtn" id="panelBtn" aria-expanded="${!panelHidden}" aria-label="${panelHidden ? 'Show' : 'Hide'} controls"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button>
         <button class="sync" id="statusChip" aria-label="Account and sync"><span class="dot"></span><span id="statusTxt"></span></button>
       </div></header>
