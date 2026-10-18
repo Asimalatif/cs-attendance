@@ -592,7 +592,7 @@ function render(){ authed() ? renderMain() : renderLogin(); }
 function renderLogin(msg){
   $('#app').innerHTML = `
     <div class="login">
-      <h1>CS Attendance</h1>
+      <h1>JCW Daily Attendance</h1>
       <p>Sign in once while you have internet, with the same username and password as the portal. After that the app works offline.</p>
       <label for="user">Username</label>
       <input id="user" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" value="${esc(store.get('lastUser', ''))}">
@@ -870,7 +870,7 @@ function renderMain(){
   $('#app').innerHTML = `
     <div class="stick">
       <header class="top"><div class="row1">
-        <div class="ttl"><h1>CS Attendance</h1>${teacher ? `<div class="teacher">${esc(teacher)}${isAdmin ? ' (admin)' : ''}</div>` : ''}</div>
+        <div class="ttl"><h1>JCW Daily Attendance</h1>${teacher ? `<div class="teacher">${esc(teacher)}${isAdmin ? ' (admin)' : ''}</div>` : ''}</div>
         <button class="hideBtn" id="panelBtn" aria-expanded="${!panelHidden}" aria-label="${panelHidden ? 'Show' : 'Hide'} controls" title="${panelHidden ? 'Show' : 'Hide'} controls"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>
         <button class="sync" id="statusChip" aria-label="Account and sync"><span class="dot"></span><span id="statusTxt"></span></button>
       </div></header>
