@@ -10,477 +10,242 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
-<title>JCW Daily Attendance</title>
+<title>CS Attendance</title>
 <style>
-/* ============ Design tokens ============ */
-:root{
-  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#0F1B2D; --muted:#667085; --line:#E3E7EE;
-  --accent:#0F1B2D; --on-accent:#FFFFFF; --ring:#2F5BEA;
-  --present:#12805C; --present-bg:#E6F4EE;
-  --absent:#D92D20;  --absent-bg:#FDECEA;
-  --leave:#B7791F;   --leave-bg:#FFF4DB;
-  --bb:#5B3FD1;      --bb-bg:#EEE9FF;
-  --none:#D5DAE3;
-  --hero:#0F1B2D; --hero2:#1C3158;
-  --shadow:0 1px 2px rgba(15,27,45,.06),0 2px 8px rgba(15,27,45,.05);
-  --r:14px;
-  --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
-  --sal:env(safe-area-inset-left,0px); --sar:env(safe-area-inset-right,0px);
-}
-@media (prefers-color-scheme:dark){
-  :root{
-    --bg:#0B1220; --surface:#141E31; --ink:#EAF0FA; --muted:#9AA9C0; --line:#25324A;
-    --accent:#EAF0FA; --on-accent:#0B1220; --ring:#7AA2FF;
-    --present:#3CC38A; --present-bg:#12302A;
-    --absent:#F26B60;  --absent-bg:#3A1C1F;
-    --leave:#E8B04A;   --leave-bg:#3A2F14;
-    --bb:#9C86FF;      --bb-bg:#2A2450;
-    --none:#33425E; --hero:#16233D; --hero2:#233B68;
-    --shadow:0 1px 2px rgba(0,0,0,.4);
-  }
-}
-
-/* ============ Base ============ */
+:root{--bg:#F2F5FA;--surface:#fff;--ink:#0F1B2D;--muted:#667085;--line:#E3E7EE;--accent:#0F1B2D;--on-accent:#fff;--ring:#2F5BEA;
+--present:#12805C;--present-bg:#E6F4EE;--absent:#D92D20;--absent-bg:#FDECEA;--leave:#B7791F;--leave-bg:#FFF4DB;--bb:#5B3FD1;--bb-bg:#EEE9FF;--none:#D5DAE3;--hero:#0F1B2D;--hero2:#1C3158;
+--shadow:0 1px 2px rgba(15,27,45,.06),0 2px 8px rgba(15,27,45,.05);--r:14px;--sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root{--bg:#0B1220;--surface:#141E31;--ink:#EAF0FA;--muted:#9AA9C0;--line:#25324A;--accent:#EAF0FA;--on-accent:#0B1220;--ring:#7AA2FF;
+--present:#3CC38A;--present-bg:#12302A;--absent:#F26B60;--absent-bg:#3A1C1F;--leave:#E8B04A;--leave-bg:#3A2F14;--bb:#9C86FF;--bb-bg:#2A2450;--none:#33425E;--hero:#16233D;--hero2:#233B68;--shadow:0 1px 2px rgba(0,0,0,.4)}}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+html{-webkit-text-size-adjust:100%}
 html,body{margin:0;background:var(--bg);color:var(--ink)}
-body{font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-  -webkit-font-smoothing:antialiased;padding-bottom:calc(84px + var(--sab))}
+body{font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:calc(84px + var(--sab))}
 button,select,input,textarea{font:inherit;color:inherit}
 button{cursor:pointer;touch-action:manipulation}
 button:active:not(:disabled){transform:scale(.97)}
 :focus-visible{outline:3px solid var(--ring);outline-offset:2px}
-@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
-
-/* ============ Sticky header + control panel ============ */
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 .stick{position:sticky;top:0;z-index:5;background:var(--bg);box-shadow:0 10px 14px -12px rgba(15,27,45,.45)}
-.top{background:var(--surface);border-bottom:1px solid var(--line);
-  padding:calc(8px + var(--sat)) max(14px,var(--sar)) 8px max(14px,var(--sal))}
+.top{background:var(--surface);border-bottom:1px solid var(--line);padding:calc(8px + var(--sat)) 14px 8px}
 .row1{display:flex;align-items:center;gap:8px;max-width:560px;margin:0 auto}
-.ttl{flex:1 1 0;min-width:0}
-.ttl h1{margin:0;font-size:16px;font-weight:750;letter-spacing:-.2px;line-height:1.2}
+.ttl{flex:1;min-width:0}.ttl h1{margin:0;font-size:16px;font-weight:750;line-height:1.2}
 .teacher{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-
-.hideBtn{width:40px;height:40px;padding:0;border-radius:999px;border:1px solid var(--line);
-  background:var(--bg);display:grid;place-items:center;flex:none}
-.hideBtn svg{transition:transform .2s}
-.hideBtn[aria-expanded="false"] svg{transform:rotate(180deg)}
-
-.sync{display:inline-flex;align-items:center;gap:7px;height:40px;border:1px solid var(--line);background:var(--bg);
-  border-radius:999px;padding:0 13px;font-size:13px;font-weight:650;white-space:nowrap;flex:none}
+.hideBtn{width:40px;height:40px;padding:0;border-radius:99px;border:1px solid var(--line);background:var(--bg);display:grid;place-items:center;flex:none}
+.hideBtn svg{transition:transform .2s}.hideBtn[aria-expanded=false] svg{transform:rotate(180deg)}
+.sync{display:inline-flex;align-items:center;gap:7px;height:40px;border:1px solid var(--line);background:var(--bg);border-radius:99px;padding:0 13px;font-size:13px;font-weight:650;white-space:nowrap;flex:none}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--present)}
-.sync.off .dot{background:#E3A33B}
-.sync.busy .dot{background:var(--ring);animation:pulse 1s ease-in-out infinite}
-.sync.err{border-color:var(--absent)} .sync.err .dot{background:var(--absent)}
+.sync.off .dot{background:#E3A33B}.sync.busy .dot{background:var(--ring);animation:pulse 1s infinite}
+.sync.err{border-color:var(--absent)}.sync.err .dot{background:var(--absent)}
 @keyframes pulse{50%{opacity:.35}}
-
-.panel{max-width:560px;margin:0 auto;padding:8px 12px 10px}
-.panel.hid{display:none!important}
-.pcard{border-radius:18px;padding:10px;color:#fff;background:linear-gradient(160deg,var(--hero2) 0%,var(--hero) 70%);box-shadow:var(--shadow)}
-
+.panel{max-width:560px;margin:0 auto;padding:8px 12px 10px}.panel.hid{display:none}
+.pcard{border-radius:18px;padding:10px;color:#fff;background:linear-gradient(160deg,var(--hero2),var(--hero) 70%);box-shadow:var(--shadow)}
 .pk{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr) minmax(0,.8fr);gap:6px}
-.pk select{width:100%;height:42px;border:1px solid rgba(255,255,255,.22);border-radius:11px;background-color:rgba(255,255,255,.1);
-  color:#fff;padding:0 24px 0 10px;font-weight:650;font-size:16px;appearance:none;-webkit-appearance:none;
-  text-overflow:ellipsis;white-space:nowrap;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5l4 4 4-4'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 9px center}
-.pk select:focus{border-color:#8FB0FF;outline:none}
+.pk select{width:100%;height:42px;border:1px solid rgba(255,255,255,.22);border-radius:11px;background-color:rgba(255,255,255,.1);color:#fff;padding:0 24px 0 10px;font-weight:650;font-size:16px;appearance:none;-webkit-appearance:none;text-overflow:ellipsis;
+background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5l4 4 4-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center}
 .pk option{color:#0F1B2D;background:#fff}
-
 .mrow{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}
 .tabs2{display:flex;gap:2px;padding:3px;border-radius:12px;background:rgba(255,255,255,.12)}
-.tabs2 button{height:34px;padding:0 12px;border:0;border-radius:9px;background:transparent;color:rgba(255,255,255,.75);font-weight:700;font-size:13px;white-space:nowrap}
+.tabs2 button{height:34px;padding:0 12px;border:0;border-radius:9px;background:transparent;color:rgba(255,255,255,.75);font-weight:700;font-size:13px}
 .tabs2 button.on{background:#fff;color:#0F1B2D}
-.tabs2 .sm{display:none}
 .ibtns{display:flex;gap:6px;margin-left:auto}
 .ib{width:38px;height:38px;padding:0;border-radius:11px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.1);color:#fff;display:grid;place-items:center}
-
-/* date strip */
-.strip{display:flex;align-items:flex-start;gap:6px;overflow-x:auto;margin:9px -10px 0;padding:2px 10px 4px;
-  scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.strip{display:flex;gap:6px;overflow-x:auto;margin:9px -10px 0;padding:2px 10px 4px;scrollbar-width:none}
 .strip::-webkit-scrollbar{display:none}
-.day{flex:none;width:44px;height:52px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.08);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;position:relative;color:#fff;
-  margin:0;appearance:none;-webkit-appearance:none}
-.day span{font-size:10px;font-weight:600;color:rgba(255,255,255,.65)}
-.day b{font-size:16px;font-weight:750;font-variant-numeric:tabular-nums}
-.day.sun span{color:#FF9C93}
-.day.today{border:1.5px solid #8FB0FF}
-.day.sel{background:#fff;border-color:#fff;box-shadow:0 0 0 3px rgba(143,176,255,.55)}
-.day.sel span,.day.sel b{color:#0F1B2D}
-.day.has::after{content:"";position:absolute;bottom:4px;width:5px;height:5px;border-radius:50%;background:#5FD3A2}
-.day:disabled{opacity:.28;cursor:not-allowed}
-/* day with a note: dotted ring + yellow dot (all orientations) */
+.day{flex:none;width:44px;height:52px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.08);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;position:relative;color:#fff;margin:0}
+.day span{font-size:10px;font-weight:600;color:rgba(255,255,255,.65)}.day b{font-size:16px;font-weight:750}
+.day.sun span{color:#FF9C93}.day.today{border:1.5px solid #8FB0FF}
+.day.sel{background:#fff;border-color:#fff;box-shadow:0 0 0 3px rgba(143,176,255,.55)}.day.sel span,.day.sel b{color:#0F1B2D}
+.day.has::after,.day.miss::after{content:"";position:absolute;bottom:4px;width:5px;height:5px;border-radius:50%;background:#5FD3A2}
+.day.miss::after{background:#FFA94D}.day:disabled{opacity:.28}
 .day.hasnote{outline:2px dotted #FFD166;outline-offset:-3px}
-.day.hasnote::before{content:"";position:absolute;top:4px;right:5px;width:7px;height:7px;border-radius:50%;background:#FFD166}
-
-/* progress */
 .prow{display:flex;align-items:center;gap:10px;margin-top:8px}
 .bar3{display:flex;height:6px;border-radius:99px;overflow:hidden;background:rgba(255,255,255,.16);flex:1;min-width:40px}
-.bar3 i{display:block;height:100%;transition:width .2s}
-.bar3 .p{background:#5FD3A2} .bar3 .a{background:#FF8A80} .bar3 .l{background:#FFD166} .bar3 .b{background:#A99BFF}
-.nums{display:flex;flex:none;gap:9px;white-space:nowrap;font-size:11px;color:rgba(255,255,255,.7)}
-.nums b{font-size:14px;color:#fff;font-variant-numeric:tabular-nums;margin-right:2px}
-.nums .p b{color:#5FD3A2} .nums .a b{color:#FF9C93} .nums .l b{color:#FFD166} .nums .b b{color:#B9AEFF}
-
-/* monthly test header */
+.bar3 i{display:block;height:100%;transition:width .2s}.bar3 .p{background:#5FD3A2}.bar3 .a{background:#FF8A80}.bar3 .l{background:#FFD166}.bar3 .b{background:#A99BFF}
+.nums{display:flex;gap:9px;white-space:nowrap;font-size:11px;color:rgba(255,255,255,.7)}
+.nums b{font-size:14px;color:#fff;margin-right:2px}.nums .p b{color:#5FD3A2}.nums .a b{color:#FF9C93}.nums .l b{color:#FFD166}.nums .b b{color:#B9AEFF}
 .tot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px}
 .tot span{font-size:13px;font-weight:700;color:rgba(255,255,255,.78)}
-.tot input{width:120px;height:42px;border-radius:12px;border:1.5px solid rgba(255,255,255,.25);background:rgba(255,255,255,.1);
-  color:#fff;font-weight:800;font-size:17px;text-align:center;padding:0 8px}
-.tot input::placeholder{color:rgba(255,255,255,.4)}
+.tot input{width:120px;height:42px;border-radius:12px;border:1.5px solid rgba(255,255,255,.25);background:rgba(255,255,255,.1);color:#fff;font-weight:800;font-size:17px;text-align:center}
 .cnt{margin-top:6px;font-size:12px;color:rgba(255,255,255,.65)}
-
-/* ============ Messages above the list ============ */
 .wrap{max-width:560px;margin:0 auto;padding:10px 12px 0}
-.badge,.noteLine,.lowCnt{display:none;margin:0 0 8px;padding:9px 12px;border-radius:12px;font-size:13px;font-weight:650;word-break:break-word}
-.badge{background:var(--surface);color:var(--muted);border:1px solid var(--line)}
-.badge.ok{background:var(--present-bg);color:var(--present);border-color:transparent}
-.badge.wait{background:var(--leave-bg);color:var(--leave);border-color:transparent}
-.badge.err{background:var(--absent-bg);color:var(--absent);border-color:transparent}
-.noteLine{background:var(--leave-bg);color:var(--leave)}
-.lowCnt{background:var(--absent-bg);color:var(--absent)}
-
-/* student search */
-.sq{width:100%;height:44px;border:1.5px solid var(--line);border-radius:12px;background:var(--surface);padding:0 14px;margin:0 0 8px;font-size:16px}
-.sq:focus{border-color:var(--ring);outline:none}
+.sline{display:none;margin:0 0 8px;padding:8px 12px;border-radius:12px;font-size:13px;font-weight:650;word-break:break-word;background:var(--surface);color:var(--muted);border:1px solid var(--line)}
+.sline.ok{background:var(--present-bg);color:var(--present);border-color:transparent}
+.sline.wait,.sline.note{background:var(--leave-bg);color:var(--leave);border-color:transparent}
+.sline.err,.sline.low{background:var(--absent-bg);color:var(--absent);border-color:transparent}
+.sline[data-act]{cursor:pointer}
+.sq{width:100%;height:42px;border:1.5px solid var(--line);border-radius:12px;background:var(--surface);padding:0 14px;margin:0 0 6px;font-size:16px}
+.fl{display:flex;gap:6px;overflow-x:auto;margin:0 0 8px;padding-bottom:2px;scrollbar-width:none}
+.fl::-webkit-scrollbar{display:none}.fl .chip{flex:none;height:32px;font-size:12.5px}
 .nores{display:none;margin:0 0 8px;padding:12px;border:1px dashed var(--line);border-radius:var(--r);color:var(--muted);text-align:center;font-size:13px}
-
-/* ============ Student list ============ */
 ul.list{list-style:none;margin:0;padding:0}
-.row{display:grid;grid-template-columns:22px minmax(0,1fr) auto;align-items:center;gap:6px;background:var(--surface);
-  border:1px solid var(--line);border-left:5px solid var(--none);border-radius:var(--r);padding:7px 7px 7px 8px;margin-bottom:8px;box-shadow:var(--shadow);
-  transition:background .15s,border-color .15s}
-.row.is-p{border-left-color:var(--present)}
-.row.is-a{border-left-color:var(--absent);background:var(--absent-bg)}
-.row.is-l{border-left-color:var(--leave);background:var(--leave-bg)}
-.row.is-b{border-left-color:var(--bb);background:var(--bb-bg)}
-.row.low{box-shadow:inset 0 0 0 1.5px var(--absent)}
-.row.mtlow{background:var(--absent-bg);box-shadow:inset 0 0 0 1.5px var(--absent)}
-.no{color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums;text-align:center}
-.who{min-width:0}
+.row{display:grid;grid-template-columns:22px minmax(0,1fr) auto;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--none);border-radius:var(--r);padding:7px 7px 7px 8px;margin-bottom:8px;box-shadow:var(--shadow)}
+.row.is-p{border-left-color:var(--present)}.row.is-a{border-left-color:var(--absent);background:var(--absent-bg)}
+.row.is-l{border-left-color:var(--leave);background:var(--leave-bg)}.row.is-b{border-left-color:var(--bb);background:var(--bb-bg)}
+.row.low{box-shadow:inset 0 0 0 1.5px var(--absent)}.row.mtlow{background:var(--absent-bg);box-shadow:inset 0 0 0 1.5px var(--absent)}
+.no{color:var(--muted);font-size:11.5px;text-align:center}
+.who{min-width:0;cursor:pointer}
 .who b{display:block;font-weight:650;font-size:14.5px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .who small{color:var(--muted);font-size:11.5px;display:flex;flex-wrap:wrap;gap:2px 6px;align-items:center;margin-top:1px}
-.pct,.mtp{font-size:11.5px;color:var(--muted);font-weight:600}
+.pct,.mtp{font-size:11.5px;color:var(--muted);font-weight:600}.pct:empty,.mtp:empty{display:none}
 .pct.lowp,.mtp.lowm{background:var(--absent);color:#fff;padding:1px 8px;border-radius:99px;font-weight:800}
-
+.rtag{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px;background:var(--leave-bg);color:var(--leave)}
+.rtag.good{background:var(--present-bg);color:var(--present)}.rtag.cm{background:var(--bb-bg);color:var(--bb)}
 .seg{display:flex;gap:4px}
-.seg button{width:38px;height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);
-  font-weight:800;font-size:15px;color:var(--muted);transition:background .12s,border-color .12s}
-.seg button[aria-pressed="true"]{color:#fff}
-.seg button[aria-pressed="true"].p{background:var(--present);border-color:var(--present)}
-.seg button[aria-pressed="true"].a{background:var(--absent);border-color:var(--absent)}
-.seg button[aria-pressed="true"].l{background:var(--leave);border-color:var(--leave)}
-.seg button[aria-pressed="true"].b{background:var(--bb);border-color:var(--bb)}
-.seg button:disabled{opacity:.4;cursor:not-allowed}
-
-/* mark-all row */
+.seg button{width:38px;height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);font-weight:800;font-size:15px;color:var(--muted)}
+.seg button[aria-pressed=true]{color:#fff}
+.seg button[aria-pressed=true].p{background:var(--present);border-color:var(--present)}.seg button[aria-pressed=true].a{background:var(--absent);border-color:var(--absent)}
+.seg button[aria-pressed=true].l{background:var(--leave);border-color:var(--leave)}.seg button[aria-pressed=true].b{background:var(--bb);border-color:var(--bb)}
 .allrow{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:6px;align-items:center;padding:2px 7px 8px 13px}
-.allrow .lbl{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;grid-column:2}
-.allrow .seg{grid-column:3}
+.allrow .lbl{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;grid-column:2}.allrow .seg{grid-column:3}
 .ck{width:38px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;font-weight:800;color:var(--muted);cursor:pointer}
-.ck input{appearance:none;-webkit-appearance:none;margin:0;width:26px;height:26px;border-radius:8px;
-  border:2px solid var(--line);background:var(--surface);display:grid;place-content:center}
-.ck input:checked{background:var(--c);border-color:var(--c)}
-.ck input:checked::after{content:"\2713";color:#fff;font-size:15px;font-weight:800;line-height:1}
-.ck input:disabled{opacity:.4}
-.ck.p{--c:var(--present)} .ck.a{--c:var(--absent)} .ck.l{--c:var(--leave)} .ck.b{--c:var(--bb)}
-
-/* monthly-test input */
-.mk{width:84px;height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);
-  font-weight:800;font-size:17px;text-align:center;padding:0 6px}
-.mk:focus{border-color:var(--ring);outline:none}
+.ck input{appearance:none;-webkit-appearance:none;margin:0;width:26px;height:26px;border-radius:8px;border:2px solid var(--line);background:var(--surface);display:grid;place-content:center}
+.ck input:checked{background:var(--c);border-color:var(--c)}.ck input:checked::after{content:"\2713";color:#fff;font-size:15px;font-weight:800}
+.ck.p{--c:var(--present)}.ck.a{--c:var(--absent)}.ck.l{--c:var(--leave)}.ck.b{--c:var(--bb)}
+.mk{width:84px;height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);font-weight:800;font-size:17px;text-align:center;padding:0 6px}
 .mk.bad{border-color:var(--absent);background:var(--absent-bg);color:var(--absent)}
-
-/* ============ Bottom bar ============ */
-.bottom{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);
-  padding:8px max(12px,var(--sar)) calc(8px + var(--sab)) max(12px,var(--sal))}
+.bottom{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);padding:8px 12px calc(8px + var(--sab))}
 .bottom .in{max-width:560px;margin:0 auto}
 .btn{height:48px;border-radius:14px;border:1.5px solid var(--line);background:var(--surface);font-weight:700;padding:0 16px}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
-.bottom .btn{width:100%;font-size:16px}
-.btn.primary.incomplete{opacity:.6}
-.btn.small{height:42px;padding:0 14px;font-size:14px;border-radius:12px}
-.btn.danger{border-color:var(--absent);color:var(--absent)}
-
+.bottom .btn{width:100%;font-size:16px}.btn.primary.incomplete{opacity:.6}
+.btn.small{height:42px;padding:0 14px;font-size:14px;border-radius:12px}.btn.danger{border-color:var(--absent);color:var(--absent)}
 .note{margin:10px 0;padding:14px;border:1px dashed var(--line);border-radius:var(--r);color:var(--muted);background:var(--surface)}
 .note .bad{color:var(--absent);display:block;margin-bottom:10px;word-break:break-word}
-.toast{position:fixed;left:50%;bottom:calc(92px + var(--sab));transform:translateX(-50%);z-index:20;
-  background:var(--accent);color:var(--on-accent);padding:11px 16px;border-radius:14px;font-size:13.5px;font-weight:600;
-  width:max-content;max-width:min(92vw,420px);display:none;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.toast{position:fixed;left:50%;bottom:calc(92px + var(--sab));transform:translateX(-50%);z-index:20;background:var(--accent);color:var(--on-accent);padding:11px 16px;border-radius:14px;font-size:13.5px;font-weight:600;width:max-content;max-width:min(92vw,420px);display:none;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 .toastBtn{margin-left:12px;border:0;background:transparent;color:inherit;font-weight:800;text-decoration:underline;padding:4px 2px}
-
-/* ============ Login ============ */
 .login{max-width:380px;margin:0 auto;padding:calc(56px + var(--sat)) 22px 22px}
-.login h1{font-size:28px;margin:0 0 6px;letter-spacing:-.4px}
-.login p{color:var(--muted);margin:0 0 24px}
+.login h1{font-size:28px;margin:0 0 6px}.login p{color:var(--muted);margin:0 0 24px}
 .login label,.dlg label{font-size:13px;font-weight:650;color:var(--muted)}
-.login input,.dlg input{width:100%;height:50px;border:1.5px solid var(--line);border-radius:14px;background:var(--surface);
-  padding:0 14px;margin:6px 0 14px;font-size:16px}
+.login input,.dlg input{width:100%;height:50px;border:1.5px solid var(--line);border-radius:14px;background:var(--surface);padding:0 14px;margin:6px 0 14px;font-size:16px}
 .err{color:var(--absent);min-height:22px;margin:0 0 10px;word-break:break-word;font-size:14px}
-
-/* ============ Dialogs ============ */
-dialog{border:none;border-radius:20px;padding:0;width:min(440px,94vw);max-height:90vh;overflow:auto;background:var(--surface);color:var(--ink)}
+dialog{border:none;border-radius:20px;padding:0;width:min(440px,94vw);max-height:90vh;overflow-y:auto;overflow-x:hidden;background:var(--surface);color:var(--ink)}
 dialog::backdrop{background:rgba(8,14,26,.55)}
-.dlg{padding:18px}
-.dlg h2{margin:0 0 4px;font-size:19px}
+.dlg{padding:18px;min-width:0}.dlg h2{margin:0 0 4px;font-size:19px}
 .dlg .meta{color:var(--muted);font-size:13px;margin-bottom:12px;word-break:break-word}
-.dlg textarea{width:100%;min-height:96px;border:1.5px solid var(--line);border-radius:14px;background:var(--surface);
-  padding:10px 12px;margin:8px 0 4px;resize:vertical;font-size:16px}
+.dlg textarea{width:100%;min-height:96px;border:1.5px solid var(--line);border-radius:14px;background:var(--surface);padding:10px 12px;margin:8px 0 4px;resize:vertical;font-size:16px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-.chip{height:36px;padding:0 13px;border-radius:999px;border:1px solid var(--line);background:var(--bg);font-size:13px;font-weight:650}
+.chip{height:36px;padding:0 13px;border-radius:99px;border:1px solid var(--line);background:var(--bg);font-size:13px;font-weight:650;white-space:nowrap}
 .chip.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 .q{display:flex;align-items:center;gap:10px;border-top:1px solid var(--line);padding:10px 0}
-.q div{flex:1;min-width:0} .q small{display:block;color:var(--muted)} .q .bad{color:var(--absent)}
+.q div{flex:1;min-width:0;word-break:break-word}.q small{display:block;color:var(--muted)}.q .bad{color:var(--absent)}
 .diag{margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--absent-bg);color:var(--absent);font-size:13px;word-break:break-word}
-.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
-.acts .grow{flex:1 1 auto}
-.sp{font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap}
-.sp.lowp{background:var(--absent);color:#fff;padding:2px 9px;border-radius:99px}
-
-.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:8px}
-.grid .h{text-align:center;font-size:12px;font-weight:650;color:var(--muted);padding:4px 0}
-.grid .h.sun{color:var(--absent)}
-.cell{aspect-ratio:1/1;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-weight:700;position:relative}
-.cell.today{border:2px solid var(--ring)}
-.cell.sel{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
-.cell.has::after{content:"";position:absolute;bottom:5px;left:50%;margin-left:-2.5px;width:5px;height:5px;border-radius:50%;background:var(--present)}
-.cell.sel.has::after{background:var(--on-accent)}
-.cell.note::before{content:"";position:absolute;top:5px;right:5px;width:6px;height:6px;border-radius:50%;background:var(--leave)}
-.cell.note{outline:2px dotted var(--leave);outline-offset:-3px}
-.cell:disabled{opacity:.3}
-.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:12px}
-
-/* ============ Responsive ============ */
-@media (max-width:400px){
-  .tabs2 .lg{display:none} .tabs2 .sm{display:inline}
-  .sync{padding:0 11px}
-}
-@media (max-width:360px){
-  .seg button,.ck{width:34px}
-  .day{width:41px}
-  .row{grid-template-columns:18px minmax(0,1fr) auto;gap:4px}
-  .allrow{grid-template-columns:18px minmax(0,1fr) auto}
-  .mk{width:72px}
-}
-@media (min-width:600px){
-  .row:hover{border-color:var(--ring)}
-}
-
-/* landscape phones: controls left (frozen), students right */
-@media (orientation:landscape) and (max-height:520px){
-  #app{display:grid;grid-template-columns:minmax(290px,42%) minmax(0,1fr);align-items:start}
-  .stick{display:contents}
-  .stick .top{grid-column:1 / -1;position:sticky;top:0;z-index:5}
-  .panel{grid-column:1;position:sticky;top:calc(56px + var(--sat));max-width:none;margin:0;padding:8px 6px 8px max(10px,var(--sal))}
-  .wrap{grid-column:2;max-width:none;margin:0;padding:8px max(12px,var(--sar)) 0 6px}
-  #app.phid{grid-template-columns:minmax(0,1fr)}
-  #app.phid .wrap{grid-column:1}
-}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.acts .grow{flex:1 1 auto}
+.sp{font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap}.sp.lowp{background:var(--absent);color:#fff;padding:2px 9px;border-radius:99px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:10px 0}
+.stats div{background:var(--bg);border-radius:12px;padding:8px 4px;text-align:center}
+.stats b{display:block;font-size:17px}.stats small{color:var(--muted);font-size:11px}
+.lg2{border-top:1px solid var(--line);padding:9px 0;display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.lg2 div{flex:1;min-width:0;word-break:break-word}.lg2 small{display:block;color:var(--muted);font-size:11.5px}
+.lg2 button{border:0;background:transparent;color:var(--absent);font-weight:700}
+.grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;margin-top:8px}
+.grid>div{min-width:0}
+.grid .h{text-align:center;font-size:12px;font-weight:650;color:var(--muted);padding:4px 0}.grid .h.sun{color:var(--absent)}
+.cell{height:46px;width:100%;min-width:0;padding:0;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-weight:700;position:relative}
+.cell.today{border:2px solid var(--ring)}.cell.sel{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.cell.has::after,.cell.miss::after{content:"";position:absolute;bottom:5px;left:50%;margin-left:-2.5px;width:5px;height:5px;border-radius:50%;background:var(--present)}
+.cell.miss::after{background:#F08C1A}.cell.sel.has::after{background:var(--on-accent)}
+.cell.hasnote{outline:2px dotted var(--leave);outline-offset:-3px}.cell:disabled{opacity:.3}
+.legend{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:12px}
 </style>
 </head>
 <body>
 <div id="app"></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <dialog id="dlg"><div class="dlg" id="dlgBody"></div></dialog>
-
 <script>
-const API_URL = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm7d7-UKg0W-OoWAiuRBHe4mjlRgMQXIHuLm6zi--i/exec';
-
+const API = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm7d7-UKg0W-OoWAiuRBHe4mjlRgMQXIHuLm6zi--i/exec';
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-const MARKS = ['P','A','L','B'];            // only P is counted in the sheet
-const LOW_ATT = 73, MIN_LECT = 1;           // red below 73%; MIN_LECT = lectures needed before a % is shown
-const UNDO_MS = 7000;                       // how long the Undo button stays after Mark all
-
-const allRow = locked => `<div class="allrow"><span class="lbl">Mark all</span><span class="seg">` +
-  ['P','A','L','B'].map(v => `<label class="ck ${v.toLowerCase()}">${v}<input type="checkbox" data-all="${v}" aria-label="Mark all ${v}" ${locked ? 'disabled' : ''}></label>`).join('') +
-  `</span></div>`;
+const MARKS = ['P','A','L','B'], LOW = 73, UNDO_MS = 7000;
+const TAGS = ['Bunking','Often late','Weak in studies','Needs counselling','Parent informed','Excellent'];
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const store = {
   get(k, d){ try{ const v = localStorage.getItem('csa2_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
-  set(k, v){
-    try{ localStorage.setItem('csa2_' + k, JSON.stringify(v)); }catch(e){}
-    if(k === 'queue' || k === 'user' || k === 'pass') mirrorBg();   // keep the service worker's copy up to date
-  }
+  set(k, v){ try{ localStorage.setItem('csa2_' + k, JSON.stringify(v)); }catch(e){} }
 };
-const API = (typeof API_URL === 'string') ? API_URL : '';
-let mode = store.get('mode', 'att');   // 'att' or 'mt'
-let panelHidden = store.get('phide', false);
-let mtDraft = { total:'', marks:{} };
-let user    = store.get('user', '');
-let pass    = store.get('pass', '');
-let teacher = store.get('teacher', '');
-let isAdmin = store.get('admin', false);
-let sheets  = store.get('sheets', []);     // [{name, cls, sub, mon, teacher}]
-let data    = store.get('data', {});       // sheet name -> {title, m, y, days, students, marks, notes, mt}
-let queue   = store.get('queue', []);      // [{id, sheet, day, marks, note?, ts, error?}]
-let confirms = store.get('confirms', {});  // 'sheet|day' -> {at, p, a, l, b, note}
-let lastSync = store.get('lastSync', 0);
-let lastError = '';
-let sel    = { cls: store.get('cls', ''), sub: store.get('sub', ''), mon: store.get('mon', ''), day: 0 };
-let draft  = {};
-let searchQ = '';
-let dirty = false, syncing = false, refreshing = false, prefetching = false, syncPromise = null;
+let mode = store.get('mode', 'att'), panelHidden = store.get('phide', false), mtDraft = { total:'', marks:{} };
+let user = store.get('user', ''), pass = store.get('pass', ''), teacher = store.get('teacher', ''), isAdmin = store.get('admin', false);
+let sheets = store.get('sheets', []), data = store.get('data', {}), queue = store.get('queue', []), confirms = store.get('confirms', {});
+let lastSync = store.get('lastSync', 0), remarks = store.get('remarks', {}), rDirty = store.get('rdirty', {});
+let sel = { cls:store.get('cls', ''), sub:store.get('sub', ''), mon:store.get('mon', ''), day:0 };
+let draft = {}, searchQ = '', filterQ = 'all', lowInfo = '', lastError = '';
+let dirty = false, syncing = false, refreshing = false, syncPromise = null, rSyncing = false;
 const tried = {}, loading = new Set(), sheetErr = {}, fresh = {};
-
 const authed = () => !!(user && pass);
+const greet = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
+const ic = p => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
+const IC = {
+  cal: ic('<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/>'),
+  note: ic('<path d="M4 4h16v11l-5 5H4z"/><path d="M15 20v-5h5"/><path d="M8 9h8M8 13h4"/>'),
+  sum: ic('<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'),
+  print: ic('<path d="M7 9V3h10v6"/><rect x="4" y="9" width="16" height="8" rx="2"/><path d="M7 14h10v7H7z"/>')
+};
 
-/* ---------- background sync (mirror of the queue for the service worker) ---------- */
-function bgDb(){ return new Promise((res, rej) => {
-  const r = indexedDB.open('csa_bg', 1);
-  r.onupgradeneeded = () => r.result.createObjectStore('kv');
-  r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
-}); }
-async function bgSet(k, v){ const db = await bgDb(); return new Promise((res, rej) => {
-  const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k);
-  t.oncomplete = () => res(); t.onerror = () => rej(t.error);
-}); }
-async function bgGet(k){ const db = await bgDb(); return new Promise((res, rej) => {
-  const r = db.transaction('kv').objectStore('kv').get(k);
-  r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
-}); }
-async function registerBgSync(){
-  try{
-    if(!('serviceWorker' in navigator)) return;
-    const reg = await navigator.serviceWorker.ready;
-    if(reg.sync) await reg.sync.register('csa-sync');
-  }catch(e){}
-}
-async function mirrorBg(){
-  try{
-    await bgSet('job', { api: API, user, pass, queue: JSON.parse(JSON.stringify(queue)) });
-    if(queue.length && user && pass) registerBgSync();
-  }catch(e){}
-}
-
-/** Applies the result of a save (made by the page OR by the service worker) to local data. */
-function applySaved(batch, res){
-  const saved = res.saved || [];
-  saved.forEach(id => {
-    const b = batch.find(x => x.id === id);
-    if(b && b.kind === 'mt'){
-      if(data[b.sheet]) data[b.sheet].mt = { total:b.total, marks:Object.assign({}, b.marks) };
-      if(res.confirmed && res.confirmed[id]) confirms[id] = res.confirmed[id];
-      return;
-    }
-    if(b && data[b.sheet]){
-      const D = data[b.sheet];
-      const m = D.marks = D.marks || {};
-      const day = Object.assign({}, m[b.day]);
-      Object.keys(b.marks).forEach(r => { if(b.marks[r] === '') delete day[r]; else day[r] = b.marks[r]; });
-      if(Object.keys(day).length) m[b.day] = day; else delete m[b.day];
-      if(b.note !== undefined){
-        D.notes = D.notes || {};
-        if(b.note) D.notes[b.day] = b.note; else delete D.notes[b.day];
-      }
-    }
-    if(res.confirmed && res.confirmed[id]) confirms[id] = res.confirmed[id];
-  });
-  queue = queue.filter(x => { const b = batch.find(y => y.id === x.id); return !(saved.includes(x.id) && b && b.ts === x.ts); });
-  (res.failed || []).forEach(f => { const x = queue.find(q => q.id === f.id); if(x) x.error = f.error; });
-  lastSync = Date.now(); store.set('lastSync', lastSync);
-  store.set('queue', queue); store.set('data', data); store.set('confirms', confirms);
-}
-
-/** Picks up records the service worker already sent while the app was closed. */
-async function absorbBg(){
-  try{
-    const done = await bgGet('done');
-    if(!done || !done.length) return;
-    await bgSet('done', []);
-    done.forEach(d => applySaved(d.batch, d.res));
-    if(authed()){ if(!dirty) loadDraft(); renderMain(); toast('Attendance was synced in the background'); }
-  }catch(e){}
-}
-
-/* ---------- sheet / class / subject / month helpers ---------- */
+/* ---------- helpers: class / subject / month / day ---------- */
 const uniq = a => [...new Set(a)];
 const titleCase = s => String(s).toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
-const monIdx = tok => MONTHS.findIndex(m => m.slice(0, 3).toUpperCase() === String(tok).slice(0, 3).toUpperCase());
-const monLabel = tok => { const i = monIdx(tok); return i >= 0 ? MONTHS[i].slice(0, 3) : tok; };
-const classes   = () => uniq(sheets.map(s => s.cls));
-const subjects  = cls => uniq(sheets.filter(s => s.cls === cls).map(s => s.sub));
-const monthsOf  = (cls, sub) => uniq(sheets.filter(s => s.cls === cls && s.sub === sub).map(s => s.mon));
-const entry     = () => sheets.find(s => s.cls === sel.cls && s.sub === sel.sub && s.mon === sel.mon);
+const monIdx = t => MONTHS.findIndex(m => m.slice(0, 3).toUpperCase() === String(t).slice(0, 3).toUpperCase());
+const monLabel = t => { const i = monIdx(t); return i >= 0 ? MONTHS[i].slice(0, 3) : t; };
+const classes = () => uniq(sheets.map(s => s.cls));
+const subjects = c => uniq(sheets.filter(s => s.cls === c).map(s => s.sub));
+const monthsOf = (c, s) => uniq(sheets.filter(x => x.cls === c && x.sub === s).map(x => x.mon));
+const entry = () => sheets.find(s => s.cls === sel.cls && s.sub === sel.sub && s.mon === sel.mon);
 const sheetName = () => { const e = entry(); return e ? e.name : ''; };
-
-function bestMonth(list, want){
-  if(list.includes(want)) return want;
-  const now = new Date().getMonth();
-  return list.find(t => monIdx(t) === now) || list[list.length - 1] || '';
-}
+const bestMonth = (list, want) => list.includes(want) ? want : (list.find(t => monIdx(t) === new Date().getMonth()) || list[list.length - 1] || '');
 function ensureSel(){
   if(!sheets.length || entry()) return;
   const cl = classes(); if(!cl.includes(sel.cls)) sel.cls = cl[0];
   const sb = subjects(sel.cls); if(!sb.includes(sel.sub)) sel.sub = sb[0];
-  sel.mon = bestMonth(monthsOf(sel.cls, sel.sub), sel.mon);
-  initDay();
+  sel.mon = bestMonth(monthsOf(sel.cls, sel.sub), sel.mon); initDay();
 }
-function choose(kind, value){
-  searchQ = '';
-  if(kind === 'cls'){
-    sel.cls = value;
-    const sb = subjects(value); if(!sb.includes(sel.sub)) sel.sub = sb[0];
-    sel.mon = bestMonth(monthsOf(sel.cls, sel.sub), sel.mon);
-  } else if(kind === 'sub'){
-    sel.sub = value; sel.mon = bestMonth(monthsOf(sel.cls, value), sel.mon);
-  } else sel.mon = value;
-  store.set('cls', sel.cls); store.set('sub', sel.sub); store.set('mon', sel.mon);
-  initDay();
+function choose(kind, v){
+  searchQ = ''; filterQ = 'all';
+  if(kind === 'cls'){ sel.cls = v; const sb = subjects(v); if(!sb.includes(sel.sub)) sel.sub = sb[0]; sel.mon = bestMonth(monthsOf(sel.cls, sel.sub), sel.mon); }
+  else if(kind === 'sub'){ sel.sub = v; sel.mon = bestMonth(monthsOf(sel.cls, v), sel.mon); }
+  else sel.mon = v;
+  store.set('cls', sel.cls); store.set('sub', sel.sub); store.set('mon', sel.mon); initDay();
 }
 function monthYear(){
   const d = data[sheetName()];
-  if(d && d.m != null && d.y) return { m: d.m, y: d.y };
-  const e = entry(), now = new Date();
-  let m = e ? monIdx(e.mon) : -1; if(m < 0) m = now.getMonth();
+  if(d && d.m != null && d.y) return { m:d.m, y:d.y };
+  const e = entry(), now = new Date(); let m = e ? monIdx(e.mon) : -1; if(m < 0) m = now.getMonth();
   const start = (now.getMonth() > 7 || (now.getMonth() === 7 && now.getDate() >= 15)) ? now.getFullYear() : now.getFullYear() - 1;
   return { m, y: m >= 7 ? start : start + 1 };
 }
 function dayInfo(){
-  const { m, y } = monthYear();
-  const n = new Date(y, m + 1, 0).getDate();
-  const d = data[sheetName()];
+  const { m, y } = monthYear(), n = new Date(y, m + 1, 0).getDate(), d = data[sheetName()];
   const srv = d && d.days && d.days.length >= 25 ? d.days : null;
-  // Sundays are blacked out in the sheet, so they cannot be marked
-  const avail = Array.from({ length: n }, (_, i) => i + 1)
-    .filter(x => (!srv || srv.includes(x)) && new Date(y, m, x).getDay() !== 0);
+  const avail = Array.from({ length:n }, (_, i) => i + 1).filter(x => (!srv || srv.includes(x)) && new Date(y, m, x).getDay() !== 0);
   const now = new Date();
   return { m, y, n, avail, isCur: now.getMonth() === m && now.getFullYear() === y, today: now.getDate() };
 }
-function initDay(){
-  const { isCur, today, avail } = dayInfo();
-  sel.day = isCur && avail.includes(today) ? today : (avail[0] || 1);
-}
-function fixDay(){
-  const { avail } = dayInfo();
-  if(!sel.day || !avail.includes(sel.day)) initDay();
-}
-function queued(day){ const name = sheetName(); return queue.find(q => q.sheet === name && q.day === day); }
+function initDay(){ const { isCur, today, avail } = dayInfo(); sel.day = isCur && avail.includes(today) ? today : (avail[0] || 1); }
+function fixDay(){ const { avail } = dayInfo(); if(!sel.day || !avail.includes(sel.day)) initDay(); }
+const queued = day => { const n = sheetName(); return queue.find(q => q.sheet === n && q.day === day); };
 function noteFor(day){
-  const q = queued(day);
-  if(q && q.note !== undefined) return q.note;
-  const d = data[sheetName()];
-  return (d && d.notes && d.notes[day]) || '';
+  const q = queued(day); if(q && q.note !== undefined) return q.note;
+  const d = data[sheetName()]; return (d && d.notes && d.notes[day]) || '';
 }
 function hasData(day){
   const d = data[sheetName()], q = queued(day);
   return !!((d && d.marks && d.marks[day] && Object.keys(d.marks[day]).length) || (q && Object.keys(q.marks).length));
 }
+function firstDataDay(n){ for(let i = 1; i <= n; i++) if(hasData(i)) return i; return 0; }
+function isMissed(day, fd, info){
+  if(!fd || day <= fd || !info.avail.includes(day) || hasData(day) || noteFor(day)) return false;
+  const t = new Date(); t.setHours(0, 0, 0, 0); return new Date(info.y, info.m, day) < t;
+}
 function loadDraft(){
-  draft = {}; dirty = false;
-  const d = data[sheetName()]; if(!d) return;
+  draft = {}; dirty = false; const d = data[sheetName()]; if(!d) return;
   Object.assign(draft, (d.marks && d.marks[sel.day]) || {});
   const q = queued(sel.day);
   if(q) Object.keys(q.marks).forEach(r => { if(q.marks[r] === '') delete draft[r]; else draft[r] = q.marks[r]; });
 }
 function counts(){
   const d = data[sheetName()]; let p = 0, a = 0, l = 0, b = 0, n = 0;
-  (d ? d.students : []).forEach(s => {
-    const v = draft[s.roll];
-    if(v === 'P') p++; else if(v === 'A') a++; else if(v === 'L') l++; else if(v === 'B') b++; else n++;
-  });
+  (d ? d.students : []).forEach(s => { const v = draft[s.roll]; if(v === 'P') p++; else if(v === 'A') a++; else if(v === 'L') l++; else if(v === 'B') b++; else n++; });
   return { p, a, l, b, n, total: p + a + l + b + n };
 }
 
@@ -491,250 +256,239 @@ function errText(e){
   if(e instanceof TypeError) return 'Could not reach the server (network blocked or wrong API_URL).';
   return e.message || String(e);
 }
-
 async function api(payload, ms = 45000){
-  const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), ms);
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms);
   try{
-    const r = await fetch(API, { method:'POST', body: JSON.stringify({ username:user, password:pass, ...payload }), signal: ctl.signal, redirect:'follow' });
+    const r = await fetch(API, { method:'POST', body:JSON.stringify({ username:user, password:pass, ...payload }), signal:ctl.signal, redirect:'follow' });
     const txt = await r.text();
     try{ return JSON.parse(txt); }
-    catch(e){ throw new Error('Server sent a web page instead of data. Check that the Apps Script web app is deployed with access "Anyone" and that API_URL is the latest URL.'); }
+    catch(e){ throw new Error('Server sent a web page instead of data. Deploy the Apps Script as "Anyone" and check API_URL.'); }
   } finally { clearTimeout(t); }
 }
-
-/** Loads one sheet. create=true makes the sheet on the server if it does not exist yet. */
 async function loadSheet(e, create){
   loading.add(e.name);
   try{
-    const d = await api({ action:'sheet', sheet:e.name, create: !!create }, 90000);
-    if(d.ok && d.missing){ delete data[e.name]; }
+    const d = await api({ action:'sheet', sheet:e.name, create:!!create }, 90000);
+    if(d.ok && d.missing) delete data[e.name];
     else if(d.ok){ data[e.name] = { title:d.title, m:d.m, y:d.y, days:d.days, students:d.students, marks:d.marks, notes:d.notes || {}, mt:d.mt || { total:0, marks:{} } }; delete sheetErr[e.name]; }
     else if(d.error === 'BAD_LOGIN'){ signOut('Your username or password was changed. Sign in again.'); return false; }
     else throw new Error(d.error || 'Could not load the sheet');
-    fresh[e.name] = Date.now();
-    store.set('data', data);
-    return true;
+    fresh[e.name] = Date.now(); store.set('data', data); return true;
   } finally { loading.delete(e.name); }
 }
-
 const isCurMonth = e => monIdx(e.mon) === new Date().getMonth();
-
 async function refreshAll(){
-  if(!authed() || refreshing || prefetching) return;
-  refreshing = true; updateStatus();
-  let rest = [];
+  if(!authed() || refreshing) return;
+  refreshing = true; updateStatus(); let rest = [];
   try{
     const s = await api({ action:'sheets' });
     if(!s.ok){ if(s.error === 'BAD_LOGIN') return signOut('Your username or password was changed. Sign in again.'); throw new Error(s.error); }
     sheets = s.sheets; teacher = s.teacher || teacher; isAdmin = !!s.admin;
     store.set('sheets', sheets); store.set('teacher', teacher); store.set('admin', isAdmin);
-    ensureSel();
-    const cur = entry();
-    if(cur){
-      try{ await loadSheet(cur, true); }
-      catch(err){ sheetErr[cur.name] = errText(err); }
-      if(!dirty){ fixDay(); loadDraft(); }
-    }
+    ensureSel(); const cur = entry();
+    if(cur){ try{ await loadSheet(cur, true); }catch(err){ sheetErr[cur.name] = errText(err); } if(!dirty){ fixDay(); loadDraft(); } }
     rest = sheets.filter(x => x !== cur);
     if(!dirty){ ensureSel(); fixDay(); loadDraft(); if(mode === 'mt') loadMtDraft(); render(); }
   }catch(e){ lastError = errText(e); }
   finally{ refreshing = false; updateStatus(); }
-
-  if(!rest.length || !authed()) return;
-  prefetching = true;
-  try{
-    for(const e of rest){
-      if(!authed()) break;
-      if(queue.length && !syncing) await syncQueue();
-      if(fresh[e.name] && Date.now() - fresh[e.name] < 120000) continue;
-      try{ await loadSheet(e, isCurMonth(e)); }
-      catch(err){ sheetErr[e.name] = errText(err); }
-    }
-  } finally { prefetching = false; }
+  for(const e of rest){
+    if(!authed()) break;
+    if(queue.length && !syncing) await syncQueue();
+    if(fresh[e.name] && Date.now() - fresh[e.name] < 120000) continue;
+    try{ await loadSheet(e, isCurMonth(e)); }catch(err){ sheetErr[e.name] = errText(err); }
+  }
 }
 
 /* ---------- saving to the sheet ---------- */
+function applySaved(batch, res){
+  const saved = res.saved || [];
+  saved.forEach(id => {
+    const b = batch.find(x => x.id === id);
+    if(b && b.kind === 'mt'){ if(data[b.sheet]) data[b.sheet].mt = { total:b.total, marks:Object.assign({}, b.marks) }; }
+    else if(b && data[b.sheet]){
+      const D = data[b.sheet], m = D.marks = D.marks || {}, day = Object.assign({}, m[b.day]);
+      Object.keys(b.marks).forEach(r => { if(b.marks[r] === '') delete day[r]; else day[r] = b.marks[r]; });
+      if(Object.keys(day).length) m[b.day] = day; else delete m[b.day];
+      if(b.note !== undefined){ D.notes = D.notes || {}; if(b.note) D.notes[b.day] = b.note; else delete D.notes[b.day]; }
+    }
+    if(res.confirmed && res.confirmed[id]) confirms[id] = res.confirmed[id];
+  });
+  queue = queue.filter(x => { const b = batch.find(y => y.id === x.id); return !(saved.includes(x.id) && b && b.ts === x.ts); });
+  (res.failed || []).forEach(f => { const x = queue.find(q => q.id === f.id); if(x) x.error = f.error; });
+  lastSync = Date.now(); store.set('lastSync', lastSync); store.set('queue', queue); store.set('data', data); store.set('confirms', confirms);
+}
 function syncQueue(){
   if(syncPromise) return syncPromise;
   if(!queue.length || !authed()) return Promise.resolve(false);
-  syncPromise = doSync().finally(() => { syncPromise = null; });
-  return syncPromise;
+  syncPromise = doSync().finally(() => { syncPromise = null; }); return syncPromise;
 }
-
 async function doSync(){
-  syncing = true; updateStatus();
-  let ok = false;
+  syncing = true; updateStatus(); let ok = false;
   try{
-    const batch = queue.map(q => ({ ...q }));
-    const res = await api({ action:'save', records: batch }, 90000);
+    const batch = queue.map(q => ({ ...q })), res = await api({ action:'save', records:batch }, 90000);
     if(res.ok){
-      const saved = res.saved || [];
-      applySaved(batch, res);
-      lastError = (res.failed && res.failed.length) ? res.failed[0].error : '';
-      ok = !lastError;
+      const saved = res.saved || []; applySaved(batch, res);
+      lastError = (res.failed && res.failed.length) ? res.failed[0].error : ''; ok = !lastError;
       if(saved.length){
         const c = res.confirmed && res.confirmed[saved[saved.length - 1]];
-        toast(c && c.p != null ? 'Saved in sheet and verified: P ' + c.p + ', A ' + c.a + (c.l ? ', L ' + c.l : '') + (c.b ? ', B ' + c.b : '')
-                               : 'Saved in sheet and verified');
+        toast(c && c.p != null ? 'Saved in sheet and verified: P ' + c.p + ', A ' + c.a + (c.l ? ', L ' + c.l : '') + (c.b ? ', B ' + c.b : '') : 'Saved in sheet and verified');
       }
-    } else if(res.error === 'BAD_LOGIN'){ signOut('Your username or password was changed. Sign in again.'); }
-    else { lastError = res.error || 'The server refused the save.'; }
+    } else if(res.error === 'BAD_LOGIN') signOut('Your username or password was changed. Sign in again.');
+    else lastError = res.error || 'The server refused the save.';
   }catch(e){ lastError = errText(e); }
-  finally{ syncing = false; updateStatus(); if(authed() && sheetName()){ if(!dirty) loadDraft(); } }
+  finally{ syncing = false; updateStatus(); if(authed() && sheetName() && !dirty) loadDraft(); }
   if(ok && queue.length) setTimeout(syncQueue, 300);
   return ok;
 }
 
-/* ---------- views ---------- */
-function render(){ authed() ? renderMain() : renderLogin(); }
+/* ---------- student remarks (tags + comments), synced to the sheet ---------- */
+const rk = roll => user + '|' + sel.cls + '|' + roll;
+const getR = roll => remarks[rk(roll)] || { tags:[], log:[] };
+function saveR(roll, R){
+  R.u = Date.now(); remarks[rk(roll)] = R; store.set('remarks', remarks);
+  const st = ((data[sheetName()] || {}).students || []).find(x => x.roll === roll);
+  rDirty[sel.cls + '|' + roll] = st ? st.name : ''; store.set('rdirty', rDirty); syncRemarks();
+}
+function tagHtml(roll){
+  const R = remarks[rk(roll)]; if(!R) return '';
+  return R.tags.slice(0, 2).map(t => `<span class="rtag ${t === 'Excellent' ? 'good' : ''}">${esc(t)}</span>`).join('') +
+    (R.log.length ? `<span class="rtag cm">\u{1F4AC} ${R.log.length}</span>` : '');
+}
+async function syncRemarks(){
+  if(!authed() || !navigator.onLine || rSyncing) return;
+  rSyncing = true;
+  try{
+    const keys = Object.keys(rDirty);
+    if(keys.length){
+      const recs = keys.map(k => { const i = k.indexOf('|'), R = remarks[user + '|' + k] || { tags:[], log:[] };
+        return { cls:k.slice(0, i), roll:k.slice(i + 1), name:rDirty[k], tags:R.tags, log:R.log, u:R.u || Date.now() }; });
+      const r = await api({ action:'remarks_save', records:recs });
+      if(r.ok){ (r.saved || []).concat(r.skipped || []).forEach(k => delete rDirty[k]); store.set('rdirty', rDirty); }
+    }
+    const g = await api({ action:'remarks_get' });
+    if(g.ok){
+      let changed = false;
+      Object.keys(g.remarks).forEach(k => { const lk = user + '|' + k, mine = remarks[lk];
+        if(!mine || (mine.u || 0) < g.remarks[k].u){ remarks[lk] = g.remarks[k]; changed = true; } });
+      store.set('remarks', remarks); if(changed && authed()) renderMain();
+    }
+  }catch(e){} finally{ rSyncing = false; }
+}
+function openStudent(roll, keep){
+  const d = data[sheetName()]; if(!d) return;
+  const s = d.students.find(x => x.roll === roll); if(!s) return;
+  const S = stats(), c = S.per[roll] || { p:0, a:0 }, p = pctOf(c, S.lect), R = getR(roll), dlg = $('#dlg');
+  const mt = d.mt && d.mt.marks ? d.mt.marks[roll] : null;
+  $('#dlgBody').innerHTML = `
+    <h2>${esc(s.name)}</h2><div class="meta">Roll ${esc(roll)} \u00b7 ${esc(sel.cls)} \u00b7 ${esc(titleCase(sel.sub))}</div>
+    <div class="stats"><div><b>${p == null ? '-' : p + '%'}</b><small>Attendance</small></div><div><b>${c.p}</b><small>Present</small></div><div><b>${c.a}</b><small>Absent</small></div>
+      <div><b>${mt == null ? '-' : mt === 'A' ? 'Abs' : mt + '/' + d.mt.total}</b><small>Test</small></div></div>
+    <div class="chips">${TAGS.map(t => `<button class="chip ${R.tags.includes(t) ? 'on' : ''}" data-tag="${esc(t)}">${esc(t)}</button>`).join('')}</div>
+    <textarea id="rkTxt" maxlength="400" placeholder="Add a comment, e.g. bunking the last lecture often...">${esc(keep || '')}</textarea>
+    <div class="acts"><button class="btn small primary grow" id="rkAdd">Add comment</button><button class="btn small grow" id="closeDlg">Close</button></div>
+    ${R.log.slice().reverse().map((e, i) => `<div class="lg2"><div>${esc(e.txt)}<small>${new Date(e.t).toLocaleDateString([], { day:'numeric', month:'short', year:'numeric' })}</small></div><button data-del="${R.log.length - 1 - i}">Delete</button></div>`).join('')}`;
+  if(!dlg.open) dlg.showModal();
+  $('#closeDlg').onclick = () => dlg.close();
+  dlg.querySelectorAll('[data-tag]').forEach(b => b.onclick = () => {
+    const kt = $('#rkTxt').value, i = R.tags.indexOf(b.dataset.tag);
+    if(i >= 0) R.tags.splice(i, 1); else R.tags.push(b.dataset.tag);
+    saveR(roll, R); renderMain(); openStudent(roll, kt);
+  });
+  $('#rkAdd').onclick = () => {
+    const txt = $('#rkTxt').value.trim(); if(!txt) return toast('Type a comment first.');
+    R.log.push({ t:Date.now(), txt }); saveR(roll, R); renderMain(); openStudent(roll);
+  };
+  dlg.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    R.log.splice(Number(b.dataset.del), 1); saveR(roll, R); renderMain(); openStudent(roll, $('#rkTxt').value);
+  });
+}
 
+/* ---------- login ---------- */
+const render = () => authed() ? renderMain() : renderLogin();
 function renderLogin(msg){
-  $('#app').innerHTML = `
-    <div class="login">
-      <h1>JCW Daily Attendance</h1>
-      <p>Sign in once while you have internet, with the same username and password as the portal. After that the app works offline.</p>
-      <label for="user">Username</label>
-      <input id="user" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" value="${esc(store.get('lastUser', ''))}">
-      <label for="pass">Password</label>
-      <input id="pass" type="password" autocomplete="current-password" enterkeyhint="go">
-      <div class="err" id="loginErr" role="alert">${esc(msg || '')}</div>
-      <button class="btn primary" style="width:100%" id="loginBtn">Sign in</button>
-    </div>`;
-  $('#app').classList.remove('phid');
+  $('#app').innerHTML = `<div class="login"><h1>CS Attendance</h1>
+    <p>Sign in once while you have internet, with the same username and password as the portal. After that the app works offline.</p>
+    <label for="user">Username</label><input id="user" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" value="${esc(store.get('lastUser', ''))}">
+    <label for="pass">Password</label><input id="pass" type="password" autocomplete="current-password">
+    <div class="err" id="loginErr" role="alert">${esc(msg || '')}</div>
+    <button class="btn primary" style="width:100%" id="loginBtn">Sign in</button></div>`;
   $('#loginBtn').onclick = login;
   $('#user').onkeydown = e => { if(e.key === 'Enter') $('#pass').focus(); };
   $('#pass').onkeydown = e => { if(e.key === 'Enter') login(); };
 }
-
 async function login(){
   const u = $('#user').value.trim(), p = $('#pass').value;
-  if(!u || !p) { $('#loginErr').textContent = 'Enter your username and password.'; return; }
-  if(!API || API.startsWith('PASTE')){ $('#loginErr').textContent = 'Not connected yet: set API_URL.'; return; }
-  $('#loginErr').textContent = 'Signing in...';
-  user = u; pass = p;
+  if(!u || !p){ $('#loginErr').textContent = 'Enter your username and password.'; return; }
+  $('#loginErr').textContent = 'Signing in...'; user = u; pass = p;
   try{
     const r = await api({ action:'sheets' });
-    if(!r.ok){
-      user = ''; pass = '';
-      $('#loginErr').textContent = r.error === 'BAD_LOGIN' ? 'Wrong username or password. Try again.' : 'Could not sign in: ' + r.error;
-      return;
-    }
+    if(!r.ok){ user = ''; pass = ''; $('#loginErr').textContent = r.error === 'BAD_LOGIN' ? 'Wrong username or password. Try again.' : 'Could not sign in: ' + r.error; return; }
     const prev = store.get('lastUser', '');
     if(prev && prev.toLowerCase() !== u.toLowerCase()){
       data = {}; queue = []; confirms = {}; sel = { cls:'', sub:'', mon:'', day:0 };
       store.set('data', data); store.set('queue', queue); store.set('confirms', confirms);
     }
     teacher = r.teacher || ''; isAdmin = !!r.admin; sheets = r.sheets || [];
-    store.set('user', user); store.set('pass', pass); store.set('lastUser', user);
-    store.set('teacher', teacher); store.set('admin', isAdmin); store.set('sheets', sheets);
-    ensureSel(); loadDraft(); render(); refreshAll();
+    store.set('user', user); store.set('pass', pass); store.set('lastUser', user); store.set('teacher', teacher); store.set('admin', isAdmin); store.set('sheets', sheets);
+    ensureSel(); loadDraft(); render(); refreshAll(); syncRemarks();
   }catch(e){ user = ''; pass = ''; $('#loginErr').textContent = errText(e); }
 }
-
-function clearLocal(){
-  queue = []; data = {}; sheets = []; teacher = ''; isAdmin = false; confirms = {};
-  store.set('queue', []); store.set('data', {}); store.set('sheets', []); store.set('teacher', ''); store.set('admin', false); store.set('confirms', {});
-}
-
-/** msg given = forced sign-out (password changed): keep local data. No msg = manual: save first, then wipe. */
 async function signOut(msg){
   if(!msg && queue.length){
     toast('Saving your attendance before signing out...');
     if(navigator.onLine){ await syncQueue(); if(queue.length) await syncQueue(); }
-    if(queue.length){
-      if(!confirm(queue.length + ' record(s) could not be saved to the sheet yet and would be lost. Sign out anyway?')) { renderMain(); return; }
-    } else toast('Saved in sheet. Signed out.');
+    if(queue.length && !confirm(queue.length + ' record(s) could not be saved to the sheet yet and would be lost. Sign out anyway?')){ renderMain(); return; }
   }
   user = ''; pass = ''; store.set('user', ''); store.set('pass', '');
-  if(!msg) clearLocal();
+  if(!msg){ queue = []; data = {}; sheets = []; teacher = ''; isAdmin = false; confirms = {}; ['queue','data','sheets','confirms'].forEach(k => store.set(k, k === 'queue' || k === 'sheets' ? [] : {})); store.set('teacher', ''); store.set('admin', false); }
   renderLogin(msg);
 }
 
-/** Scrolls the date strip so the selected date sits in the middle (works whatever the offsetParent is). */
-function centerStrip(){
-  const st = $('#strip'); if(!st || !st.clientWidth) return;
-  const cur = st.querySelector('.sel'); if(!cur) return;
-  const sr = st.getBoundingClientRect(), cr = cur.getBoundingClientRect();
-  st.scrollLeft += (cr.left - sr.left) - (st.clientWidth - cr.width) / 2;
-}
-function focusSelectedDay(){
-  centerStrip();
-  requestAnimationFrame(centerStrip);
-  setTimeout(centerStrip, 120);
-}
-
-/* ---------- attendance % (this month's sheet) ---------- */
+/* ---------- attendance stats (this month) ---------- */
 function dayMarks(day){
-  if(day === sel.day) return draft;                       // what is on screen right now
-  const d = data[sheetName()], q = queued(day);
-  const base = Object.assign({}, (d && d.marks && d.marks[day]) || {});
+  if(day === sel.day) return draft;
+  const d = data[sheetName()], q = queued(day), base = Object.assign({}, (d && d.marks && d.marks[day]) || {});
   if(q) Object.keys(q.marks).forEach(r => { if(q.marks[r] === '') delete base[r]; else base[r] = q.marks[r]; });
   return base;
 }
-function attStats(){
-  const d = data[sheetName()]; if(!d) return { lect:0, pct:{}, pres:{} };
-  const days = d.days && d.days.length ? d.days : Array.from({ length:31 }, (_, i) => i + 1);
-  const per = {}; let lect = 0;
-  d.students.forEach(s => per[s.roll] = 0);
+function stats(){
+  const d = data[sheetName()]; if(!d) return { lect:0, per:{} };
+  const days = d.days && d.days.length ? d.days : Array.from({ length:31 }, (_, i) => i + 1), per = {}; let lect = 0;
+  d.students.forEach(s => per[s.roll] = { p:0, a:0, l:0, b:0 });
   days.forEach(day => {
-    const m = dayMarks(day); let any = false;
-    Object.keys(m).forEach(r => { if(m[r] === 'P'){ any = true; if(r in per) per[r]++; } else if(m[r] === 'A') any = true; });
+    const m = dayMarks(day); let any = 0;
+    Object.keys(m).forEach(r => { const v = m[r]; if(v === 'P' || v === 'A') any = 1; if(per[r] && v && per[r][v.toLowerCase()] != null) per[r][v.toLowerCase()]++; });
     if(any) lect++;
   });
-  const pct = {};
-  d.students.forEach(s => { pct[s.roll] = lect >= MIN_LECT ? Math.round(per[s.roll] / lect * 1000) / 10 : null; });
-  return { lect, pct, pres: per };
+  return { lect, per };
 }
+const pctOf = (c, l) => l ? Math.round(c.p / l * 1000) / 10 : null;
 function paintPct(){
-  const { lect, pct, pres } = attStats(); let low = 0;
+  const { lect, per } = stats(); let low = 0;
   document.querySelectorAll('.list .row').forEach(row => {
-    const roll = row.dataset.roll, p = pct[roll], el = row.querySelector('.pct'), isLow = p != null && p < LOW_ATT;
-    if(isLow) low++;
-    row.classList.toggle('low', isLow && mode === 'att');
-    if(el){
-      el.textContent = p == null ? '' : 'Attend: ' + pres[roll] + '/' + lect + ' = ' + p + '%';
-      el.className = 'pct' + (isLow ? ' lowp' : '');
-    }
+    const c = per[row.dataset.roll], p = c ? pctOf(c, lect) : null, isLow = p != null && p < LOW, el = row.querySelector('.pct');
+    if(isLow) low++; row.classList.toggle('low', isLow && mode === 'att');
+    if(el){ el.textContent = isLow ? 'Attend: ' + c.p + '/' + lect + ' = ' + p + '%' : ''; el.className = 'pct' + (isLow ? ' lowp' : ''); }
   });
-  const lc = $('#lowCnt');
-  if(lc){
-    lc.style.display = low ? 'block' : 'none';
-    lc.textContent = low + ' student' + (low > 1 ? 's' : '') + ' below ' + LOW_ATT + '% attendance (' + lect + ' lectures held)';
-  }
+  if(mode === 'att'){ lowInfo = low ? low + ' below ' + LOW + '% (' + lect + ' lectures)' : ''; updateBadge(); }
 }
 
 /* ---------- monthly test ---------- */
-const ABS_WORDS = ['A', 'AB', 'ABSENT'];
 function mtParse(raw, total){
   const s = String(raw == null ? '' : raw).trim().toUpperCase().replace(',', '.');
   if(s === '') return { k:'empty' };
-  if(ABS_WORDS.includes(s)) return { k:'abs' };
-  if(/^\d+(\.\d*)?$/.test(s)){
-    const v = Number(s);
-    if(total > 0 && v > total) return { k:'over', v };
-    return { k:'num', v };
-  }
+  if(['A','AB','ABSENT'].includes(s)) return { k:'abs' };
+  if(/^\d+(\.\d*)?$/.test(s)){ const v = Number(s); return total > 0 && v > total ? { k:'over', v } : { k:'num', v }; }
   return { k:'bad' };
 }
-function mtQueued(){ const name = sheetName(); return queue.find(q => q.sheet === name && q.kind === 'mt'); }
+const mtQueued = () => queue.find(q => q.sheet === sheetName() && q.kind === 'mt');
 function loadMtDraft(){
-  const d = data[sheetName()], q = mtQueued();
-  const src = q ? { total:q.total, marks:q.marks } : ((d && d.mt) || { total:0, marks:{} });
+  const d = data[sheetName()], q = mtQueued(), src = q ? { total:q.total, marks:q.marks } : ((d && d.mt) || { total:0, marks:{} });
   mtDraft = { total: src.total ? String(src.total) : '', marks: Object.assign({}, src.marks) };
 }
-function enqueueMt(total, marks){
-  const name = sheetName(), id = name + '|MT';
-  queue = queue.filter(x => x.id !== id);
-  queue.push({ id, kind:'mt', sheet:name, total, marks, ts:Date.now() });
-  store.set('queue', queue); delete confirms[id]; store.set('confirms', confirms);
-}
-
 function saveMt(){
-  const name = sheetName(), d = data[name];
-  if(!d) return toast('This sheet is not on the phone yet');
-  const total = Number(mtDraft.total);
-  if(!(total > 0)) return toast('Enter the total marks first.');
+  const name = sheetName(), d = data[name]; if(!d) return toast('This sheet is not on the phone yet');
+  const total = Number(mtDraft.total); if(!(total > 0)) return toast('Enter the total marks first.');
   const marks = {}; let missing = 0;
   for(const s of d.students){
     const p = mtParse(mtDraft.marks[s.roll], total);
@@ -745,568 +499,394 @@ function saveMt(){
     marks[s.roll] = String(p.v);
   }
   if(missing) return toast(missing + ' student' + (missing > 1 ? 's have' : ' has') + ' no marks. Enter marks, or A for absent.');
-  enqueueMt(total, marks); dirty = false;
-  toast('Saved on phone. Sending to the sheet...');
-  renderMain();
+  const id = name + '|MT'; queue = queue.filter(x => x.id !== id);
+  queue.push({ id, kind:'mt', sheet:name, total, marks, ts:Date.now() }); store.set('queue', queue); delete confirms[id]; store.set('confirms', confirms);
+  dirty = false; toast('Saved on phone. Sending to the sheet...'); renderMain();
   syncQueue().then(ok => { if(!ok && queue.length) toast('Saved on this phone. Tap the status chip to see why it has not reached the sheet.'); });
 }
-
 function updateMt(d){
-  paintPct();
-  const total = Number(mtDraft.total) || 0; let filled = 0, left = 0, bad = 0, low = 0;
+  paintPct(); const total = Number(mtDraft.total) || 0; let filled = 0, left = 0, bad = 0, low = 0;
   document.querySelectorAll('#mtList .row').forEach(row => {
-    const p = mtParse(mtDraft.marks[row.dataset.roll], total);
-    const inp = row.querySelector('.mk'), chip = row.querySelector('.mtp');
-    const invalid = p.k === 'over' || p.k === 'bad';
-    const isLow = p.k === 'num' && total > 0 && p.v / total < 0.5;
-    const flag = isLow || p.k === 'abs';          // below 50% or absent
-    inp.classList.toggle('bad', invalid);
-    row.classList.toggle('mtlow', flag);
-    if(chip){
-      chip.className = 'mtp' + (flag ? ' lowm' : '');
-      chip.textContent = p.k === 'num' && total > 0
-        ? 'Test: ' + p.v + '/' + total + ' = ' + (Math.round(p.v / total * 1000) / 10) + '%'
-        : (p.k === 'abs' ? 'Test: Absent' : '');
-    }
-    if(p.k === 'empty') left++; else filled++;
-    if(invalid) bad++;
-    if(flag) low++;
+    const p = mtParse(mtDraft.marks[row.dataset.roll], total), inp = row.querySelector('.mk'), chip = row.querySelector('.mtp');
+    const invalid = p.k === 'over' || p.k === 'bad', flag = (p.k === 'num' && total > 0 && p.v / total < 0.5) || p.k === 'abs';
+    inp.classList.toggle('bad', invalid); row.classList.toggle('mtlow', flag);
+    chip.className = 'mtp' + (flag ? ' lowm' : '');
+    chip.textContent = p.k === 'num' && total > 0 ? 'Test: ' + p.v + '/' + total + ' = ' + (Math.round(p.v / total * 1000) / 10) + '%' : (p.k === 'abs' ? 'Test: Absent' : '');
+    if(p.k === 'empty') left++; else filled++; if(invalid) bad++; if(flag) low++;
   });
   const info = $('#mtInfo');
   if(info) info.textContent = (d ? d.students.length : 0) + ' students \u00b7 ' + filled + ' entered' + (left ? ' \u00b7 ' + left + ' left' : '') + ' \u00b7 type A, AB or Absent';
-  const lm = $('#mtLow');
-  if(lm){ lm.style.display = low ? 'block' : 'none'; lm.textContent = low + ' student' + (low > 1 ? 's' : '') + ' below 50% or absent in the monthly test'; }
+  lowInfo = low ? low + ' below 50% or absent in the monthly test' : '';
   const sb = $('#saveBtn');
   if(sb){ sb.textContent = left ? 'Save test marks (' + left + ' left)' : 'Save test marks'; sb.classList.toggle('incomplete', left > 0 || bad > 0 || !(total > 0)); }
+  updateBadge(); paintFilters();
 }
 
-/* ---------- list bodies ---------- */
+/* ---------- main screen ---------- */
 function attBodyHtml(d){
-  return allRow(false) + '<ul class="list" id="list">' + d.students.map((s, i) => `
-      <li class="row" data-roll="${esc(s.roll)}">
-        <span class="no">${i + 1}</span>
-        <span class="who"><b>${esc(s.name)}</b><small><span>${esc(s.roll)}</span><span class="pct"></span></small></span>
-        <span class="seg">
-          <button class="p" data-v="P" aria-label="Present" aria-pressed="false">P</button>
-          <button class="a" data-v="A" aria-label="Absent" aria-pressed="false">A</button>
-          <button class="l" data-v="L" aria-label="Leave" aria-pressed="false">L</button>
-          <button class="b" data-v="B" aria-label="B" aria-pressed="false">B</button>
-        </span>
-      </li>`).join('') + '</ul>';
+  return `<div class="allrow"><span class="lbl">Mark all</span><span class="seg">` +
+    MARKS.map(v => `<label class="ck ${v.toLowerCase()}">${v}<input type="checkbox" data-all="${v}" aria-label="Mark all ${v}"></label>`).join('') + `</span></div>` +
+    '<ul class="list" id="list">' + d.students.map((s, i) => `
+    <li class="row" data-roll="${esc(s.roll)}"><span class="no">${i + 1}</span>
+      <span class="who"><b>${esc(s.name)}</b><small><span>${esc(s.roll)}</span><span class="pct"></span>${tagHtml(s.roll)}</small></span>
+      <span class="seg">${MARKS.map(v => `<button class="${v.toLowerCase()}" data-v="${v}" aria-label="${v}" aria-pressed="false">${v}</button>`).join('')}</span></li>`).join('') + '</ul>';
 }
 function mtBodyHtml(d){
   return '<ul class="list" id="mtList">' + d.students.map((s, i) => `
-      <li class="row" data-roll="${esc(s.roll)}">
-        <span class="no">${i + 1}</span>
-        <span class="who"><b>${esc(s.name)}</b><small><span>${esc(s.roll)}</span><span class="pct"></span><span class="mtp"></span></small></span>
-        <input class="mk" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" placeholder="Marks" aria-label="Marks for ${esc(s.name)}" value="${esc(mtDraft.marks[s.roll] || '')}">
-      </li>`).join('') + '</ul>';
+    <li class="row" data-roll="${esc(s.roll)}"><span class="no">${i + 1}</span>
+      <span class="who"><b>${esc(s.name)}</b><small><span>${esc(s.roll)}</span><span class="pct"></span><span class="mtp"></span>${tagHtml(s.roll)}</small></span>
+      <input class="mk" type="text" autocapitalize="characters" autocomplete="off" placeholder="Marks" aria-label="Marks for ${esc(s.name)}" value="${esc(mtDraft.marks[s.roll] || '')}"></li>`).join('') + '</ul>';
 }
-const IC = {
-  cal:  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>',
-  note: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v11l-5 5H4z"/><path d="M15 20v-5h5"/><path d="M8 9h8M8 13h4"/></svg>',
-  sum:  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
-  print:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 9V3h10v6"/><rect x="4" y="9" width="16" height="8" rx="2"/><path d="M7 14h10v7H7z"/></svg>'
-};
-
 function renderMain(){
-  const sy = window.scrollY;
-  ensureSel(); fixDay();
+  const sy = window.scrollY; ensureSel(); fixDay();
   if(!dirty){ loadDraft(); if(mode === 'mt') loadMtDraft(); }
-  const e = entry(), name = sheetName(), d = data[name];
-  const { m, y, n, avail, isCur, today } = dayInfo();
-  const on = (q, fn) => { const el = $(q); if(el) el.onclick = fn; };
-
-  const strip = Array.from({ length: n }, (_, i) => {
+  const e = entry(), name = sheetName(), d = data[name], info = dayInfo(), { m, y, n, avail, isCur, today } = info, fd = firstDataDay(n);
+  const strip = Array.from({ length:n }, (_, i) => {
     const day = i + 1, wd = new Date(y, m, day).getDay();
-    return `<button class="day ${day === sel.day ? 'sel' : ''} ${isCur && day === today ? 'today' : ''} ${wd === 0 ? 'sun' : ''} ${hasData(day) ? 'has' : ''} ${noteFor(day) ? 'hasnote' : ''}"
-      data-day="${day}" ${avail.includes(day) ? '' : 'disabled'} aria-label="${day} ${MONTHS[m]}" ${day === sel.day ? 'aria-current="date"' : ''}><span>${WD[wd]}</span><b>${day}</b></button>`;
+    const cls = [day === sel.day ? 'sel' : '', isCur && day === today ? 'today' : '', wd === 0 ? 'sun' : '', hasData(day) ? 'has' : (isMissed(day, fd, info) ? 'miss' : ''), noteFor(day) ? 'hasnote' : ''].filter(Boolean).join(' ');
+    return `<button class="day ${cls}" data-day="${day}" ${avail.includes(day) ? '' : 'disabled'} aria-label="${day} ${MONTHS[m]}"><span>${WD[wd]}</span><b>${day}</b></button>`;
   }).join('');
-
   let body = '', ready = false;
   if(!sheets.length) body = `<div class="note">No sections are assigned to you in the timetable yet. Ask the admin, then open the status chip and tap Sync now.</div>`;
   else if(!d){
     if(loading.has(name)) body = `<div class="note">Setting up this sheet. It is created automatically the first time, please wait...</div>`;
     else if(sheetErr[name]) body = `<div class="note"><span class="bad">${esc(sheetErr[name])}</span><button class="btn small" id="retryBtn">Try again</button></div>`;
     else body = `<div class="note">This sheet is not on the phone yet. Connect to the internet and it will be created and loaded automatically.</div>`;
-  }
-  else if(!d.students.length) body = `<div class="note">This sheet has no students.</div>`;
+  } else if(!d.students.length) body = `<div class="note">This sheet has no students.</div>`;
   else ready = true;
   if(ready) body = mode === 'mt' ? mtBodyHtml(d) : attBodyHtml(d);
-
-  const subs = subjects(sel.cls);
-  const note = noteFor(sel.day);
-
-  const selects = `
-    <div class="pk">
-      <select id="selCls" aria-label="Class">${classes().map(x => `<option value="${esc(x)}" ${x === sel.cls ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>
-      <select id="selSub" aria-label="Subject">${subs.map(x => `<option value="${esc(x)}" ${x === sel.sub ? 'selected' : ''}>${esc(titleCase(x))}</option>`).join('')}</select>
-      <select id="selMon" aria-label="Month">${monthsOf(sel.cls, sel.sub).map(x => `<option value="${esc(x)}" ${x === sel.mon ? 'selected' : ''}>${esc(monLabel(x))}</option>`).join('')}</select>
-    </div>`;
-
-  const modeRow = `
-    <div class="mrow">
-      <div class="tabs2" role="group" aria-label="Mode">
-        <button data-mode="att" class="${mode === 'att' ? 'on' : ''}">Attendance</button>
-        <button data-mode="mt" class="${mode === 'mt' ? 'on' : ''}"><span class="lg">Monthly test</span><span class="sm">Test</span></button>
-      </div>
-      <div class="ibtns">
-        ${mode === 'att' ? `<button class="ib" id="calBtn" aria-label="Calendar" title="Calendar">${IC.cal}</button>
-        <button class="ib" id="noteBtn" aria-label="${note ? 'Edit note' : 'Add note'}" title="${note ? 'Edit note' : 'Add note'}">${IC.note}</button>` : ''}
-        <button class="ib" id="sumBtn" aria-label="Monthly summary" title="Monthly summary">${IC.sum}</button>
-        <button class="ib" id="printBtn" aria-label="Print sheet" title="Print sheet">${IC.print}</button>
-      </div>
-    </div>`;
-
-  const attRows = `
-    <div class="strip" id="strip">${strip}</div>
-    <div class="prow"><div class="bar3" id="bar3"></div><div class="nums" id="nums"></div></div>`;
-
-  const mtRows = `
-    <label class="tot"><span>Total marks</span>
-      <input id="mtTotal" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 20" value="${esc(mtDraft.total)}"></label>
-    <div class="cnt" id="mtInfo"></div>`;
-
+  const note = noteFor(sel.day), opts = (arr, cur, f) => arr.map(x => `<option value="${esc(x)}" ${x === cur ? 'selected' : ''}>${esc(f ? f(x) : x)}</option>`).join('');
+  const fk = [['all', 'All'], ['un', 'Unmarked'], ['ab', 'Absent'], ['low', mode === 'mt' ? 'Below 50%' : 'Low']];
   $('#app').innerHTML = `
     <div class="stick">
       <header class="top"><div class="row1">
-        <div class="ttl"><h1>JCW Daily Attendance</h1>${teacher ? `<div class="teacher">${esc(teacher)}${isAdmin ? ' (admin)' : ''}</div>` : ''}</div>
-        <button class="hideBtn" id="panelBtn" aria-expanded="${!panelHidden}" aria-label="${panelHidden ? 'Show' : 'Hide'} controls" title="${panelHidden ? 'Show' : 'Hide'} controls"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>
+        <div class="ttl"><h1>CS Attendance</h1>${teacher ? `<div class="teacher">${greet()}, ${esc(teacher)}${isAdmin ? ' (admin)' : ''}</div>` : ''}</div>
+        <button class="hideBtn" id="panelBtn" aria-expanded="${!panelHidden}" aria-label="${panelHidden ? 'Show' : 'Hide'} controls"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button>
         <button class="sync" id="statusChip" aria-label="Account and sync"><span class="dot"></span><span id="statusTxt"></span></button>
       </div></header>
       <div class="panel ${panelHidden ? 'hid' : ''}"><div class="pcard">
-        ${selects}
-        ${modeRow}
-        ${mode === 'mt' ? mtRows : attRows}
+        <div class="pk"><select id="selCls" aria-label="Class">${opts(classes(), sel.cls)}</select>
+          <select id="selSub" aria-label="Subject">${opts(subjects(sel.cls), sel.sub, titleCase)}</select>
+          <select id="selMon" aria-label="Month">${opts(monthsOf(sel.cls, sel.sub), sel.mon, monLabel)}</select></div>
+        <div class="mrow"><div class="tabs2" role="group"><button data-mode="att" class="${mode === 'att' ? 'on' : ''}">Attendance</button><button data-mode="mt" class="${mode === 'mt' ? 'on' : ''}">Monthly test</button></div>
+          <div class="ibtns">${mode === 'att' ? `<button class="ib" id="calBtn" aria-label="Calendar">${IC.cal}</button><button class="ib" id="noteBtn" aria-label="${note ? 'Edit note' : 'Add note'}">${IC.note}</button>` : ''}
+            <button class="ib" id="sumBtn" aria-label="Monthly summary">${IC.sum}</button><button class="ib" id="printBtn" aria-label="Print sheet">${IC.print}</button></div></div>
+        ${mode === 'mt' ? `<label class="tot"><span>Total marks</span><input id="mtTotal" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 20" value="${esc(mtDraft.total)}"></label><div class="cnt" id="mtInfo"></div>`
+          : `<div class="strip" id="strip">${strip}</div><div class="prow"><div class="bar3" id="bar3"></div><div class="nums" id="nums"></div></div>`}
       </div></div>
     </div>
-    <div class="wrap">
-      <div class="badge" id="saveBadge"></div>
-      ${mode === 'mt'
-        ? '<div class="lowCnt" id="mtLow"></div>'
-        : `<div class="noteLine" id="noteLine" ${note ? 'style="display:block"' : ''}>Note: ${esc(note)}</div><div class="lowCnt" id="lowCnt"></div>`}
-      ${ready ? `<input id="sq" class="sq" type="search" placeholder="Search student name or roll no" autocomplete="off" autocapitalize="none" spellcheck="false" value="${esc(searchQ)}"><div class="nores" id="nores">No student matches your search.</div>` : ''}
-      ${body}
-    </div>
-    <div class="bottom"><div class="in">
-      <button class="btn primary" id="saveBtn">Save attendance</button>
-    </div></div>`;
-  $('#app').classList.toggle('phid', panelHidden);
-  on('#retryBtn', () => { delete tried[name]; delete sheetErr[name]; fresh[name] = 0; renderMain(); });
-
-  const list = $('#list');
-  if(list){
-    list.onclick = ev => {
-      const b = ev.target.closest('button[data-v]'); if(!b) return;
-      const row = b.closest('.row'), roll = row.dataset.roll, v = b.dataset.v;
-      if(draft[roll] === v) delete draft[roll]; else draft[roll] = v;
-      dirty = true; paintRow(row); updateTally();
-    };
-    list.querySelectorAll('.row').forEach(paintRow);
-  }
-  // Mark all (+ Undo button for 7 seconds)
-  document.querySelectorAll('input[data-all]').forEach(cb => cb.onchange = () => {
-    const d2 = data[sheetName()]; if(!d2) return;
-    const v = cb.dataset.all, snap = Object.assign({}, draft), wasDirty = dirty;
-    d2.students.forEach(s => { if(cb.checked) draft[s.roll] = v; else if(draft[s.roll] === v) delete draft[s.roll]; });
-    dirty = true; document.querySelectorAll('#list .row').forEach(paintRow); updateTally();
-    toast(cb.checked ? 'Marked all ' + v : 'Cleared all ' + v, { label:'Undo', fn: () => {
-      draft = snap; dirty = wasDirty;
-      document.querySelectorAll('#list .row').forEach(paintRow); updateTally();
-      toast('Undone');
-    } });
-  });
-
-  const mtList = $('#mtList');
-  if(mtList) mtList.oninput = ev => {
-    const inp = ev.target.closest('.mk'); if(!inp) return;
-    const roll = inp.closest('.row').dataset.roll, total = Number(mtDraft.total) || 0;
-    const val = inp.value.replace(',', '.').toUpperCase().trim(), prev = mtDraft.marks[roll] || '';
-    const typingAbs = /^(A|AB|ABS|ABSE|ABSEN|ABSENT)$/.test(val);
-    const typingNum = /^\d{0,4}(\.\d{0,2})?$/.test(val);
-    if(!typingAbs && !typingNum){ inp.value = prev; return toast('Enter marks, or A / AB / Absent.'); }
-    if(val !== '' && !total){ inp.value = prev; return toast('Enter the total marks first.'); }
-    if(typingNum && val !== '' && total > 0 && Number(val) > total){ inp.value = prev; return toast('Marks cannot be more than ' + total + '.'); }
-    inp.value = val; mtDraft.marks[roll] = val;
-    dirty = true; updateTally();
-  };
-  const tot = $('#mtTotal');
-  if(tot) tot.oninput = () => { mtDraft.total = tot.value.trim().replace(',', '.'); dirty = true; updateTally(); };
-  const sq = $('#sq');
-  if(sq){ sq.oninput = () => { searchQ = sq.value; applySearch(); }; applySearch(); }
-
-  window.scrollTo(0, sy);
-  focusSelectedDay();
-  updateTally(); updateStatus();
-
-  // sheet missing or old on the phone and we are online: load / create it in the background
+    <div class="wrap"><div class="sline" id="sline" role="status"></div>
+      ${ready ? `<input id="sq" class="sq" type="search" placeholder="Search name or roll no. Tap a name for details" autocomplete="off" autocapitalize="none" spellcheck="false" value="${esc(searchQ)}">
+        <div class="fl" id="fl">${fk.map(([k, t]) => `<button class="chip ${filterQ === k ? 'on' : ''}" data-f="${k}">${t}</button>`).join('')}</div><div class="nores" id="nores">No student matches.</div>` : ''}
+      ${body}</div>
+    <div class="bottom"><div class="in"><button class="btn primary" id="saveBtn">Save attendance</button></div></div>`;
+  const rt = $('#retryBtn'); if(rt) rt.onclick = () => { delete tried[name]; delete sheetErr[name]; fresh[name] = 0; renderMain(); };
+  document.querySelectorAll('#list .row').forEach(paintRow);
+  window.scrollTo(0, sy); centerStrip(); updateTally(); updateStatus();
   if(e && navigator.onLine && authed() && !loading.has(name)){
     const stale = !d ? !tried[name] : (Date.now() - (fresh[name] || 0) > 120000);
     if(stale){
       tried[name] = true; fresh[name] = Date.now();
-      loadSheet(e, !d || isCurMonth(e))
-        .catch(err => { if(!d) sheetErr[name] = errText(err); })
+      loadSheet(e, !d || isCurMonth(e)).catch(err => { if(!d) sheetErr[name] = errText(err); })
         .finally(() => { if(!authed() || sheetName() !== name) return; if(!dirty){ loadDraft(); if(mode === 'mt') loadMtDraft(); } renderMain(); });
       if(!d) setTimeout(() => { if(loading.has(name)) renderMain(); }, 0);
     }
   }
 }
-
+function centerStrip(){
+  const st = $('#strip'); if(!st || !st.clientWidth) return; const cur = st.querySelector('.sel'); if(!cur) return;
+  const go = () => { const sr = st.getBoundingClientRect(), cr = cur.getBoundingClientRect(); st.scrollLeft += (cr.left - sr.left) - (st.clientWidth - cr.width) / 2; };
+  go(); requestAnimationFrame(go); setTimeout(go, 120);
+}
 function togglePanel(){
   panelHidden = !panelHidden; store.set('phide', panelHidden);
-  const p = $('.panel'), b = $('#panelBtn');
-  if(p) p.classList.toggle('hid', panelHidden);
-  $('#app').classList.toggle('phid', panelHidden);
-  if(b){
-    b.setAttribute('aria-expanded', String(!panelHidden));
-    b.setAttribute('aria-label', (panelHidden ? 'Show' : 'Hide') + ' controls');
-    b.title = (panelHidden ? 'Show' : 'Hide') + ' controls';
-  }
-  if(!panelHidden) focusSelectedDay();
+  const p = $('.panel'), b = $('#panelBtn'); if(p) p.classList.toggle('hid', panelHidden);
+  if(b){ b.setAttribute('aria-expanded', String(!panelHidden)); b.setAttribute('aria-label', (panelHidden ? 'Show' : 'Hide') + ' controls'); }
+  if(!panelHidden) centerStrip();
 }
-
 function switchTo(fn){
   if(dirty && !confirm('Discard the changes you have not saved?')){ renderMain(); return; }
-  dirty = false; fn(); loadDraft(); if(mode === 'mt') loadMtDraft(); renderMain();
+  dirty = false; filterQ = 'all'; fn(); loadDraft(); if(mode === 'mt') loadMtDraft(); renderMain();
 }
 function paintRow(row){
   const v = draft[row.dataset.roll];
   ['p','a','l','b'].forEach(k => row.classList.toggle('is-' + k, v === k.toUpperCase()));
   row.querySelectorAll('button[data-v]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
 }
-
-/** Student search: hides rows that do not match the name or roll number. */
+function rowState(row){
+  const roll = row.dataset.roll;
+  if(mode === 'mt'){ const p = mtParse(mtDraft.marks[roll], Number(mtDraft.total) || 0); return { un:p.k === 'empty', ab:p.k === 'abs', low:row.classList.contains('mtlow') }; }
+  const v = draft[roll]; return { un:!v, ab:v === 'A', low:row.classList.contains('low') };
+}
 function applySearch(){
-  const q = searchQ.trim().toLowerCase();
-  let shown = 0, total = 0;
+  const q = searchQ.trim().toLowerCase(); let shown = 0, total = 0;
   document.querySelectorAll('.list .row').forEach(row => {
-    total++;
-    const txt = (row.querySelector('.who b').textContent + ' ' + row.dataset.roll).toLowerCase();
-    const ok = !q || txt.includes(q);
-    row.style.display = ok ? '' : 'none';
-    if(ok) shown++;
+    total++; const txt = (row.querySelector('.who b').textContent + ' ' + row.dataset.roll).toLowerCase(), st = rowState(row);
+    const okF = filterQ === 'all' || (filterQ === 'un' && st.un) || (filterQ === 'ab' && st.ab) || (filterQ === 'low' && st.low);
+    const ok = okF && (!q || txt.includes(q)); row.style.display = ok ? '' : 'none'; if(ok) shown++;
   });
-  const nr = $('#nores'); if(nr) nr.style.display = q && total && !shown ? 'block' : 'none';
+  const nr = $('#nores'); if(nr) nr.style.display = total && !shown ? 'block' : 'none';
 }
-
+function paintFilters(){
+  const fl = $('#fl'); if(!fl) return; let un = 0, ab = 0, low = 0;
+  document.querySelectorAll('.list .row').forEach(row => { const s = rowState(row); if(s.un) un++; if(s.ab) ab++; if(s.low) low++; });
+  const lab = { all:'All', un:'Unmarked', ab:'Absent', low: mode === 'mt' ? 'Below 50%' : 'Low' }, num = { un, ab, low };
+  fl.querySelectorAll('[data-f]').forEach(b => { const k = b.dataset.f; b.textContent = lab[k] + (k === 'all' ? '' : ' (' + num[k] + ')'); b.classList.toggle('on', filterQ === k); });
+  applySearch();
+}
 function updateTally(){
-  const d = data[sheetName()];
-  if(mode === 'mt') return updateMt(d);
+  const d = data[sheetName()]; if(mode === 'mt') return updateMt(d);
   const c = counts(), t = c.total || 1;
-  $('#bar3').innerHTML = ['p','a','l','b'].map(k => `<i class="${k}" style="width:${c[k] / t * 100}%"></i>`).join('');
-  $('#nums').innerHTML = `<span class="p"><b>${c.p}</b>P</span><span class="a"><b>${c.a}</b>A</span><span class="l"><b>${c.l}</b>L</span><span class="b"><b>${c.b}</b>B</span><span><b>${c.n}</b>left</span>`;
-  document.querySelectorAll('input[data-all]').forEach(cb => {
-    cb.checked = !!d && d.students.length > 0 && d.students.every(s => draft[s.roll] === cb.dataset.all);
-  });
-  const sb = $('#saveBtn');
-  if(sb){ sb.textContent = c.n ? 'Save attendance (' + c.n + ' left)' : 'Save attendance'; sb.classList.toggle('incomplete', c.n > 0); }
-  paintPct();
+  const bar = $('#bar3'), nums = $('#nums'); if(!bar) return;
+  bar.innerHTML = ['p','a','l','b'].map(k => `<i class="${k}" style="width:${c[k] / t * 100}%"></i>`).join('');
+  nums.innerHTML = `<span class="p"><b>${c.p}</b>P</span><span class="a"><b>${c.a}</b>A</span><span class="l"><b>${c.l}</b>L</span><span class="b"><b>${c.b}</b>B</span><span><b>${c.n}</b>left</span>`;
+  document.querySelectorAll('input[data-all]').forEach(cb => { cb.checked = !!d && d.students.length > 0 && d.students.every(s => draft[s.roll] === cb.dataset.all); });
+  const sb = $('#saveBtn'); if(sb){ sb.textContent = c.n ? 'Save attendance (' + c.n + ' left)' : 'Save attendance'; sb.classList.toggle('incomplete', c.n > 0); }
+  paintPct(); paintFilters();
 }
-/** Puts a record in the queue (one per sheet+day). Marks are replaced; a note is kept unless a new one is given. */
 function enqueue(marks, note){
-  const name = sheetName(), id = name + '|' + sel.day;
-  const old = queue.find(x => x.id === id);
-  const rec = { id, sheet:name, day:sel.day, marks, ts:Date.now() };
-  const nt = note !== undefined ? note : (old ? old.note : undefined);
+  const name = sheetName(), id = name + '|' + sel.day, old = queue.find(x => x.id === id);
+  const rec = { id, sheet:name, day:sel.day, marks, ts:Date.now() }, nt = note !== undefined ? note : (old ? old.note : undefined);
   if(nt !== undefined) rec.note = nt;
-  queue = queue.filter(x => x.id !== id);
-  queue.push(rec);
-  store.set('queue', queue);
-  delete confirms[id]; store.set('confirms', confirms);
-}
-function buildMarks(){
-  const d = data[sheetName()], srv = (d.marks && d.marks[sel.day]) || {}, marks = {};
-  d.students.forEach(s => {
-    const v = draft[s.roll];
-    if(MARKS.includes(v)) marks[s.roll] = v;
-    else if(srv[s.roll]) marks[s.roll] = '';      // un-marked on screen: clear it in the sheet too
-  });
-  return marks;
+  queue = queue.filter(x => x.id !== id); queue.push(rec); store.set('queue', queue); delete confirms[id]; store.set('confirms', confirms);
 }
 function save(){
   if(mode === 'mt') return saveMt();
-  const name = sheetName(), d = data[name];
-  if(!d) return toast('This sheet is not on the phone yet');
-  const c = counts();
-  if(c.n > 0) return toast(c.n + ' student' + (c.n > 1 ? 's are' : ' is') + ' not marked. Mark everyone P, A, L or B first.');
-  const marks = buildMarks();
+  const name = sheetName(), d = data[name]; if(!d) return toast('This sheet is not on the phone yet');
+  const c = counts(); if(c.n > 0) return toast(c.n + ' student' + (c.n > 1 ? 's are' : ' is') + ' not marked. Mark everyone P, A, L or B first.');
+  const srv = (d.marks && d.marks[sel.day]) || {}, marks = {};
+  d.students.forEach(s => { const v = draft[s.roll]; if(MARKS.includes(v)) marks[s.roll] = v; else if(srv[s.roll]) marks[s.roll] = ''; });
   if(!Object.keys(marks).length) return toast('No students to save');
-  enqueue(marks); dirty = false;
-  toast('Saved on phone. Sending to the sheet...');
-  renderMain();
+  enqueue(marks); dirty = false; toast('Saved on phone. Sending to the sheet...'); renderMain();
   syncQueue().then(ok => { if(!ok && queue.length) toast('Saved on this phone. Tap the status chip to see why it has not reached the sheet.'); });
 }
 
-/* ---------- note for a day (college off, holiday, ...) ---------- */
+/* ---------- day note ---------- */
 function openNote(){
-  const name = sheetName(), d = data[name];
-  if(!d) return toast('This sheet is not on the phone yet');
+  const name = sheetName(); if(!data[name]) return toast('This sheet is not on the phone yet');
   const { m } = dayInfo(), cur = noteFor(sel.day), dlg = $('#dlg');
-  $('#dlgBody').innerHTML = `
-    <h2>Note for ${sel.day} ${MONTHS[m].slice(0, 3)}</h2>
+  $('#dlgBody').innerHTML = `<h2>Note for ${sel.day} ${MONTHS[m].slice(0, 3)}</h2>
     <div class="meta">Saved in the sheet as a note on this date (the date header turns yellow). Use it when college is closed or the class did not happen.</div>
-    <div class="chips">
-      ${['College closed','Public holiday','Emergency closure','Class not held','Exam day'].map(t => `<button class="chip" data-chip="${esc(t)}">${esc(t)}</button>`).join('')}
-    </div>
+    <div class="chips">${['College closed','Public holiday','Emergency closure','Class not held','Exam day'].map(t => `<button class="chip" data-chip="${esc(t)}">${esc(t)}</button>`).join('')}</div>
     <textarea id="noteTxt" maxlength="500" placeholder="Type the reason here...">${esc(cur)}</textarea>
-    <div class="acts">
-      <button class="btn small primary" id="noteSave">Save note</button>
-      ${cur ? '<button class="btn small danger" id="noteClear">Remove note</button>' : ''}
-      <button class="btn small" id="noteCancel">Cancel</button>
-    </div>`;
+    <div class="acts"><button class="btn small primary" id="noteSave">Save note</button>${cur ? '<button class="btn small danger" id="noteClear">Remove note</button>' : ''}<button class="btn small" id="noteCancel">Cancel</button></div>`;
   dlg.showModal();
   const ta = $('#noteTxt');
   dlg.querySelectorAll('[data-chip]').forEach(b => b.onclick = () => { ta.value = b.dataset.chip; ta.focus(); });
-  const commit = text => {
-    const old = queued(sel.day);
-    enqueue(old ? old.marks : {}, text);
-    dlg.close(); renderMain();
-    toast(text ? 'Note saved on phone. Sending to the sheet...' : 'Removing note...');
-    syncQueue();
-  };
+  const commit = text => { const old = queued(sel.day); enqueue(old ? old.marks : {}, text); dlg.close(); renderMain(); toast(text ? 'Note saved on phone. Sending to the sheet...' : 'Removing note...'); syncQueue(); };
   $('#noteSave').onclick = () => commit(ta.value.trim());
   const c = $('#noteClear'); if(c) c.onclick = () => commit('');
   $('#noteCancel').onclick = () => dlg.close();
 }
 
-/* ---------- monthly summary (every student: P, A, L, B and attendance %) ---------- */
-function summaryStats(){
-  const d = data[sheetName()]; if(!d) return null;
-  const days = d.days && d.days.length ? d.days : Array.from({ length:31 }, (_, i) => i + 1);
-  const per = {}; let lect = 0;
-  d.students.forEach(s => per[s.roll] = { p:0, a:0, l:0, b:0 });
-  days.forEach(day => {
-    const m = dayMarks(day); let any = false;
-    Object.keys(m).forEach(r => {
-      const v = m[r];
-      if(v === 'P' || v === 'A') any = true;
-      if(per[r] && v) { const k = v.toLowerCase(); if(k in per[r]) per[r][k]++; }
-    });
-    if(any) lect++;
-  });
-  return { d, per, lect };
+/* ---------- summary, print, calendar ---------- */
+function mtView(d){
+  const q = mtQueued(), src = q ? { total:q.total, marks:q.marks } : (d.mt || { total:0, marks:{} }), total = Number(src.total) || 0;
+  const get = roll => {
+    const v = src.marks[roll]; if(v === undefined || v === '') return null;
+    if(String(v).toUpperCase() === 'A') return { abs:true, low:true, txt:'Absent' };
+    const n = Number(v), p = total ? Math.round(n / total * 1000) / 10 : null;
+    return { n, p, low: p != null && p < 50, txt: n + '/' + total + (p != null ? ' = ' + p + '%' : '') };
+  };
+  return { total, get };
 }
-function openSummary(lowOnly){
-  const S = summaryStats(); if(!S) return toast('This sheet is not on the phone yet');
-  const { d, per, lect } = S, { m, y } = dayInfo(), dlg = $('#dlg');
-  const rows = d.students.map(s => {
-    const c = per[s.roll], p = lect >= MIN_LECT ? Math.round(c.p / lect * 1000) / 10 : null;
-    return { s, c, p };
-  }).sort((a, b) => (a.p == null ? 101 : a.p) - (b.p == null ? 101 : b.p));
-  const low = rows.filter(r => r.p != null && r.p < LOW_ATT).length;
-  const shown = lowOnly ? rows.filter(r => r.p != null && r.p < LOW_ATT) : rows;
-  $('#dlgBody').innerHTML = `
-    <h2>Summary: ${MONTHS[m]} ${y}</h2>
-    <div class="meta">${esc(sheetName())}<br>${lect} lectures held, ${d.students.length} students, ${low} below ${LOW_ATT}%</div>
-    <div class="chips"><button class="chip ${lowOnly ? 'on' : ''}" id="lowOnly">Only below ${LOW_ATT}%</button></div>
-    ${shown.map(r => `<div class="q"><div><b>${esc(r.s.name)}</b>
-        <small>${esc(r.s.roll)} \u00b7 P ${r.c.p} \u00b7 A ${r.c.a}${r.c.l ? ' \u00b7 L ' + r.c.l : ''}${r.c.b ? ' \u00b7 B ' + r.c.b : ''}</small></div>
-      <span class="sp ${r.p != null && r.p < LOW_ATT ? 'lowp' : ''}">${r.p == null ? '-' : r.c.p + '/' + lect + ' = ' + r.p + '%'}</span></div>`).join('') || '<div class="q"><div>No students to show.</div></div>'}
-    <div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>`;
+let sumF = 'all';   // all | att (below 73%) | mt (test below 50% or absent)
+function openSummary(f){
+  const d = data[sheetName()]; if(!d) return toast('This sheet is not on the phone yet');
+  if(f === true) f = 'att'; sumF = (f === 'att' || f === 'mt') ? f : 'all';
+  const { lect, per } = stats(), { m, y } = dayInfo(), dlg = $('#dlg'), T = mtView(d);
+  const rows = d.students.map(s => ({ s, c:per[s.roll], p:pctOf(per[s.roll], lect), t:T.get(s.roll) }));
+  const attLow = r => r.p != null && r.p < LOW;
+  rows.sort(sumF === 'mt'
+    ? (a, b) => (a.t ? (a.t.abs ? -1 : a.t.p == null ? 101 : a.t.p) : 102) - (b.t ? (b.t.abs ? -1 : b.t.p == null ? 101 : b.t.p) : 102)
+    : (a, b) => (a.p == null ? 101 : a.p) - (b.p == null ? 101 : b.p));
+  const nAtt = rows.filter(attLow).length, nMt = rows.filter(r => r.t && r.t.low).length;
+  const shown = sumF === 'att' ? rows.filter(attLow) : sumF === 'mt' ? rows.filter(r => r.t && r.t.low) : rows;
+  const chip = (k, t) => `<button class="chip ${sumF === k ? 'on' : ''}" data-sf="${k}">${t}</button>`;
+  $('#dlgBody').innerHTML = `<h2>Summary: ${MONTHS[m]} ${y}</h2>
+    <div class="meta">${esc(sheetName())}<br>${lect} lectures held, ${d.students.length} students, ${nAtt} below ${LOW}% attendance<br>${T.total ? 'Monthly test out of ' + T.total + ', ' + nMt + ' below 50% or absent' : 'Monthly test: no marks entered yet'}</div>
+    <div class="chips">${chip('all', 'All')}${chip('att', 'Attendance below ' + LOW + '%')}${chip('mt', 'Test below 50%')}</div>
+    ${shown.map(r => `<div class="q"><div><b>${esc(r.s.name)}</b><small>${esc(r.s.roll)} \u00b7 P ${r.c.p} \u00b7 A ${r.c.a}${r.c.l ? ' \u00b7 L ' + r.c.l : ''}${r.c.b ? ' \u00b7 B ' + r.c.b : ''}</small></div>
+      <span style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><span class="sp ${attLow(r) ? 'lowp' : ''}">${r.p == null ? '-' : r.c.p + '/' + lect + ' = ' + r.p + '%'}</span>${r.t ? `<span class="sp ${r.t.low ? 'lowp' : ''}">Test ${r.t.txt}</span>` : ''}</span></div>`).join('') || '<div class="q"><div>No students to show.</div></div>'}
+    <div class="acts"><button class="btn small grow" id="copyRep">Share list</button><button class="btn small grow" id="closeDlg">Close</button></div>`;
   if(!dlg.open) dlg.showModal();
   $('#closeDlg').onclick = () => dlg.close();
-  $('#lowOnly').onclick = () => openSummary(!lowOnly);
+  dlg.querySelectorAll('[data-sf]').forEach(b => b.onclick = () => openSummary(b.dataset.sf));
+  $('#copyRep').onclick = () => {
+    const head = sheetName() + '\nAttendance: ' + lect + ' lectures' + (T.total ? ' | Monthly test: out of ' + T.total : '') +
+      (sumF === 'att' ? '\n(Attendance below ' + LOW + '%)' : sumF === 'mt' ? '\n(Test below 50% or absent)' : '');
+    const lines = shown.map(r => r.s.name + ' (' + r.s.roll + ') - Att: ' + (r.p == null ? '-' : r.c.p + '/' + lect + ' = ' + r.p + '%') + (r.t ? ' | Test: ' + r.t.txt : ''));
+    const txt = head + '\n' + lines.join('\n');
+    Promise.resolve(navigator.share ? navigator.share({ text:txt }) : navigator.clipboard.writeText(txt).then(() => toast('Copied'))).catch(() => {});
+  };
 }
-
-/* ---------- print the underlying sheet ---------- */
 async function printSheet(){
-  const name = sheetName();
-  if(!name || !data[name]) return toast('This sheet is not on the phone yet');
+  const name = sheetName(); if(!name || !data[name]) return toast('This sheet is not on the phone yet');
   if(!navigator.onLine) return toast('Printing needs an internet connection');
-  const w = window.open('', '_blank');           // opened now so the browser does not block it
+  const w = window.open('', '_blank');
   try{
     if(queue.some(q => q.sheet === name)){
-      toast('Sending your latest attendance first...');
-      await syncQueue(); if(queue.some(q => q.sheet === name)) await syncQueue();
+      toast('Sending your latest attendance first...'); await syncQueue(); if(queue.some(q => q.sheet === name)) await syncQueue();
       if(queue.some(q => q.sheet === name)) throw new Error('Latest attendance is not in the sheet yet. Try again.');
     }
     toast('Preparing the PDF...');
-    const r = await api({ action:'pdf', sheet:name }, 90000);
-    if(!r.ok) throw new Error(r.error || 'Could not create the PDF');
-    const bin = atob(r.pdf), arr = new Uint8Array(bin.length);
-    for(let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    const r = await api({ action:'pdf', sheet:name }, 90000); if(!r.ok) throw new Error(r.error || 'Could not create the PDF');
+    const bin = atob(r.pdf), arr = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
     const url = URL.createObjectURL(new Blob([arr], { type:'application/pdf' }));
-    if(w) w.location.href = url;
-    else { const a = document.createElement('a'); a.href = url; a.download = name + '.pdf'; document.body.appendChild(a); a.click(); a.remove(); }
+    if(w) w.location.href = url; else { const a = document.createElement('a'); a.href = url; a.download = name + '.pdf'; document.body.appendChild(a); a.click(); a.remove(); }
   }catch(e){ if(w) w.close(); toast('Could not print: ' + errText(e)); }
 }
-
-/* ---------- dialogs ---------- */
 function openCalendar(){
-  const { m, y, n, avail, isCur, today } = dayInfo();
-  const offset = (new Date(y, m, 1).getDay() + 6) % 7;   // Monday first
+  const info = dayInfo(), { m, y, n, avail, isCur, today } = info, fd = firstDataDay(n), offset = (new Date(y, m, 1).getDay() + 6) % 7;
   const heads = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(h => `<div class="h ${h === 'Sun' ? 'sun' : ''}">${h}</div>`).join('');
-  const cells = Array.from({ length: offset }, () => '<div></div>').join('') +
-    Array.from({ length: n }, (_, i) => {
-      const day = i + 1;
-      return `<button class="cell ${day === sel.day ? 'sel' : ''} ${isCur && day === today ? 'today' : ''} ${hasData(day) ? 'has' : ''} ${noteFor(day) ? 'note' : ''}"
-        data-pick="${day}" ${avail.includes(day) ? '' : 'disabled'}>${day}</button>`;
-    }).join('');
-  $('#dlgBody').innerHTML = `
-    <h2>${MONTHS[m]} ${y}</h2>
-    <div class="meta">${esc(sheetName())}</div>
-    <div class="grid">${heads}${cells}</div>
-    <div class="legend"><span>Green dot: has attendance</span><span>Yellow dot: note</span><span>Ring: today</span></div>
+  const cells = Array.from({ length:offset }, () => '<div></div>').join('') + Array.from({ length:n }, (_, i) => {
+    const day = i + 1, cls = [day === sel.day ? 'sel' : '', isCur && day === today ? 'today' : '', hasData(day) ? 'has' : (isMissed(day, fd, info) ? 'miss' : ''), noteFor(day) ? 'hasnote' : ''].filter(Boolean).join(' ');
+    return `<button class="cell ${cls}" data-pick="${day}" ${avail.includes(day) ? '' : 'disabled'}>${day}</button>`;
+  }).join('');
+  $('#dlgBody').innerHTML = `<h2>${MONTHS[m]} ${y}</h2><div class="meta">${esc(sheetName())}</div><div class="grid">${heads}${cells}</div>
+    <div class="legend"><span>Green dot: marked</span><span>Orange dot: not marked</span><span>Dotted ring: note</span><span>Blue ring: today</span></div>
     <div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>`;
-  const dlg = $('#dlg'); dlg.showModal();
-  $('#closeDlg').onclick = () => dlg.close();
+  const dlg = $('#dlg'); dlg.showModal(); $('#closeDlg').onclick = () => dlg.close();
   dlg.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => { dlg.close(); switchTo(() => { sel.day = Number(b.dataset.pick); }); });
 }
-
 function openSync(){
-  const dlg = $('#dlg');
-  const when = lastSync ? new Date(lastSync).toLocaleString() : 'never';
-  $('#dlgBody').innerHTML = `
-    <h2>Account and sync</h2>
-    <div class="meta"><b>${esc(teacher || user)}</b>${isAdmin ? ' (admin)' : ''}<br>${esc(user)}<br>
-      ${navigator.onLine ? 'Online' : 'Phone reports no internet. Everything you save stays on this phone.'}<br>Last synced: ${esc(when)}<br>Server ends with: ${esc(API.slice(-12))}</div>
-    ${queue.length ? queue.map(q => `
-      <div class="q"><div><b>${esc(q.sheet)}</b>, ${q.kind === 'mt' ? 'monthly test' : 'day ' + q.day}
-        <small>${Object.keys(q.marks).length} students${q.note !== undefined ? ' + note' : ''} waiting</small>
-        ${q.error ? `<small class="bad">${esc(q.error)}</small>` : ''}</div>
-        <button class="btn small danger" data-discard="${esc(q.id)}">Discard</button></div>`).join('')
-      : '<div class="q"><div>Nothing is waiting to sync. Everything is in the sheet.</div></div>'}
+  const dlg = $('#dlg'), when = lastSync ? new Date(lastSync).toLocaleString() : 'never';
+  $('#dlgBody').innerHTML = `<h2>Account and sync</h2>
+    <div class="meta"><b>${esc(teacher || user)}</b>${isAdmin ? ' (admin)' : ''}<br>${esc(user)}<br>${navigator.onLine ? 'Online' : 'Phone reports no internet. Everything you save stays on this phone.'}<br>Last synced: ${esc(when)}${Object.keys(rDirty).length ? '<br>' + Object.keys(rDirty).length + ' student comment(s) waiting to upload' : ''}</div>
+    ${queue.length ? queue.map(q => `<div class="q"><div><b>${esc(q.sheet)}</b>, ${q.kind === 'mt' ? 'monthly test' : 'day ' + q.day}<small>${Object.keys(q.marks).length} students${q.note !== undefined ? ' + note' : ''} waiting</small>${q.error ? `<small class="bad">${esc(q.error)}</small>` : ''}</div><button class="btn small danger" data-discard="${esc(q.id)}">Discard</button></div>`).join('') : '<div class="q"><div>Nothing is waiting to sync. Everything is in the sheet.</div></div>'}
     ${lastError && queue.length ? `<div class="diag">${esc(lastError)}</div>` : ''}
-    <div class="acts">
-      <button class="btn small primary grow" id="syncNow">Sync now</button>
-      <button class="btn small grow" id="pwBtn">Change password</button>
-    </div>
-    <div class="acts">
-      <button class="btn small danger grow" id="signOutBtn">Sign out</button>
-      <button class="btn small grow" id="closeDlg">Close</button>
-    </div>`;
+    <div class="acts"><button class="btn small primary grow" id="syncNow">Sync now</button><button class="btn small grow" id="pwBtn">Change password</button></div>
+    <div class="acts"><button class="btn small danger grow" id="signOutBtn">Sign out</button><button class="btn small grow" id="closeDlg">Close</button></div>`;
   dlg.showModal();
-  $('#closeDlg').onclick = () => dlg.close();
-  $('#pwBtn').onclick = openPassword;
+  $('#closeDlg').onclick = () => dlg.close(); $('#pwBtn').onclick = openPassword;
   $('#signOutBtn').onclick = () => { dlg.close(); signOut(); };
   $('#syncNow').onclick = async () => {
-    dlg.close();
-    toast('Syncing...');
-    await absorbBg();
-    const ok = await syncQueue();
+    dlg.close(); toast('Syncing...'); const ok = await syncQueue();
     if(!ok && queue.length) toast('Not synced: ' + (lastError || 'unknown problem'));
-    if(!queue.length){ fresh[sheetName()] = 0; }
-    refreshAll();
+    if(!queue.length) fresh[sheetName()] = 0; refreshAll(); syncRemarks();
   };
-  dlg.querySelectorAll('[data-discard]').forEach(b => b.onclick = () => {
-    queue = queue.filter(x => x.id !== b.dataset.discard); store.set('queue', queue);
-    dlg.close(); loadDraft(); renderMain();
-  });
+  dlg.querySelectorAll('[data-discard]').forEach(b => b.onclick = () => { queue = queue.filter(x => x.id !== b.dataset.discard); store.set('queue', queue); dlg.close(); loadDraft(); renderMain(); });
 }
-
 function openPassword(){
   const dlg = $('#dlg');
-  $('#dlgBody').innerHTML = `
-    <h2>Change password</h2>
-    <div class="meta">This changes the password for the portal as well.</div>
-    <label for="pwOld">Current password</label>
-    <input id="pwOld" type="password" autocomplete="current-password">
-    <label for="pwNew">New password (at least 4 characters)</label>
-    <input id="pwNew" type="password" autocomplete="new-password">
-    <label for="pwNew2">New password again</label>
-    <input id="pwNew2" type="password" autocomplete="new-password">
+  $('#dlgBody').innerHTML = `<h2>Change password</h2><div class="meta">This changes the password for the portal as well.</div>
+    <label for="pwOld">Current password</label><input id="pwOld" type="password" autocomplete="current-password">
+    <label for="pwNew">New password (at least 4 characters)</label><input id="pwNew" type="password" autocomplete="new-password">
+    <label for="pwNew2">New password again</label><input id="pwNew2" type="password" autocomplete="new-password">
     <div class="err" id="pwErr" role="alert"></div>
-    <div class="acts">
-      <button class="btn small primary grow" id="pwSave">Save password</button>
-      <button class="btn small grow" id="pwCancel">Cancel</button>
-    </div>`;
+    <div class="acts"><button class="btn small primary grow" id="pwSave">Save password</button><button class="btn small grow" id="pwCancel">Cancel</button></div>`;
   $('#pwCancel').onclick = () => dlg.close();
   $('#pwSave').onclick = async () => {
     const o = $('#pwOld').value, nw = $('#pwNew').value, n2 = $('#pwNew2').value, err = $('#pwErr');
-    if(!o || !nw) { err.textContent = 'Fill in all the fields.'; return; }
-    if(nw !== n2) { err.textContent = 'The two new passwords do not match.'; return; }
+    if(!o || !nw){ err.textContent = 'Fill in all the fields.'; return; }
+    if(nw !== n2){ err.textContent = 'The two new passwords do not match.'; return; }
     err.textContent = 'Saving...';
     try{
       const r = await api({ action:'password', oldPass:o, newPass:nw });
       if(r.ok){ pass = nw; store.set('pass', pass); dlg.close(); toast('Password changed'); }
-      else err.textContent = r.error === 'WRONG_OLD' ? 'The current password is wrong.'
-        : r.error === 'TOO_SHORT' ? 'The new password must be at least 4 characters.' : (r.error || 'Could not change the password.');
+      else err.textContent = r.error === 'WRONG_OLD' ? 'The current password is wrong.' : r.error === 'TOO_SHORT' ? 'The new password must be at least 4 characters.' : (r.error || 'Could not change the password.');
     }catch(e){ err.textContent = errText(e); }
   };
 }
 
-/** Shows whether THIS day is really in the sheet (confirmed by the server), waiting, or failed. */
+/* ---------- status line + chip ---------- */
 function updateBadge(){
-  const el = $('#saveBadge'); if(!el) return;
-  const name = sheetName(), id = name + '|' + sel.day, d = data[name];
-  const q = queue.find(x => x.id === id), c = confirms[id];
-  let cls = '', txt = '';
+  const el = $('#sline'); if(!el) return;
+  const name = sheetName(), d = data[name], sid = mode === 'mt' ? name + '|MT' : name + '|' + sel.day;
+  const q = queue.find(x => x.id === sid), c = confirms[sid]; let cls = '', txt = '', act = '';
   if(q){
     if(q.error){ cls = 'err'; txt = 'Not in the sheet yet: ' + q.error; }
     else if(syncing){ cls = 'wait'; txt = 'Sending to the sheet...'; }
     else { cls = 'wait'; txt = navigator.onLine ? 'Saved on phone, waiting to reach the sheet' : 'Saved on phone, will go to the sheet when online'; }
-  } else if(c){
-    const t = new Date(c.at).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
-    cls = 'ok';
-    txt = c.p == null ? '\u2713 Note confirmed in the sheet at ' + t
-      : '\u2713 Confirmed in the sheet at ' + t + ' (P ' + c.p + ', A ' + c.a + (c.l ? ', L ' + c.l : '') + (c.b ? ', B ' + c.b : '') + ')';
   } else {
-    const m = d && d.marks && d.marks[sel.day], k = m ? Object.keys(m).length : 0;
-    if(k){ cls = 'ok'; txt = '\u2713 In the sheet (' + k + ' students marked)'; }
+    const items = [], note = mode === 'att' ? noteFor(sel.day) : ''; let okTxt = '';
+    if(c){
+      const t = new Date(c.at).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+      okTxt = c.mt ? '\u2713 Test marks saved at ' + t : c.p == null ? '\u2713 Note saved at ' + t
+        : '\u2713 Saved at ' + t + ' (P ' + c.p + ', A ' + c.a + (c.l ? ', L ' + c.l : '') + (c.b ? ', B ' + c.b : '') + ')';
+    } else if(mode === 'att'){ const m = d && d.marks && d.marks[sel.day], k = m ? Object.keys(m).length : 0; if(k) okTxt = '\u2713 In the sheet (' + k + ' marked)'; }
+    else if(d && d.mt && d.mt.total) okTxt = '\u2713 Test marks in the sheet';
+    if(note) items.push('Note: ' + note); if(okTxt) items.push(okTxt); if(lowInfo) items.push(lowInfo);
+    txt = items.join(' \u00b7 '); cls = lowInfo ? 'low' : note ? 'note' : okTxt ? 'ok' : '';
+    act = mode === 'att' ? (lowInfo ? 'low' : note ? 'note' : '') : '';
   }
-  el.className = 'badge ' + cls; el.textContent = txt; el.style.display = txt ? 'block' : 'none';
+  el.className = 'sline ' + cls; el.textContent = txt; el.style.display = txt ? 'block' : 'none';
+  if(act) el.dataset.act = act; else el.removeAttribute('data-act');
 }
-
 function updateStatus(){
   const chip = $('#statusChip'), txt = $('#statusTxt'); if(!chip) return;
   const on = navigator.onLine, busy = syncing || refreshing;
-  chip.classList.toggle('off', !on); chip.classList.toggle('busy', busy);
-  chip.classList.toggle('err', !busy && !!queue.length && !!lastError);
+  chip.classList.toggle('off', !on); chip.classList.toggle('busy', busy); chip.classList.toggle('err', !busy && !!queue.length && !!lastError);
   txt.textContent = syncing ? 'Saving...' : refreshing ? 'Updating...' : queue.length ? queue.length + ' to sync' : on ? 'Synced' : 'Offline';
   updateBadge();
 }
-
 let toastTimer;
 function toast(msg, action){
   const t = $('#toast'); t.textContent = msg; t.style.display = 'block';
   if(action){
     const b = document.createElement('button'); b.className = 'toastBtn'; b.textContent = action.label;
-    b.onclick = () => { clearTimeout(toastTimer); t.style.display = 'none'; action.fn(); };
-    t.appendChild(b);
+    b.onclick = () => { clearTimeout(toastTimer); t.style.display = 'none'; action.fn(); }; t.appendChild(b);
   }
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.style.display = 'none', action ? UNDO_MS : 4000);
 }
+
+/* ---------- events ---------- */
 document.addEventListener('click', ev => {
-  const t = ev.target; if(!t.closest) return;
-  let b;
-  if((b = t.closest('[data-mode]'))){
-    if(b.dataset.mode !== mode) switchTo(() => { mode = b.dataset.mode; store.set('mode', mode); });
-    return;
+  const t = ev.target; if(!t.closest) return; let b;
+  if((b = t.closest('#list button[data-v]'))){
+    const row = b.closest('.row'), roll = row.dataset.roll, v = b.dataset.v;
+    if(navigator.vibrate) navigator.vibrate(8);
+    if(draft[roll] === v) delete draft[roll]; else draft[roll] = v;
+    dirty = true; paintRow(row); updateTally(); return;
   }
-  if((b = t.closest('#strip [data-day]'))){
-    if(!b.disabled) switchTo(() => { sel.day = Number(b.dataset.day); });
-    return;
-  }
-  if(t.closest('#calBtn'))     return openCalendar();
-  if(t.closest('#noteBtn'))    return openNote();
-  if(t.closest('#sumBtn'))     return openSummary(false);
-  if(t.closest('#printBtn'))   return printSheet();
+  if((b = t.closest('#app .who'))){ const r = b.closest('.row'); if(r) openStudent(r.dataset.roll); return; }
+  if((b = t.closest('[data-mode]'))){ if(b.dataset.mode !== mode) switchTo(() => { mode = b.dataset.mode; store.set('mode', mode); }); return; }
+  if((b = t.closest('#strip [data-day]'))){ if(!b.disabled) switchTo(() => { sel.day = Number(b.dataset.day); }); return; }
+  if((b = t.closest('#fl [data-f]'))){ filterQ = b.dataset.f; paintFilters(); return; }
+  if((b = t.closest('#sline'))){ if(b.dataset.act === 'low') return openSummary('att'); if(b.dataset.act === 'note') return openNote(); return; }
+  if(t.closest('#calBtn')) return openCalendar();
+  if(t.closest('#noteBtn')) return openNote();
+  if(t.closest('#sumBtn')) return openSummary('all');
+  if(t.closest('#printBtn')) return printSheet();
   if(t.closest('#statusChip')) return openSync();
-  if(t.closest('#saveBtn'))    return save();
-  if(t.closest('#panelBtn'))   return togglePanel();
+  if(t.closest('#saveBtn')) return save();
+  if(t.closest('#panelBtn')) return togglePanel();
 });
 document.addEventListener('change', ev => {
-  const id = ev.target && ev.target.id, v = ev.target && ev.target.value;
+  const t = ev.target, id = t && t.id, v = t && t.value;
   if(id === 'selCls') switchTo(() => choose('cls', v));
   else if(id === 'selSub') switchTo(() => choose('sub', v));
   else if(id === 'selMon') switchTo(() => choose('mon', v));
+  else if(t && t.dataset && t.dataset.all){
+    const d = data[sheetName()]; if(!d) return;
+    const val = t.dataset.all, snap = Object.assign({}, draft), was = dirty;
+    d.students.forEach(s => { if(t.checked) draft[s.roll] = val; else if(draft[s.roll] === val) delete draft[s.roll]; });
+    dirty = true; document.querySelectorAll('#list .row').forEach(paintRow); updateTally();
+    toast(t.checked ? 'Marked all ' + val : 'Cleared all ' + val, { label:'Undo', fn:() => { draft = snap; dirty = was; document.querySelectorAll('#list .row').forEach(paintRow); updateTally(); toast('Undone'); } });
+  }
 });
-
-/* ---------- start ---------- */
-window.addEventListener('online',  () => { updateStatus(); absorbBg().finally(() => syncQueue().then(refreshAll)); });
+document.addEventListener('input', ev => {
+  const t = ev.target;
+  if(t.id === 'sq'){ searchQ = t.value; applySearch(); return; }
+  if(t.id === 'mtTotal'){ mtDraft.total = t.value.trim().replace(',', '.'); dirty = true; updateTally(); return; }
+  if(t.classList && t.classList.contains('mk')){
+    const roll = t.closest('.row').dataset.roll, total = Number(mtDraft.total) || 0;
+    const val = t.value.replace(',', '.').toUpperCase().trim(), prev = mtDraft.marks[roll] || '';
+    const abs = /^(A|AB|ABS|ABSE|ABSEN|ABSENT)$/.test(val), num = /^\d{0,4}(\.\d{0,2})?$/.test(val);
+    if(!abs && !num){ t.value = prev; return toast('Enter marks, or A / AB / Absent.'); }
+    if(val !== '' && !total){ t.value = prev; return toast('Enter the total marks first.'); }
+    if(num && val !== '' && total > 0 && Number(val) > total){ t.value = prev; return toast('Marks cannot be more than ' + total + '.'); }
+    t.value = val; mtDraft.marks[roll] = val; dirty = true; updateTally();
+  }
+});
+window.addEventListener('online', () => { updateStatus(); syncRemarks(); syncQueue().then(refreshAll); });
 window.addEventListener('offline', updateStatus);
-window.addEventListener('resize', () => centerStrip());
-document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible'){ absorbBg().finally(syncQueue); focusSelectedDay(); } });
-setInterval(syncQueue, 30000);
-
-if('serviceWorker' in navigator){
-  const had = !!navigator.serviceWorker.controller;
-  navigator.serviceWorker.register('sw.js').catch(() => {});
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if(had && !dirty) location.reload(); });
-  navigator.serviceWorker.addEventListener('message', ev => { if(ev.data && ev.data.type === 'bg-synced') absorbBg(); });
-}
+window.addEventListener('resize', centerStrip);
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible'){ syncQueue(); centerStrip(); } });
+setInterval(syncQueue, 30000); setInterval(syncRemarks, 60000);
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 ensureSel(); initDay(); render();
-if(authed()){ mirrorBg(); absorbBg().finally(() => syncQueue().then(refreshAll)); }
+if(authed()){ syncQueue().then(refreshAll); syncRemarks(); }
 </script>
 </body>
 </html>
