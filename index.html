@@ -12,6 +12,11 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>JCW Daily Attendance</title>
 <style>
+  .delwarn{margin:10px 0;padding:12px;border-radius:12px;background:var(--absent-bg);color:var(--absent);font-size:14px;font-weight:650;word-break:break-word}
+.delwarn big{display:block;font-size:18px;margin-bottom:4px}
+.btn.danger.fill{background:var(--absent);border-color:var(--absent);color:#fff}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+  .fillA{width:100%;height:40px;margin-top:8px;border-radius:11px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:#fff;font-weight:700;font-size:13.5px}
 :root{--bg:#F2F5FA;--surface:#fff;--ink:#0F1B2D;--muted:#667085;--line:#E3E7EE;--accent:#0F1B2D;--on-accent:#fff;--ring:#2F5BEA;
 --present:#12805C;--present-bg:#E6F4EE;--absent:#D92D20;--absent-bg:#FDECEA;--leave:#B7791F;--leave-bg:#FFF4DB;--bb:#5B3FD1;--bb-bg:#EEE9FF;--none:#D5DAE3;--hero:#0F1B2D;--hero2:#1C3158;
 --shadow:0 1px 2px rgba(15,27,45,.06),0 2px 8px rgba(15,27,45,.05);--r:14px;--sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);--sal:env(safe-area-inset-left,0px);--sar:env(safe-area-inset-right,0px)}
@@ -244,6 +249,7 @@ const IC = {
   note: ic('<path d="M4 4h16v11l-5 5H4z"/><path d="M15 20v-5h5"/><path d="M8 9h8M8 13h4"/>'),
   sum: ic('<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'),
   print: ic('<path d="M7 9V3h10v6"/><rect x="4" y="9" width="16" height="8" rx="2"/><path d="M7 14h10v7H7z"/>'),
+    trash: ic('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'),
   down: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>'
 };
 
@@ -351,7 +357,7 @@ async function refreshAll(){
     store.set('sheets', sheets); store.set('teacher', teacher); store.set('admin', isAdmin);
     ensureSel(); const cur = entry();
     if(cur){ try{ await loadSheet(cur, true); }catch(err){ sheetErr[cur.name] = errText(err); } if(!dirty){ fixDay(); loadDraft(); } }
-    rest = sheets.filter(x => x !== cur);
+    rest = sheets.filter(x => x !== cur && (!isAdmin || (cur && x.cls === cur.cls && x.sub === cur.sub)));   // admin: do not download all 1,600 sheets, the others load when opened
     if(!dirty){ ensureSel(); fixDay(); loadDraft(); if(mode === 'mt') loadMtDraft(); render(); }
   }catch(e){ lastError = errText(e); }
   finally{ refreshing = false; updateStatus(); }
@@ -616,7 +622,20 @@ function updateMt(d){
   if(sb){ sb.textContent = left ? 'Save test marks (' + left + ' left)' : 'Save test marks'; sb.classList.toggle('incomplete', left > 0 || bad > 0 || !(total > 0)); }
   updateBadge(); paintFilters();
 }
-
+function mtRefill(){
+  document.querySelectorAll('#mtList .row').forEach(row => { row.querySelector('.mk').value = mtDraft.marks[row.dataset.roll] || ''; });
+  updateTally();
+}
+function mtFillA(){
+  const d = data[sheetName()]; if(!d) return toast('This sheet is not on the phone yet');
+  const total = Number(mtDraft.total) || 0; if(!(total > 0)) return toast('Enter the total marks first.');
+  const snap = Object.assign({}, mtDraft.marks);
+  const empty = d.students.filter(s => mtParse(mtDraft.marks[s.roll], total).k === 'empty');
+  if(!empty.length) return toast('No empty rows. Everyone already has marks or A.');
+  empty.forEach(s => { mtDraft.marks[s.roll] = 'A'; });
+  dirty = true; mtRefill();
+  toast('Filled ' + empty.length + ' empty row' + (empty.length > 1 ? 's' : '') + ' with A', { label:'Undo', fn:() => { mtDraft.marks = snap; mtRefill(); toast('Undone'); } });
+}
 /* ---------- main screen ---------- */
 function attBodyHtml(d){
   return `<div class="allrow"><span class="lbl">Mark all</span><span class="seg">` +
@@ -666,9 +685,11 @@ function renderMain(){
           <select id="selSub" aria-label="Subject">${opts(subjects(sel.cls), sel.sub, titleCase)}</select>
           <select id="selMon" aria-label="Month">${opts(monthsOf(sel.cls, sel.sub), sel.mon, monLabel)}</select></div>
         <div class="mrow"><div class="tabs2" role="group"><button data-mode="att" class="${mode === 'att' ? 'on' : ''}">Attendance</button><button data-mode="mt" class="${mode === 'mt' ? 'on' : ''}"><span class="lg">Monthly test</span><span class="sm">Test</span></button></div>
-          <div class="ibtns">${mode === 'att' ? `<button class="ib" id="calBtn" aria-label="Calendar" title="Calendar">${IC.cal}</button><button class="ib" id="noteBtn" aria-label="${note ? 'Edit note' : 'Add note'}" title="${note ? 'Edit note' : 'Add note'}">${IC.note}</button>` : ''}
+          <div class="ibtns">${mode === 'att' ? `<button class="ib" id="calBtn" aria-label="Calendar" title="Calendar">${IC.cal}</button><button class="ib" id="noteBtn" aria-label="${note ? 'Edit note' : 'Add note'}" title="${note ? 'Edit note' : 'Add note'}">${IC.note}</button><button class="ib" id="delBtn" aria-label="Delete attendance of this day" title="Delete attendance of this day">${IC.trash}</button>` : ''}
             <button class="ib" id="sumBtn" aria-label="Monthly summary" title="Monthly summary">${IC.sum}</button><button class="ib" id="printBtn" aria-label="Print sheet" title="Print sheet">${IC.print}</button></div></div>
-        ${mode === 'mt' ? `<label class="tot"><span>Total marks</span><input id="mtTotal" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 20" value="${esc(mtDraft.total)}"></label><div class="cnt" id="mtInfo"></div>`
+        ${mode === 'mt' ? `<label class="tot"><span>Total marks</span><input id="mtTotal" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 20" value="${esc(mtDraft.total)}"></label>
+        
+        <div class="cnt" id="mtInfo"></div><button class="fillA" id="mtFillA">Fill empty with A (absent)</button>`
           : `<div class="strip" id="strip">${strip}</div><div class="prow"><div class="bar3" id="bar3"></div><div class="nums" id="nums"></div></div>`}
       </div></div>
     </div>
@@ -778,6 +799,49 @@ function openNote(){
   $('#noteSave').onclick = () => commit(ta.value.trim());
   const c = $('#noteClear'); if(c) c.onclick = () => commit('');
   $('#noteCancel').onclick = () => dlg.close();
+}
+
+
+
+/* ---------- delete one day (safe: typed confirmation + server backup + restore) ---------- */
+function openDeleteDay(){
+  const name = sheetName(), d = data[name], dlg = $('#dlg');
+  if(!d) return toast('This sheet is not on the phone yet');
+  if(!navigator.onLine) return toast('Deleting needs an internet connection.');
+  const day = sel.day;
+  if(queued(day)) return toast('Day ' + day + ' has a save that has not reached the sheet yet. Wait until the status says Synced, then try again.');
+  const sm = (d.marks && d.marks[day]) || {}, note = (d.notes && d.notes[day]) || '';
+  const c = { P:0, A:0, L:0, B:0 }; Object.keys(sm).forEach(r => { if(c[sm[r]] != null) c[sm[r]]++; });
+  const total = Object.keys(sm).length;
+  if(!total && !note) return toast('Nothing is saved for day ' + day + '.');
+  const { m, y } = dayInfo(), when = new Date(y, m, day).toLocaleDateString([], { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  $('#dlgBody').innerHTML = `<h2>Delete attendance?</h2>
+    <div class="delwarn"><big>${esc(when)}</big>${esc(sel.cls)} \u00b7 ${esc(titleCase(sel.sub))}<br>${total} marks will be removed (P ${c.P}, A ${c.A}, L ${c.L}, B ${c.B})${note ? '<br>The note for this day will also be removed.' : ''}</div>
+    <label for="delTyped">To confirm, type the day number: <b>${day}</b></label>
+    <input id="delTyped" type="text" inputmode="numeric" autocomplete="off" placeholder="${day}">
+    <div class="err" id="delErr" role="alert"></div>
+    <div class="acts"><button class="btn small danger fill grow" id="delGo" disabled>Delete day ${day}</button><button class="btn small grow" id="delCancel">Cancel</button></div>`;
+  dlg.showModal();
+  const go = $('#delGo'), typed = $('#delTyped'), err = $('#delErr');
+  typed.oninput = () => { go.disabled = typed.value.trim() !== String(day); };
+  $('#delCancel').onclick = () => dlg.close();
+  go.onclick = async () => {
+    if(typed.value.trim() !== String(day)) return;
+    go.disabled = true; go.textContent = 'Deleting...'; err.textContent = '';
+    try{
+      const r = await api({ action:'delete_day', sheet:name, day, confirmDay:day }, 90000);
+      if(r.error === 'BAD_LOGIN'){ dlg.close(); return signOut('Your username or password was changed. Sign in again.'); }
+      if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'The server was not updated. Redeploy Code.gs as a New version.' : (r.error || 'Could not delete'));
+      const D = data[name];
+      if(D){ if(D.marks) delete D.marks[day]; if(D.notes) delete D.notes[day]; }
+      delete confirms[name + '|' + day]; store.set('data', data); store.set('confirms', confirms);
+      dlg.close(); dirty = false; loadDraft(); renderMain();
+      toast('Day ' + day + ' attendance deleted.');
+    }catch(e){
+      go.disabled = false; go.textContent = 'Delete day ' + day;
+      err.textContent = 'Not deleted: ' + errText(e);
+    }
+  };
 }
 
 /* ---------- summary, print, calendar ---------- */
@@ -928,7 +992,7 @@ function toast(msg, action){
     const b = document.createElement('button'); b.className = 'toastBtn'; b.textContent = action.label;
     b.onclick = () => { clearTimeout(toastTimer); t.style.display = 'none'; action.fn(); }; t.appendChild(b);
   }
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.style.display = 'none', action ? UNDO_MS : 5500);
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.style.display = 'none', action ? (action.ms || UNDO_MS) : 5500);
 }
 
 /* ---------- auto-fold the control panel while scrolling ---------- */
@@ -978,6 +1042,8 @@ document.addEventListener('click', ev => {
   if(t.closest('#statusChip')) return openSync();
   if(t.closest('#saveBtn')) return save();
   if(t.closest('#panelBtn')) return togglePanel();
+    if(t.closest('#mtFillA')) return mtFillA();
+      if(t.closest('#delBtn')) return openDeleteDay();
 });
 document.addEventListener('change', ev => {
   const t = ev.target, id = t && t.id, v = t && t.value;
