@@ -193,7 +193,78 @@ dialog::backdrop{background:rgba(8,14,26,.55)}
   #app.phid .wrap{grid-column:1}
   .mini{display:none!important}
   #app.compact .panel{display:block}
+  /* ===== look & feel v2 ===== */
+:root{--chev:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' fill='none' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5l4 4 4-4'/%3E%3C/svg%3E")}
+@media(prefers-color-scheme:dark){:root{--chev:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' fill='none' stroke='%239AA9C0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5l4 4 4-4'/%3E%3C/svg%3E")}}
+
+.top{background:var(--bg);border-bottom:0}
+.hideBtn,.sync{background:var(--surface)}
+.pcard{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:20px;padding:12px}
+.pk select{background-color:var(--bg);border:1px solid var(--line);color:var(--ink);background-image:var(--chev)}
+.tabs2{background:var(--bg)}
+.tabs2 button{color:var(--muted)}
+.tabs2 button.on{background:var(--accent);color:var(--on-accent)}
+.ib{background:var(--bg);border-color:var(--line);color:var(--ink)}
+
+.day{background:var(--bg);border-color:var(--line);color:var(--ink)}
+.day span{color:var(--muted)}
+.day.sun span{color:var(--absent)}
+.day.today{border:1.5px solid var(--ring)}
+.day.sel{background:var(--accent);border-color:var(--accent);box-shadow:none}
+.day.sel span,.day.sel b{color:var(--on-accent)}
+.day.has::after{background:var(--present)}
+.day.miss::after{background:#F08C1A}
+.day.hasnote{outline:none}
+.day.hasnote::before{background:var(--leave)}
+
+.bar3{background:var(--line)}
+.bar3 .p{background:var(--present)}.bar3 .a{background:var(--absent)}.bar3 .l{background:var(--leave)}.bar3 .b{background:var(--bb)}
+.nums{color:var(--muted)}.nums b{color:var(--ink)}
+.nums .p b{color:var(--present)}.nums .a b{color:var(--absent)}.nums .l b{color:var(--leave)}.nums .b b{color:var(--bb)}
+.tot span,.cnt{color:var(--muted)}
+.tot input{background:var(--bg);border-color:var(--line);color:var(--ink)}
+.tot input::placeholder{color:var(--muted)}
+.fillA{background:var(--bg);border-color:var(--line);color:var(--ink)}
+
+/* lecture bar (only shown on days with more than one lecture) */
+.lecbar{display:flex;align-items:center;gap:4px;margin-top:10px;padding:4px;border-radius:12px;background:var(--bg);border:1px solid var(--line)}
+.lecbar .lt{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px 0 8px}
+.pchip{flex:1;height:34px;border:0;border-radius:9px;background:transparent;color:var(--ink);font-weight:800;font-size:14px}
+.pchip.sel{background:var(--accent);color:var(--on-accent);box-shadow:none}
+.pchip.done::after{background:var(--present)}
+.pchip.sel.done::after{background:var(--on-accent)}
+.pchip.add{flex:none;width:40px;color:var(--ring);font-size:18px}
+.pchip.x{flex:none;width:34px;color:var(--muted);font-weight:600}
+
+/* student rows */
+.row{border-radius:16px;border-left-width:4px;padding:8px 8px 8px 10px}
+.seg{gap:5px}
+.seg button{width:40px;height:44px;border-radius:12px;background:var(--surface);font-size:15px}
+.seg button.p{color:var(--present)}.seg button.a{color:var(--absent)}.seg button.l{color:var(--leave)}.seg button.b{color:var(--bb)}
+.seg button[aria-pressed=true]{color:#fff}
+@media(max-width:360px){.seg button{width:34px}}
+
+.sq{height:44px;border-radius:14px}
+.bottom{border-top:0;box-shadow:0 -8px 24px rgba(15,27,45,.10)}
+.bottom .btn{height:52px;border-radius:16px}
 }
+/* days with more than one lecture */
+.day.multi{background:var(--bb-bg);border-color:var(--bb)}
+.day.multi span{color:var(--bb)}
+.day.multi.sun span{color:var(--absent)}
+.day.multi::after{display:none}
+.day.multi.hasnote::before{right:auto;left:5px}
+.day.sel.multi{background:var(--accent);border-color:var(--bb);box-shadow:0 0 0 2px var(--bb)}
+.day.sel.multi span,.day.sel.multi b{color:var(--on-accent)}
+
+.mb{position:absolute;left:50%;bottom:3px;transform:translateX(-50%);min-width:24px;height:14px;padding:0 5px;border-radius:99px;background:var(--bb);color:#fff;font-style:normal;font-size:10px;font-weight:800;line-height:14px;text-align:center}
+
+.cell{position:relative}
+.cell.multi{background:var(--bb-bg);border-color:var(--bb);color:var(--bb)}
+.cell.multi::after{display:none}
+.cell.multi.hasnote::before{right:auto;left:5px}
+.cell.sel.multi{background:var(--accent);color:var(--on-accent);box-shadow:0 0 0 2px var(--bb)}
+.cell .mb{bottom:3px;font-size:9px;height:13px;line-height:13px;min-width:22px}
 </style>
 </head>
 <body>
@@ -223,15 +294,21 @@ let sheets = store.get('sheets', []), data = store.get('data', {}), queue = stor
 if(store.get('dver', 1) !== 2){ data = {}; store.set('data', {}); store.set('dver', 2); }
 let lastSync = store.get('lastSync', 0), remarks = store.get('remarks', {}), rDirty = store.get('rdirty', {});
 let sel = { cls:store.get('cls', ''), sub:store.get('sub', ''), mon:store.get('mon', ''), day:0, period:1 };
-let multi = store.get('multi', {});
-const multiKey = () => sel.cls + '|' + sel.sub;
-function multiData(){
+
+let multi = store.get('multi2', {});   // per sheet + day: how many lectures to show
+const multiKey = (day = sel.day) => sheetName() + '|' + day;
+// true when THIS day already has a lecture other than lecture 1 (saved or waiting on the phone)
+function multiData(day = sel.day){
   const d = data[sheetName()];
-  if(d && d.marks) for(const k in d.marks) if(Object.keys(d.marks[k]).length > 1) return true;
-  return queue.some(q => q.sheet === sheetName() && q.kind !== 'mt' && (q.period || 1) > 1);
+  const m = d && d.marks && d.marks[day];
+  if(m && Object.keys(m).some(p => p !== '1')) return true;
+  return queue.some(q => q.sheet === sheetName() && q.kind !== 'mt' && q.day === day && (q.period || 1) > 1);
 }
-const hasMulti = () => !!multi[multiKey()] || multiData();
+const hasMulti = (day = sel.day) => !!multi[multiKey(day)] || multiData(day);
+const maxSaved = day => Math.max(0, ...Object.keys(pmOf(day)).map(Number));
+const lecCount = (day = sel.day) => Math.min(MAXP, Math.max(2, multi[multiKey(day)] || 0, maxSaved(day), sel.period));
 const lecTxt = p => hasMulti() ? 'Lecture ' + p : 'Attendance';
+
 let draft = {}, searchQ = '', filterQ = 'all', lowInfo = '', lastError = '';
 let dirty = false, syncing = false, refreshing = false, prefetching = false, syncPromise = null, rSyncing = false;
 let compact = false;   // control panel folded into a one-line bar while scrolling
@@ -268,6 +345,7 @@ async function absorbBg(){
 const greet = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
 const ic = p => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
 const IC = {
+  plus: ic('<rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/>'),
   cal: ic('<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/>'),
   note: ic('<path d="M4 4h16v11l-5 5H4z"/><path d="M15 20v-5h5"/><path d="M8 9h8M8 13h4"/>'),
   sum: ic('<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'),
@@ -329,7 +407,7 @@ function pmOf(day){
   return out;
 }
 /** The lowest period of the day that has no attendance yet (1 when the day is empty). */
-function nextPeriod(day){ if(!hasMulti()) return 1; const s = pmOf(day); for(let p = 1; p <= MAXP; p++) if(!s[p]) return p; return 1; }
+function nextPeriod(day){ if(!hasMulti(day)) return 1; const s = pmOf(day); for(let p = 1; p <= MAXP; p++) if(!s[p]) return p; return 1; }
 function pickDay(day){ sel.day = day; sel.period = nextPeriod(day); }
 function initDay(){ const { isCur, today, avail } = dayInfo(); pickDay(isCur && avail.includes(today) ? today : (avail[0] || 1)); }
 function fixDay(){ const { avail } = dayInfo(); if(!sel.day || !avail.includes(sel.day)) initDay(); }
@@ -340,6 +418,7 @@ function noteFor(day){
   const d = data[n]; return (d && d.notes && d.notes[day]) || '';
 }
 const hasData = day => Object.keys(pmOf(day)).length > 0;
+const lecN = day => Object.keys(pmOf(day)).length;
 function firstDataDay(n){ for(let i = 1; i <= n; i++) if(hasData(i)) return i; return 0; }
 function isMissed(day, fd, info){
   if(!fd || day <= fd || !info.avail.includes(day) || hasData(day) || noteFor(day)) return false;
@@ -418,7 +497,7 @@ function recInfo(b){
   let what;
   if(b.kind === 'mt') what = 'Monthly test';
   else if(!Object.keys(b.marks || {}).length && b.note !== undefined) what = 'Note for ' + b.day + ' ' + mon;
-  else what = 'Attendance ' + b.day + ' ' + mon + (hasMulti() ? ' \u00b7 lecture ' + (b.period || 1) : '');
+  else what = 'Attendance ' + b.day + ' ' + mon + (hasMulti(b.day) ? ' \u00b7 lecture ' + (b.period || 1) : '');
   return { who, what };
 }
 function savedLines(batch, res){
@@ -703,15 +782,17 @@ function renderMain(){
   if(!dirty){ loadDraft(); if(mode === 'mt') loadMtDraft(); }
   const e = entry(), name = sheetName(), d = data[name], info = dayInfo(), { m, y, n, avail, isCur, today } = info, fd = firstDataDay(n);
   const strip = Array.from({ length:n }, (_, i) => {
-    const day = i + 1, wd = new Date(y, m, day).getDay();
-    const cls = [day === sel.day ? 'sel' : '', isCur && day === today ? 'today' : '', wd === 0 ? 'sun' : '', hasData(day) ? 'has' : (isMissed(day, fd, info) ? 'miss' : ''), noteFor(day) ? 'hasnote' : ''].filter(Boolean).join(' ');
-    return `<button class="day ${cls}" data-day="${day}" ${avail.includes(day) ? '' : 'disabled'} aria-label="${day} ${MONTHS[m]}" ${day === sel.day ? 'aria-current="date"' : ''}><span>${WD[wd]}</span><b>${day}</b></button>`;
-  }).join('');
+  const day = i + 1, wd = new Date(y, m, day).getDay(), ln = lecN(day);
+  const cls = [day === sel.day ? 'sel' : '', isCur && day === today ? 'today' : '', wd === 0 ? 'sun' : '', hasData(day) ? 'has' : (isMissed(day, fd, info) ? 'miss' : ''), ln > 1 ? 'multi' : '', noteFor(day) ? 'hasnote' : ''].filter(Boolean).join(' ');
+  return `<button class="day ${cls}" data-day="${day}" ${avail.includes(day) ? '' : 'disabled'} aria-label="${day} ${MONTHS[m]}${ln > 1 ? ', ' + ln + ' lectures' : ''}" ${day === sel.day ? 'aria-current="date"' : ''}><span>${WD[wd]}</span><b>${day}</b>${ln > 1 ? '<i class="mb">\u00d7' + ln + '</i>' : ''}</button>`;
+}).join('');
   const savedP = pmOf(sel.day);
- const perBar = mode !== 'att' ? '' : !hasMulti()
-  ? `<button class="addper" id="multiOn">+ I take more than one lecture of this class on the same day</button>`
-  : `<div class="pbar" id="perBar" role="group" aria-label="Lecture number"><span>My lecture</span>${Array.from({ length:MAXP }, (_, i) => { const p = i + 1;
-      return `<button class="pchip ${p === sel.period ? 'sel' : ''} ${savedP[p] ? 'done' : ''}" data-per="${p}" aria-label="Lecture ${p}${savedP[p] ? ', saved' : ''}" ${p === sel.period ? 'aria-current="true"' : ''}>${p}</button>`; }).join('')}</div>${multiData() ? '' : '<div class="phint"><button id="multiOff">Only one lecture a day</button></div>'}`;
+ const nLec = lecCount();
+const perBar = (mode !== 'att' || !hasMulti()) ? '' :
+  `<div class="lecbar" id="perBar" role="group" aria-label="Lecture number"><span class="lt">Lecture</span>${
+    Array.from({ length:nLec }, (_, i) => { const p = i + 1;
+      return `<button class="pchip ${p === sel.period ? 'sel' : ''} ${savedP[p] ? 'done' : ''}" data-per="${p}" aria-label="Lecture ${p}${savedP[p] ? ', saved' : ''}" ${p === sel.period ? 'aria-current="true"' : ''}>${p}</button>`; }).join('')
+  }${nLec < MAXP ? '<button class="pchip add" id="perAdd" aria-label="Add another lecture">+</button>' : ''}${multiData() ? '' : '<button class="pchip x" id="multiOff" aria-label="Back to one lecture a day">\u2715</button>'}</div>`;
   
   
   
@@ -741,7 +822,11 @@ function renderMain(){
           <select id="selSub" aria-label="Subject">${opts(subjects(sel.cls), sel.sub, titleCase)}</select>
           <select id="selMon" aria-label="Month">${opts(monthsOf(sel.cls, sel.sub), sel.mon, monLabel)}</select></div>
         <div class="mrow"><div class="tabs2" role="group"><button data-mode="att" class="${mode === 'att' ? 'on' : ''}">Attendance</button><button data-mode="mt" class="${mode === 'mt' ? 'on' : ''}"><span class="lg">Monthly test</span><span class="sm">Test</span></button></div>
-          <div class="ibtns">${mode === 'att' ? `<button class="ib" id="calBtn" aria-label="Calendar" title="Calendar">${IC.cal}</button><button class="ib" id="noteBtn" aria-label="${note ? 'Edit note' : 'Add note'}" title="${note ? 'Edit note' : 'Add note'}">${IC.note}</button><button class="ib" id="delBtn" aria-label="Delete attendance of this period" title="Delete attendance of this period">${IC.trash}</button>` : ''}
+          <div class="ibtns">${mode === 'att' ? `<button class="ib" id="calBtn" aria-label="Calendar" title="Calendar">${IC.cal}</button><button class="ib" id="noteBtn" aria-label="${note ? 'Edit note' : 'Add note'}" title="${note ? 'Edit note' : 'Add note'}">${IC.note}</button>
+          
+          ${hasMulti() ? '' : '<button class="ib" id="multiOn" aria-label="I take more than one lecture of this class today" title="I take more than one lecture of this class today">' + IC.plus + '</button>'}
+
+          <button class="ib" id="delBtn" aria-label="Delete attendance of this period" title="Delete attendance of this period">${IC.trash}</button>` : ''}
             <button class="ib" id="sumBtn" aria-label="Monthly summary" title="Monthly summary">${IC.sum}</button><button class="ib" id="printBtn" aria-label="Print sheet" title="Print sheet">${IC.print}</button></div></div>
         ${mode === 'mt' ? `<label class="tot"><span>Total marks</span><input id="mtTotal" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 20" value="${esc(mtDraft.total)}"></label>
         <div class="cnt" id="mtInfo"></div><button class="fillA" id="mtFillA">Fill empty with A (absent)</button>`
@@ -972,11 +1057,11 @@ function openCalendar(){
   const info = dayInfo(), { m, y, n, avail, isCur, today } = info, fd = firstDataDay(n), offset = (new Date(y, m, 1).getDay() + 6) % 7;
   const heads = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(h => `<div class="h ${h === 'Sun' ? 'sun' : ''}">${h}</div>`).join('');
   const cells = Array.from({ length:offset }, () => '<div></div>').join('') + Array.from({ length:n }, (_, i) => {
-    const day = i + 1, cls = [day === sel.day ? 'sel' : '', isCur && day === today ? 'today' : '', hasData(day) ? 'has' : (isMissed(day, fd, info) ? 'miss' : ''), noteFor(day) ? 'hasnote' : ''].filter(Boolean).join(' ');
-    return `<button class="cell ${cls}" data-pick="${day}" ${avail.includes(day) ? '' : 'disabled'}>${day}</button>`;
-  }).join('');
+  const day = i + 1, ln = lecN(day), cls = [day === sel.day ? 'sel' : '', isCur && day === today ? 'today' : '', hasData(day) ? 'has' : (isMissed(day, fd, info) ? 'miss' : ''), ln > 1 ? 'multi' : '', noteFor(day) ? 'hasnote' : ''].filter(Boolean).join(' ');
+  return `<button class="cell ${cls}" data-pick="${day}" ${avail.includes(day) ? '' : 'disabled'}>${day}${ln > 1 ? '<i class="mb">\u00d7' + ln + '</i>' : ''}</button>`;
+}).join('');
   $('#dlgBody').innerHTML = `<h2>${MONTHS[m]} ${y}</h2><div class="meta">${esc(sheetName())}</div><div class="grid">${heads}${cells}</div>
-    <div class="legend"><span>Green dot: marked</span><span>Orange dot: not marked</span><span>Yellow dot: note</span><span>Ring: today</span></div>
+    <div class="legend"><span>Green dot: marked</span><span>Orange dot: not marked</span><span>Yellow dot: note</span><span>Ring: today</span><span>Purple: more than one lecture</span></div>
     <div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>`;
   const dlg = $('#dlg'); dlg.showModal(); $('#closeDlg').onclick = () => dlg.close();
   dlg.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => { dlg.close(); switchTo(() => pickDay(Number(b.dataset.pick))); });
@@ -1036,6 +1121,7 @@ function updateBadge(){
       const t = new Date(c.at).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
       okTxt = c.mt ? '\u2713 Test marks saved at ' + t : c.p == null ? '\u2713 Note saved at ' + t
         : '\u2713 ' + lecTxt(sel.period) + ' saved at ' + t + ' (P ' + c.p + ', A ' + c.a + (c.l ? ', L ' + c.l : '') + (c.b ? ', B ' + c.b : '') + ')';
+        if(mode === 'att' && lecN(sel.day) > 1) items.unshift(lecN(sel.day) + ' lectures on this day');
     } else if(mode === 'att'){ const m = d && d.marks && d.marks[sel.day] && d.marks[sel.day][sel.period], k = m ? Object.keys(m).length : 0; if(k) okTxt = '\u2713 ' + lecTxt(sel.period) + ' is in the sheet (' + k + ' marked)'; }
     else if(d && d.mt && d.mt.total) okTxt = '\u2713 Test marks in the sheet';
     if(note) items.push('Note: ' + note); if(okTxt) items.push(okTxt); if(lowInfo) items.push(lowInfo);
@@ -1113,8 +1199,9 @@ document.addEventListener('click', ev => {
   if(t.closest('#panelBtn')) return togglePanel();
   if(t.closest('#mtFillA')) return mtFillA();
   if(t.closest('#delBtn')) return openDeleteDay();
-  if(t.closest('#multiOn')){ multi[multiKey()] = true; store.set('multi', multi); sel.period = nextPeriod(sel.day); return renderMain(); }
-if(t.closest('#multiOff')){ delete multi[multiKey()]; store.set('multi', multi); switchTo(() => { sel.period = 1; }); return; }
+  if(t.closest('#multiOn')){ multi[multiKey()] = 2; store.set('multi2', multi); renderMain(); return toast('Lecture bar added for day ' + sel.day + '. Tap 2 for your second lecture.'); }
+if(t.closest('#perAdd')){ const n = Math.min(MAXP, lecCount() + 1); multi[multiKey()] = n; store.set('multi2', multi); switchTo(() => { sel.period = n; }); return; }
+if(t.closest('#multiOff')){ delete multi[multiKey()]; store.set('multi2', multi); switchTo(() => { sel.period = 1; }); return; }
 });
 document.addEventListener('change', ev => {
   const t = ev.target, id = t && t.id, v = t && t.value;
