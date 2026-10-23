@@ -12,6 +12,10 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>JCW Daily Attendance</title>
 <style>
+  .addper{width:100%;height:36px;margin-top:8px;border-radius:10px;border:1px dashed rgba(255,255,255,.35);background:transparent;color:rgba(255,255,255,.85);font-weight:650;font-size:12.5px}
+.phint{margin-top:6px;font-size:11.5px;line-height:1.35;color:rgba(255,255,255,.7)}
+.phint button{border:0;background:transparent;color:#BFD2FF;font-weight:700;text-decoration:underline;padding:0;font-size:11.5px}
+.pbar span{white-space:normal;line-height:1.1;max-width:62px}
   .row.off{opacity:.55}.row.off .who b{text-decoration:line-through}
 .mk:disabled{opacity:.4}
   .delwarn{margin:10px 0;padding:12px;border-radius:12px;background:var(--absent-bg);color:var(--absent);font-size:14px;font-weight:650;word-break:break-word}
@@ -66,6 +70,11 @@ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 .day.has::after,.day.miss::after{content:"";position:absolute;bottom:4px;width:5px;height:5px;border-radius:50%;background:#5FD3A2}
 .day.miss::after{background:#FFA94D}.day:disabled{opacity:.28}
 .day.hasnote{outline:2px dotted #FFD166;outline-offset:-3px}
+.pbar{display:flex;align-items:center;gap:5px;margin-top:8px}
+.pbar span{font-size:11px;font-weight:700;color:rgba(255,255,255,.7);margin-right:2px;white-space:nowrap}
+.pchip{flex:1;min-width:0;height:36px;border-radius:10px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.1);color:#fff;font-weight:800;font-size:14px;position:relative;padding:0}
+.pchip.done::after{content:"";position:absolute;bottom:4px;left:50%;margin-left:-2.5px;width:5px;height:5px;border-radius:50%;background:#5FD3A2}
+.pchip.sel{background:#fff;color:#0F1B2D;border-color:#fff;box-shadow:0 0 0 3px rgba(143,176,255,.55)}
 .prow{display:flex;align-items:center;gap:10px;margin-top:8px}
 .bar3{display:flex;height:6px;border-radius:99px;overflow:hidden;background:rgba(255,255,255,.16);flex:1;min-width:40px}
 .bar3 i{display:block;height:100%;transition:width .2s}.bar3 .p{background:#5FD3A2}.bar3 .a{background:#FF8A80}.bar3 .l{background:#FFD166}.bar3 .b{background:#A99BFF}
@@ -196,6 +205,7 @@ const API = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const MARKS = ['P','A','L','B'], LOW = 73, UNDO_MS = 7000;
+const MAXP = 8;   // periods 1..8 (must match MAX_PERIOD in Code.gs)
 const TAGS = ['Bunking','Often late','Weak in studies','Needs counselling','Parent informed','Excellent'];
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -209,8 +219,19 @@ const store = {
 let mode = store.get('mode', 'att'), panelHidden = store.get('phide', false), mtDraft = { total:'', marks:{} };
 let user = store.get('user', ''), pass = store.get('pass', ''), teacher = store.get('teacher', ''), isAdmin = store.get('admin', false);
 let sheets = store.get('sheets', []), data = store.get('data', {}), queue = store.get('queue', []), confirms = store.get('confirms', {});
+// period-wise attendance changed the shape of data[sheet].marks (marks[day][period][roll]): drop the old cached sheets once
+if(store.get('dver', 1) !== 2){ data = {}; store.set('data', {}); store.set('dver', 2); }
 let lastSync = store.get('lastSync', 0), remarks = store.get('remarks', {}), rDirty = store.get('rdirty', {});
-let sel = { cls:store.get('cls', ''), sub:store.get('sub', ''), mon:store.get('mon', ''), day:0 };
+let sel = { cls:store.get('cls', ''), sub:store.get('sub', ''), mon:store.get('mon', ''), day:0, period:1 };
+let multi = store.get('multi', {});
+const multiKey = () => sel.cls + '|' + sel.sub;
+function multiData(){
+  const d = data[sheetName()];
+  if(d && d.marks) for(const k in d.marks) if(Object.keys(d.marks[k]).length > 1) return true;
+  return queue.some(q => q.sheet === sheetName() && q.kind !== 'mt' && (q.period || 1) > 1);
+}
+const hasMulti = () => !!multi[multiKey()] || multiData();
+const lecTxt = p => hasMulti() ? 'Lecture ' + p : 'Attendance';
 let draft = {}, searchQ = '', filterQ = 'all', lowInfo = '', lastError = '';
 let dirty = false, syncing = false, refreshing = false, prefetching = false, syncPromise = null, rSyncing = false;
 let compact = false;   // control panel folded into a one-line bar while scrolling
@@ -255,7 +276,7 @@ const IC = {
   down: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>'
 };
 
-/* ---------- helpers: class / subject / month / day ---------- */
+/* ---------- helpers: class / subject / month / day / period ---------- */
 const uniq = a => [...new Set(a)];
 const titleCase = s => String(s).toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 const monIdx = t => MONTHS.findIndex(m => m.slice(0, 3).toUpperCase() === String(t).slice(0, 3).toUpperCase());
@@ -293,17 +314,32 @@ function dayInfo(){
   const now = new Date();
   return { m, y, n, avail, isCur: now.getMonth() === m && now.getFullYear() === y, today: now.getDate() };
 }
-function initDay(){ const { isCur, today, avail } = dayInfo(); sel.day = isCur && avail.includes(today) ? today : (avail[0] || 1); }
+
+/* ----- period-wise data: marks[day][period][roll] = 'P'|'A'|'L'|'B' ----- */
+/** Everything known for a day: what the sheet has + what is still waiting on the phone. { period: { roll: mark } } */
+function pmOf(day){
+  const d = data[sheetName()], src = (d && d.marks && d.marks[day]) || {}, out = {};
+  Object.keys(src).forEach(p => { out[p] = Object.assign({}, src[p]); });
+  queue.forEach(q => {
+    if(q.sheet !== sheetName() || q.day !== day || q.kind === 'mt') return;
+    const p = String(q.period || 1), m = out[p] = out[p] || {};
+    Object.keys(q.marks).forEach(r => { if(q.marks[r] === '') delete m[r]; else m[r] = q.marks[r]; });
+    if(!Object.keys(m).length) delete out[p];
+  });
+  return out;
+}
+/** The lowest period of the day that has no attendance yet (1 when the day is empty). */
+function nextPeriod(day){ if(!hasMulti()) return 1; const s = pmOf(day); for(let p = 1; p <= MAXP; p++) if(!s[p]) return p; return 1; }
+function pickDay(day){ sel.day = day; sel.period = nextPeriod(day); }
+function initDay(){ const { isCur, today, avail } = dayInfo(); pickDay(isCur && avail.includes(today) ? today : (avail[0] || 1)); }
 function fixDay(){ const { avail } = dayInfo(); if(!sel.day || !avail.includes(sel.day)) initDay(); }
-const queued = day => { const n = sheetName(); return queue.find(q => q.sheet === n && q.day === day); };
+/** Waiting-on-phone record of a day and period (attendance or note-only). */
+const queued = (day, per = sel.period) => { const n = sheetName(); return queue.find(q => q.sheet === n && q.kind !== 'mt' && q.day === day && (q.period || 1) === per); };
 function noteFor(day){
-  const q = queued(day); if(q && q.note !== undefined) return q.note;
-  const d = data[sheetName()]; return (d && d.notes && d.notes[day]) || '';
+  const n = sheetName(), q = queue.find(x => x.sheet === n && x.kind !== 'mt' && x.day === day && x.note !== undefined); if(q) return q.note;
+  const d = data[n]; return (d && d.notes && d.notes[day]) || '';
 }
-function hasData(day){
-  const d = data[sheetName()], q = queued(day);
-  return !!((d && d.marks && d.marks[day] && Object.keys(d.marks[day]).length) || (q && Object.keys(q.marks).length));
-}
+const hasData = day => Object.keys(pmOf(day)).length > 0;
 function firstDataDay(n){ for(let i = 1; i <= n; i++) if(hasData(i)) return i; return 0; }
 function isMissed(day, fd, info){
   if(!fd || day <= fd || !info.avail.includes(day) || hasData(day) || noteFor(day)) return false;
@@ -311,9 +347,7 @@ function isMissed(day, fd, info){
 }
 function loadDraft(){
   draft = {}; dirty = false; const d = data[sheetName()]; if(!d) return;
-  Object.assign(draft, (d.marks && d.marks[sel.day]) || {});
-  const q = queued(sel.day);
-  if(q) Object.keys(q.marks).forEach(r => { if(q.marks[r] === '') delete draft[r]; else draft[r] = q.marks[r]; });
+  Object.assign(draft, pmOf(sel.day)[sel.period] || {});
 }
 /** Counts only ACTIVE students: disabled students (s.off, changed subject) are ignored. */
 function counts(){
@@ -376,7 +410,7 @@ async function refreshAll(){
   } finally { prefetching = false; }
 }
 
-/* ---------- readable notification text (class, subject, day, counts) ---------- */
+/* ---------- readable notification text (class, subject, day, period, counts) ---------- */
 function recInfo(b){
   const e = sheets.find(s => s.name === b.sheet);
   const who = e ? e.cls + ' ' + titleCase(e.sub) : b.sheet;
@@ -384,7 +418,7 @@ function recInfo(b){
   let what;
   if(b.kind === 'mt') what = 'Monthly test';
   else if(!Object.keys(b.marks || {}).length && b.note !== undefined) what = 'Note for ' + b.day + ' ' + mon;
-  else what = 'Attendance ' + b.day + ' ' + mon;
+  else what = 'Attendance ' + b.day + ' ' + mon + (hasMulti() ? ' \u00b7 lecture ' + (b.period || 1) : '');
   return { who, what };
 }
 function savedLines(batch, res){
@@ -408,9 +442,10 @@ function applySaved(batch, res){
       if(data[b.sheet]) data[b.sheet].mt = { total:b.total, marks:Object.assign({}, (data[b.sheet].mt && data[b.sheet].mt.marks) || {}, b.marks) };
     }
     else if(b && data[b.sheet]){
-      const D = data[b.sheet], m = D.marks = D.marks || {}, day = Object.assign({}, m[b.day]);
-      Object.keys(b.marks).forEach(r => { if(b.marks[r] === '') delete day[r]; else day[r] = b.marks[r]; });
-      if(Object.keys(day).length) m[b.day] = day; else delete m[b.day];
+      const D = data[b.sheet], mk = D.marks = D.marks || {}, dd = Object.assign({}, mk[b.day]), k = String(b.period || 1), pm = Object.assign({}, dd[k]);
+      Object.keys(b.marks).forEach(r => { if(b.marks[r] === '') delete pm[r]; else pm[r] = b.marks[r]; });
+      if(Object.keys(pm).length) dd[k] = pm; else delete dd[k];
+      if(Object.keys(dd).length) mk[b.day] = dd; else delete mk[b.day];
       if(b.note !== undefined){ D.notes = D.notes || {}; if(b.note) D.notes[b.day] = b.note; else delete D.notes[b.day]; }
     }
     if(res.confirmed && res.confirmed[id]) confirms[id] = res.confirmed[id];
@@ -530,7 +565,7 @@ async function login(){
     if(!r.ok){ user = ''; pass = ''; $('#loginErr').textContent = r.error === 'BAD_LOGIN' ? 'Wrong username or password. Try again.' : 'Could not sign in: ' + r.error; return; }
     const prev = store.get('lastUser', '');
     if(prev && prev.toLowerCase() !== u.toLowerCase()){
-      data = {}; queue = []; confirms = {}; sel = { cls:'', sub:'', mon:'', day:0 };
+      data = {}; queue = []; confirms = {}; sel = { cls:'', sub:'', mon:'', day:0, period:1 };
       store.set('data', data); store.set('queue', queue); store.set('confirms', confirms);
     }
     teacher = r.teacher || ''; isAdmin = !!r.admin; sheets = r.sheets || [];
@@ -550,21 +585,23 @@ async function signOut(msg){
   renderLogin(msg);
 }
 
-/* ---------- attendance stats (this month) ---------- */
-function dayMarks(day){
-  if(day === sel.day) return draft;
-  const d = data[sheetName()], q = queued(day), base = Object.assign({}, (d && d.marks && d.marks[day]) || {});
-  if(q) Object.keys(q.marks).forEach(r => { if(q.marks[r] === '') delete base[r]; else base[r] = q.marks[r]; });
-  return base;
+/* ---------- attendance stats (this month, every period counts as one lecture) ---------- */
+/** Marks of one period of a day: the draft for the period on screen, otherwise sheet data + unsent records. */
+function dayMarks(day, per){
+  if(day === sel.day && per === sel.period) return draft;
+  return pmOf(day)[per] || {};
 }
 function stats(){
   const d = data[sheetName()]; if(!d) return { lect:0, per:{} };
   const days = d.days && d.days.length ? d.days : Array.from({ length:31 }, (_, i) => i + 1), per = {}; let lect = 0;
   d.students.forEach(s => per[s.roll] = { p:0, a:0, l:0, b:0 });
   days.forEach(day => {
-    const m = dayMarks(day); let any = 0;
-    Object.keys(m).forEach(r => { const v = m[r]; if(v === 'P' || v === 'A') any = 1; if(per[r] && v && per[r][v.toLowerCase()] != null) per[r][v.toLowerCase()]++; });
-    if(any) lect++;
+    const ps = new Set(Object.keys(pmOf(day)).map(Number)); if(day === sel.day) ps.add(sel.period);
+    ps.forEach(pr => {
+      const m = dayMarks(day, pr); let any = 0;
+      Object.keys(m).forEach(r => { const v = m[r]; if(v === 'P' || v === 'A') any = 1; if(per[r] && v && per[r][v.toLowerCase()] != null) per[r][v.toLowerCase()]++; });
+      if(any) lect++;
+    });
   });
   return { lect, per };
 }
@@ -670,6 +707,15 @@ function renderMain(){
     const cls = [day === sel.day ? 'sel' : '', isCur && day === today ? 'today' : '', wd === 0 ? 'sun' : '', hasData(day) ? 'has' : (isMissed(day, fd, info) ? 'miss' : ''), noteFor(day) ? 'hasnote' : ''].filter(Boolean).join(' ');
     return `<button class="day ${cls}" data-day="${day}" ${avail.includes(day) ? '' : 'disabled'} aria-label="${day} ${MONTHS[m]}" ${day === sel.day ? 'aria-current="date"' : ''}><span>${WD[wd]}</span><b>${day}</b></button>`;
   }).join('');
+  const savedP = pmOf(sel.day);
+ const perBar = mode !== 'att' ? '' : !hasMulti()
+  ? `<button class="addper" id="multiOn">+ I take more than one lecture of this class on the same day</button>`
+  : `<div class="pbar" id="perBar" role="group" aria-label="Lecture number"><span>My lecture</span>${Array.from({ length:MAXP }, (_, i) => { const p = i + 1;
+      return `<button class="pchip ${p === sel.period ? 'sel' : ''} ${savedP[p] ? 'done' : ''}" data-per="${p}" aria-label="Lecture ${p}${savedP[p] ? ', saved' : ''}" ${p === sel.period ? 'aria-current="true"' : ''}>${p}</button>`; }).join('')}</div>${multiData() ? '' : '<div class="phint"><button id="multiOff">Only one lecture a day</button></div>'}`;
+  
+  
+  
+  
   let body = '', ready = false;
   if(!sheets.length) body = `<div class="note">No sections are assigned to you in the timetable yet. Ask the admin, then open the status chip and tap Sync now.</div>`;
   else if(!d){
@@ -681,7 +727,7 @@ function renderMain(){
   if(ready) body = mode === 'mt' ? mtBodyHtml(d) : attBodyHtml(d);
   const note = noteFor(sel.day), opts = (arr, cur, f) => arr.map(x => `<option value="${esc(x)}" ${x === cur ? 'selected' : ''}>${esc(f ? f(x) : x)}</option>`).join('');
   const fk = [['all', 'All'], ['un', 'Unmarked'], ['ab', 'Absent'], ['low', mode === 'mt' ? 'Below 50%' : 'Low']];
-  const miniTxt = esc(sel.cls) + ' \u00b7 ' + esc(titleCase(sel.sub)) + ' \u00b7 ' + esc(monLabel(sel.mon)) + (mode === 'att' ? ' ' + sel.day : ' test');
+ const miniTxt = esc(sel.cls) + ' \u00b7 ' + esc(titleCase(sel.sub)) + ' \u00b7 ' + esc(monLabel(sel.mon)) + (mode === 'att' ? ' ' + sel.day + (hasMulti() ? ' \u00b7 lecture ' + sel.period : '') : ' test');
   $('#app').innerHTML = `
     <div class="stick">
       <header class="top"><div class="row1">
@@ -695,18 +741,18 @@ function renderMain(){
           <select id="selSub" aria-label="Subject">${opts(subjects(sel.cls), sel.sub, titleCase)}</select>
           <select id="selMon" aria-label="Month">${opts(monthsOf(sel.cls, sel.sub), sel.mon, monLabel)}</select></div>
         <div class="mrow"><div class="tabs2" role="group"><button data-mode="att" class="${mode === 'att' ? 'on' : ''}">Attendance</button><button data-mode="mt" class="${mode === 'mt' ? 'on' : ''}"><span class="lg">Monthly test</span><span class="sm">Test</span></button></div>
-          <div class="ibtns">${mode === 'att' ? `<button class="ib" id="calBtn" aria-label="Calendar" title="Calendar">${IC.cal}</button><button class="ib" id="noteBtn" aria-label="${note ? 'Edit note' : 'Add note'}" title="${note ? 'Edit note' : 'Add note'}">${IC.note}</button><button class="ib" id="delBtn" aria-label="Delete attendance of this day" title="Delete attendance of this day">${IC.trash}</button>` : ''}
+          <div class="ibtns">${mode === 'att' ? `<button class="ib" id="calBtn" aria-label="Calendar" title="Calendar">${IC.cal}</button><button class="ib" id="noteBtn" aria-label="${note ? 'Edit note' : 'Add note'}" title="${note ? 'Edit note' : 'Add note'}">${IC.note}</button><button class="ib" id="delBtn" aria-label="Delete attendance of this period" title="Delete attendance of this period">${IC.trash}</button>` : ''}
             <button class="ib" id="sumBtn" aria-label="Monthly summary" title="Monthly summary">${IC.sum}</button><button class="ib" id="printBtn" aria-label="Print sheet" title="Print sheet">${IC.print}</button></div></div>
         ${mode === 'mt' ? `<label class="tot"><span>Total marks</span><input id="mtTotal" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 20" value="${esc(mtDraft.total)}"></label>
         <div class="cnt" id="mtInfo"></div><button class="fillA" id="mtFillA">Fill empty with A (absent)</button>`
-          : `<div class="strip" id="strip">${strip}</div><div class="prow"><div class="bar3" id="bar3"></div><div class="nums" id="nums"></div></div>`}
+          : `<div class="strip" id="strip">${strip}</div>${perBar}<div class="prow"><div class="bar3" id="bar3"></div><div class="nums" id="nums"></div></div>`}
       </div></div>
     </div>
     <div class="wrap"><div class="sline" id="sline" role="status"></div>
       ${ready ? `<input id="sq" class="sq" type="search" placeholder="Search name or roll no. Tap a name for details" autocomplete="off" autocapitalize="none" spellcheck="false" value="${esc(searchQ)}">
         <div class="fl" id="fl">${fk.map(([k, t]) => `<button class="chip ${filterQ === k ? 'on' : ''}" data-f="${k}">${t}</button>`).join('')}</div><div class="nores" id="nores">No student matches.</div>` : ''}
       ${body}</div>
-    <div class="bottom"><div class="in"><button class="btn primary" id="saveBtn">Save attendance</button></div></div>`;
+    <div class="bottom"><div class="in"><button class="btn primary" id="saveBtn">Save period</button></div></div>`;
   $('#app').classList.toggle('phid', panelHidden); $('#app').classList.toggle('compact', compact && !panelHidden && !isLandscape());
   const rt = $('#retryBtn'); if(rt) rt.onclick = () => { delete tried[name]; delete sheetErr[name]; fresh[name] = 0; renderMain(); };
   document.querySelectorAll('#list .row').forEach(paintRow);
@@ -772,13 +818,13 @@ function updateTally(){
   bar.innerHTML = ['p','a','l','b'].map(k => `<i class="${k}" style="width:${c[k] / t * 100}%"></i>`).join('');
   nums.innerHTML = `<span class="p"><b>${c.p}</b>P</span><span class="a"><b>${c.a}</b>A</span><span class="l"><b>${c.l}</b>L</span><span class="b"><b>${c.b}</b>B</span><span><b>${c.n}</b>left</span>`;
   document.querySelectorAll('input[data-all]').forEach(cb => { const act = d ? d.students.filter(s => !s.off) : []; cb.checked = act.length > 0 && act.every(s => draft[s.roll] === cb.dataset.all); });
-  const sb = $('#saveBtn'); if(sb){ sb.textContent = c.n ? 'Save attendance (' + c.n + ' left)' : 'Save attendance'; sb.classList.toggle('incomplete', c.n > 0); }
+  const sb = $('#saveBtn'); if(sb){ sb.textContent = (hasMulti() ? 'Save lecture ' + sel.period : 'Save attendance') + (c.n ? ' (' + c.n + ' left)' : ''); sb.classList.toggle('incomplete', c.n > 0); }
   const mc = $('#miniCnt'); if(mc) mc.textContent = 'P ' + c.p + ' \u00b7 A ' + c.a + (c.n ? ' \u00b7 ' + c.n + ' left' : '');
   paintPct(); paintFilters();
 }
 function enqueue(marks, note){
-  const name = sheetName(), id = name + '|' + sel.day, old = queue.find(x => x.id === id);
-  const rec = { id, sheet:name, day:sel.day, marks, ts:Date.now() }, nt = note !== undefined ? note : (old ? old.note : undefined);
+  const name = sheetName(), id = name + '|' + sel.day + '|' + sel.period, old = queue.find(x => x.id === id);
+  const rec = { id, sheet:name, day:sel.day, period:sel.period, marks, ts:Date.now() }, nt = note !== undefined ? note : (old ? old.note : undefined);
   if(nt !== undefined) rec.note = nt;
   queue = queue.filter(x => x.id !== id); queue.push(rec); store.set('queue', queue); delete confirms[id]; store.set('confirms', confirms);
 }
@@ -786,10 +832,10 @@ function save(){
   if(mode === 'mt') return saveMt();
   const name = sheetName(), d = data[name]; if(!d) return toast('This sheet is not on the phone yet');
   const c = counts(); if(c.n > 0) return toast(c.n + ' student' + (c.n > 1 ? 's are' : ' is') + ' not marked. Mark everyone P, A, L or B first.');
-  const srv = (d.marks && d.marks[sel.day]) || {}, marks = {};
+  const srv = ((d.marks && d.marks[sel.day]) || {})[sel.period] || {}, marks = {};
   d.students.forEach(s => { if(s.off) return; const v = draft[s.roll]; if(MARKS.includes(v)) marks[s.roll] = v; else if(srv[s.roll]) marks[s.roll] = ''; });
   if(!Object.keys(marks).length) return toast('No students to save');
-  enqueue(marks); dirty = false; { const i = recInfo({ sheet:name, day:sel.day, marks }); toast(i.who + ' \u00b7 ' + i.what + ' saved on phone. Sending to the sheet...'); } renderMain();
+  enqueue(marks); dirty = false; { const i = recInfo({ sheet:name, day:sel.day, period:sel.period, marks }); toast(i.who + ' \u00b7 ' + i.what + ' saved on phone. Sending to the sheet...'); } renderMain();
   syncQueue().then(ok => { if(!ok && queue.length) toast('Saved on this phone. Tap the status chip to see why it has not reached the sheet.'); });
 }
 
@@ -811,24 +857,32 @@ function openNote(){
   $('#noteCancel').onclick = () => dlg.close();
 }
 
-/* ---------- delete one day (safe: typed confirmation + server backup + restore) ---------- */
+/* ---------- delete one period of a day (safe: typed confirmation) ---------- */
 function openDeleteDay(){
   const name = sheetName(), d = data[name], dlg = $('#dlg');
   if(!d) return toast('This sheet is not on the phone yet');
   if(!navigator.onLine) return toast('Deleting needs an internet connection.');
-  const day = sel.day;
-  if(queued(day)) return toast('Day ' + day + ' has a save that has not reached the sheet yet. Wait until the status says Synced, then try again.');
-  const sm = (d.marks && d.marks[day]) || {}, note = (d.notes && d.notes[day]) || '';
+  const day = sel.day, per = sel.period;
+  if(queued(day, per)) return toast('The attendance of day ' + day + ' has a save that has not reached the sheet yet. Wait until the status says Synced, then try again.');
+  const pmAll = (d.marks && d.marks[day]) || {}, sm = pmAll[per] || {}, note = (d.notes && d.notes[day]) || '';
+  const others = Object.keys(pmAll).filter(k => Number(k) !== per).length;
   const c = { P:0, A:0, L:0, B:0 }; Object.keys(sm).forEach(r => { if(c[sm[r]] != null) c[sm[r]]++; });
   const total = Object.keys(sm).length;
-  if(!total && !note) return toast('Nothing is saved for day ' + day + '.');
+
+  // (3) "nothing saved" toast: near the top, right after `total` is known
+  if(!total && !(note && !others)) return toast('Nothing is saved' + (hasMulti() ? ' for lecture ' + per : '') + ' on day ' + day + '.');
+
   const { m, y } = dayInfo(), when = new Date(y, m, day).toLocaleDateString([], { weekday:'long', day:'numeric', month:'long', year:'numeric' });
-  $('#dlgBody').innerHTML = `<h2>Delete attendance?</h2>
-    <div class="delwarn"><big>${esc(when)}</big>${esc(sel.cls)} \u00b7 ${esc(titleCase(sel.sub))}<br>${total} marks will be removed (P ${c.P}, A ${c.A}, L ${c.L}, B ${c.B})${note ? '<br>The note for this day will also be removed.' : ''}</div>
+  const multiL = hasMulti();
+  const what = multiL ? 'lecture ' + per : 'attendance';
+  const title = multiL ? 'Delete lecture ' + per + '?' : 'Delete attendance?';
+
+  $('#dlgBody').innerHTML = `<h2>${title}</h2>
+    <div class="delwarn"><big>${esc(when)}</big>${esc(sel.cls)} \u00b7 ${esc(titleCase(sel.sub))}${multiL ? ' \u00b7 lecture ' + per : ''}<br>${total} marks will be removed (P ${c.P}, A ${c.A}, L ${c.L}, B ${c.B})${others ? '<br>The other ' + others + ' lecture' + (others > 1 ? 's' : '') + ' of this day stay.' : ''}${note && !others ? '<br>The note for this day will also be removed.' : ''}</div>
     <label for="delTyped">To confirm, type the day number: <b>${day}</b></label>
     <input id="delTyped" type="text" inputmode="numeric" autocomplete="off" placeholder="${day}">
     <div class="err" id="delErr" role="alert"></div>
-    <div class="acts"><button class="btn small danger fill grow" id="delGo" disabled>Delete day ${day}</button><button class="btn small grow" id="delCancel">Cancel</button></div>`;
+    <div class="acts"><button class="btn small danger fill grow" id="delGo" disabled>Delete ${what}</button><button class="btn small grow" id="delCancel">Cancel</button></div>`;
   dlg.showModal();
   const go = $('#delGo'), typed = $('#delTyped'), err = $('#delErr');
   typed.oninput = () => { go.disabled = typed.value.trim() !== String(day); };
@@ -837,16 +891,21 @@ function openDeleteDay(){
     if(typed.value.trim() !== String(day)) return;
     go.disabled = true; go.textContent = 'Deleting...'; err.textContent = '';
     try{
-      const r = await api({ action:'delete_day', sheet:name, day, confirmDay:day }, 90000);
+      const r = await api({ action:'delete_day', sheet:name, day, confirmDay:day, period:per }, 90000);
       if(r.error === 'BAD_LOGIN'){ dlg.close(); return signOut('Your username or password was changed. Sign in again.'); }
       if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'The server was not updated. Redeploy Code.gs as a New version.' : (r.error || 'Could not delete'));
       const D = data[name];
-      if(D){ if(D.marks) delete D.marks[day]; if(D.notes) delete D.notes[day]; }
-      delete confirms[name + '|' + day]; store.set('data', data); store.set('confirms', confirms);
-      dlg.close(); dirty = false; loadDraft(); renderMain();
-      toast('Day ' + day + ' attendance deleted.');
+      if(D){
+        if(D.marks && D.marks[day]){ delete D.marks[day][per]; if(!Object.keys(D.marks[day]).length) delete D.marks[day]; }
+        if(!D.marks || !D.marks[day]){ if(D.notes) delete D.notes[day]; }
+      }
+      delete confirms[name + '|' + day + '|' + per]; store.set('data', data); store.set('confirms', confirms);
+      dlg.close(); dirty = false; sel.period = per; loadDraft(); renderMain();
+
+      // (2) success toast
+      toast((multiL ? 'Lecture ' + per : 'Attendance') + ' of day ' + day + ' deleted.');
     }catch(e){
-      go.disabled = false; go.textContent = 'Delete day ' + day;
+      go.disabled = false; go.textContent = 'Delete ' + what;
       err.textContent = 'Not deleted: ' + errText(e);
     }
   };
@@ -920,13 +979,13 @@ function openCalendar(){
     <div class="legend"><span>Green dot: marked</span><span>Orange dot: not marked</span><span>Yellow dot: note</span><span>Ring: today</span></div>
     <div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>`;
   const dlg = $('#dlg'); dlg.showModal(); $('#closeDlg').onclick = () => dlg.close();
-  dlg.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => { dlg.close(); switchTo(() => { sel.day = Number(b.dataset.pick); }); });
+  dlg.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => { dlg.close(); switchTo(() => pickDay(Number(b.dataset.pick))); });
 }
 function openSync(){
   const dlg = $('#dlg'), when = lastSync ? new Date(lastSync).toLocaleString() : 'never';
   $('#dlgBody').innerHTML = `<h2>Account and sync</h2>
     <div class="meta"><b>${esc(teacher || user)}</b>${isAdmin ? ' (admin)' : ''}<br>${esc(user)}<br>${navigator.onLine ? 'Online' : 'Phone reports no internet. Everything you save stays on this phone.'}<br>Last synced: ${esc(when)}<br>Server ends with: ${esc(API.slice(-12))}${Object.keys(rDirty).length ? '<br>' + Object.keys(rDirty).length + ' student comment(s) waiting to upload' : ''}</div>
-    ${queue.length ? queue.map(q => `<div class="q"><div><b>${esc(q.sheet)}</b>, ${q.kind === 'mt' ? 'monthly test' : 'day ' + q.day}<small>${Object.keys(q.marks).length} students${q.note !== undefined ? ' + note' : ''} waiting</small>${q.error ? `<small class="bad">${esc(q.error)}</small>` : ''}</div><button class="btn small danger" data-discard="${esc(q.id)}">Discard</button></div>`).join('') : '<div class="q"><div>Nothing is waiting to sync. Everything is in the sheet.</div></div>'}
+    ${queue.length ? queue.map(q => `<div class="q"><div><b>${esc(q.sheet)}</b>, ${q.kind === 'mt' ? 'monthly test' : 'day ' + q.day + ', period ' + (q.period || 1)}<small>${Object.keys(q.marks).length} students${q.note !== undefined ? ' + note' : ''} waiting</small>${q.error ? `<small class="bad">${esc(q.error)}</small>` : ''}</div><button class="btn small danger" data-discard="${esc(q.id)}">Discard</button></div>`).join('') : '<div class="q"><div>Nothing is waiting to sync. Everything is in the sheet.</div></div>'}
     ${lastError && queue.length ? `<div class="diag">${esc(lastError)}</div>` : ''}
     <div class="acts"><button class="btn small primary grow" id="syncNow">Sync now</button><button class="btn small grow" id="pwBtn">Change password</button></div>
     <div class="acts"><button class="btn small danger grow" id="signOutBtn">Sign out</button><button class="btn small grow" id="closeDlg">Close</button></div>`;
@@ -965,7 +1024,7 @@ function openPassword(){
 /* ---------- status line + chip ---------- */
 function updateBadge(){
   const el = $('#sline'); if(!el) return;
-  const name = sheetName(), d = data[name], sid = mode === 'mt' ? name + '|MT' : name + '|' + sel.day;
+  const name = sheetName(), d = data[name], sid = mode === 'mt' ? name + '|MT' : name + '|' + sel.day + '|' + sel.period;
   const q = queue.find(x => x.id === sid), c = confirms[sid]; let cls = '', txt = '', act = '';
   if(q){
     if(q.error){ cls = 'err'; txt = 'Not in the sheet yet: ' + q.error; }
@@ -976,8 +1035,8 @@ function updateBadge(){
     if(c){
       const t = new Date(c.at).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
       okTxt = c.mt ? '\u2713 Test marks saved at ' + t : c.p == null ? '\u2713 Note saved at ' + t
-        : '\u2713 Saved at ' + t + ' (P ' + c.p + ', A ' + c.a + (c.l ? ', L ' + c.l : '') + (c.b ? ', B ' + c.b : '') + ')';
-    } else if(mode === 'att'){ const m = d && d.marks && d.marks[sel.day], k = m ? Object.keys(m).length : 0; if(k) okTxt = '\u2713 In the sheet (' + k + ' marked)'; }
+        : '\u2713 ' + lecTxt(sel.period) + ' saved at ' + t + ' (P ' + c.p + ', A ' + c.a + (c.l ? ', L ' + c.l : '') + (c.b ? ', B ' + c.b : '') + ')';
+    } else if(mode === 'att'){ const m = d && d.marks && d.marks[sel.day] && d.marks[sel.day][sel.period], k = m ? Object.keys(m).length : 0; if(k) okTxt = '\u2713 ' + lecTxt(sel.period) + ' is in the sheet (' + k + ' marked)'; }
     else if(d && d.mt && d.mt.total) okTxt = '\u2713 Test marks in the sheet';
     if(note) items.push('Note: ' + note); if(okTxt) items.push(okTxt); if(lowInfo) items.push(lowInfo);
     txt = items.join(' \u00b7 '); cls = lowInfo ? 'low' : note ? 'note' : okTxt ? 'ok' : '';
@@ -1040,7 +1099,8 @@ document.addEventListener('click', ev => {
   }
   if((b = t.closest('#app .who'))){ const r = b.closest('.row'); if(r) openStudent(r.dataset.roll); return; }
   if((b = t.closest('[data-mode]'))){ if(b.dataset.mode !== mode) switchTo(() => { mode = b.dataset.mode; store.set('mode', mode); }); return; }
-  if((b = t.closest('#strip [data-day]'))){ if(!b.disabled) switchTo(() => { sel.day = Number(b.dataset.day); }); return; }
+  if((b = t.closest('#strip [data-day]'))){ if(!b.disabled) switchTo(() => pickDay(Number(b.dataset.day))); return; }
+  if((b = t.closest('#perBar [data-per]'))){ const p = Number(b.dataset.per); if(p !== sel.period) switchTo(() => { sel.period = p; }); return; }
   if((b = t.closest('#fl [data-f]'))){ filterQ = b.dataset.f; paintFilters(); return; }
   if((b = t.closest('#sline'))){ if(b.dataset.act === 'low') return openSummary('att'); if(b.dataset.act === 'note') return openNote(); return; }
   if(t.closest('#miniBar')) return setCompact(false);
@@ -1053,6 +1113,8 @@ document.addEventListener('click', ev => {
   if(t.closest('#panelBtn')) return togglePanel();
   if(t.closest('#mtFillA')) return mtFillA();
   if(t.closest('#delBtn')) return openDeleteDay();
+  if(t.closest('#multiOn')){ multi[multiKey()] = true; store.set('multi', multi); sel.period = nextPeriod(sel.day); return renderMain(); }
+if(t.closest('#multiOff')){ delete multi[multiKey()]; store.set('multi', multi); switchTo(() => { sel.period = 1; }); return; }
 });
 document.addEventListener('change', ev => {
   const t = ev.target, id = t && t.id, v = t && t.value;
