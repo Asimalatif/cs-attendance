@@ -729,21 +729,25 @@ const fmtIso = s => { const p = String(s || '').split('-'); return p.length === 
 const isMobileUA = () => /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
 const cpLabel = c => c.name;
 
-/** The WhatsApp text (one message for the Chief Proctor). x = a report record (queued or from the server). */
 function waMessage(x){
-  const L = ['*JCW - Report to Chief Proctor*'];
+  const dt = String(x.date || '').split('-');
+  const when = dt.length === 3 ? (+dt[2]) + ' ' + MONTHS[+dt[1] - 1].slice(0, 3) + ' ' + dt[0] : String(x.date || '');
+  const sub = titleCase(x.sub);
+  const L = ['Report from ' + (x.teacher || teacher) + ' -' + when];
   if(x.sev === 'Serious') L.push('*SERIOUS*');
-  L.push('Teacher: ' + (x.teacher || teacher));
-  L.push('Student: ' + x.who + ' (Roll ' + x.roll + ')');
-  L.push('Class: ' + x.cls + ' - ' + titleCase(x.sub) + (x.mon ? ' (' + monLabel(x.mon) + ')' : ''));
-  if(x.guest) L.push('Home section: ' + (x.home || '?') + ' (guest in this subject)');
-  L.push('Incident date: ' + fmtIso(x.date) + (x.period ? ', lecture ' + x.period : ''));
-  L.push('Reason: ' + x.cat);
-  if(x.att) L.push('Attendance: ' + x.att);
+  L.push('*' + x.who + '* (Roll ' + x.roll + ')');
+  L.push(x.cls + ' - ' + sub + (x.mon ? ' (' + monLabel(x.mon) + ')' : ''));
+  if(x.guest) L.push((x.home || '?') + ' - guest');
+  let att = x.att || '';
+  const mo = /^P (\d+), A \d+ of (\d+) lectures(?: = ([\d.]+)%)? \((\w+)\)$/.exec(att);   // reports saved in the old format
+  if(mo) att = sub + ' Attendance  ' + mo[1] + '/' + mo[2] + (mo[3] ? ' = ' + mo[3] + '%' : '') + '(' + mo[4] + ')';
+  if(att) L.push(att);
   if(x.removeGuest || x.guestRemoved) L.push('Note: removed as guest from this subject.');
-  L.push('', 'Statement:', x.txt, '', 'Report ID: ' + x.id);
+  L.push('Statement:', x.txt);
   return L.join('\n');
 }
+
+
 /** Opens WhatsApp with the message ready for this Chief Proctor. via = 'phone' (wa.me: opens the WhatsApp app) or 'web' (WhatsApp Web on a laptop).
  *  Must be called straight from a tap (not after an await) or the browser blocks the new tab. The teacher presses Send inside WhatsApp. */
 function openWa(cp, text, via){
@@ -810,7 +814,7 @@ function openReport(roll){
     const dup = myReports.concat(rq).find(r => r.roll === roll && r.cls === sel.cls && r.date === R.date && r.cat === R.cat);
     if(dup && !confirm('You already reported this student for the same reason on this date. Send another report?')) return null;
     const S = stats(), c = S.per[roll], p = c ? pctOf(c, S.lect) : null;
-    const att = c ? 'P ' + c.p + ', A ' + c.a + ' of ' + c.den + ' lectures' + (p == null ? '' : ' = ' + p + '%') + ' (' + monLabel(sel.mon) + ')' : '';
+    const att = c ? titleCase(sel.sub) + ' Attendance  ' + c.p + '/' + c.den + (p == null ? '' : ' = ' + p + '%') + '(' + monLabel(sel.mon) + ')' : '';
     return { id:'R' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8), sheet:name, roll, cat:R.cat, sev:R.sev, date:R.date,
       period:(hasMulti() && R.date === isoDay(sel.day)) ? sel.period : '', txt:t, att, cp:via === 'none' ? '' : R.cp, via,
       removeGuest:isGuest && !!(gb && gb.checked), who:s.name, cls:sel.cls, sub:sel.sub, mon:sel.mon, guest:isGuest,
@@ -834,6 +838,7 @@ function openReport(roll){
     const rec = build('none'); if(!rec) return;
     copyText(waMessage(rec));
   };
+  if(!cps.length) loadProctors().then(ok => { if(ok && dlg.open) openReport(roll); });
   paint();
 }
 
@@ -865,6 +870,11 @@ async function syncReports(){
   finally{ repBusy = false; updateStatus(); }
   if(rq.some(x => !x.error) && navigator.onLine) setTimeout(syncReports, 1500);
 }
+async function loadProctors(){
+  if(!authed() || !navigator.onLine) return false;
+  try{ const s = await api({ action:'sheets' }); if(s.ok && s.proctors && s.proctors.length){ cps = s.proctors; store.set('cps', cps); return true; } }catch(e){}
+  return false;
+}
 async function loadMyReports(){
   if(!authed() || !navigator.onLine) return;
   try{ const r = await api({ action:'reports_mine' }); if(r.ok){ myReports = (r.reports || []).map(x => ({ ...x, period:x.lecture })); store.set('myrep', myReports); } }catch(e){}
@@ -883,6 +893,7 @@ function openResend(x, back){
   const p = $('#rsWaPhone'), w = $('#rsWaWeb'); if(p) p.onclick = () => go('phone'); if(w) w.onclick = () => go('web');
   $('#rsCopy').onclick = () => copyText(waMessage(x));
   $('#rsBack').onclick = back;
+  if(!cps.length) loadProctors().then(ok => { if(ok && dlg.open) openResend(x, back); });
   paint();
 }
 function openMyReports(){
