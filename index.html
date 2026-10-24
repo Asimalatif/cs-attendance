@@ -107,6 +107,7 @@ ul.list{list-style:none;margin:0;padding:0}
 .pct.lowp,.mtp.lowm{background:var(--absent);color:#fff;padding:1px 8px;border-radius:99px;font-weight:800}
 .rtag{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px;background:var(--leave-bg);color:var(--leave)}
 .rtag.good{background:var(--present-bg);color:var(--present)}.rtag.cm{background:var(--bb-bg);color:var(--bb)}
+.rtag.guest{background:var(--bb-bg);color:var(--bb)}.rtag.away{background:var(--leave-bg);color:var(--leave)}
 .seg{display:flex;gap:4px}
 .seg button{width:38px;height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);font-weight:800;font-size:15px;color:var(--muted)}
 .seg button[aria-pressed=true]{color:#fff}
@@ -265,6 +266,21 @@ dialog::backdrop{background:rgba(8,14,26,.55)}
 .cell.multi.hasnote::before{right:auto;left:5px}
 .cell.sel.multi{background:var(--accent);color:var(--on-accent);box-shadow:0 0 0 2px var(--bb)}
 .cell .mb{bottom:3px;font-size:9px;height:13px;line-height:13px;min-width:22px}
+
+/* ===== reports to the Chief Proctor (WhatsApp) ===== */
+.rcat{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 12px}
+.rcat .chip{height:auto;min-height:40px;padding:6px 13px;white-space:normal;text-align:left;line-height:1.25}
+.rcat .chip small{display:block;font-size:11px;font-weight:600;opacity:.75}
+.rcat .chip.sev-s.on{background:var(--absent);border-color:var(--absent);color:#fff}
+.dlg label.lb{display:block;margin-top:10px}
+.rcount{font-size:12px;color:var(--muted);text-align:right}
+.rhint{font-size:12.5px;color:var(--muted);line-height:1.4;margin-top:10px}
+.gbox{display:flex;gap:10px;align-items:flex-start;margin:12px 0;padding:12px;border-radius:12px;background:var(--bb-bg);color:var(--ink);font-size:13.5px;line-height:1.35}
+.gbox input{width:24px;height:24px;margin:0;flex:none}
+.dlg input[type=date]{height:46px}
+.btn.wa{background:#128C4A;border-color:#128C4A;color:#fff}
+.rrow{align-items:flex-start;flex-wrap:wrap}
+.rrow .btn{flex:none}
 </style>
 </head>
 <body>
@@ -290,6 +306,8 @@ const store = {
 let mode = store.get('mode', 'att'), panelHidden = store.get('phide', false), mtDraft = { total:'', marks:{} };
 let user = store.get('user', ''), pass = store.get('pass', ''), teacher = store.get('teacher', ''), isAdmin = store.get('admin', false);
 let sheets = store.get('sheets', []), data = store.get('data', {}), queue = store.get('queue', []), confirms = store.get('confirms', {});
+// reports to the Chief Proctor: rq = reports waiting to reach the server, myReports = reports already on the server, cps = Chief Proctors (CP1 / CP2)
+let rq = store.get('rq', []), myReports = store.get('myrep', []), cps = store.get('cps', []), repBusy = false;
 // period-wise attendance changed the shape of data[sheet].marks (marks[day][period][roll]): drop the old cached sheets once
 if(store.get('dver', 1) !== 2){ data = {}; store.set('data', {}); store.set('dver', 2); }
 let lastSync = store.get('lastSync', 0), remarks = store.get('remarks', {}), rDirty = store.get('rdirty', {});
@@ -351,6 +369,7 @@ const IC = {
   sum: ic('<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'),
   print: ic('<path d="M7 9V3h10v6"/><rect x="4" y="9" width="16" height="8" rx="2"/><path d="M7 14h10v7H7z"/>'),
   trash: ic('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'),
+  guest: ic('<circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6M19 8v6M16 11h6"/>'),
   down: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>'
 };
 
@@ -428,7 +447,7 @@ function loadDraft(){
   draft = {}; dirty = false; const d = data[sheetName()]; if(!d) return;
   Object.assign(draft, pmOf(sel.day)[sel.period] || {});
 }
-/** Counts only ACTIVE students: disabled students (s.off, changed subject) are ignored. */
+/** Counts only ACTIVE students: disabled students (s.off, changed subject / guest removed) are ignored. */
 function counts(){
   const d = data[sheetName()]; let p = 0, a = 0, l = 0, b = 0, n = 0;
   (d ? d.students : []).forEach(s => { if(s.off) return; const v = draft[s.roll]; if(v === 'P') p++; else if(v === 'A') a++; else if(v === 'L') l++; else if(v === 'B') b++; else n++; });
@@ -451,12 +470,22 @@ async function api(payload, ms = 45000){
     catch(e){ throw new Error('Server sent a web page instead of data. Deploy the Apps Script as "Anyone" and check API_URL.'); }
   } finally { clearTimeout(t); }
 }
+/** Tells the home-section teacher (once per student + host sheet) that her student is a guest somewhere else. */
+function announceGuests(e, d){
+  if(isAdmin) return;
+  const seen = store.get('gseen', {}), news = [];
+  (d.students || []).forEach(s => (s.guestAt || []).forEach(g => {
+    const k = e.name + '|' + s.roll + '|' + g.cls + '|' + g.sub;
+    if(!seen[k]){ seen[k] = 1; news.push(s.name + ' is a guest in ' + g.cls + ' ' + titleCase(g.sub) + (g.by ? ' (added by ' + g.by + ')' : '')); }
+  }));
+  if(news.length){ store.set('gseen', seen); toast(joinLines(news)); }
+}
 async function loadSheet(e, create){
   loading.add(e.name);
   try{
     const d = await api({ action:'sheet', sheet:e.name, create:!!create }, 90000);
     if(d.ok && d.missing) delete data[e.name];
-    else if(d.ok){ data[e.name] = { title:d.title, m:d.m, y:d.y, days:d.days, students:d.students, marks:d.marks, notes:d.notes || {}, mt:d.mt || { total:0, marks:{} } }; delete sheetErr[e.name]; }
+    else if(d.ok){ data[e.name] = { title:d.title, m:d.m, y:d.y, days:d.days, students:d.students, marks:d.marks, notes:d.notes || {}, mt:d.mt || { total:0, marks:{} } }; delete sheetErr[e.name]; announceGuests(e, data[e.name]); }
     else if(d.error === 'BAD_LOGIN'){ signOut('Your username or password was changed. Sign in again.'); return false; }
     else throw new Error(d.error || 'Could not load the sheet');
     fresh[e.name] = Date.now(); store.set('data', data); return true;
@@ -471,6 +500,7 @@ async function refreshAll(){
     if(!s.ok){ if(s.error === 'BAD_LOGIN') return signOut('Your username or password was changed. Sign in again.'); throw new Error(s.error); }
     sheets = s.sheets; teacher = s.teacher || teacher; isAdmin = !!s.admin;
     store.set('sheets', sheets); store.set('teacher', teacher); store.set('admin', isAdmin);
+    if(s.proctors){ cps = s.proctors; store.set('cps', cps); }   // the Chief Proctors (CP1 / CP2) a teacher can report to
     ensureSel(); const cur = entry();
     if(cur){ try{ await loadSheet(cur, true); }catch(err){ sheetErr[cur.name] = errText(err); } if(!dirty){ fixDay(); loadDraft(); } }
     rest = sheets.filter(x => x !== cur && (!isAdmin || (cur && x.cls === cur.cls && x.sub === cur.sub)));   // admin: do not download all 1,600 sheets, the others load when opened
@@ -566,9 +596,16 @@ function saveR(roll, R){
   const st = ((data[sheetName()] || {}).students || []).find(x => x.roll === roll);
   rDirty[sel.cls + '|' + roll] = st ? st.name : ''; store.set('rdirty', rDirty); syncRemarks();
 }
+const stuOf = roll => ((data[sheetName()] || {}).students || []).find(x => x.roll === roll);
+/** Tag shown on a disabled row: a removed guest or a student who changed subject. */
+const offTag = s => '<span class="rtag">' + (s.offGuest ? 'Guest removed' : 'Changed subject') + '</span>';
+/** Guest tags (guest here / guest somewhere else) + remark tags of one student. */
 function tagHtml(roll){
-  const R = remarks[rk(roll)]; if(!R) return '';
-  return R.tags.slice(0, 2).map(t => `<span class="rtag ${t === 'Excellent' ? 'good' : ''}">${esc(t)}</span>`).join('') +
+  const s = stuOf(roll); let h = '';
+  if(s && s.guest) h += `<span class="rtag guest">Guest \u00b7 from ${esc(s.guest.home || '?')}</span>`;
+  if(s && s.guestAt) s.guestAt.forEach(g => { h += `<span class="rtag away">Guest in ${esc(g.cls)} \u00b7 ${esc(titleCase(g.sub))}</span>`; });
+  const R = remarks[rk(roll)]; if(!R) return h;
+  return h + R.tags.slice(0, 2).map(t => `<span class="rtag ${t === 'Excellent' ? 'good' : ''}">${esc(t)}</span>`).join('') +
     (R.log.length ? `<span class="rtag cm">\u{1F4AC} ${R.log.length}</span>` : '');
 }
 async function syncRemarks(){
@@ -596,16 +633,22 @@ function openStudent(roll, keep){
   const s = d.students.find(x => x.roll === roll); if(!s) return;
   const S = stats(), c = S.per[roll] || { p:0, a:0 }, p = pctOf(c, S.lect), R = getR(roll), dlg = $('#dlg');
   const mt = d.mt && d.mt.marks ? d.mt.marks[roll] : null;
+  const gInfo = (s.guest ? '<br><b>Guest here.</b> Her own section: ' + esc(s.guest.home || '?') + (s.guest.by ? '. Added by ' + esc(s.guest.by) : '') + (s.guest.on ? ' on ' + esc(s.guest.on) : '') : '') +
+    (s.guestAt || []).map(g => '<br><b>Guest in ' + esc(g.cls) + ' ' + esc(titleCase(g.sub)) + '</b>' + (g.by ? ', added by ' + esc(g.by) : '')).join('');
   $('#dlgBody').innerHTML = `
-    <h2>${esc(s.name)}</h2><div class="meta">Roll ${esc(roll)} \u00b7 ${esc(sel.cls)} \u00b7 ${esc(titleCase(sel.sub))}${s.off ? '<br>Changed subject: attendance is closed for this student.' : ''}</div>
+    <h2>${esc(s.name)}</h2><div class="meta">Roll ${esc(roll)} \u00b7 ${esc(sel.cls)} \u00b7 ${esc(titleCase(sel.sub))}${s.off ? (s.offGuest ? '<br>Guest removed: attendance is closed for this student.' : '<br>Changed subject: attendance is closed for this student.') : ''}${gInfo}</div>
     <div class="stats"><div><b>${p == null ? '-' : p + '%'}</b><small>Attendance</small></div><div><b>${c.p}</b><small>Present</small></div><div><b>${c.a}</b><small>Absent</small></div>
       <div><b>${mt == null ? '-' : mt === 'A' ? 'Abs' : mt + '/' + d.mt.total}</b><small>Test</small></div></div>
     <div class="chips">${TAGS.map(t => `<button class="chip ${R.tags.includes(t) ? 'on' : ''}" data-tag="${esc(t)}">${esc(t)}</button>`).join('')}</div>
     <textarea id="rkTxt" maxlength="400" placeholder="Add a comment, e.g. bunking the last lecture often...">${esc(keep || '')}</textarea>
     <div class="acts"><button class="btn small primary grow" id="rkAdd">Add comment</button><button class="btn small grow" id="closeDlg">Close</button></div>
+    <div class="acts"><button class="btn small danger grow" id="rpBtn">Report to Chief Proctor</button></div>
+    ${s.guest && !s.off ? '<div class="acts"><button class="btn small danger grow" id="gDel">Remove guest from this sheet</button></div>' : ''}
     ${R.log.slice().reverse().map((e, i) => `<div class="lg2"><div>${esc(e.txt)}<small>${new Date(e.t).toLocaleDateString([], { day:'numeric', month:'short', year:'numeric' })}</small></div><button data-del="${R.log.length - 1 - i}">Delete</button></div>`).join('')}`;
   if(!dlg.open) dlg.showModal();
   $('#closeDlg').onclick = () => dlg.close();
+  $('#rpBtn').onclick = () => openReport(roll);
+  const gd = $('#gDel'); if(gd) gd.onclick = () => removeGuest(s);
   dlg.querySelectorAll('[data-tag]').forEach(b => b.onclick = () => {
     const kt = $('#rkTxt').value, i = R.tags.indexOf(b.dataset.tag);
     if(i >= 0) R.tags.splice(i, 1); else R.tags.push(b.dataset.tag);
@@ -618,6 +661,244 @@ function openStudent(roll, keep){
   dlg.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
     R.log.splice(Number(b.dataset.del), 1); saveR(roll, R); renderMain(); openStudent(roll, $('#rkTxt').value);
   });
+}
+
+/* ---------- guest students (a student of another section who attends this subject here) ---------- */
+/** Removes a guest from this sheet and from the later months. Her old attendance stays in the sheet. */
+async function removeGuest(s){
+  if(!navigator.onLine) return toast('Removing a guest needs an internet connection.');
+  if(!confirm('Remove ' + s.name + ' as a guest from ' + sel.cls + ' ' + titleCase(sel.sub) + ' (' + monLabel(sel.mon) + ' onwards)? Attendance already saved stays in the sheet.')) return;
+  const name = sheetName();
+  try{
+    const r = await api({ action:'guest_remove', sheet:name, roll:s.roll }, 90000);
+    if(r.error === 'BAD_LOGIN'){ $('#dlg').close(); return signOut('Your username or password was changed. Sign in again.'); }
+    if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'The server was not updated. Redeploy Code.gs as a New version.' : (r.error || 'Could not remove'));
+    $('#dlg').close();
+    const e = entry(); if(e) await loadSheet(e, false);
+    if(!dirty) loadDraft(); renderMain(); toast(s.name + ' removed as guest.');
+  }catch(err){ toast('Not removed: ' + errText(err)); }
+}
+function openGuest(){
+  const name = sheetName(), d = data[name], dlg = $('#dlg');
+  if(!d) return toast('This sheet is not on the phone yet');
+  if(!navigator.onLine) return toast('Adding a guest needs an internet connection.');
+  $('#dlgBody').innerHTML = `<h2>Add guest student</h2>
+    <div class="meta">${esc(sel.cls)} \u00b7 ${esc(titleCase(sel.sub))} \u00b7 ${esc(monLabel(sel.mon))}. Search a student of another section. Her own section is not changed, her class teacher is informed, and she is marked as a guest here.</div>
+    <input id="gq" type="search" placeholder="Name or roll no." autocomplete="off" autocapitalize="none" spellcheck="false">
+    <div id="gres"></div>
+    <div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>`;
+  dlg.showModal(); $('#closeDlg').onclick = () => dlg.close();
+  const box = $('#gres'); let timer, token = 0, list = [];
+  $('#gq').oninput = e => {
+    clearTimeout(timer); const q = e.target.value.trim();
+    if(q.length < 2){ token++; box.innerHTML = ''; return; }
+    timer = setTimeout(async () => {
+      const my = ++token; box.innerHTML = '<div class="q"><div>Searching...</div></div>';
+      try{
+        const r = await api({ action:'guest_search', sheet:name, q });
+        if(my !== token) return;
+        if(r.error === 'BAD_LOGIN'){ dlg.close(); return signOut('Your username or password was changed. Sign in again.'); }
+        if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'The server was not updated. Redeploy Code.gs as a New version.' : (r.error || 'Search failed'));
+        list = r.results || [];
+        box.innerHTML = list.length ? list.map((s, i) => `<div class="q"><div><b>${esc(s.name)}</b><small>${esc(s.roll)} \u00b7 ${esc(s.cls || '')}</small></div><button class="btn small primary" data-g="${i}">Add</button></div>`).join('') : '<div class="q"><div>No student found.</div></div>';
+        box.querySelectorAll('[data-g]').forEach(b => b.onclick = async () => {
+          const s = list[Number(b.dataset.g)];
+          if(!confirm('Add ' + s.name + ' (' + s.roll + ', section ' + (s.cls || '?') + ') as a guest in ' + sel.cls + ' ' + titleCase(sel.sub) + '?')) return;
+          b.disabled = true; b.textContent = 'Adding...';
+          try{
+            const a = await api({ action:'guest_add', sheet:name, roll:s.roll }, 90000);
+            if(!a.ok) throw new Error(a.error || 'Could not add');
+            dlg.close();
+            const e = entry(); if(e) await loadSheet(e, false);
+            if(!dirty) loadDraft(); renderMain();
+            toast(s.name + (a.already ? ' is already a guest here.' : ' added as guest. Her section ' + (s.cls || '') + ' will see it.'));
+          }catch(err){ b.disabled = false; b.textContent = 'Add'; toast('Not added: ' + errText(err)); }
+        });
+      }catch(err){ if(my === token) box.innerHTML = '<div class="diag">' + esc(errText(err)) + '</div>'; }
+    }, 400);
+  };
+}
+
+/* ---------- reports to the Chief Proctor: saved on the server + month sheet, sent by WhatsApp ---------- */
+const REP_CATS = ['Bunking / leaving class','Late / irregular','Misbehaviour / disrespect','Cheating','Mobile phone','Dress code','Fighting / bullying','Other'];
+const REP_MIN = 10, REP_MAX = 1000;
+const pad2 = n => String(n).padStart(2, '0');
+const isoOf = dt => dt.getFullYear() + '-' + pad2(dt.getMonth() + 1) + '-' + pad2(dt.getDate());
+function isoDay(day){ const { m, y } = monthYear(); return y + '-' + pad2(m + 1) + '-' + pad2(day); }
+const fmtIso = s => { const p = String(s || '').split('-'); return p.length === 3 ? new Date(+p[0], +p[1] - 1, +p[2]).toLocaleDateString([], { day:'numeric', month:'short', year:'numeric' }) : String(s || ''); };
+const isMobileUA = () => /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+const cpLabel = c => c.id + ' \u00b7 ' + c.name;
+
+/** The WhatsApp text (one message for the Chief Proctor). x = a report record (queued or from the server). */
+function waMessage(x){
+  const L = ['*JCW - Report to Chief Proctor*'];
+  if(x.sev === 'Serious') L.push('*SERIOUS*');
+  L.push('Teacher: ' + (x.teacher || teacher));
+  L.push('Student: ' + x.who + ' (Roll ' + x.roll + ')');
+  L.push('Class: ' + x.cls + ' - ' + titleCase(x.sub) + (x.mon ? ' (' + monLabel(x.mon) + ')' : ''));
+  if(x.guest) L.push('Home section: ' + (x.home || '?') + ' (guest in this subject)');
+  L.push('Incident date: ' + fmtIso(x.date) + (x.period ? ', lecture ' + x.period : ''));
+  L.push('Reason: ' + x.cat);
+  if(x.att) L.push('Attendance: ' + x.att);
+  if(x.removeGuest || x.guestRemoved) L.push('Note: removed as guest from this subject.');
+  L.push('', 'Statement:', x.txt, '', 'Report ID: ' + x.id);
+  return L.join('\n');
+}
+/** Opens WhatsApp with the message ready for this Chief Proctor. via = 'phone' (wa.me: opens the WhatsApp app) or 'web' (WhatsApp Web on a laptop).
+ *  Must be called straight from a tap (not after an await) or the browser blocks the new tab. The teacher presses Send inside WhatsApp. */
+function openWa(cp, text, via){
+  const q = encodeURIComponent(text);
+  const url = via === 'web' ? 'https://web.whatsapp.com/send?phone=' + cp.phone + '&text=' + q : 'https://wa.me/' + cp.phone + '?text=' + q;
+  const w = window.open(url, '_blank');
+  if(!w) location.href = url;
+}
+const copyText = txt => Promise.resolve(navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast('Message copied. Paste it in WhatsApp.')).catch(() => toast('Could not copy.'));
+const cpChipsHtml = () => cps.map(c => `<button class="chip" data-cp="${esc(c.id)}">${esc(cpLabel(c))}${c.dept ? '<small>' + esc(c.dept) + (c.desig ? ' \u00b7 ' + esc(c.desig) : '') + '</small>' : ''}</button>`).join('');
+const waButtonsHtml = (idp) => {
+  const phone = `<button class="btn small wa grow" id="${idp}Phone">WhatsApp on phone</button>`, web = `<button class="btn small wa grow" id="${idp}Web">WhatsApp Web (laptop)</button>`;
+  return isMobileUA() ? phone + web : web + phone;
+};
+
+function openReport(roll){
+  const name = sheetName(), d = data[name]; if(!d) return;
+  const s = d.students.find(x => x.roll === roll); if(!s) return;
+  const dlg = $('#dlg'), dk = 'rdraft|' + user + '|' + name + '|' + roll, today = isoOf(new Date()), isGuest = !!(s.guest && !s.off);
+  let R = store.get(dk, null) || { cat:'', sev:'Normal', txt:'', rg:false, date:'', cp:'' };
+  if(!R.date){ const dd = isoDay(sel.day); R.date = dd > today ? today : dd; }
+  if(!R.cp || !cps.some(c => c.id === R.cp)) R.cp = store.get('cppick', '');
+  if((!R.cp || !cps.some(c => c.id === R.cp)) && cps.length === 1) R.cp = cps[0].id;
+  const keep = () => store.set(dk, R);
+  $('#dlgBody').innerHTML = `<h2>Report to Chief Proctor</h2>
+    <div class="meta"><b>${esc(s.name)}</b><br>Roll ${esc(roll)} \u00b7 ${esc(sel.cls)} \u00b7 ${esc(titleCase(sel.sub))}${isGuest ? '<br>Guest here. Her own section: ' + esc(s.guest.home || '?') : ''}</div>
+    ${cps.length ? `<label class="lb">Send to which Chief Proctor?</label><div class="rcat" id="rpCps">${cpChipsHtml()}</div>`
+      : '<div class="diag">The Chief Proctor list is not on this phone yet. Connect to the internet once and open the app again. You can still save the report now and send it on WhatsApp later from My reports.</div>'}
+    <label class="lb">What happened?</label>
+    <div class="rcat" id="rpCats">${REP_CATS.map(c => `<button class="chip" data-cat="${esc(c)}">${esc(c)}</button>`).join('')}</div>
+    <label class="lb">How serious?</label>
+    <div class="rcat" id="rpSev"><button class="chip" data-sev="Normal">Normal</button><button class="chip sev-s" data-sev="Serious">Serious</button></div>
+    <label class="lb" for="rpDate">Date of incident</label><input id="rpDate" type="date" max="${today}" value="${esc(R.date)}">
+    <label class="lb" for="rpTxt">Your statement</label>
+    <textarea id="rpTxt" maxlength="${REP_MAX}" placeholder="Write what happened, when and where. Be factual."></textarea>
+    <div class="rcount" id="rpCount"></div>
+    ${isGuest ? `<label class="gbox"><input type="checkbox" id="rpGuest"><span>Also remove <b>${esc(s.name)}</b> as a guest from ${esc(titleCase(sel.sub))} (${esc(monLabel(sel.mon))} onwards). Her old attendance stays in the sheet. If you do not tick this, she stays a guest and is only reported.</span></label>` : ''}
+    <div class="err" id="rpErr" role="alert"></div>
+    ${cps.length ? `<div class="acts">${waButtonsHtml('rpWa')}</div>` : ''}
+    <div class="acts"><button class="btn small grow" id="rpSave">Save report only</button><button class="btn small grow" id="rpCopy">Copy message</button><button class="btn small grow" id="rpBack">Back</button></div>
+    <div class="rhint">WhatsApp opens with the message ready. Press <b>Send</b> inside WhatsApp. The report is also saved on the server and noted on this student in the month sheet.</div>`;
+  if(!dlg.open) dlg.showModal();
+  const txt = $('#rpTxt'), err = $('#rpErr'), gb = $('#rpGuest'); txt.value = R.txt; if(gb) gb.checked = !!R.rg;
+  const paint = () => {
+    dlg.querySelectorAll('[data-cp]').forEach(b => b.classList.toggle('on', b.dataset.cp === R.cp));
+    dlg.querySelectorAll('[data-cat]').forEach(b => b.classList.toggle('on', b.dataset.cat === R.cat));
+    dlg.querySelectorAll('[data-sev]').forEach(b => b.classList.toggle('on', b.dataset.sev === R.sev));
+    $('#rpCount').textContent = txt.value.trim().length + ' / ' + REP_MAX + ' (at least ' + REP_MIN + ')';
+  };
+  dlg.querySelectorAll('[data-cp]').forEach(b => b.onclick = () => { R.cp = b.dataset.cp; store.set('cppick', R.cp); keep(); paint(); });
+  dlg.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { R.cat = b.dataset.cat; keep(); paint(); });
+  dlg.querySelectorAll('[data-sev]').forEach(b => b.onclick = () => { R.sev = b.dataset.sev; keep(); paint(); });
+  txt.oninput = () => { R.txt = txt.value; keep(); paint(); };
+  $('#rpDate').onchange = e => { R.date = e.target.value; keep(); };
+  if(gb) gb.onchange = () => { R.rg = gb.checked; keep(); };
+  $('#rpBack').onclick = () => openStudent(roll);
+  /** Validates, builds the record. Returns null (and shows the reason) when something is missing. */
+  const build = via => {
+    const t = txt.value.trim(); err.textContent = '';
+    if(via !== 'none' && !R.cp){ err.textContent = 'Choose the Chief Proctor first.'; return null; }
+    if(!R.cat){ err.textContent = 'Choose what happened.'; return null; }
+    if(t.length < REP_MIN){ err.textContent = 'Write your statement (at least ' + REP_MIN + ' characters).'; return null; }
+    if(!R.date){ err.textContent = 'Choose the date of the incident.'; return null; }
+    const dup = myReports.concat(rq).find(r => r.roll === roll && r.cls === sel.cls && r.date === R.date && r.cat === R.cat);
+    if(dup && !confirm('You already reported this student for the same reason on this date. Send another report?')) return null;
+    const S = stats(), c = S.per[roll], p = c ? pctOf(c, S.lect) : null;
+    const att = c ? 'P ' + c.p + ', A ' + c.a + ' of ' + c.den + ' lectures' + (p == null ? '' : ' = ' + p + '%') + ' (' + monLabel(sel.mon) + ')' : '';
+    return { id:'R' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8), sheet:name, roll, cat:R.cat, sev:R.sev, date:R.date,
+      period:(hasMulti() && R.date === isoDay(sel.day)) ? sel.period : '', txt:t, att, cp:via === 'none' ? '' : R.cp, via,
+      removeGuest:isGuest && !!(gb && gb.checked), who:s.name, cls:sel.cls, sub:sel.sub, mon:sel.mon, guest:isGuest,
+      home:s.guest ? (s.guest.home || '') : '', teacher, ts:Date.now() };
+  };
+  /** Saves on the phone FIRST (never lost), then opens WhatsApp (this runs inside the tap), then sends to the server. */
+  const submit = via => {
+    const rec = build(via); if(!rec) return;
+    const cp = cps.find(c => c.id === rec.cp) || null;
+    rq.push(rec); store.set('rq', rq); store.set(dk, null);
+    dlg.close(); renderMain();
+    if(via !== 'none' && cp) openWa(cp, waMessage(rec), via);
+    toast(via === 'none' ? 'Report on ' + s.name + ' saved on phone. Sending to the server...' : 'WhatsApp opened for ' + cp.name + '. Press Send there. The report is saved too.');
+    syncReports();
+  };
+  const wp = $('#rpWaPhone'), ww = $('#rpWaWeb');
+  if(wp) wp.onclick = () => submit('phone');
+  if(ww) ww.onclick = () => submit('web');
+  $('#rpSave').onclick = () => submit('none');
+  $('#rpCopy').onclick = () => {
+    const rec = build('none'); if(!rec) return;
+    copyText(waMessage(rec));
+  };
+  paint();
+}
+
+/** Sends the waiting reports. Safe to call often: one run at a time, and the server ignores a report it already has. */
+async function syncReports(){
+  const todo = rq.filter(x => !x.error);
+  if(repBusy || !todo.length || !authed() || !navigator.onLine) return;
+  repBusy = true; updateStatus();
+  try{
+    const batch = todo.slice(0, 10).map(x => ({ ...x })), r = await api({ action:'report_save', records:batch }, 90000);
+    if(r.error === 'BAD_LOGIN'){ repBusy = false; return signOut('Your username or password was changed. Sign in again.'); }
+    if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'The server was not updated. Redeploy Code.gs as a New version.' : (r.error || 'The server refused the report.'));
+    const lines = []; let reload = false;
+    (r.saved || []).forEach(id => {
+      const b = batch.find(x => x.id === id), res = (r.results || {})[id] || {}; if(!b) return;
+      lines.push('\u2713 Report on ' + b.who + ' is saved' + (res.inSheet === false ? ' (month-sheet note failed)' : '') +
+        (b.removeGuest ? (res.guestRemoved ? '. Guest removed.' : '. Guest NOT removed: ' + (res.guestError || 'use "Remove guest" on her row')) : ''));
+      rq = rq.filter(x => x.id !== id);
+      if(b.removeGuest && res.guestRemoved){ fresh[b.sheet] = 0; reload = true; }
+      else if(res.inSheet) fresh[b.sheet] = 0;
+    });
+    (r.failed || []).forEach(f => { const x = rq.find(q => q.id === f.id); if(x) x.error = f.error; });
+    store.set('rq', rq);
+    if(lines.length) toast(joinLines(lines));
+    else if((r.failed || []).length) toast('\u2717 Report not saved: ' + r.failed[0].error);
+    if(reload){ const e = entry(); if(e){ try{ await loadSheet(e, false); }catch(err){} } if(!dirty) loadDraft(); renderMain(); }
+    loadMyReports();
+  }catch(e){ lastError = errText(e); }
+  finally{ repBusy = false; updateStatus(); }
+  if(rq.some(x => !x.error) && navigator.onLine) setTimeout(syncReports, 1500);
+}
+async function loadMyReports(){
+  if(!authed() || !navigator.onLine) return;
+  try{ const r = await api({ action:'reports_mine' }); if(r.ok){ myReports = (r.reports || []).map(x => ({ ...x, period:x.lecture })); store.set('myrep', myReports); } }catch(e){}
+}
+/** Send an already saved report on WhatsApp again (phone or laptop, to CP1 or CP2). x = queued or server report. */
+function openResend(x, back){
+  const dlg = $('#dlg'); let pick = store.get('cppick', ''); if(!cps.some(c => c.id === pick)) pick = cps.length === 1 ? cps[0].id : '';
+  $('#dlgBody').innerHTML = `<h2>Send on WhatsApp</h2><div class="meta"><b>${esc(x.who)}</b> \u00b7 ${esc(x.cat)} \u00b7 ${esc(fmtIso(x.date))}</div>
+    ${cps.length ? `<label class="lb">Which Chief Proctor?</label><div class="rcat" id="rsCps">${cpChipsHtml()}</div><div class="err" id="rsErr" role="alert"></div><div class="acts">${waButtonsHtml('rsWa')}</div>`
+      : '<div class="diag">The Chief Proctor list is not on this phone yet. Connect to the internet and open the app again.</div>'}
+    <div class="acts"><button class="btn small grow" id="rsCopy">Copy message</button><button class="btn small grow" id="rsBack">Back</button></div>`;
+  if(!dlg.open) dlg.showModal();
+  const paint = () => dlg.querySelectorAll('[data-cp]').forEach(b => b.classList.toggle('on', b.dataset.cp === pick));
+  dlg.querySelectorAll('[data-cp]').forEach(b => b.onclick = () => { pick = b.dataset.cp; store.set('cppick', pick); paint(); });
+  const go = via => { const cp = cps.find(c => c.id === pick); if(!cp) return $('#rsErr').textContent = 'Choose the Chief Proctor first.'; openWa(cp, waMessage(x), via); toast('WhatsApp opened for ' + cp.name + '. Press Send there.'); };
+  const p = $('#rsWaPhone'), w = $('#rsWaWeb'); if(p) p.onclick = () => go('phone'); if(w) w.onclick = () => go('web');
+  $('#rsCopy').onclick = () => copyText(waMessage(x));
+  $('#rsBack').onclick = back;
+  paint();
+}
+function openMyReports(){
+  const dlg = $('#dlg');
+  const waiting = rq.map(x => `<div class="q rrow"><div><b>${esc(x.who)}</b><small>${esc(x.cls)} \u00b7 ${esc(titleCase(x.sub))} \u00b7 ${esc(x.cat)}</small>${x.error ? `<small class="bad">${esc(x.error)}</small>` : '<small>Saved on phone, waiting to reach the server</small>'}</div>
+      <button class="btn small wa" data-qwa="${esc(x.id)}">WhatsApp</button>${x.error ? `<button class="btn small" data-retry="${esc(x.id)}">Retry</button>` : ''}<button class="btn small danger" data-rdisc="${esc(x.id)}">Discard</button></div>`).join('');
+  const sent = myReports.map((r, i) => `<div class="q rrow"><div><b>${esc(r.who)}</b><small>${esc(r.cls)} \u00b7 ${esc(titleCase(r.sub))} \u00b7 ${esc(r.cat)}${r.sev === 'Serious' ? ' \u00b7 Serious' : ''}</small><small>${esc(fmtIso(r.date) || r.at)}${r.guestRemoved ? ' \u00b7 guest removed' : ''}${r.sent ? ' \u00b7 to ' + esc(r.sent) : ''}</small></div>
+      <span class="rtag ${/Action|Closed/.test(r.status) ? 'good' : ''}">${esc(r.status)}</span><button class="btn small wa" data-swa="${i}">WhatsApp</button></div>`).join('');
+  $('#dlgBody').innerHTML = `<h2>My reports</h2><div class="meta">Reports you sent to the Chief Proctor, newest first. The WhatsApp button sends the report again on WhatsApp.</div>${waiting}${sent || (waiting ? '' : '<div class="q"><div>No reports yet.</div></div>')}
+    <div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>`;
+  if(!dlg.open) dlg.showModal(); $('#closeDlg').onclick = () => dlg.close();
+  dlg.querySelectorAll('[data-qwa]').forEach(b => b.onclick = () => { const x = rq.find(q => q.id === b.dataset.qwa); if(x) openResend(x, openMyReports); });
+  dlg.querySelectorAll('[data-swa]').forEach(b => b.onclick = () => { const x = myReports[Number(b.dataset.swa)]; if(x) openResend({ ...x, teacher }, openMyReports); });
+  dlg.querySelectorAll('[data-retry]').forEach(b => b.onclick = () => { const x = rq.find(q => q.id === b.dataset.retry); if(x){ delete x.error; store.set('rq', rq); } syncReports(); openMyReports(); });
+  dlg.querySelectorAll('[data-rdisc]').forEach(b => b.onclick = () => { if(!confirm('Discard this report? It has NOT reached the server.')) return; rq = rq.filter(q => q.id !== b.dataset.rdisc); store.set('rq', rq); updateStatus(); openMyReports(); });
+  loadMyReports().then(() => { const h = $('#dlgBody h2'); if(dlg.open && h && h.textContent === 'My reports' && $('#closeDlg')) openMyReports(); });
 }
 
 /* ---------- login ---------- */
@@ -646,21 +927,24 @@ async function login(){
     if(prev && prev.toLowerCase() !== u.toLowerCase()){
       data = {}; queue = []; confirms = {}; sel = { cls:'', sub:'', mon:'', day:0, period:1 };
       store.set('data', data); store.set('queue', queue); store.set('confirms', confirms);
+      rq = []; store.set('rq', rq); myReports = []; store.set('myrep', myReports);
     }
     teacher = r.teacher || ''; isAdmin = !!r.admin; sheets = r.sheets || [];
+    cps = r.proctors || []; store.set('cps', cps);
     store.set('user', user); store.set('pass', pass); store.set('lastUser', user); store.set('teacher', teacher); store.set('admin', isAdmin); store.set('sheets', sheets);
-    ensureSel(); loadDraft(); render(); refreshAll(); syncRemarks();
+    ensureSel(); loadDraft(); render(); refreshAll(); syncRemarks(); syncReports(); loadMyReports();
   }catch(e){ user = ''; pass = ''; $('#loginErr').textContent = errText(e); }
 }
 async function signOut(msg){
-  if(!msg && queue.length){
-    toast('Saving your attendance before signing out...');
-    if(navigator.onLine){ await syncQueue(); if(queue.length) await syncQueue(); }
-    if(queue.length){ if(!confirm(queue.length + ' record(s) could not be saved to the sheet yet and would be lost. Sign out anyway?')){ renderMain(); return; } }
+  if(!msg && (queue.length || rq.length)){
+    toast('Saving your work before signing out...');
+    if(navigator.onLine){ await syncQueue(); await syncReports(); if(queue.length) await syncQueue(); if(rq.some(x => !x.error)) await syncReports(); }
+    if(queue.length || rq.length){ if(!confirm((queue.length + rq.length) + ' record(s) could not be saved to the server yet and would be lost. Sign out anyway?')){ renderMain(); return; } }
     else toast('Saved in sheet. Signed out.');
   }
   user = ''; pass = ''; store.set('user', ''); store.set('pass', '');
-  if(!msg){ queue = []; data = {}; sheets = []; teacher = ''; isAdmin = false; confirms = {}; ['queue','data','sheets','confirms'].forEach(k => store.set(k, k === 'queue' || k === 'sheets' ? [] : {})); store.set('teacher', ''); store.set('admin', false); }
+  if(!msg){ queue = []; data = {}; sheets = []; teacher = ''; isAdmin = false; confirms = {}; ['queue','data','sheets','confirms'].forEach(k => store.set(k, k === 'queue' || k === 'sheets' ? [] : {})); store.set('teacher', ''); store.set('admin', false);
+    rq = []; store.set('rq', []); myReports = []; store.set('myrep', []); cps = []; store.set('cps', []); }
   renderLogin(msg);
 }
 
@@ -670,10 +954,13 @@ function dayMarks(day, per){
   if(day === sel.day && per === sel.period) return draft;
   return pmOf(day)[per] || {};
 }
+/** per[roll] = { p, a, l, b, g, den }. den = lectures the percentage is measured against:
+ *  every lecture held for a normal student, only the lectures she was marked P or A in for a guest
+ *  (a guest who joined in the middle of the month is not punished for lectures before she came). */
 function stats(){
   const d = data[sheetName()]; if(!d) return { lect:0, per:{} };
   const days = d.days && d.days.length ? d.days : Array.from({ length:31 }, (_, i) => i + 1), per = {}; let lect = 0;
-  d.students.forEach(s => per[s.roll] = { p:0, a:0, l:0, b:0 });
+  d.students.forEach(s => per[s.roll] = { p:0, a:0, l:0, b:0, g:!!s.guest });
   days.forEach(day => {
     const ps = new Set(Object.keys(pmOf(day)).map(Number)); if(day === sel.day) ps.add(sel.period);
     ps.forEach(pr => {
@@ -682,17 +969,18 @@ function stats(){
       if(any) lect++;
     });
   });
+  Object.keys(per).forEach(r => { const c = per[r]; c.den = c.g ? c.p + c.a : lect; });
   return { lect, per };
 }
-const pctOf = (c, l) => l ? Math.round(c.p / l * 1000) / 10 : null;
+const pctOf = (c, l) => { const den = c && c.den != null ? c.den : l; return den ? Math.round(c.p / den * 1000) / 10 : null; };
 function paintPct(){
   const { lect, per } = stats(); let low = 0;
   document.querySelectorAll('.list .row').forEach(row => {
-    // disabled students (changed subject): no percentage, no "low" highlight, not counted
+    // disabled students (changed subject / guest removed): no percentage, no "low" highlight, not counted
     if(row.classList.contains('off')){ const o = row.querySelector('.pct'); if(o) o.textContent = ''; row.classList.remove('low'); return; }
     const c = per[row.dataset.roll], p = c ? pctOf(c, lect) : null, isLow = p != null && p < LOW, el = row.querySelector('.pct');
     if(isLow) low++; row.classList.toggle('low', isLow && mode === 'att');
-    if(el){ el.textContent = isLow ? 'Attend: ' + c.p + '/' + lect + ' = ' + p + '%' : ''; el.className = 'pct' + (isLow ? ' lowp' : ''); }
+    if(el){ el.textContent = isLow ? 'Attend: ' + c.p + '/' + c.den + ' = ' + p + '%' : ''; el.className = 'pct' + (isLow ? ' lowp' : ''); }
   });
   if(mode === 'att'){ lowInfo = low ? low + ' below ' + LOW + '% (' + lect + ' lectures)' : ''; updateBadge(); }
 }
@@ -768,13 +1056,13 @@ function attBodyHtml(d){
     MARKS.map(v => `<label class="ck ${v.toLowerCase()}">${v}<input type="checkbox" data-all="${v}" aria-label="Mark all ${v}"></label>`).join('') + `</span></div>` +
     '<ul class="list" id="list">' + d.students.map((s, i) => `
     <li class="row ${s.off ? 'off' : ''}" data-roll="${esc(s.roll)}"><span class="no">${i + 1}</span>
-      <span class="who"><b>${esc(s.name)}</b><small><span>${esc(s.roll)}</span><span class="pct"></span>${s.off ? '<span class="rtag">Changed subject</span>' : ''}${tagHtml(s.roll)}</small></span>
+      <span class="who"><b>${esc(s.name)}</b><small><span>${esc(s.roll)}</span><span class="pct"></span>${s.off ? offTag(s) : ''}${tagHtml(s.roll)}</small></span>
       <span class="seg">${MARKS.map(v => `<button class="${v.toLowerCase()}" data-v="${v}" aria-label="${v}" aria-pressed="false" ${s.off ? 'disabled' : ''}>${v}</button>`).join('')}</span></li>`).join('') + '</ul>';
 }
 function mtBodyHtml(d){
   return '<ul class="list" id="mtList">' + d.students.map((s, i) => `
     <li class="row ${s.off ? 'off' : ''}" data-roll="${esc(s.roll)}"><span class="no">${i + 1}</span>
-      <span class="who"><b>${esc(s.name)}</b><small><span>${esc(s.roll)}</span><span class="pct"></span><span class="mtp"></span>${s.off ? '<span class="rtag">Changed subject</span>' : ''}${tagHtml(s.roll)}</small></span>
+      <span class="who"><b>${esc(s.name)}</b><small><span>${esc(s.roll)}</span><span class="pct"></span><span class="mtp"></span>${s.off ? offTag(s) : ''}${tagHtml(s.roll)}</small></span>
       <input class="mk" type="text" autocapitalize="characters" autocomplete="off" placeholder="Marks" aria-label="Marks for ${esc(s.name)}" value="${esc(mtDraft.marks[s.roll] || '')}" ${s.off ? 'disabled' : ''}></li>`).join('') + '</ul>';
 }
 function renderMain(){
@@ -827,7 +1115,7 @@ const perBar = (mode !== 'att' || !hasMulti()) ? '' :
           ${hasMulti() ? '' : '<button class="ib" id="multiOn" aria-label="I take more than one lecture of this class today" title="I take more than one lecture of this class today">' + IC.plus + '</button>'}
 
           <button class="ib" id="delBtn" aria-label="Delete attendance of this period" title="Delete attendance of this period">${IC.trash}</button>` : ''}
-            <button class="ib" id="sumBtn" aria-label="Monthly summary" title="Monthly summary">${IC.sum}</button><button class="ib" id="printBtn" aria-label="Print sheet" title="Print sheet">${IC.print}</button></div></div>
+            <button class="ib" id="guestBtn" aria-label="Add guest student" title="Add guest student">${IC.guest}</button><button class="ib" id="sumBtn" aria-label="Monthly summary" title="Monthly summary">${IC.sum}</button><button class="ib" id="printBtn" aria-label="Print sheet" title="Print sheet">${IC.print}</button></div></div>
         ${mode === 'mt' ? `<label class="tot"><span>Total marks</span><input id="mtTotal" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 20" value="${esc(mtDraft.total)}"></label>
         <div class="cnt" id="mtInfo"></div><button class="fillA" id="mtFillA">Fill empty with A (absent)</button>`
           : `<div class="strip" id="strip">${strip}</div>${perBar}<div class="prow"><div class="bar3" id="bar3"></div><div class="nums" id="nums"></div></div>`}
@@ -1023,8 +1311,8 @@ function openSummary(f){
   $('#dlgBody').innerHTML = `<h2>Summary: ${MONTHS[m]} ${y}</h2>
     <div class="meta">${esc(sheetName())}<br>${lect} lectures held, ${rows.length} students, ${nAtt} below ${LOW}% attendance<br>${T.total ? 'Monthly test out of ' + T.total + ', ' + nMt + ' below 50% or absent' : 'Monthly test: no marks entered yet'}</div>
     <div class="chips">${chip('all', 'All')}${chip('att', 'Attendance below ' + LOW + '%')}${chip('mt', 'Test below 50%')}</div>
-    ${shown.map(r => `<div class="q"><div><b>${esc(r.s.name)}</b><small>${esc(r.s.roll)} \u00b7 P ${r.c.p} \u00b7 A ${r.c.a}${r.c.l ? ' \u00b7 L ' + r.c.l : ''}${r.c.b ? ' \u00b7 B ' + r.c.b : ''}</small></div>
-      <span style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><span class="sp ${attLow(r) ? 'lowp' : ''}">${r.p == null ? '-' : r.c.p + '/' + lect + ' = ' + r.p + '%'}</span>${r.t ? `<span class="sp ${r.t.low ? 'lowp' : ''}">Test ${r.t.txt}</span>` : ''}</span></div>`).join('') || '<div class="q"><div>No students to show.</div></div>'}
+    ${shown.map(r => `<div class="q"><div><b>${esc(r.s.name)}</b><small>${esc(r.s.roll)} \u00b7 P ${r.c.p} \u00b7 A ${r.c.a}${r.c.l ? ' \u00b7 L ' + r.c.l : ''}${r.c.b ? ' \u00b7 B ' + r.c.b : ''}${r.s.guest ? ' \u00b7 Guest from ' + esc(r.s.guest.home || '?') : ''}</small></div>
+      <span style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><span class="sp ${attLow(r) ? 'lowp' : ''}">${r.p == null ? '-' : r.c.p + '/' + r.c.den + ' = ' + r.p + '%'}</span>${r.t ? `<span class="sp ${r.t.low ? 'lowp' : ''}">Test ${r.t.txt}</span>` : ''}</span></div>`).join('') || '<div class="q"><div>No students to show.</div></div>'}
     <div class="acts"><button class="btn small grow" id="copyRep">Share list</button><button class="btn small grow" id="closeDlg">Close</button></div>`;
   if(!dlg.open) dlg.showModal();
   $('#closeDlg').onclick = () => dlg.close();
@@ -1032,7 +1320,7 @@ function openSummary(f){
   $('#copyRep').onclick = () => {
     const head = sheetName() + '\nAttendance: ' + lect + ' lectures' + (T.total ? ' | Monthly test: out of ' + T.total : '') +
       (sumF === 'att' ? '\n(Attendance below ' + LOW + '%)' : sumF === 'mt' ? '\n(Test below 50% or absent)' : '');
-    const lines = shown.map(r => r.s.name + ' (' + r.s.roll + ') - Att: ' + (r.p == null ? '-' : r.c.p + '/' + lect + ' = ' + r.p + '%') + (r.t ? ' | Test: ' + r.t.txt : ''));
+    const lines = shown.map(r => r.s.name + ' (' + r.s.roll + ')' + (r.s.guest ? ' [Guest from ' + (r.s.guest.home || '?') + ']' : '') + ' - Att: ' + (r.p == null ? '-' : r.c.p + '/' + r.c.den + ' = ' + r.p + '%') + (r.t ? ' | Test: ' + r.t.txt : ''));
     const txt = head + '\n' + lines.join('\n');
     Promise.resolve(navigator.share ? navigator.share({ text:txt }) : navigator.clipboard.writeText(txt).then(() => toast('Copied'))).catch(() => {});
   };
@@ -1069,16 +1357,17 @@ function openCalendar(){
 function openSync(){
   const dlg = $('#dlg'), when = lastSync ? new Date(lastSync).toLocaleString() : 'never';
   $('#dlgBody').innerHTML = `<h2>Account and sync</h2>
-    <div class="meta"><b>${esc(teacher || user)}</b>${isAdmin ? ' (admin)' : ''}<br>${esc(user)}<br>${navigator.onLine ? 'Online' : 'Phone reports no internet. Everything you save stays on this phone.'}<br>Last synced: ${esc(when)}<br>Server ends with: ${esc(API.slice(-12))}${Object.keys(rDirty).length ? '<br>' + Object.keys(rDirty).length + ' student comment(s) waiting to upload' : ''}</div>
+    <div class="meta"><b>${esc(teacher || user)}</b>${isAdmin ? ' (admin)' : ''}<br>${esc(user)}<br>${navigator.onLine ? 'Online' : 'Phone reports no internet. Everything you save stays on this phone.'}<br>Last synced: ${esc(when)}<br>Server ends with: ${esc(API.slice(-12))}${Object.keys(rDirty).length ? '<br>' + Object.keys(rDirty).length + ' student comment(s) waiting to upload' : ''}${rq.length ? '<br>' + rq.length + ' report(s) to the Chief Proctor waiting to upload' : ''}</div>
     ${queue.length ? queue.map(q => `<div class="q"><div><b>${esc(q.sheet)}</b>, ${q.kind === 'mt' ? 'monthly test' : 'day ' + q.day + ', period ' + (q.period || 1)}<small>${Object.keys(q.marks).length} students${q.note !== undefined ? ' + note' : ''} waiting</small>${q.error ? `<small class="bad">${esc(q.error)}</small>` : ''}</div><button class="btn small danger" data-discard="${esc(q.id)}">Discard</button></div>`).join('') : '<div class="q"><div>Nothing is waiting to sync. Everything is in the sheet.</div></div>'}
-    ${lastError && queue.length ? `<div class="diag">${esc(lastError)}</div>` : ''}
-    <div class="acts"><button class="btn small primary grow" id="syncNow">Sync now</button><button class="btn small grow" id="pwBtn">Change password</button></div>
+    ${lastError && (queue.length || rq.length) ? `<div class="diag">${esc(lastError)}</div>` : ''}
+    <div class="acts"><button class="btn small primary grow" id="syncNow">Sync now</button><button class="btn small grow" id="repBtn">My reports${rq.length ? ' (' + rq.length + ' waiting)' : ''}</button></div>
+    <div class="acts"><button class="btn small grow" id="pwBtn">Change password</button></div>
     <div class="acts"><button class="btn small danger grow" id="signOutBtn">Sign out</button><button class="btn small grow" id="closeDlg">Close</button></div>`;
   dlg.showModal();
-  $('#closeDlg').onclick = () => dlg.close(); $('#pwBtn').onclick = openPassword;
+  $('#closeDlg').onclick = () => dlg.close(); $('#pwBtn').onclick = openPassword; $('#repBtn').onclick = openMyReports;
   $('#signOutBtn').onclick = () => { dlg.close(); signOut(); };
   $('#syncNow').onclick = async () => {
-    dlg.close(); toast('Syncing...'); await absorbBg(); const ok = await syncQueue();
+    dlg.close(); toast('Syncing...'); rq.forEach(x => { delete x.error; }); store.set('rq', rq); syncReports(); await absorbBg(); const ok = await syncQueue();
     if(!ok && queue.length) toast('Not synced: ' + (lastError || 'unknown problem'));
     if(!queue.length) fresh[sheetName()] = 0; refreshAll(); syncRemarks();
   };
@@ -1133,9 +1422,9 @@ function updateBadge(){
 }
 function updateStatus(){
   const chip = $('#statusChip'), txt = $('#statusTxt'); if(!chip) return;
-  const on = navigator.onLine, busy = syncing || refreshing;
-  chip.classList.toggle('off', !on); chip.classList.toggle('busy', busy); chip.classList.toggle('err', !busy && !!queue.length && !!lastError);
-  txt.textContent = syncing ? 'Saving...' : refreshing ? 'Updating...' : queue.length ? queue.length + ' to sync' : on ? 'Synced' : 'Offline';
+  const on = navigator.onLine, busy = syncing || refreshing || repBusy, pend = queue.length + rq.length;
+  chip.classList.toggle('off', !on); chip.classList.toggle('busy', busy); chip.classList.toggle('err', !busy && !!pend && !!lastError);
+  txt.textContent = (syncing || repBusy) ? 'Saving...' : refreshing ? 'Updating...' : pend ? pend + ' to sync' : on ? 'Synced' : 'Offline';
   updateBadge();
 }
 let toastTimer;
@@ -1192,6 +1481,7 @@ document.addEventListener('click', ev => {
   if(t.closest('#miniBar')) return setCompact(false);
   if(t.closest('#calBtn')) return openCalendar();
   if(t.closest('#noteBtn')) return openNote();
+  if(t.closest('#guestBtn')) return openGuest();
   if(t.closest('#sumBtn')) return openSummary('all');
   if(t.closest('#printBtn')) return printSheet();
   if(t.closest('#statusChip')) return openSync();
@@ -1230,11 +1520,11 @@ document.addEventListener('input', ev => {
     t.value = val; mtDraft.marks[roll] = val; dirty = true; updateTally();
   }
 });
-window.addEventListener('online', () => { updateStatus(); syncRemarks(); absorbBg().finally(() => syncQueue().then(refreshAll)); });
+window.addEventListener('online', () => { updateStatus(); syncRemarks(); syncReports(); absorbBg().finally(() => syncQueue().then(refreshAll)); });
 window.addEventListener('offline', updateStatus);
 window.addEventListener('resize', () => { if(isLandscape()) setCompact(false); else centerStrip(); });
-document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible'){ absorbBg().finally(syncQueue); centerStrip(); } });
-setInterval(syncQueue, 30000); setInterval(syncRemarks, 60000);
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible'){ absorbBg().finally(syncQueue); syncReports(); centerStrip(); } });
+setInterval(syncQueue, 30000); setInterval(syncRemarks, 60000); setInterval(syncReports, 30000);
 if('serviceWorker' in navigator){
   const had = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -1242,7 +1532,7 @@ if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('message', ev => { if(ev.data && ev.data.type === 'bg-synced') absorbBg(); });
 }
 ensureSel(); initDay(); render();
-if(authed()){ mirrorBg(); absorbBg().finally(() => syncQueue().then(refreshAll)); syncRemarks(); }
+if(authed()){ mirrorBg(); absorbBg().finally(() => syncQueue().then(refreshAll)); syncRemarks(); syncReports(); loadMyReports(); }
 </script>
 </body>
 </html>
