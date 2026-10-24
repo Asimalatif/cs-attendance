@@ -727,7 +727,7 @@ const isoOf = dt => dt.getFullYear() + '-' + pad2(dt.getMonth() + 1) + '-' + pad
 function isoDay(day){ const { m, y } = monthYear(); return y + '-' + pad2(m + 1) + '-' + pad2(day); }
 const fmtIso = s => { const p = String(s || '').split('-'); return p.length === 3 ? new Date(+p[0], +p[1] - 1, +p[2]).toLocaleDateString([], { day:'numeric', month:'short', year:'numeric' }) : String(s || ''); };
 const isMobileUA = () => /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
-const cpLabel = c => c.id + ' \u00b7 ' + c.name;
+const cpLabel = c => c.name;
 
 /** The WhatsApp text (one message for the Chief Proctor). x = a report record (queued or from the server). */
 function waMessage(x){
