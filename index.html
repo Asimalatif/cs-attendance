@@ -281,6 +281,10 @@ dialog::backdrop{background:rgba(8,14,26,.55)}
 .btn.wa{background:#128C4A;border-color:#128C4A;color:#fff}
 .rrow{align-items:flex-start;flex-wrap:wrap}
 .rrow .btn{flex:none}
+.rdate{display:flex;align-items:center;gap:8px;margin:8px 0}
+.rdate label{margin:0;white-space:nowrap}
+.dlg .rdate input{margin:0;flex:1;height:42px}
+.dlg .rtxt{min-height:80px;margin:8px 0 2px}
 </style>
 </head>
 <body>
@@ -635,6 +639,14 @@ function openStudent(roll, keep){
   const mt = d.mt && d.mt.marks ? d.mt.marks[roll] : null;
   const gInfo = (s.guest ? '<br><b>Guest here.</b> Her own section: ' + esc(s.guest.home || '?') + (s.guest.by ? '. Added by ' + esc(s.guest.by) : '') + (s.guest.on ? ' on ' + esc(s.guest.on) : '') : '') +
     (s.guestAt || []).map(g => '<br><b>Guest in ' + esc(g.cls) + ' ' + esc(titleCase(g.sub)) + '</b>' + (g.by ? ', added by ' + esc(g.by) : '')).join('');
+    const trend = sheets.filter(e => e.cls === sel.cls && e.sub === sel.sub).map(e => {
+  const D = data[e.name]; if(!D || !D.marks) return null;
+  let p = 0, tot = 0;
+  Object.keys(D.marks).forEach(day => Object.values(D.marks[day]).forEach(pm => { const v = pm[roll]; if(v){ tot++; if(v === 'P') p++; } }));
+  return tot ? { mon:monLabel(e.mon), pct:Math.round(p / tot * 100) } : null;
+}).filter(Boolean);
+const trendHtml = trend.length > 1 ? '<div style="display:flex;gap:6px;align-items:flex-end;height:64px;margin:10px 0">' + trend.map(t =>
+  `<div style="flex:1;text-align:center;font-size:10px;color:var(--muted)"><div style="height:${Math.max(4, t.pct * .44)}px;border-radius:5px;background:${t.pct < LOW ? 'var(--absent)' : 'var(--present)'}"></div>${t.pct}%<br>${t.mon}</div>`).join('') + '</div>' : '';
   $('#dlgBody').innerHTML = `
     <h2>${esc(s.name)}</h2><div class="meta">Roll ${esc(roll)} \u00b7 ${esc(sel.cls)} \u00b7 ${esc(titleCase(sel.sub))}${s.off ? (s.offGuest ? '<br>Guest removed: attendance is closed for this student.' : '<br>Changed subject: attendance is closed for this student.') : ''}${gInfo}</div>
     <div class="stats"><div><b>${p == null ? '-' : p + '%'}</b><small>Attendance</small></div><div><b>${c.p}</b><small>Present</small></div><div><b>${c.a}</b><small>Absent</small></div>
@@ -672,7 +684,7 @@ async function removeGuest(s){
   try{
     const r = await api({ action:'guest_remove', sheet:name, roll:s.roll }, 90000);
     if(r.error === 'BAD_LOGIN'){ $('#dlg').close(); return signOut('Your username or password was changed. Sign in again.'); }
-    if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'The server was not updated. Redeploy Code.gs as a New version.' : (r.error || 'Could not remove'));
+           if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'The server was not updated. Redeploy Code.gs as a New version.' : (r.error || 'Could not remove'));
     $('#dlg').close();
     const e = entry(); if(e) await loadSheet(e, false);
     if(!dirty) loadDraft(); renderMain(); toast(s.name + ' removed as guest.');
@@ -725,25 +737,20 @@ const REP_MIN = 10, REP_MAX = 1000;
 const pad2 = n => String(n).padStart(2, '0');
 const isoOf = dt => dt.getFullYear() + '-' + pad2(dt.getMonth() + 1) + '-' + pad2(dt.getDate());
 function isoDay(day){ const { m, y } = monthYear(); return y + '-' + pad2(m + 1) + '-' + pad2(day); }
-const fmtIso = s => { const p = String(s || '').split('-'); return p.length === 3 ? new Date(+p[0], +p[1] - 1, +p[2]).toLocaleDateString([], { day:'numeric', month:'short', year:'numeric' }) : String(s || ''); };
+const fmtIso = s => { const p = String(s || '').slice(0, 10).split('-'); return p.length === 3 && +p[0] ? new Date(+p[0], +p[1] - 1, +p[2]).toLocaleDateString([], { day:'numeric', month:'short', year:'numeric' }) : ''; };
 const isMobileUA = () => /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
 const cpLabel = c => c.name;
 
 function waMessage(x){
   const dt = String(x.date || '').split('-');
   const when = dt.length === 3 ? (+dt[2]) + ' ' + MONTHS[+dt[1] - 1].slice(0, 3) + ' ' + dt[0] : String(x.date || '');
-  const sub = titleCase(x.sub);
-  const L = ['Report from ' + (x.teacher || teacher) + ' -' + when];
-  if(x.sev === 'Serious') L.push('*SERIOUS*');
-  L.push('*' + x.who + '* (Roll ' + x.roll + ')');
-  L.push(x.cls + ' - ' + sub + (x.mon ? ' (' + monLabel(x.mon) + ')' : ''));
-  if(x.guest) L.push((x.home || '?') + ' - guest');
-  let att = x.att || '';
-  const mo = /^P (\d+), A \d+ of (\d+) lectures(?: = ([\d.]+)%)? \((\w+)\)$/.exec(att);   // reports saved in the old format
-  if(mo) att = sub + ' Attendance  ' + mo[1] + '/' + mo[2] + (mo[3] ? ' = ' + mo[3] + '%' : '') + '(' + mo[4] + ')';
-  if(att) L.push(att);
-  if(x.removeGuest || x.guestRemoved) L.push('Note: removed as guest from this subject.');
-  L.push('Statement:', x.txt);
+  const att = String(x.att || '').replace(/^.*Attendance\s+/, '').replace(/\s*\(/, ' (');   // "13/14 = 92.9% (Oct)"
+  const head = '*' + x.who + '* (' + x.roll + ') ' + x.cls + ' - ' + titleCase(x.sub) +
+    (x.guest ? ' [guest, ' + (x.home || '?') + ']' : '') + (att ? ' - Att: ' + att : '');
+  const L = [head];
+  if(x.cat) L.push('Issue: ' + x.cat);
+  if(x.removeGuest || x.guestRemoved) L.push('Removed as guest.');
+  L.push(x.txt, '', '*' + (x.teacher || teacher) + '*, ' + when);
   return L.join('\n');
 }
 
@@ -758,10 +765,7 @@ function openWa(cp, text, via){
 }
 const copyText = txt => Promise.resolve(navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast('Message copied. Paste it in WhatsApp.')).catch(() => toast('Could not copy.'));
 const cpChipsHtml = () => cps.map(c => `<button class="chip" data-cp="${esc(c.id)}">${esc(cpLabel(c))}${c.dept ? '<small>' + esc(c.dept) + (c.desig ? ' \u00b7 ' + esc(c.desig) : '') + '</small>' : ''}</button>`).join('');
-const waButtonsHtml = (idp) => {
-  const phone = `<button class="btn small wa grow" id="${idp}Phone">WhatsApp on phone</button>`, web = `<button class="btn small wa grow" id="${idp}Web">WhatsApp Web (laptop)</button>`;
-  return isMobileUA() ? phone + web : web + phone;
-};
+const waButtonsHtml = (idp) => `<button class="btn small wa grow" id="${idp}Web">Send on WhatsApp Web</button>`;
 
 function openReport(roll){
   const name = sheetName(), d = data[name]; if(!d) return;
@@ -775,13 +779,9 @@ function openReport(roll){
   $('#dlgBody').innerHTML = `<h2>Report to Chief Proctor</h2>
     <div class="meta"><b>${esc(s.name)}</b><br>Roll ${esc(roll)} \u00b7 ${esc(sel.cls)} \u00b7 ${esc(titleCase(sel.sub))}${isGuest ? '<br>Guest here. Her own section: ' + esc(s.guest.home || '?') : ''}</div>
     ${cps.length ? `<label class="lb">Send to which Chief Proctor?</label><div class="rcat" id="rpCps">${cpChipsHtml()}</div>`
-      : '<div class="diag">The Chief Proctor list is not on this phone yet. Connect to the internet once and open the app again. You can still save the report now and send it on WhatsApp later from My reports.</div>'}
-    <label class="lb">What happened?</label>
-    <div class="rcat" id="rpCats">${REP_CATS.map(c => `<button class="chip" data-cat="${esc(c)}">${esc(c)}</button>`).join('')}</div>
-    <label class="lb">How serious?</label>
-    <div class="rcat" id="rpSev"><button class="chip" data-sev="Normal">Normal</button><button class="chip sev-s" data-sev="Serious">Serious</button></div>
-    <label class="lb" for="rpDate">Date of incident</label><input id="rpDate" type="date" max="${today}" value="${esc(R.date)}">
-    <label class="lb" for="rpTxt">Your statement</label>
+      : '<div class="diag">The Chief Proctor list is not on this phone yet. Connect to the internet once and open the app again. You can still save the report now and send it on WhatsApp later from My reports.</div>'} 
+    
+<div class="rdate"><label for="rpDate">Date</label><input id="rpDate" type="date" max="${today}" value="${today}"></div>
     <textarea id="rpTxt" maxlength="${REP_MAX}" placeholder="Write what happened, when and where. Be factual."></textarea>
     <div class="rcount" id="rpCount"></div>
     ${isGuest ? `<label class="gbox"><input type="checkbox" id="rpGuest"><span>Also remove <b>${esc(s.name)}</b> as a guest from ${esc(titleCase(sel.sub))} (${esc(monLabel(sel.mon))} onwards). Her old attendance stays in the sheet. If you do not tick this, she stays a guest and is only reported.</span></label>` : ''}
@@ -808,7 +808,6 @@ function openReport(roll){
   const build = via => {
     const t = txt.value.trim(); err.textContent = '';
     if(via !== 'none' && !R.cp){ err.textContent = 'Choose the Chief Proctor first.'; return null; }
-    if(!R.cat){ err.textContent = 'Choose what happened.'; return null; }
     if(t.length < REP_MIN){ err.textContent = 'Write your statement (at least ' + REP_MIN + ' characters).'; return null; }
     if(!R.date){ err.textContent = 'Choose the date of the incident.'; return null; }
     const dup = myReports.concat(rq).find(r => r.roll === roll && r.cls === sel.cls && r.date === R.date && r.cat === R.cat);
@@ -901,12 +900,26 @@ function openMyReports(){
   const waiting = rq.map(x => `<div class="q rrow"><div><b>${esc(x.who)}</b><small>${esc(x.cls)} \u00b7 ${esc(titleCase(x.sub))} \u00b7 ${esc(x.cat)}</small>${x.error ? `<small class="bad">${esc(x.error)}</small>` : '<small>Saved on phone, waiting to reach the server</small>'}</div>
       <button class="btn small wa" data-qwa="${esc(x.id)}">WhatsApp</button>${x.error ? `<button class="btn small" data-retry="${esc(x.id)}">Retry</button>` : ''}<button class="btn small danger" data-rdisc="${esc(x.id)}">Discard</button></div>`).join('');
   const sent = myReports.map((r, i) => `<div class="q rrow"><div><b>${esc(r.who)}</b><small>${esc(r.cls)} \u00b7 ${esc(titleCase(r.sub))} \u00b7 ${esc(r.cat)}${r.sev === 'Serious' ? ' \u00b7 Serious' : ''}</small><small>${esc(fmtIso(r.date) || r.at)}${r.guestRemoved ? ' \u00b7 guest removed' : ''}${r.sent ? ' \u00b7 to ' + esc(r.sent) : ''}</small></div>
-      <span class="rtag ${/Action|Closed/.test(r.status) ? 'good' : ''}">${esc(r.status)}</span><button class="btn small wa" data-swa="${i}">WhatsApp</button></div>`).join('');
+      <span class="rtag ${/Action|Closed/.test(r.status) ? 'good' : ''}">${esc(r.status)}</span><button class="btn small wa" data-swa="${i}">WhatsApp</button>${r.status === 'Received' || isAdmin ? `<button class="btn small danger" data-sdel="${i}">Delete</button>` : ''}</div>`).join('');
   $('#dlgBody').innerHTML = `<h2>My reports</h2><div class="meta">Reports you sent to the Chief Proctor, newest first. The WhatsApp button sends the report again on WhatsApp.</div>${waiting}${sent || (waiting ? '' : '<div class="q"><div>No reports yet.</div></div>')}
     <div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>`;
   if(!dlg.open) dlg.showModal(); $('#closeDlg').onclick = () => dlg.close();
   dlg.querySelectorAll('[data-qwa]').forEach(b => b.onclick = () => { const x = rq.find(q => q.id === b.dataset.qwa); if(x) openResend(x, openMyReports); });
   dlg.querySelectorAll('[data-swa]').forEach(b => b.onclick = () => { const x = myReports[Number(b.dataset.swa)]; if(x) openResend({ ...x, teacher }, openMyReports); });
+  dlg.querySelectorAll('[data-sdel]').forEach(b => b.onclick = async () => {
+    const x = myReports[Number(b.dataset.sdel)]; if(!x) return;
+    if(!navigator.onLine) return toast('Deleting needs an internet connection.');
+    if(!confirm('Delete the report on ' + x.who + (x.cat ? ' (' + x.cat + ')' : '') + ' from the server?\n\nIf you already sent it on WhatsApp, the Chief Proctor still has that message.')) return;
+    b.disabled = true; b.textContent = 'Deleting...';
+    try{
+      const r = await api({ action:'report_delete', id:x.id });
+      if(r.error === 'BAD_LOGIN'){ dlg.close(); return signOut('Your username or password was changed. Sign in again.'); }
+                if(!r.ok && r.error === 'REPORT_NOT_FOUND'){ /* already gone on the server */ }
+      else if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'The server was not updated. Redeploy Code.gs as a New version.' : (r.error || 'Could not delete'));
+      myReports = myReports.filter(q => q.id !== x.id); store.set('myrep', myReports);
+      toast('Report on ' + x.who + ' deleted.'); openMyReports();
+    }catch(err){ b.disabled = false; b.textContent = 'Delete'; toast('Not deleted: ' + errText(err)); }
+  });
   dlg.querySelectorAll('[data-retry]').forEach(b => b.onclick = () => { const x = rq.find(q => q.id === b.dataset.retry); if(x){ delete x.error; store.set('rq', rq); } syncReports(); openMyReports(); });
   dlg.querySelectorAll('[data-rdisc]').forEach(b => b.onclick = () => { if(!confirm('Discard this report? It has NOT reached the server.')) return; rq = rq.filter(q => q.id !== b.dataset.rdisc); store.set('rq', rq); updateStatus(); openMyReports(); });
   loadMyReports().then(() => { const h = $('#dlgBody h2'); if(dlg.open && h && h.textContent === 'My reports' && $('#closeDlg')) openMyReports(); });
@@ -1135,6 +1148,7 @@ const perBar = (mode !== 'att' || !hasMulti()) ? '' :
     <div class="wrap"><div class="sline" id="sline" role="status"></div>
       ${ready ? `<input id="sq" class="sq" type="search" placeholder="Search name or roll no. Tap a name for details" autocomplete="off" autocapitalize="none" spellcheck="false" value="${esc(searchQ)}">
         <div class="fl" id="fl">${fk.map(([k, t]) => `<button class="chip ${filterQ === k ? 'on' : ''}" data-f="${k}">${t}</button>`).join('')}</div><div class="nores" id="nores">No student matches.</div>` : ''}
+        ${todayCard()}
       ${body}</div>
     <div class="bottom"><div class="in"><button class="btn primary" id="saveBtn">Save period</button></div></div>`;
   $('#app').classList.toggle('phid', panelHidden); $('#app').classList.toggle('compact', compact && !panelHidden && !isLandscape());
@@ -1219,7 +1233,7 @@ function save(){
   const srv = ((d.marks && d.marks[sel.day]) || {})[sel.period] || {}, marks = {};
   d.students.forEach(s => { if(s.off) return; const v = draft[s.roll]; if(MARKS.includes(v)) marks[s.roll] = v; else if(srv[s.roll]) marks[s.roll] = ''; });
   if(!Object.keys(marks).length) return toast('No students to save');
-  enqueue(marks); dirty = false; { const i = recInfo({ sheet:name, day:sel.day, period:sel.period, marks }); toast(i.who + ' \u00b7 ' + i.what + ' saved on phone. Sending to the sheet...'); } renderMain();
+  enqueue(marks); dirty = false; { const i = recInfo({ sheet:name, day:sel.day, period:sel.period, marks }); toast(i.who + ' \u00b7 ' + i.what + ' saved on phone.', { label:'Share absentees', fn:shareAbsentees, ms:9000 }); } renderMain();
   syncQueue().then(ok => { if(!ok && queue.length) toast('Saved on this phone. Tap the status chip to see why it has not reached the sheet.'); });
 }
 
@@ -1227,6 +1241,7 @@ function save(){
 function openNote(){
   const name = sheetName(); if(!data[name]) return toast('This sheet is not on the phone yet');
   const { m } = dayInfo(), cur = noteFor(sel.day), dlg = $('#dlg');
+
   $('#dlgBody').innerHTML = `<h2>Note for ${sel.day} ${MONTHS[m].slice(0, 3)}</h2>
     <div class="meta">Saved in the sheet as a note on this date (the date header turns yellow). Use it when college is closed or the class did not happen.</div>
     <div class="chips">${['College closed','Public holiday','Emergency closure','Class not held','Exam day'].map(t => `<button class="chip" data-chip="${esc(t)}">${esc(t)}</button>`).join('')}</div>
@@ -1489,6 +1504,7 @@ document.addEventListener('click', ev => {
   if((b = t.closest('#perBar [data-per]'))){ const p = Number(b.dataset.per); if(p !== sel.period) switchTo(() => { sel.period = p; }); return; }
   if((b = t.closest('#fl [data-f]'))){ filterQ = b.dataset.f; paintFilters(); return; }
   if((b = t.closest('#sline'))){ if(b.dataset.act === 'low') return openSummary('att'); if(b.dataset.act === 'note') return openNote(); return; }
+    if((b = t.closest('[data-today]'))){ const e = sheets.find(s => s.name === b.dataset.today); if(e) switchTo(() => { sel.cls = e.cls; sel.sub = e.sub; sel.mon = e.mon; initDay(); }); return; }
   if(t.closest('#miniBar')) return setCompact(false);
   if(t.closest('#calBtn')) return openCalendar();
   if(t.closest('#noteBtn')) return openNote();
@@ -1544,6 +1560,24 @@ if('serviceWorker' in navigator){
 }
 ensureSel(); initDay(); render();
 if(authed()){ mirrorBg(); absorbBg().finally(() => syncQueue().then(refreshAll)); syncRemarks(); syncReports(); loadMyReports(); }
+
+function shareAbsentees(){
+  const d = data[sheetName()]; if(!d) return;
+  const { per } = stats(), { m, y } = dayInfo();
+  const ab = d.students.filter(s => !s.off && draft[s.roll] === 'A');
+  const head = sel.cls + ' ' + titleCase(sel.sub) + ' - ' + sel.day + ' ' + MONTHS[m].slice(0,3) + ' ' + y + (hasMulti() ? ' (Lecture ' + sel.period + ')' : '') + '\nAbsent: ' + ab.length;
+  const txt = head + '\n' + (ab.length ? ab.map((s, i) => (i+1) + '. ' + s.name + ' (' + s.roll + ') P ' + (per[s.roll]||{p:0}).p + ' / A ' + (per[s.roll]||{a:0}).a).join('\n') : 'No absentees.');
+  Promise.resolve(navigator.share ? navigator.share({ text:txt }) : navigator.clipboard.writeText(txt).then(() => toast('Absentee list copied'))).catch(() => {});
+}
+function todayCard(){
+  const now = new Date(), day = now.getDate(); if(now.getDay() === 0) return '';
+  const mine = sheets.filter(isCurMonth).slice(0, 12); if(!mine.length || isAdmin) return '';
+  const rows = mine.map(e => {
+    const D = data[e.name], done = D && D.marks && D.marks[day] && Object.keys(D.marks[day]).length || queue.some(q => q.sheet === e.name && q.day === day && q.kind !== 'mt');
+    return `<button class="chip ${done ? '' : 'on'}" data-today="${esc(e.name)}">${done ? '\u2713 ' : ''}${esc(e.cls)} \u00b7 ${esc(titleCase(e.sub))}</button>`;
+  }).join('');
+  return `<div class="note" style="border-style:solid"><b>Today</b> \u00b7 dark = pending<div class="chips">${rows}</div></div>`;
+}
 </script>
 </body>
 </html>
