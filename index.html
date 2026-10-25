@@ -194,6 +194,7 @@ dialog::backdrop{background:rgba(8,14,26,.55)}
   #app.phid .wrap{grid-column:1}
   .mini{display:none!important}
   #app.compact .panel{display:block}
+ 
   /* ===== look & feel v2 ===== */
 :root{--chev:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' fill='none' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5l4 4 4-4'/%3E%3C/svg%3E")}
 @media(prefers-color-scheme:dark){:root{--chev:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' fill='none' stroke='%239AA9C0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5l4 4 4-4'/%3E%3C/svg%3E")}}
@@ -651,6 +652,7 @@ const trendHtml = trend.length > 1 ? '<div style="display:flex;gap:6px;align-ite
     <h2>${esc(s.name)}</h2><div class="meta">Roll ${esc(roll)} \u00b7 ${esc(sel.cls)} \u00b7 ${esc(titleCase(sel.sub))}${s.off ? (s.offGuest ? '<br>Guest removed: attendance is closed for this student.' : '<br>Changed subject: attendance is closed for this student.') : ''}${gInfo}</div>
     <div class="stats"><div><b>${p == null ? '-' : p + '%'}</b><small>Attendance</small></div><div><b>${c.p}</b><small>Present</small></div><div><b>${c.a}</b><small>Absent</small></div>
       <div><b>${mt == null ? '-' : mt === 'A' ? 'Abs' : mt + '/' + d.mt.total}</b><small>Test</small></div></div>
+       ${trendHtml}
     <div class="chips">${TAGS.map(t => `<button class="chip ${R.tags.includes(t) ? 'on' : ''}" data-tag="${esc(t)}">${esc(t)}</button>`).join('')}</div>
     <textarea id="rkTxt" maxlength="400" placeholder="Add a comment, e.g. bunking the last lecture often...">${esc(keep || '')}</textarea>
     <div class="acts"><button class="btn small primary grow" id="rkAdd">Add comment</button><button class="btn small grow" id="closeDlg">Close</button></div>
@@ -781,7 +783,9 @@ function openReport(roll){
     ${cps.length ? `<label class="lb">Send to which Chief Proctor?</label><div class="rcat" id="rpCps">${cpChipsHtml()}</div>`
       : '<div class="diag">The Chief Proctor list is not on this phone yet. Connect to the internet once and open the app again. You can still save the report now and send it on WhatsApp later from My reports.</div>'} 
     
-<div class="rdate"><label for="rpDate">Date</label><input id="rpDate" type="date" max="${today}" value="${today}"></div>
+<label class="lb">Reason</label><div class="rcat">${REP_CATS.map(c => `<button class="chip" data-cat="${esc(c)}">${esc(c)}</button>`).join('')}</div>
+    <div class="rcat"><button class="chip" data-sev="Normal">Normal</button><button class="chip sev-s" data-sev="Serious">Serious</button></div>
+    <div class="rdate"><label for="rpDate">Date</label><input id="rpDate" type="date" max="${today}" value="${R.date}"></div>
     <textarea id="rpTxt" maxlength="${REP_MAX}" placeholder="Write what happened, when and where. Be factual."></textarea>
     <div class="rcount" id="rpCount"></div>
     ${isGuest ? `<label class="gbox"><input type="checkbox" id="rpGuest"><span>Also remove <b>${esc(s.name)}</b> as a guest from ${esc(titleCase(sel.sub))} (${esc(monLabel(sel.mon))} onwards). Her old attendance stays in the sheet. If you do not tick this, she stays a guest and is only reported.</span></label>` : ''}
@@ -807,7 +811,8 @@ function openReport(roll){
   /** Validates, builds the record. Returns null (and shows the reason) when something is missing. */
   const build = via => {
     const t = txt.value.trim(); err.textContent = '';
-    if(via !== 'none' && !R.cp){ err.textContent = 'Choose the Chief Proctor first.'; return null; }
+        if(via !== 'none' && !R.cp){ err.textContent = 'Choose the Chief Proctor first.'; return null; }
+    if(!R.cat){ err.textContent = 'Choose the reason first.'; return null; }
     if(t.length < REP_MIN){ err.textContent = 'Write your statement (at least ' + REP_MIN + ' characters).'; return null; }
     if(!R.date){ err.textContent = 'Choose the date of the incident.'; return null; }
     const dup = myReports.concat(rq).find(r => r.roll === roll && r.cls === sel.cls && r.date === R.date && r.cat === R.cat);
@@ -1150,7 +1155,9 @@ const perBar = (mode !== 'att' || !hasMulti()) ? '' :
         <div class="fl" id="fl">${fk.map(([k, t]) => `<button class="chip ${filterQ === k ? 'on' : ''}" data-f="${k}">${t}</button>`).join('')}</div><div class="nores" id="nores">No student matches.</div>` : ''}
         ${todayCard()}
       ${body}</div>
-    <div class="bottom"><div class="in"><button class="btn primary" id="saveBtn">Save period</button></div></div>`;
+    <div class="bottom"><div class="in" style="display:flex;gap:8px"><button class="btn primary" id="saveBtn" style="flex:1">Save period</button>${mode === 'att' && ready ? '<button class="btn" id="shareBtn" style="flex:none;width:auto">Share absentees</button>' : ''}</div></div>
+    
+    `;
   $('#app').classList.toggle('phid', panelHidden); $('#app').classList.toggle('compact', compact && !panelHidden && !isLandscape());
   const rt = $('#retryBtn'); if(rt) rt.onclick = () => { delete tried[name]; delete sheetErr[name]; fresh[name] = 0; renderMain(); };
   document.querySelectorAll('#list .row').forEach(paintRow);
@@ -1513,6 +1520,7 @@ document.addEventListener('click', ev => {
   if(t.closest('#printBtn')) return printSheet();
   if(t.closest('#statusChip')) return openSync();
   if(t.closest('#saveBtn')) return save();
+    if(t.closest('#shareBtn')) return shareAbsentees();
   if(t.closest('#panelBtn')) return togglePanel();
   if(t.closest('#mtFillA')) return mtFillA();
   if(t.closest('#delBtn')) return openDeleteDay();
@@ -1570,13 +1578,14 @@ function shareAbsentees(){
   Promise.resolve(navigator.share ? navigator.share({ text:txt }) : navigator.clipboard.writeText(txt).then(() => toast('Absentee list copied'))).catch(() => {});
 }
 function todayCard(){
-  const now = new Date(), day = now.getDate(); if(now.getDay() === 0) return '';
-  const mine = sheets.filter(isCurMonth).slice(0, 12); if(!mine.length || isAdmin) return '';
+  if(isAdmin) return '';
+  const now = new Date(), day = now.getDate(), sun = now.getDay() === 0;
+  const mine = sheets.filter(isCurMonth).slice(0, 12); if(!mine.length) return '';
   const rows = mine.map(e => {
     const D = data[e.name], done = D && D.marks && D.marks[day] && Object.keys(D.marks[day]).length || queue.some(q => q.sheet === e.name && q.day === day && q.kind !== 'mt');
-    return `<button class="chip ${done ? '' : 'on'}" data-today="${esc(e.name)}">${done ? '\u2713 ' : ''}${esc(e.cls)} \u00b7 ${esc(titleCase(e.sub))}</button>`;
+    return `<button class="chip ${done || sun ? '' : 'on'}" data-today="${esc(e.name)}">${done ? '\u2713 ' : ''}${esc(e.cls)} \u00b7 ${esc(titleCase(e.sub))}</button>`;
   }).join('');
-  return `<div class="note" style="border-style:solid"><b>Today</b> \u00b7 dark = pending<div class="chips">${rows}</div></div>`;
+  return `<div class="note" style="border-style:solid"><b>Today</b> \u00b7 ${sun ? 'Sunday, no classes' : 'dark = pending, \u2713 = marked'}<div class="chips">${rows}</div></div>`;
 }
 </script>
 </body>
