@@ -1604,5 +1604,463 @@ function todayCard(){
   return `<div class="note" style="border-style:solid"><b>Today</b> \u00b7 ${sun ? 'Sunday, no classes' : 'dark = pending, \u2713 = marked'}<div class="chips">${rows}</div></div>`;
 }
 </script>
+<script>
+/* ===== JCW Help add-on v1.1: hover hints + hint mode + illustrated manual ===== */
+(function(){
+'use strict';
+const canHover = matchMedia('(hover:hover) and (pointer:fine)').matches;
+const q = x => document.querySelector(x);
+let hintOn = false, hoverT = 0, restorePanel = false, built = false;
+
+/* ---------- styles ---------- */
+const css = `
+.helpq{font-weight:800;font-size:19px;color:var(--ring)}
+#hintBar{position:fixed;top:0;left:0;right:0;z-index:30;display:flex;align-items:center;gap:10px;padding:calc(8px + var(--sat)) max(12px,var(--sar)) 8px max(12px,var(--sal));background:#2F5BEA;color:#fff;font-size:13.5px;font-weight:650;line-height:1.3}
+#hintBar span{flex:1}
+#hintBar button{height:36px;padding:0 14px;border-radius:10px;border:0;background:#fff;color:#0F1B2D;font-weight:800}
+#hintShield{position:fixed;top:0;left:0;right:0;bottom:0;z-index:25;background:rgba(15,27,45,.10);touch-action:pan-y;cursor:help}
+#hintBubble{position:fixed;z-index:60;width:min(320px,92vw);padding:12px 14px;border-radius:14px;background:var(--surface);color:var(--ink);border:1.5px solid var(--ring);box-shadow:0 10px 30px rgba(0,0,0,.28);font-size:13.5px;line-height:1.4;pointer-events:none}
+#hintBubble.tap{pointer-events:auto}
+#hintBubble b{display:block;font-size:14.5px;margin-bottom:3px}
+#hintBubble p{margin:0}
+#hintBubble button{margin-top:8px;border:0;background:transparent;color:var(--ring);font-weight:800;padding:0;text-decoration:underline;font-size:13px}
+.hintTarget{outline:3px solid #F5A623!important;outline-offset:2px}
+#helpDlg{width:min(760px,96vw);max-height:94vh;height:min(94vh,920px);overflow:hidden}
+#helpDlg[open]{display:flex;flex-direction:column}
+.hmHead{flex:none;padding:14px 16px 10px;border-bottom:1px solid var(--line);background:var(--surface)}
+.hmHead h2{margin:0 0 8px;font-size:20px;display:flex;align-items:center;gap:8px}
+.hmHead h2 button{margin-left:auto}
+.hmTools{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.hmSearch{width:100%;height:42px;border:1.5px solid var(--line);border-radius:12px;background:var(--bg);padding:0 12px;margin-bottom:8px;font-size:16px}
+.hmNav{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.hmNav::-webkit-scrollbar{display:none}
+.hmNav .chip{flex:none;height:32px;font-size:12.5px}
+.hmBody{flex:1;overflow-y:auto;padding:6px 16px 30px;-webkit-overflow-scrolling:touch}
+.hmBody section{padding:14px 0;border-bottom:1px solid var(--line)}
+.hmBody h3{margin:0 0 6px;font-size:17px}
+.hmBody p,.hmBody li{font-size:14px;line-height:1.5}
+.hmBody p{margin:6px 0}
+.hmBody ul,.hmBody ol.st{margin:6px 0;padding-left:20px}
+.hmBody .tip{margin:8px 0;padding:10px 12px;border-radius:12px;background:var(--leave-bg);font-size:13.5px;line-height:1.45}
+.hmBody .none{display:none;padding:20px 0;color:var(--muted);text-align:center}
+.shotWrap{margin:12px auto;max-width:400px}
+.shotWrap figcaption{font-size:12px;color:var(--muted);text-align:center;margin-top:5px}
+.shot{border:1px solid var(--line);border-radius:20px;background:var(--bg);padding:14px;overflow:hidden;box-shadow:var(--shadow);pointer-events:none;user-select:none}
+.shot .top{border-radius:12px;padding:8px 10px}
+.shot .pcard{margin-top:8px}
+.rel{position:relative}
+.cn{display:inline-grid;place-items:center;flex:none;width:20px;height:20px;border-radius:50%;background:#E5322B;color:#fff;font:800 11px/1 system-ui,sans-serif;font-style:normal}
+.pin{position:absolute;top:-8px;left:-6px;z-index:3;box-shadow:0 0 0 2px #fff}
+.leg{list-style:none;margin:8px 0;padding:0}
+.leg li{display:flex;gap:8px;align-items:flex-start;padding:4px 0}
+.leg li span{flex:1;min-width:0}
+.mockdlg{background:var(--surface);border-radius:18px;border:1px solid var(--line);padding:14px;color:var(--ink)}
+.mockdlg h2{margin:0 0 4px;font-size:18px}
+.dw{display:flex;gap:6px;flex-wrap:wrap}
+.cmp{width:100%;border-collapse:collapse;font-size:13px}
+.cmp td{padding:6px 4px;border-top:1px solid var(--line);vertical-align:top}
+`;
+const sty = document.createElement('style'); sty.textContent = css; document.head.appendChild(sty);
+
+/* ---------- hints: [selector, title, text, manual section, optional function(el) -> [title,text]] ---------- */
+const MKH = {
+  P:['P = Present','The student attended this lecture. Only P counts towards the attendance percentage.'],
+  A:['A = Absent','The student was absent. The row turns red.'],
+  L:['L = Leave','The student is on approved leave. Not counted as present.'],
+  B:['B = Bunk','The student is in college but missed this lecture. Not counted as present.']
+};
+const FH = {
+  all:['All','Shows every student.'],
+  un:['Unmarked','Shows only students you have not marked yet. Use it to find who is left.'],
+  ab:['Absent','Shows only students marked A (or A in the test).'],
+  low:['Low','Shows students below 73% attendance (or below 50% in the monthly test).']
+};
+const HINTS = [
+ ['#helpBtn,#helpLogin','Help and manual','Opens the illustrated manual. You can also switch on Hint mode there.','hints'],
+ ['#panelBtn','Hide or show the controls','Folds the class, subject and day controls away so more students fit on screen. Tap again to bring them back.','screen'],
+ ['#statusChip','Sync status and account','Shows Synced, Saving, Offline, or how many records are waiting. Tap it to sync now, see unsent records, open My reports, change your password or sign out.','sync'],
+ ['#selCls','Class / section','Choose the class and section you teach, for example FCS-1 D2.','screen'],
+ ['#selSub','Subject','Choose the subject of the selected class.','screen'],
+ ['#selMon','Month','Choose the month sheet. Months run from September up to the current month.','screen'],
+ ['[data-mode="att"]','Attendance','Daily attendance: pick a day and mark every student P, A, L or B.','mark'],
+ ['[data-mode="mt"]','Monthly test','Switch to entering monthly test marks for this section.','test'],
+ ['#calBtn','Calendar','Shows the whole month. Green dot = marked, orange = missed, yellow = note, purple = more than one lecture. Tap a date to open it.','days'],
+ ['#noteBtn','Day note','Write a note on this date, for example College closed or Class not held. The date header turns yellow in the sheet.','note'],
+ ['#multiOn','More than one lecture today','Tap if you take this class more than once today. A lecture bar (1, 2, 3 ...) appears and each lecture is saved separately.','lectures'],
+ ['#delBtn','Delete attendance','Deletes the attendance of the selected lecture (or of the day). You must type the day number to confirm. Needs internet.','delete'],
+ ['#guestBtn','Add guest student','Adds a student of another section who attends this subject with you. Her own teacher is informed.','guest'],
+ ['#sumBtn','Monthly summary','Shows every student with attendance %, and test marks. Filter low attendance and share the list.','summary'],
+ ['#printBtn','Print sheet','Creates a PDF of this month sheet. Needs internet; your latest attendance is sent first.','summary'],
+ ['#perAdd','Add another lecture','Adds the next lecture button (up to 8 lectures a day).','lectures'],
+ ['#multiOff','Back to one lecture','Removes the lecture bar for this day. Only possible while no second lecture is saved.','lectures'],
+ ['#perBar .pchip','Lecture number','Choose which lecture of the day you are marking. A green dot means it is already saved.','lectures',el=>['Lecture '+(el.dataset.per||''),'Tap to mark or edit this lecture. A dot under the number means it is already saved.']],
+ ['#strip .day','Day','Tap to work on this date. Green dot = marked, orange = missed, yellow = note, purple badge = more than one lecture. Sundays are greyed out.','days',el=>['Day '+(el.dataset.day||''),'Tap to open this date. Green dot = marked, orange = missed, yellow = note, purple badge = more than one lecture.']],
+ ['#bar3,#nums,.prow','Counts','Live count of P, A, L, B and students still left to mark.','mark'],
+ ['#mtTotal','Total marks','Type the total marks of the test first (for example 20). Student marks cannot be more than this.','test'],
+ ['#mtFillA','Fill empty with A','Puts A (absent) in every empty row. Handy after entering all present students. Undo is offered.','test'],
+ ['#mtInfo,.cnt','Test progress','How many students are entered and how many are left.','test'],
+ ['#sline','Status line','Green = saved, yellow = waiting to reach the sheet, red = problem. Tap it when it shows low attendance or a note.','sync'],
+ ['#miniBar','Folded controls','Tap to open the controls again. They fold automatically while you scroll down.','screen'],
+ ['.allrow .ck','Mark all','Ticks everyone with this mark. Untick to clear. An Undo button appears for a few seconds.','mark',el=>{const v=(el.querySelector('input')||{dataset:{}}).dataset.all;return ['Mark all '+(v||''),'Marks every active student '+(v||'')+'. Untick to clear. Then change the exceptions one by one. Undo is offered.'];}],
+ ['.allrow','Mark all','Use the boxes to mark the whole class with one mark, then correct exceptions.','mark'],
+ ['#list .seg button','Mark','Tap to mark this student. Tap the same mark again to clear it.','mark',el=>MKH[el.dataset.v]],
+ ['.mk','Test marks','Type marks, or A / AB / Absent. Red means below 50% or absent.','test'],
+ ['#sq','Search','Type part of a name or roll number to find a student quickly.','mark'],
+ ['#fl .chip','Filter','Filters the list.','mark',el=>FH[el.dataset.f]],
+ ['.who','Student','Tap the name to open details: attendance, test, trend, tags, comments and Report to Chief Proctor.','student'],
+ ['.rtag','Tag','A tag you added, a Guest label, or a note that the student changed subject.','student'],
+ ['.pct','Low attendance','Attended lectures out of lectures held this month. Shown when below 73%.','mark'],
+ ['[data-today]','Today shortcut','Jump to one of your sections for today. Dark = still pending, tick = already marked.','days'],
+ ['#saveBtn','Save','Saves on the phone first, then sends to the sheet. Everyone must be marked. Works offline; it sends when internet returns.','mark'],
+ ['#shareBtn','Share absentees','Shares today\'s list of absent, leave and bunk students with their attendance so far.','summary'],
+ ['.row','Student row','Mark with P, A, L, B on the right. Tap the name for details.','mark'],
+ /* pop-up windows */
+ ['#rpBtn','Report to Chief Proctor','Write a report on this student and send it on WhatsApp. It is also saved on the server.','report'],
+ ['#gDel','Remove guest','Removes this guest from this sheet and later months. Old attendance stays.','guest'],
+ ['[data-tag]','Tag','Tap to add or remove a tag on this student. Tags are private to you.','student'],
+ ['#rkTxt','Comment','Write a private comment about this student.','student'],
+ ['#rkAdd','Add comment','Saves your comment with today\'s date.','student'],
+ ['[data-del]','Delete comment','Deletes this comment.','student'],
+ ['#syncNow','Sync now','Sends everything waiting and refreshes the sheets.','sync'],
+ ['#repBtn','My reports','Reports you sent to the Chief Proctor, their status, resend on WhatsApp.','report'],
+ ['#pwBtn','Change password','Changes your password here and in the portal.','account'],
+ ['#signOutBtn','Sign out','Signs out. Unsent records are sent first, or you are warned.','account'],
+ ['[data-discard]','Discard','Throws away this unsent record. It will never reach the sheet.','sync'],
+ ['#delTyped','Confirm','Type the day number shown to enable the Delete button.','delete'],
+ ['#delGo','Delete','Permanently deletes the marks. It cannot be undone in the app.','delete'],
+ ['[data-chip]','Quick reason','Fills the note with this reason.','note'],
+ ['#noteTxt','Note text','Reason shown on the date header in the sheet.','note'],
+ ['#noteSave','Save note','Saves the note on this date.','note'],
+ ['#noteClear','Remove note','Deletes the note of this date.','note'],
+ ['[data-cp]','Chief Proctor','Choose which Chief Proctor receives this report.','report'],
+ ['[data-cat]','Reason','Choose the type of problem.','report'],
+ ['[data-sev]','Severity','Normal or Serious.','report'],
+ ['#rpDate','Incident date','The date the incident happened.','report'],
+ ['#rpTxt','Statement','Write what happened, when and where. At least 10 characters. Be factual.','report'],
+ ['#rpGuest','Also remove guest','Tick to also remove this guest from the subject.','report'],
+ ['#rpWaWeb,#rsWaWeb','Send on WhatsApp','Opens WhatsApp with the message ready. Press Send inside WhatsApp. The report is saved too.','report'],
+ ['#rpSave','Save report only','Saves the report without opening WhatsApp.','report'],
+ ['#rpCopy','Copy message','Copies the WhatsApp text so you can paste it anywhere.','report'],
+ ['#rpBack,#rsBack','Back','Returns to the previous window.','report'],
+ ['#copyRep','Share list','Shares or copies this list as text.','summary'],
+ ['[data-sf]','Summary filter','All students, attendance below 73%, or test below 50%.','summary'],
+ ['[data-pick]','Calendar date','Tap to open this date.','days'],
+ ['#gq','Search student','Type at least 2 letters of the name or roll number of the student.','guest'],
+ ['[data-g]','Add as guest','Adds this student as a guest in your class.','guest'],
+ ['[data-qwa],[data-swa]','WhatsApp','Send this report on WhatsApp again.','report'],
+ ['[data-sdel]','Delete report','Deletes the report from the server while it is still Received.','report'],
+ ['[data-retry]','Retry','Tries to send this report again.','report'],
+ ['[data-rdisc]','Discard','Throws away a report that never reached the server.','report'],
+ ['#closeDlg,#delCancel,#noteCancel,#pwCancel','Close','Closes this window.','screen']
+];
+function findHint(t){
+  if(!t || !t.closest) return null;
+  for(const h of HINTS){
+    const el = t.closest(h[0]); if(!el) continue;
+    const r = h[4] ? (h[4](el) || [h[1],h[2]]) : [h[1],h[2]];
+    return { el, title:r[0], text:r[1], sec:h[3] };
+  }
+  return null;
+}
+
+/* ---------- bubble ---------- */
+function hideBubble(){
+  const b = document.getElementById('hintBubble'); if(b) b.remove();
+  document.querySelectorAll('.hintTarget').forEach(e => e.classList.remove('hintTarget'));
+}
+function showBubble(rect, el, title, text, sec, tap){
+  hideBubble();
+  const b = document.createElement('div'); b.id = 'hintBubble'; if(tap) b.className = 'tap';
+  b.innerHTML = '<b></b><p></p>' + (tap && sec ? '<button type="button">Read more in the manual</button>' : '');
+  b.firstChild.textContent = title; b.children[1].textContent = text;
+  (document.querySelector('dialog[open]') || document.body).appendChild(b);
+  const bw = b.offsetWidth, bh = b.offsetHeight, vw = innerWidth, vh = innerHeight;
+  let top = rect.bottom + 10; if(top + bh > vh - 8) top = rect.top - bh - 10;
+  top = Math.max(8, Math.min(top, vh - bh - 8));
+  let left = rect.left + rect.width / 2 - bw / 2; left = Math.max(8, Math.min(left, vw - bw - 8));
+  b.style.top = top + 'px'; b.style.left = left + 'px';
+  if(el) el.classList.add('hintTarget');
+  const btn = b.querySelector('button'); if(btn) btn.onclick = () => openHelp(sec);
+}
+
+/* ---------- hover hints (laptop) ---------- */
+if(canHover){
+  document.addEventListener('mouseover', ev => {
+    clearTimeout(hoverT);
+    if(hintOn || !store.get('hhover', true)) return;
+    const t = ev.target; if(!t.closest || t.closest('#helpDlg,#hintBubble')) return;
+    const h = findHint(t); if(!h){ hideBubble(); return; }
+    hoverT = setTimeout(() => showBubble(h.el.getBoundingClientRect(), h.el, h.title, h.text, h.sec, false), 550);
+  });
+  document.addEventListener('mouseout', () => { clearTimeout(hoverT); if(!hintOn) hideBubble(); });
+  document.addEventListener('mousedown', () => { clearTimeout(hoverT); if(!hintOn) hideBubble(); }, true);
+}
+window.addEventListener('scroll', () => { clearTimeout(hoverT); hideBubble(); }, true);
+
+/* ---------- hint mode (phone and laptop): tap anything to read what it does, nothing is pressed ---------- */
+function enterHint(){
+  if(hintOn) return;
+  document.querySelectorAll('dialog[open]').forEach(d => d.close());
+  hintOn = true; window.scrollTo(0, 0);
+  try{ if(typeof setCompact === 'function') setCompact(false); }catch(e){}
+  try{ if(panelHidden){ togglePanel(); restorePanel = true; } }catch(e){}
+  const bar = document.createElement('div'); bar.id = 'hintBar';
+  bar.innerHTML = '<span>Hint mode: tap any button, mark or student to see what it does. Nothing is pressed.</span><button type="button">Done</button>';
+  bar.querySelector('button').onclick = exitHint;
+  const sh = document.createElement('div'); sh.id = 'hintShield';
+  sh.addEventListener('click', ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    const els = document.elementsFromPoint(ev.clientX, ev.clientY);
+    for(const e of els){
+      if(e === sh || (e.closest && e.closest('#hintBar,#hintBubble'))) continue;
+      const h = findHint(e);
+      if(h){ showBubble(h.el.getBoundingClientRect(), h.el, h.title, h.text, h.sec, true); return; }
+    }
+    showBubble({ left:ev.clientX - 20, top:ev.clientY, bottom:ev.clientY + 20, width:40, height:20 }, null,
+      'Nothing to press here', 'Tap a button, a mark or a student name to learn what it does.', null, true);
+  });
+  document.body.appendChild(sh); document.body.appendChild(bar);
+}
+function exitHint(){
+  hintOn = false; hideBubble();
+  ['hintShield','hintBar'].forEach(i => { const e = document.getElementById(i); if(e) e.remove(); });
+  try{ if(restorePanel && !panelHidden) togglePanel(); }catch(e){}
+  restorePanel = false;
+}
+document.addEventListener('keydown', ev => { if(ev.key === 'Escape'){ if(hintOn) exitHint(); else hideBubble(); } });
+
+/* ---------- put the ? button on the screens (the app redraws often, so it is re-added after every redraw) ---------- */
+let welcomed = false;
+function inject(){
+  const row = q('.row1');
+  if(row && !document.getElementById('helpBtn')){
+    const b = document.createElement('button'); b.id = 'helpBtn'; b.type = 'button'; b.className = 'hideBtn helpq';
+    b.setAttribute('aria-label', 'Help and manual'); b.title = 'Help and manual'; b.textContent = '?';
+    row.insertBefore(b, document.getElementById('panelBtn') || row.lastElementChild);
+  }
+  const lg = q('.login');
+  if(lg && !document.getElementById('helpLogin')){
+    const b = document.createElement('button'); b.id = 'helpLogin'; b.type = 'button'; b.className = 'btn';
+    b.style.cssText = 'width:100%;margin-top:12px'; b.textContent = 'How to use this app (manual)';
+    lg.appendChild(b);
+  }
+  if(!welcomed && row && !store.get('hseen', false)){
+    welcomed = true; store.set('hseen', true);
+    toast('New: tap the ? button at the top for hints and the full manual.', { label:'Open', fn:() => openHelp(), ms:12000 });
+  }
+}
+const rm = window.renderMain, rl = window.renderLogin;
+window.renderMain = function(){ const r = rm.apply(this, arguments); inject(); return r; };
+window.renderLogin = function(){ const r = rl.apply(this, arguments); inject(); return r; };
+document.addEventListener('click', ev => {
+  if(ev.target.closest && ev.target.closest('#helpBtn,#helpLogin')){ ev.preventDefault(); openHelp(); }
+});
+inject();
+
+/* ---------- the manual ---------- */
+const P = (n, h, blk) => n ? '<span class="rel" style="display:' + (blk ? 'block' : 'inline-flex') + '">' + h + '<i class="cn pin">' + n + '</i></span>' : h;
+const shot = (inner, cap) => '<figure class="shotWrap"><div class="shot" inert aria-hidden="true">' + inner + '</div>' + (cap ? '<figcaption>' + cap + '</figcaption>' : '') + '</figure>';
+const leg = a => '<ol class="leg">' + a.map((t, i) => '<li><i class="cn">' + (i + 1) + '</i><span>' + t + '</span></li>').join('') + '</ol>';
+const chev = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>';
+const head = p => { p = p || {}; return '<div class="top"><div class="row1"><div class="ttl"><h1>JCW Daily Attendance</h1><div class="teacher">Good morning, Ms. Example</div></div>' +
+  P(p[1], '<span class="hideBtn helpq">?</span>') + P(p[2], '<span class="hideBtn">' + chev + '</span>') + P(p[3], '<span class="sync"><span class="dot"></span>Synced</span>') + '</div></div>'; };
+const ico = (n, k) => P(n, '<span class="ib">' + IC[k] + '</span>');
+const icons7 = ['cal','note','plus','trash','guest','sum','print'].map(k => '<span class="ib">' + IC[k] + '</span>').join('');
+const panel = (p, inner) => { p = p || {}; return '<div class="pcard"><div class="pk">' + P(p.sel, '<select tabindex="-1"><option>FCS-1 D2</option></select>', 1) +
+  '<select tabindex="-1"><option>Computer Science</option></select><select tabindex="-1"><option>Oct</option></select></div><div class="mrow">' +
+  P(p.tabs, '<div class="tabs2"><button class="on" tabindex="-1">Attendance</button><button tabindex="-1">Monthly test</button></div>') +
+  P(p.ico, '<div class="ibtns">' + icons7 + '</div>') + '</div>' + (inner || '') + '</div>'; };
+const DAYS = [['Wed',21,'has hasnote',0],['Thu',22,'miss',0],['Fri',23,'has',0],['Sat',24,'has multi',2],['Sun',25,'sun',0],['Mon',26,'sel today',0]];
+const strip = pins => '<div style="display:flex;gap:6px;margin-top:9px">' + DAYS.map((d, i) =>
+  P(pins ? pins[i] : 0, '<button class="day ' + d[2] + '" tabindex="-1"' + (d[2] === 'sun' ? ' disabled' : '') + '><span>' + d[0] + '</span><b>' + d[1] + '</b>' + (d[3] ? '<i class="mb">\u00d7' + d[3] + '</i>' : '') + '</button>')).join('') + '</div>';
+const bar = '<div class="prow"><div class="bar3"><i class="p" style="width:60%"></i><i class="a" style="width:15%"></i><i class="l" style="width:5%"></i></div><div class="nums"><span class="p"><b>18</b>P</span><span class="a"><b>4</b>A</span><span class="l"><b>1</b>L</span><span class="b"><b>0</b>B</span><span><b>7</b>left</span></div></div>';
+const seg = v => '<span class="seg">' + ['P','A','L','B'].map(k => '<button class="' + k.toLowerCase() + '" tabindex="-1" aria-pressed="' + (k === v) + '">' + k + '</button>').join('') + '</span>';
+const row = (i, name, roll, v, o) => { o = o || {}; return '<li class="row rel' + (v ? ' is-' + v.toLowerCase() : '') + (o.low ? ' low' : '') + '"><span class="no">' + i + '</span><span class="who"><b>' + name + '</b><small><span>' + roll + '</span>' +
+  (o.low ? '<span class="pct lowp">Attend: 8/12 = 66.7%</span>' : '') + (o.tag || '') + '</small></span>' + seg(v) + (o.pin ? '<i class="cn pin">' + o.pin + '</i>' : '') + '</li>'; };
+const allrow = '<div class="allrow"><span class="lbl">Mark all</span><span class="seg">' + ['P','A','L','B'].map(v => '<label class="ck ' + v.toLowerCase() + '">' + v + '<input type="checkbox" tabindex="-1"></label>').join('') + '</span></div>';
+const D = inner => '<div class="mockdlg">' + inner + '</div>';
+
+function sections(){
+  return [
+  { id:'start', nav:'Quick start', title:'Quick start', html:`
+    <p>Take attendance in six steps:</p>
+    <ol class="st"><li>Open the app and <b>sign in once with internet</b> (same username and password as the portal).</li>
+    <li>Choose <b>class, subject and month</b> in the top card.</li>
+    <li>Tap the <b>day</b> in the day strip (today is already selected).</li>
+    <li>Mark each student <b>P, A, L or B</b>. Tip: tick <b>Mark all P</b> first, then change only the absentees.</li>
+    <li>Press <b>Save</b> at the bottom. The status line says <i>saved on phone</i>, then <i>reached the sheet</i>.</li>
+    <li>No internet? Nothing is lost. Records wait on the phone and go to the sheet by themselves when internet returns.</li></ol>
+    <div class="tip">Not sure what a button does? Tap the <b>?</b> at the top, press <b>Turn on hint mode</b>, then tap any button. On a laptop just hold the mouse over a button for a moment.</div>` },
+
+  { id:'login', nav:'Sign in & offline', title:'Signing in, installing and working offline', html:`
+    <p>Sign in with your portal username and password while you have internet. After the first sign in the app remembers you and works offline.</p>
+    <ul><li><b>Android (Chrome):</b> menu (three dots) then <i>Install app</i> or <i>Add to Home screen</i>.</li>
+    <li><b>iPhone (Safari):</b> Share button then <i>Add to Home Screen</i>.</li>
+    <li><b>Laptop (Chrome or Edge):</b> click the install icon at the right end of the address bar.</li></ul>
+    <p>For offline use, open the app once with internet so your classes and months download. The app also downloads the other sections in the background while it shows <i>Updating...</i> in the status chip.</p>
+    <div class="tip">When you are offline everything you save stays on the phone. The status chip shows <b>Offline</b> or <b>N to sync</b>. Do not clear the browser data or sign out until it says <b>Synced</b>.</div>` },
+
+  { id:'screen', nav:'Main screen', title:'The main screen', html:`
+    <p>This is the screen you will use every day. The numbers match the list below the picture.</p>
+    ${shot(head({1:1,2:2,3:3}) + panel({sel:4,tabs:5,ico:6}, P(7, strip(), 1) + P(8, bar, 1)) +
+      '<ul class="list" style="margin-top:10px">' + row(1,'Ayesha Khan','JCW-F26-2301','P',{pin:9}) + row(2,'Bushra Noor','JCW-F26-2302','A') + '</ul>' +
+      P(10, '<div style="display:flex;gap:8px;width:100%"><button class="btn primary" style="flex:1" tabindex="-1">Save attendance (7 left)</button><button class="btn" tabindex="-1">Share absentees</button></div>', 1),
+      'Main screen (colours follow your phone theme)')}
+    ${leg(['<b>? Help</b>: this manual and hint mode.','<b>Hide / show controls</b>: folds the top card so more students are visible.','<b>Status chip</b>: Synced, Saving, Offline or N to sync. Tap it for account and sync.','<b>Class, subject and month</b> pickers.','<b>Attendance / Monthly test</b> tabs.','<b>Menu icons</b> (calendar, note, more lectures, delete, guest, summary, print). See the next section.','<b>Day strip</b>: tap a date.','<b>Live count</b> of P, A, L, B and students left.','<b>Student row</b>: mark on the right, tap the name for details.','<b>Save</b> and <b>Share absentees</b>.'])}
+    <p>While you scroll down, the top card folds into a one-line bar to save space. Tap that bar to open it again. Below the card you also find the <b>status line</b>, the <b>search box</b>, the <b>filters</b> (All, Unmarked, Absent, Low) and a <b>Today</b> card with shortcuts to your sections.</p>` },
+
+  { id:'icons', nav:'Menu icons', title:'The menu icons', html:`
+    <p>These icons sit on the right of the Attendance / Monthly test tabs.</p>
+    ${shot('<div class="pcard"><div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:6px">' + [['cal',1],['note',2],['plus',3],['trash',4],['guest',5],['sum',6],['print',7]].map(x => ico(x[1], x[0])).join('') + '</div></div>', 'The seven icons in Attendance mode')}
+    ${leg(['<b>Calendar</b>: the whole month at a glance; tap a date to open it.','<b>Note</b>: write a note on this date (college closed, class not held).','<b>Plus square</b>: I take more than one lecture of this class today.','<b>Dustbin</b>: delete the attendance of this lecture or day.','<b>Person with plus</b>: add a guest student from another section.','<b>Bars</b>: monthly summary of attendance and test.','<b>Printer</b>: PDF of this month sheet.'])}
+    <p>In <b>Monthly test</b> mode only Guest, Summary and Print are shown.</p>` },
+
+  { id:'mark', nav:'Marking', title:'Marking attendance', html:`
+    ${shot(allrow.replace('<span class="seg">', '<span class="seg rel"><i class="cn pin">1</i>') + '<ul class="list">' + row(1,'Ayesha Khan','JCW-F26-2301','P',{pin:2}) + row(2,'Bushra Noor','JCW-F26-2302','A') + row(3,'Cheema Iqra','JCW-F26-2303','L') + row(4,'Dua Fatima','JCW-F26-2304','B') + row(5,'Esha Ali','JCW-F26-2305','P',{low:true,pin:3}) + '</ul>', 'Marking students')}
+    ${leg(['<b>Mark all</b>: tick P (or A, L, B) to mark everyone at once, untick to clear. An Undo button appears for a few seconds.','Tap <b>P, A, L or B</b> on a student. Tap the same letter again to clear it.','A red <b>Attend: 8/12 = 66.7%</b> pill means the student is below 73%.'])}
+    <ul><li><b>P Present</b>: counts towards attendance. <b>A Absent</b>: row turns red. <b>L Leave</b>: approved leave. <b>B Bunk</b>: in college but missed the lecture. Only <b>P</b> is counted as attended.</li>
+    <li>A lecture counts as <i>held</i> when at least one student is P or A.</li>
+    <li>Everyone must be marked before you can save. The button shows how many are <i>left</i>. Use the filter <b>Unmarked</b> to find them.</li>
+    <li>Use the <b>search box</b> to find a student by name or roll number. Filters: <b>All</b>, <b>Unmarked</b>, <b>Absent</b>, <b>Low</b>.</li>
+    <li>Grey, struck-through students have <b>changed subject</b> (or a guest was removed). They cannot be marked and are not counted.</li>
+    <li>A guest is measured only against the lectures in which she was marked, so she is not punished for lectures before she joined.</li>
+    <li>Saved a wrong mark? Open the same day (and lecture), correct it and save again. It overwrites.</li></ul>` },
+
+  { id:'days', nav:'Days & calendar', title:'Days, calendar and Today card', html:`
+    ${shot(panel({}, strip([1,2,3,4,5,6])), 'Day strip')}
+    ${leg(['<b>Yellow dot</b> (top right): the day has a note.','<b>Orange dot</b>: a past day with no attendance (missed).','<b>Green dot</b>: attendance is saved.','<b>Purple badge</b> (x2): more than one lecture that day.','<b>Greyed</b>: Sunday, or a day with no class.','<b>Blue ring and filled</b>: today and the day you are working on.'])}
+    ${shot(D('<h2>October 2026</h2><div class="meta">FCS-1 D2 OCT COMPUTER SCIENCE</div><div class="grid">' + ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(h => '<div class="h ' + (h === 'Sun' ? 'sun' : '') + '">' + h + '</div>').join('') + '<div></div><div></div><div></div>' +
+      Array.from({length:31}, (_, i) => { const d = i + 1, sunday = [4,11,18,25].includes(d), c = sunday ? '' : d === 26 ? 'sel today' : d > 26 ? '' : d === 8 ? 'miss' : d === 16 ? 'has multi' : 'has';
+        return '<button class="cell ' + c + '" tabindex="-1"' + (sunday ? ' disabled' : '') + '>' + d + (d === 16 ? '<i class="mb">\u00d72</i>' : '') + '</button>'; }).join('') + '</div>'), 'Calendar (tap the calendar icon)')}
+    <p>Open any date in the calendar to mark or correct it. If you have unsaved marks and change the day, the app asks whether to discard them.</p>
+    <p>The <b>Today</b> card (under the status line) lists your sections for the current month. A <b>dark chip</b> is still pending, a <b>tick</b> means already marked. Tap a chip to jump straight to it.</p>` },
+
+  { id:'lectures', nav:'More lectures', title:'More than one lecture in a day', html:`
+    <p>Tap the <b>plus square icon</b>. A lecture bar appears under the days.</p>
+    ${shot(panel({}, '<div class="lecbar">' + '<span class="lt">Lecture</span>' + P(1,'<button class="pchip sel done" tabindex="-1">1</button>') + P(2,'<button class="pchip" tabindex="-1">2</button>') + P(3,'<button class="pchip add" tabindex="-1">+</button>') + P(4,'<button class="pchip x" tabindex="-1">\u2715</button>') + '</div>'), 'Lecture bar')}
+    ${leg(['Lecture 1, already saved (dot under it).','Lecture 2: tap it, mark the students, press <b>Save lecture 2</b>.','<b>+</b> adds another lecture (up to 8).','<b>\u2715</b> returns to one lecture a day (only while no extra lecture is saved).'])}
+    <ul><li>Each lecture is saved separately. The sheet shows <b>2P</b>, <b>3P</b> ... in the day cell: the number of lectures the student attended that day.</li>
+    <li>If a student has no P in any lecture that day, the sheet shows A, L or B (with the number of lectures in front).</li>
+    <li>Attendance percentage counts every lecture as one.</li></ul>` },
+
+  { id:'note', nav:'Day note', title:'Day note (college closed, class not held)', html:`
+    ${shot(D('<h2>Note for 26 Oct</h2><div class="meta">Saved in the sheet as a note on this date (the date header turns yellow).</div><div class="chips">' + P(1,'<span class="chip">College closed</span>') + '<span class="chip">Public holiday</span><span class="chip">Class not held</span></div><textarea tabindex="-1" style="margin-top:8px" placeholder="Type the reason here..."></textarea><div class="acts">' + P(2,'<span class="btn small primary">Save note</span>') + '<span class="btn small danger">Remove note</span><span class="btn small">Cancel</span></div>'), 'Note window')}
+    ${leg(['Tap a ready reason to fill the box, or type your own.','<b>Save note</b>. The date shows a yellow dot and the status line shows the note. <b>Remove note</b> deletes it.'])}` },
+
+  { id:'delete', nav:'Delete', title:'Deleting attendance', html:`
+    <p>The <b>dustbin icon</b> deletes the attendance of the <b>selected lecture</b> (or of the day if you take only one lecture). Other lectures of that day stay.</p>
+    ${shot(D('<h2>Delete lecture 2?</h2><div class="delwarn"><big>Monday, 26 October 2026</big>FCS-1 D2 \u00b7 Computer Science \u00b7 lecture 2<br>26 marks will be removed (P 22, A 3, L 1, B 0)</div><label>To confirm, type the day number: <b>26</b></label>' + P(1,'<input type="text" tabindex="-1" value="26" style="width:100%">',1) + '<div class="acts">' + P(2,'<span class="btn small danger fill">Delete lecture 2</span>') + '<span class="btn small">Cancel</span></div>'), 'Delete window')}
+    ${leg(['Type the day number. Until it matches, the Delete button stays disabled.','<b>Delete</b> removes the marks from the sheet.'])}
+    <div class="tip">Deleting needs internet and cannot be undone in the app. If the day still has a save waiting to reach the sheet, wait until the status chip says <b>Synced</b>.</div>` },
+
+  { id:'test', nav:'Monthly test', title:'Monthly test marks', html:`
+    <p>Tap the <b>Monthly test</b> tab.</p>
+    ${shot('<div class="pcard"><div class="mrow"><div class="tabs2"><button tabindex="-1">Attendance</button><button class="on" tabindex="-1">Monthly test</button></div></div>' + P(1,'<label class="tot"><span>Total marks</span><input type="text" value="20" tabindex="-1"></label>',1) +
+      '<div class="cnt">26 students \u00b7 12 entered \u00b7 14 left \u00b7 type A, AB or Absent</div>' + P(2,'<button class="fillA" tabindex="-1">Fill empty with A (absent)</button>',1) + '</div><ul class="list" style="margin-top:10px">' +
+      '<li class="row rel"><span class="no">1</span><span class="who"><b>Ayesha Khan</b><small><span>JCW-F26-2301</span><span class="mtp">Test: 17/20 = 85%</span></small></span>' + P(3,'<input class="mk" value="17" tabindex="-1">') + '</li>' +
+      '<li class="row rel mtlow"><span class="no">2</span><span class="who"><b>Bushra Noor</b><small><span>JCW-F26-2302</span><span class="mtp lowm">Test: 6/20 = 30%</span></small></span><input class="mk bad-no" value="6" tabindex="-1"></li></ul>' +
+      P(4,'<button class="btn primary" style="width:100%;margin-top:6px" tabindex="-1">Save test marks (14 left)</button>',1), 'Monthly test screen')}
+    ${leg(['Enter the <b>Total marks</b> first (for example 20).','<b>Fill empty with A</b>: marks every empty row absent (Undo is offered). Enter all present students first.','Type each student\'s marks, or <b>A / AB / Absent</b>. Marks above the total are refused.','<b>Save test marks</b>. All students must have marks or A.'])}
+    <p>Rows turn <b>red</b> when the student is absent or below 50%. The test marks are written to the M.T column of the sheet, with the total above it.</p>` },
+
+  { id:'guest', nav:'Guest student', title:'Guest students', html:`
+    <p>A guest is a student of another section who attends this subject in your class.</p>
+    ${shot(D('<h2>Add guest student</h2><div class="meta">FCS-1 D2 \u00b7 Computer Science \u00b7 Oct. Search a student of another section.</div>' + P(1,'<input type="search" tabindex="-1" value="saba" style="width:100%">',1) + '<div class="q"><div><b>Saba Gul</b><small>JCW-F26-3120 \u00b7 FCS-1 D4</small></div>' + P(2,'<span class="btn small primary">Add</span>') + '</div>'), 'Guest search')}
+    ${leg(['Type at least 2 letters of the name or roll number.','<b>Add</b> and confirm. She appears in your list with a purple <b>Guest</b> tag, in this month and later months.'])}
+    <ul><li>Her own class teacher sees a tag <b>Guest in ...</b> so she knows where her student is.</li>
+    <li>To remove a guest: tap her name, then <b>Remove guest from this sheet</b>. Old attendance stays in the sheet. Needs internet.</li></ul>` },
+
+  { id:'student', nav:'Student details', title:'Student details, tags and comments', html:`
+    <p>Tap a student's <b>name</b> to open her card.</p>
+    ${shot(D('<h2>Ayesha Khan</h2><div class="meta">Roll JCW-F26-2301 \u00b7 FCS-1 D2 \u00b7 Computer Science</div>' + P(1,'<div class="stats"><div><b>92%</b><small>Attendance</small></div><div><b>11</b><small>Present</small></div><div><b>1</b><small>Absent</small></div><div><b>17/20</b><small>Test</small></div></div>',1) +
+      P(2,'<div class="chips"><span class="chip on">Excellent</span><span class="chip">Bunking</span><span class="chip">Often late</span></div>',1) + '<textarea tabindex="-1" style="margin-top:8px" placeholder="Add a comment..."></textarea><div class="acts"><span class="btn small primary grow">Add comment</span><span class="btn small grow">Close</span></div>' + P(3,'<div class="acts" style="margin-top:8px"><span class="btn small danger grow">Report to Chief Proctor</span></div>',1)), 'Student card')}
+    ${leg(['This month\'s attendance, present, absent and test mark (a small bar chart of earlier months appears below).','<b>Tags</b>: tap to add or remove. Tags and comments are private to you and are saved to the server.','<b>Report to Chief Proctor</b>.'])}` },
+
+  { id:'report', nav:'Chief Proctor report', title:'Report to the Chief Proctor (WhatsApp)', html:`
+    ${shot(D('<h2>Report to Chief Proctor</h2><div class="meta"><b>Ayesha Khan</b><br>Roll JCW-F26-2301 \u00b7 FCS-1 D2</div>' + P(1,'<div class="rcat"><span class="chip on">CP1</span><span class="chip">CP2</span></div>',1) + P(2,'<div class="rcat"><span class="chip on">Bunking / leaving class</span><span class="chip">Late / irregular</span><span class="chip">Mobile phone</span></div>',1) +
+      P(3,'<div class="rcat"><span class="chip on">Normal</span><span class="chip sev-s">Serious</span></div>',1) + '<div class="rdate"><label>Date</label><input type="text" value="2026-10-26" tabindex="-1"></div>' + P(4,'<textarea tabindex="-1" class="rtxt" placeholder="Write what happened, when and where."></textarea>',1) +
+      '<div class="acts">' + P(5,'<span class="btn small wa">Send on WhatsApp Web</span>') + '</div><div class="acts"><span class="btn small grow">Save report only</span><span class="btn small grow">Copy message</span></div>'), 'Report window')}
+    ${leg(['Choose the <b>Chief Proctor</b> who receives the report.','Choose the <b>reason</b>.','Choose <b>Normal</b> or <b>Serious</b>.','Write a factual <b>statement</b> (at least 10 characters).','<b>Send on WhatsApp</b>: WhatsApp opens with the message ready, press Send there. The report is also saved on the server and noted on the student in the month sheet.'])}
+    <ul><li>The report is kept on the phone first, so it is never lost if internet is missing.</li>
+    <li><b>Save report only</b> saves without WhatsApp; <b>Copy message</b> copies the text.</li>
+    <li>For a guest there is a tick box to also remove her from the subject.</li>
+    <li><b>My reports</b> (status chip, then My reports) shows every report, its status (Received, Action ...), a WhatsApp resend button, and <b>Delete</b> while the status is still Received.</li></ul>` },
+
+  { id:'summary', nav:'Summary, share, print', title:'Summary, Share and Print', html:`
+    ${shot(D('<h2>Summary: October 2026</h2><div class="meta">FCS-1 D2 OCT COMPUTER SCIENCE<br>14 lectures held, 26 students, 3 below 73% attendance</div>' + P(1,'<div class="chips"><span class="chip on">All</span><span class="chip">Attendance below 73%</span><span class="chip">Test below 50%</span></div>',1) +
+      '<div class="q"><div><b>Esha Ali</b><small>JCW-F26-2305 \u00b7 P 8 \u00b7 A 4</small></div><span class="sp lowp">8/12 = 66.7%</span></div><div class="acts">' + P(2,'<span class="btn small grow">Share list</span>') + '<span class="btn small grow">Close</span></div>'), 'Summary window')}
+    ${leg(['Filter all students, low attendance or low test.','<b>Share list</b> sends or copies the list as text (for example to WhatsApp).'])}
+    <ul><li><b>Share absentees</b> (bottom of the main screen) shares today's students who are Absent, on Leave or Bunking, with their attendance so far this month.</li>
+    <li><b>Print</b> (printer icon) creates a PDF of the month sheet. Needs internet. Your latest attendance is sent to the sheet first.</li></ul>` },
+
+  { id:'sync', nav:'Sync & status', title:'Sync, status chip and status line', html:`
+    ${shot(head({3:1}) + D('<h2>Account and sync</h2><div class="meta"><b>Ms. Example</b><br>Online<br>Last synced: 26/10/2026, 9:41</div><div class="q"><div><b>FCS-1 D2 OCT COMPUTER SCIENCE</b>, day 26, period 1<small>26 students waiting</small></div>' + P(2,'<span class="btn small danger">Discard</span>') + '</div><div class="acts">' + P(3,'<span class="btn small primary grow">Sync now</span>') + P(4,'<span class="btn small grow">My reports</span>') + '</div><div class="acts"><span class="btn small grow">Change password</span></div><div class="acts"><span class="btn small danger grow">Sign out</span><span class="btn small grow">Close</span></div>'), 'Account and sync window (tap the status chip)')}
+    ${leg(['The <b>status chip</b>.','<b>Discard</b> throws away a waiting record that has not reached the sheet (use only if told to).','<b>Sync now</b> sends everything waiting and refreshes the sheets.','<b>My reports</b>.'])}
+    <table class="cmp"><tr><td><b>Synced</b></td><td>Everything is in the sheet.</td></tr><tr><td><b>Saving... / Updating...</b></td><td>The app is sending or refreshing.</td></tr><tr><td><b>3 to sync</b></td><td>3 records are waiting on the phone.</td></tr><tr><td><b>Offline</b></td><td>No internet. Keep working, it will send later.</td></tr><tr><td><b>Red outline</b></td><td>A record could not be saved. Open the chip to read why.</td></tr></table>
+    <p>The <b>status line</b> under the controls shows for the selected day: yellow <i>Saved on phone, waiting to reach the sheet</i>, green <i>saved at 9:41 (P 22, A 3 ...)</i>, or red with the reason.</p>` },
+
+  { id:'account', nav:'Password & sign out', title:'Password and signing out', html:`
+    <p>Open the status chip, then <b>Change password</b>. Enter the current password and the new one twice (at least 4 characters). This also changes your portal password.</p>
+    <p><b>Sign out</b> first tries to send everything waiting. If something cannot be sent, the app warns you that it would be lost. If an administrator changes your password, the app asks you to sign in again.</p>` },
+
+  { id:'colours', nav:'Colours', title:'Colours and signs', html:`
+    <table class="cmp">
+    <tr><td><span class="rtag good">Green</span></td><td>Present, saved, marked day.</td></tr>
+    <tr><td><span class="rtag" style="background:var(--absent-bg);color:var(--absent)">Red</span></td><td>Absent, low attendance (below 73%), low test (below 50%), errors.</td></tr>
+    <tr><td><span class="rtag">Amber</span></td><td>Leave, waiting to sync, notes.</td></tr>
+    <tr><td><span class="rtag cm">Purple</span></td><td>Bunk, guest, more than one lecture.</td></tr>
+    <tr><td><span class="rtag">Grey / struck</span></td><td>Student changed subject or guest removed: attendance closed.</td></tr></table>` },
+
+  { id:'hints', nav:'Hints', title:'Hints on every button', html:`
+    <ul><li><b>Phone and laptop: Hint mode.</b> Tap <b>Turn on hint mode</b> at the top of this manual. A blue bar appears. Tap any button, mark, day or student and a bubble explains it, without pressing it. Tap <b>Done</b> (or press Esc) to leave.</li>
+    <li><b>Laptop: hover hints.</b> Hold the mouse over a button for half a second to read its hint. Switch this on or off with the <b>Hover hints</b> button at the top of the manual.</li>
+    <li>Inside pop-up windows (student card, report, note...) hover hints work on a laptop, and this manual shows each window with numbered pictures.</li>
+    <li>Every bubble in hint mode has a <b>Read more in the manual</b> link that jumps to the right section.</li></ul>` },
+
+  { id:'faq', nav:'Problems', title:'Problems and answers', html:`
+    <ul><li><b>"Not in the sheet yet: ..."</b>: open the status chip and press <b>Sync now</b>. If it says the login changed, sign in again.</li>
+    <li><b>"This sheet is not on the phone yet"</b>: connect to the internet once. The sheet is created and downloaded automatically.</li>
+    <li><b>A student is missing</b>: she may have changed subject (grey row) or the section/subject is wrong in the strength sheet. Tell the administrator.</li>
+    <li><b>I marked the wrong thing</b>: open the same day and lecture, correct it and save. It overwrites.</li>
+    <li><b>I cannot delete a day</b>: a save for that day is still waiting. Wait for <b>Synced</b>, then try again.</li>
+    <li><b>A month or class is missing</b>: months appear from September up to the current month; classes come from the Timetable. Ask the administrator.</li>
+    <li><b>"The server was not updated. Redeploy Code.gs"</b>: tell the administrator to deploy the script as a new version.</li>
+    <li><b>The app looks old after an update</b>: close and reopen it twice, or reload the page.</li></ul>` }
+  ];
+}
+
+function go(id){
+  const b = document.getElementById('hmBody'), s = document.getElementById('hm-' + id);
+  if(b && s) b.scrollTo({ top: s.offsetTop - 8, behavior: 'smooth' });
+}
+function build(){
+  if(built) return; built = true;
+  const S = sections(), dlg = document.createElement('dialog'); dlg.id = 'helpDlg';
+  dlg.innerHTML = '<div class="hmHead"><h2>Help and manual<button type="button" class="btn small" id="hmClose">Close</button></h2>' +
+    '<div class="hmTools"><button type="button" class="btn small primary" id="hmHint">Turn on hint mode</button>' + (canHover ? '<button type="button" class="btn small" id="hmHover"></button>' : '') + '</div>' +
+    '<input class="hmSearch" id="hmSearch" type="search" placeholder="Search the manual, e.g. delete, guest, offline" autocomplete="off">' +
+    '<div class="hmNav" id="hmNav">' + S.map(s => '<button type="button" class="chip" data-go="' + s.id + '">' + s.nav + '</button>').join('') + '</div></div>' +
+    '<div class="hmBody" id="hmBody">' + S.map(s => '<section id="hm-' + s.id + '"><h3>' + s.title + '</h3>' + s.html + '</section>').join('') + '<div class="none" id="hmNone">Nothing found. Try another word.</div></div>';
+  document.body.appendChild(dlg);
+  const hv = () => { const b = document.getElementById('hmHover'); if(b) b.textContent = 'Hover hints: ' + (store.get('hhover', true) ? 'On' : 'Off'); };
+  hv();
+  document.getElementById('hmClose').onclick = () => dlg.close();
+  document.getElementById('hmHint').onclick = () => { dlg.close(); enterHint(); };
+  const hb = document.getElementById('hmHover'); if(hb) hb.onclick = () => { store.set('hhover', !store.get('hhover', true)); hv(); };
+  document.getElementById('hmNav').addEventListener('click', ev => { const b = ev.target.closest('[data-go]'); if(b) go(b.dataset.go); });
+  document.getElementById('hmSearch').addEventListener('input', ev => {
+    const t = ev.target.value.trim().toLowerCase(); let n = 0;
+    dlg.querySelectorAll('.hmBody section').forEach(s => { const ok = !t || s.textContent.toLowerCase().indexOf(t) !== -1; s.style.display = ok ? '' : 'none'; if(ok) n++; });
+    document.getElementById('hmNone').style.display = n ? 'none' : 'block';
+  });
+}
+function openHelp(sec){
+  exitHint(); build();
+  const dlg = document.getElementById('helpDlg'); if(!dlg.open) dlg.showModal();
+  if(sec) setTimeout(() => go(sec), 80); else document.getElementById('hmBody').scrollTop = 0;
+}
+window.openHelp = openHelp;
+})();
+</script>
 </body>
 </html>
