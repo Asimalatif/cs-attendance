@@ -1571,12 +1571,28 @@ if(authed()){ mirrorBg(); absorbBg().finally(() => syncQueue().then(refreshAll))
 
 function shareAbsentees(){
   const d = data[sheetName()]; if(!d) return;
-  const { per } = stats(), { m, y } = dayInfo();
-  const ab = d.students.filter(s => !s.off && draft[s.roll] === 'A');
-  const head = sel.cls + ' ' + titleCase(sel.sub) + ' - ' + sel.day + ' ' + MONTHS[m].slice(0,3) + ' ' + y + (hasMulti() ? ' (Lecture ' + sel.period + ')' : '') + '\nAbsent: ' + ab.length;
-  const txt = head + '\n' + (ab.length ? ab.map((s, i) => (i+1) + '. ' + s.name + ' (' + s.roll + ') P ' + (per[s.roll]||{p:0}).p + ' / A ' + (per[s.roll]||{a:0}).a).join('\n') : 'No absentees.');
-  Promise.resolve(navigator.share ? navigator.share({ text:txt }) : navigator.clipboard.writeText(txt).then(() => toast('Absentee list copied'))).catch(() => {});
+  const { lect, per } = stats(), { m, y } = dayInfo();
+  const WORD = { A:'Absent', L:'On leave', B:'Bunk' };
+  const list = d.students.filter(s => !s.off && WORD[draft[s.roll]]);
+  const cnt = k => list.filter(s => draft[s.roll] === k).length;
+  const parts = ['A','L','B'].filter(k => cnt(k)).map(k => WORD[k] + ' ' + cnt(k));
+
+  const head = sel.cls + ' ' + titleCase(sel.sub) + ' - ' + sel.day + ' ' + MONTHS[m].slice(0,3) + ' ' + y +
+    (hasMulti() ? ' (Lecture ' + sel.period + ')' : '') +
+    '\nNot present: ' + list.length + (parts.length ? ' (' + parts.join(', ') + ')' : '');
+
+  const lines = list.map((s, i) => {
+    const c = per[s.roll] || { p:0, den:0 }, p = pctOf(c, lect);
+    const att = c.den
+      ? 'Attended ' + c.p + ' of ' + c.den + ' lectures this month' + (p == null ? '' : ' = ' + p + '%')
+      : 'No lectures counted yet';
+    return (i + 1) + '. ' + s.name + ' (' + s.roll + ') - ' + WORD[draft[s.roll]] + ' today\n    ' + att;
+  });
+
+  const txt = head + '\n\n' + (list.length ? lines.join('\n') : 'Everyone is present.');
+  Promise.resolve(navigator.share ? navigator.share({ text:txt }) : navigator.clipboard.writeText(txt).then(() => toast('List copied'))).catch(() => {});
 }
+
 function todayCard(){
   if(isAdmin) return '';
   const now = new Date(), day = now.getDate(), sun = now.getDay() === 0;
