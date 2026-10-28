@@ -4822,7 +4822,7 @@ window.tagHtml = function(roll){
   try{
     const d = data[sheetName()], st = d && d.students.find(x => x.roll === roll);
     const t = mode === 'att' && !(st && st.off) ? leavesOn(sel.day)[roll] : null;
-    if(t) h = `<span class="rtag lv ${draft[roll] === 'A' ? 'clash' : ''}" title="Approved by the Leave In-Charge">Approved leave · ${esc(t)}</span>` + h;
+    if(t) h = `<span class="rtag lv ${draft[roll] === 'A' ? 'clash' : ''}" title="Approved by the Leave In-Charge">Leave:${esc(t)}</span>` + h;
     else if(!(st && st.off) && d && d.lv && d.lv._u && d.lv._u[roll]){      // leave without dates: only a tag, never an automatic L
       const u = d.lv._u[roll], n = String(u[0] || '').trim();
       h = `<span class="rtag lv" title="The Leave In-Charge entered this leave without dates, so the days are not known">${n ? '' + esc(n) + ' day' + (n === '1' ? '' : 's') : ''} · ${esc(u[1])} (no dates)</span>` + h;
