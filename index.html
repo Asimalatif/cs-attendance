@@ -2033,15 +2033,17 @@ const HINTS = [
  ['#xLowPdf,#xLowPdf2','Share PDF','Weekly (or monthly) low-attendance report as PDF for WhatsApp or email.','home'],
  ['#hq','Find a student','Type a name or roll number to open her full profile.','home'],
  ['#xpPdf','Share PDF','The whole student profile as a PDF report.','home'],
- ['[data-xrt]','Report type','Student, Class, Shortage, or College / Department (admin, principal, HOD).','reports'],
+ ['[data-xrk]','1 · What do you need?','Attendance (month-wise %), Daily register (P / A / L / B for every date), Test results (marks and position) or Shortage.','reports'],
+ ['[data-xrw]','2 · For whom?','One student, one section, or all your sections (whole college / department for admin, principal and HOD).','reports'],
+ ['#rpCards','Extra PDF','Attendance: one page for every student of the section. Test results: a result card for every student.','reports'],
  ['#rpCls','Section','The section the report is about. In a shortage report you can choose all sections.','reports'],
  ['#rpSub','Subject','One subject, or All subjects.','reports'],
- ['#rpQ,[data-xrps]','Student','Type part of the name or roll number and tap the student.','reports'],
+ ['#rpQ,[data-xrps]','Student','Type part of the name, father name or roll number and tap the student. All sections are searched.','reports'],
  ['#rpFrom,#rpTo','Months','From which month to which month. September to now = the whole session so far.','reports'],
  ['#rpBelow','Shortage limit','Students below this percentage are listed (73 by default).','reports'],
  ['#rpPdf','Create PDF','Makes the report as a PDF and opens the share menu (download on a laptop).','reports'],
  ['#rpCsv','Excel (CSV)','The same data as a file Excel and Google Sheets can open.','reports'],
- ['[data-xq]','Quick report','One-tap report for the whole session so far.','reports'],
+ ['[data-xq]','Shortcut','One-tap report with no choices to make.','reports'],
  ['[data-xtab]','Overview tab','Teachers today, section-wise percentages, or low attendance.','home'],
  ['#helpBtn,#helpLogin','Help and manual','Opens the illustrated manual. You can also switch on Hint mode there.','hints'],
  ['#panelBtn','Hide or show the controls','Folds the class, subject and day controls away so more students fit on screen. Tap again to bring them back.','screen'],
@@ -2284,16 +2286,16 @@ function sections(){
     <li><b>Student profile</b>: tap any student on Home, or <b>Full profile</b> in a student's window. It shows every month's attendance and test, a day-by-day calendar, your tags and comments and her reports. <b>Share PDF</b> sends the profile as a report.</li>
     <li><b>College / Department overview</b>: <i>Today</i> shows who has and has not marked attendance today (only classes in today's timetable); <i>Workload</i> shows every teacher's periods per week; <i>Sections</i> shows section-wise percentages (tap a section for its subjects); <i>Low attendance</i> lists every student below 73%. Each tab has <b>Share as text</b> and a <b>PDF</b> button. HODs see their own department, admin and principal see the whole college.</li></ul>` },
 
-  { id:'reports', nav:'Reports', title:'Reports: student, class, shortage, complete', html:`
-    <p>Open the <b>Reports</b> tab (or <b>⋯ More → Reports</b>). Choose the kind of report, then the section, subject, student and months, and tap <b>Create PDF</b> or <b>Excel (CSV)</b>.</p>
+  { id:'reports', nav:'Reports', title:'Reports: attendance, daily register, tests, shortage', html:`
+    <p>Open the <b>Reports</b> tab (or <b>⋯ More → Reports</b>). Everything is in one card, <b>Create a report</b>, in three steps:</p>
+    <ol><li><b>What do you need?</b> Tap one of the four tiles.</li><li><b>For whom?</b> One student, one section, or all your sections.</li><li><b>Choose</b> the student or section (and subject), the months, then tap <b>Create PDF</b>.</li></ol>
     <div class="tip"><b>Every PDF and Excel file</b> in the app (reports, absentees, summary, register, timetable, free teachers…) opens a small window with three choices: <b>Share</b> (WhatsApp, Gmail, Drive… on phones), <b>Download</b> (saved in the Downloads folder: Files / My Files app on a phone) and <b>Open / Print</b>.</div>
-    <ul><li><b>Student</b>: one student's attendance and monthly test, month by month, for <i>one subject</i> or <i>all subjects</i>, with totals and her overall %.</li>
-    <li><b>Class</b>: a whole section. With one subject you see each month's % and test; with <i>All subjects</i> you see every subject side by side, the overall %, how many subjects she is short in, and the test averages. The last line is the class average.</li>
-    <li><b>Shortage</b>: everyone below the limit (73% unless you change <b>Below %</b>) in the months you choose, for one section or all of them. <b>Needed</b> = lectures in a row she must attend to reach the limit. A dot after a name = short in more than one subject.</li>
-    <li><b>College / Department</b> (admin, principal, HOD): a section-wise summary, then every section on its own page.</li>
+    <ul><li><b>Attendance</b>: lectures attended / held and % month by month, with the monthly test. <i>One student</i>: every subject of that student. <i>One section</i>: all students in one table (one subject month by month, or all subjects side by side); <b>One page per student</b> gives each student her own session register page. <i>All sections</i>: a section-wise summary, then every section on its own page. Also as <b>Excel (CSV)</b>.</li>
+    <li><b>Daily register</b>: P / A / L / B for every date, then Present, Held and %. For a student, a section (one or all subjects) or all sections (admin, principal, HOD: one month at a time).</li>
+    <li><b>Test results</b>: Obtained / Total for each monthly test, session % and class position. <b>Result card of every student</b> makes one card per student of the section.</li>
+    <li><b>Shortage</b>: everyone below the limit (73% unless you change <b>Below %</b>) in the months you choose. <b>Needed</b> = lectures in a row she must attend to reach the limit. A dot after a name = short in more than one subject.</li>
     <li><b>From / To</b>: any range from September up to this month. September to now = the whole session so far.</li>
-    <li><b>Quick reports</b>: one tap for the session shortage, this month's shortage, all sections, and all data for Excel.</li></ul>
-    <div class="tip"><b>Who sees what:</b> a teacher's reports contain only her own subjects (and work offline with what is on the phone). An HOD sees her department, the admin and principal see the whole college.</div>` },
+    <li><b>Shortcuts</b>: one tap for the session shortage, this month's shortage, and all data for Excel.</li></ul>` },
 
   { id:'start', nav:'Quick start', title:'Quick start', html:`
     <p>Take attendance in six steps:</p>
@@ -3680,7 +3682,7 @@ function openMore(){
       ${multiOk ? item('multi', I.plus, 'More than one lecture today', 'Adds a lecture bar (1, 2, 3…) for this day') : ''}
       ${item('guest', I.guest, 'Add guest student', 'A student of another section who attends here')}
       ${item('print', I.print, 'Print register', 'Designed monthly register as PDF')}
-      ${item('reports', I.doc, 'Reports', 'Student, class and shortage reports')}
+      ${item('reports', I.doc, 'Reports', 'Attendance, daily register, tests, shortage')}
       ${item('mytt', I.cal, 'My timetable & workload', 'Your periods, days, rooms and weekly load')}
       ${canFree() ? item('free', I.check, 'Free teachers', 'Who has no class in a period (for duties)') : ''}
       ${canFree() ? item('contacts', I.lock, 'Teacher contacts', 'Private: call or WhatsApp a teacher') : ''}
@@ -3715,7 +3717,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-29 registers';
+const APP_BUILD = '2026-10-29 reports v2';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -3748,17 +3750,22 @@ const enrollN = r => parseInt(String(r).split('-').pop(), 10) || 0;
 const abbr = sub => titleCase(sub).split(' ').map(w => w.length > 7 ? w.slice(0, 5) + '.' : w).join(' ');
 const needed = (p, d, t) => { if(!d) return 0; const x = Math.ceil((t * d - 100 * p) / (100 - t)); return x > 0 ? x : 0; };
 const allLabel = () => scope === 'all' ? 'Whole college' : scope === 'dept' ? 'My department' : 'All my sections';
-let rp = { type:'student', cls:'', sub:'', roll:'', name:'', from:'SEPT', to:SEAS[seasNow()], below:LOW };
-let rpBusy = false; const rpStu = {}, rpCache = {};
+/* kind: att = attendance summary, daily = daily register, tests = test results, short = shortage
+   who:  stu = one student, sec = one section, all = all sections in your scope */
+let rp = { kind:'att', who:'stu', cls:'', sub:'', roll:'', name:'', scls:'', from:'SEPT', to:SEAS[seasNow()], below:LOW };
+let rpBusy = false, rpFound = [], rpFindT = 0; const rpStu = {}, rpCache = {};
 
 function rpSections(){
   const set = new Set(sheets.map(e => e.cls));
   if(scope && ov && ov.rows) ov.rows.forEach(r => set.add(r.cls));
+  regSecs().forEach(s => set.add(s.cls));
   return [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric:true }));
 }
+const regSecs = () => (window.JCWREG && window.JCWREG.sections()) || [];
 function rpSubjects(cls){
   const set = new Set(sheets.filter(e => e.cls === cls).map(e => e.sub));
   if(scope && ov && ov.rows) ov.rows.filter(r => r.cls === cls).forEach(r => set.add(r.sub));
+  regSecs().filter(s => s.cls === cls).forEach(s => (s.subs || []).forEach(x => set.add(x)));
   return [...set].sort();
 }
 function rpStudents(cls){
@@ -4016,6 +4023,16 @@ function shortageCsv(S, q){
   return { text:L.map(csvLine).join('\r\n'), file:'Shortage_' + P.safe(q.cls && q.cls !== '*' ? q.cls : allLabel()) + '_' + q.from + '-' + q.to + '.csv', title:'Shortage list' };
 }
 async function deliverFile(blob, name, title){ P.offerFile(blob, name, title); }
+/** one student may come back under two sections (guest in one subject): join them into one report, home section first */
+function oneStudent(S, roll){
+  const list = S.filter(s => s.roll === roll); if(list.length < 2) return list;
+  const home = list.find(s => !s.guest && !/optional/i.test(s.cls)) || list[0], m = Object.assign({}, home, { subs:Object.assign({}, home.subs) });
+  list.forEach(s => { if(s !== home) Object.keys(s.subs).forEach(k => { if(!m.subs[k]) m.subs[k] = s.subs[k]; }); });
+  const live = Object.values(m.subs).filter(g => !g.off);
+  m.p = live.reduce((a, g) => a + g.p, 0); m.d = live.reduce((a, g) => a + g.d, 0); m.pct = pct2(m.p, m.d);
+  m.ms = live.reduce((a, g) => a + g.ms, 0); m.mtT = live.reduce((a, g) => a + g.mtT, 0); m.tp = m.mtT ? pct2(m.ms, m.mtT) : null;
+  return [m];
+}
 async function rpCreate(kind, preset){
   const q = Object.assign({}, rp, preset || {});
   if(q.type === 'student' && !q.roll) return toast('Choose a student first.');
@@ -4035,7 +4052,7 @@ async function rpCreate(kind, preset){
       const r = q.type === 'shortage' ? shortageCsv(S, q) : detailCsv(rows, q);
       await deliverFile(new Blob(['﻿' + r.text], { type:'text/csv' }), r.file, r.title);
     } else {
-      const r = q.type === 'student' ? studentPdf(S.filter(s => s.roll === q.roll), q) : q.type === 'class' ? classPdf(S, q)
+      const r = q.type === 'student' ? studentPdf(oneStudent(S, q.roll), q) : q.type === 'class' ? classPdf(S, q)
         : q.type === 'shortage' ? shortagePdf(S, q) : multiClassPdf(S, q, q.title || allLabel());
       await P.deliver(r);
     }
@@ -4044,52 +4061,102 @@ async function rpCreate(kind, preset){
 }
 const fld = (l, inner, wide) => `<div class="fld ${wide ? 'wide' : ''}"><span>${l}</span>${inner}</div>`;
 const monSel = (id, v, mons) => `<select id="${id}" aria-label="${id === 'rpFrom' ? 'From month' : 'To month'}">${mons.map(t => `<option value="${t}" ${t === v ? 'selected' : ''}>${monName(t)}</option>`).join('')}</select>`;
+/* ----- one organised "Create a report" card: 1) what  2) for whom  3) section / student and months ----- */
+const RP_KINDS = () => [
+  ['att', I.chart, 'Attendance', 'Month-wise % and tests'],
+  ['daily', I.cal, 'Daily register', 'P / A / L / B every date'],
+  ['tests', I.doc, 'Test results', 'Marks, % and position'],
+  ['short', I.alert, 'Shortage', 'Below ' + LOW + '%']];
+const RP_WHO = { att:['stu', 'sec', 'all'], daily:['stu', 'sec', 'all'], tests:['stu', 'sec'], short:['sec', 'all'] };
+const whoName = w => w === 'stu' ? 'One student' : w === 'sec' ? 'One section' : allLabel();
+const rpOneMonthOnly = () => rp.kind === 'daily' && rp.who === 'all' && !!scope;
+function rpDesc(){
+  const k = rp.kind, w = rp.who;
+  if(k === 'att') return w === 'stu' ? 'Every subject of the student, month by month: lectures attended / held, %, and the monthly test.'
+    : w === 'sec' ? 'All students of the section in one table: attendance % (and tests), one subject month by month or all subjects side by side.'
+    : 'A section-wise summary first, then every section on its own page. A big report: it can take a minute.';
+  if(k === 'daily') return w === 'stu' ? 'The student\'s day-by-day register: every subject x every date, one page per month.'
+    : w === 'sec' ? 'Every date of the month with P / A / L / B, then Present, Held and %. One page per subject and month.'
+    : 'The day-by-day register of every section. Very big' + (scope ? ': choose one month only.' : '.');
+  if(k === 'tests') return w === 'stu' ? 'The student\'s monthly test marks in every subject, session % and class position.'
+    : 'Obtained / Total for each test, session % and class position, for one subject or all subjects.';
+  return 'Students below the limit in the chosen months, with the lectures each one needs to reach it.';
+}
+function rpPickerHtml(){
+  if(rp.roll) return `<div class="pickd"><span class="av">${esc(initials(rp.name))}</span><span class="tx"><b>${esc(rp.name)}</b><small>${esc(rp.roll)}${rp.scls ? ' · ' + esc(rp.scls) : ''}</small></span><button type="button" class="btn small" id="rpClr">Change</button></div>`;
+  return `<input id="rpQ" class="sq" type="search" placeholder="Name, father name or roll no." autocomplete="off" autocapitalize="none" spellcheck="false"><div id="rpRes" class="rpres"></div>`;
+}
 function renderReports(){
   if(scope && !ov && !ovBusy) loadOv();
-  const types = [['student', 'Student'], ['class', 'Class'], ['shortage', 'Shortage']].concat(scope ? [['college', scope === 'all' ? 'College' : 'Department']] : []);
-  if(!types.some(t => t[0] === rp.type)) rp.type = 'student';
+  if(!RP_WHO[rp.kind]) rp.kind = 'att';
+  if(!RP_WHO[rp.kind].includes(rp.who)) rp.who = RP_WHO[rp.kind][0];
   const secs = rpSections();
-  if(rp.cls && rp.cls !== '*' && !secs.includes(rp.cls)) rp.cls = '';
-  if(rp.type === 'shortage' && !rp.cls) rp.cls = '*';
-  if(rp.type !== 'shortage' && rp.type !== 'college' && (!rp.cls || rp.cls === '*')) rp.cls = secs.includes(sel.cls) ? sel.cls : (secs[0] || '');
-  const subs = rp.cls && rp.cls !== '*' ? rpSubjects(rp.cls) : [];
+  if(!secs.includes(rp.cls)) rp.cls = secs.includes(sel.cls) ? sel.cls : (secs[0] || '');
+  const subs = rp.cls ? rpSubjects(rp.cls) : [];
   if(rp.sub && !subs.includes(rp.sub)) rp.sub = '';
   const mons = SEAS.slice(0, seasNow() + 1);
   if(!mons.includes(rp.from)) rp.from = mons[0];
   if(!mons.includes(rp.to)) rp.to = mons[mons.length - 1];
   if(SEAS.indexOf(rp.from) > SEAS.indexOf(rp.to)) rp.from = rp.to;
-  const desc = { student:'Every month\'s attendance and monthly test of one student, for one subject or all subjects.',
-    class:'All students of a section: attendance % and monthly tests, for one subject (month by month) or all subjects side by side.',
-    shortage:'Students below the limit in the months you choose, with the lectures each one needs to reach it.',
-    college:'Every section on its own page, after a section-wise summary. A big report: it can take a minute.' }[rp.type];
+  if(rpOneMonthOnly() && rp.from !== rp.to) rp.from = rp.to;
+
   let h = header('Reports', scope ? (scope === 'all' ? 'College' : 'Department') + ' reports' : 'Your subjects') + '<main class="wrap2"><div class="grid2">';
-  h += `<section class="card"><h3>${I.doc} Create a report</h3>
-    <div class="seg2" role="tablist">${types.map(t => `<button type="button" data-xrt="${t[0]}" class="${rp.type === t[0] ? 'on' : ''}">${t[1]}</button>`).join('')}</div>
-    <div class="sub">${desc}</div><div class="form">`;
-  if(rp.type !== 'college') h += fld('Section', `<select id="rpCls" aria-label="Section">${rp.type === 'shortage' ? `<option value="*" ${rp.cls === '*' ? 'selected' : ''}>${allLabel()}</option>` : ''}${secs.map(c => `<option ${c === rp.cls ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`);
-  if(rp.type !== 'college' && rp.cls !== '*') h += fld('Subject', `<select id="rpSub" aria-label="Subject"><option value="">All subjects</option>${subs.map(x => `<option value="${esc(x)}" ${x === rp.sub ? 'selected' : ''}>${esc(titleCase(x))}</option>`).join('')}</select>`);
-  if(rp.type === 'student') h += fld('Student', rp.roll
-    ? `<div class="pickd"><span class="av">${esc(initials(rp.name))}</span><span class="tx"><b>${esc(rp.name)}</b><small>${esc(rp.roll)}</small></span><button type="button" class="btn small" id="rpClr">Change</button></div>`
-    : `<input id="rpQ" class="sq" type="search" placeholder="Type a name or roll no." autocomplete="off" autocapitalize="none" spellcheck="false"><div id="rpRes"></div>`, true);
-  h += `<div class="frow">${fld('From', monSel('rpFrom', rp.from, mons))}${fld('To', monSel('rpTo', rp.to, mons))}${rp.type === 'shortage' ? fld('Below %', `<input id="rpBelow" class="sq" type="number" inputmode="numeric" min="1" max="100" value="${rp.below}">`) : ''}</div></div>
-    <div class="acts2"><button class="btn primary" type="button" id="rpPdf">${I.doc}Create PDF</button><button class="btn" type="button" id="rpCsv">Excel (CSV)</button></div>
-    <div class="rnote">${scope ? 'Taken from the college sheets, updated every time a teacher saves.' : 'Only your own subjects are included. Works offline with what is on your phone.'}</div></section>`;
-  h += `<section class="card"><h3>${I.alert} Quick reports</h3><div class="sub">One tap. Session so far = September to ${MONTHS[monIdx(SEAS[seasNow()])]}.</div>
-    <button class="li" type="button" data-xq="short"><span class="tx"><b>Shortage · ${esc(allLabel())}</b><small>Below ${LOW}% over the whole session so far</small></span><span class="chev">${I.chev}</span></button>
-    <button class="li" type="button" data-xq="shortm"><span class="tx"><b>Shortage · this month only</b><small>${esc(allLabel())}, ${MONTHS[monIdx(SEAS[seasNow()])]}</small></span><span class="chev">${I.chev}</span></button>
-    <button class="li" type="button" data-xq="all"><span class="tx"><b>${scope ? 'Complete report · ' + esc(allLabel()) : 'Class reports · all my sections'}</b><small>Section summary + one page per section, whole session</small></span><span class="chev">${I.chev}</span></button>
-    <button class="li" type="button" data-xq="csv"><span class="tx"><b>All data · Excel (CSV)</b><small>Every student, subject and month, to open in Excel</small></span><span class="chev">${I.chev}</span></button>
+  h += `<section class="card rpmain" id="rpCard"><h3>${I.doc} Create a report</h3>
+    <div class="rpstep">1 · What do you need?</div>
+    <div class="rpkinds" role="tablist">${RP_KINDS().map(k => `<button type="button" role="tab" data-xrk="${k[0]}" class="${rp.kind === k[0] ? 'on' : ''}" aria-selected="${rp.kind === k[0]}">${k[1]}<b>${k[2]}</b><small>${esc(k[3])}</small></button>`).join('')}</div>
+    <div class="rpstep">2 · For whom?</div>
+    <div class="seg2" role="tablist">${RP_WHO[rp.kind].map(w => `<button type="button" data-xrw="${w}" class="${rp.who === w ? 'on' : ''}">${esc(whoName(w))}</button>`).join('')}</div>
+    <div class="sub">${esc(rpDesc())}</div>
+    <div class="rpstep">3 · Choose</div><div class="form">`;
+  if(rp.who === 'stu') h += fld('Student', rpPickerHtml(), true);
+  if(rp.who === 'sec'){
+    h += fld('Section', `<select id="rpCls" aria-label="Section">${secs.map(c => `<option ${c === rp.cls ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`);
+    h += fld('Subject', `<select id="rpSub" aria-label="Subject"><option value="">All subjects</option>${subs.map(x => `<option value="${esc(x)}" ${x === rp.sub ? 'selected' : ''}>${esc(titleCase(x))}</option>`).join('')}</select>`);
+  }
+  h += `<div class="frow">${fld(rpOneMonthOnly() ? 'Month' : 'From', monSel('rpFrom', rp.from, mons))}${rpOneMonthOnly() ? '' : fld('To', monSel('rpTo', rp.to, mons))}${rp.kind === 'short' ? fld('Below %', `<input id="rpBelow" class="sq" type="number" inputmode="numeric" min="1" max="100" value="${rp.below}">`) : ''}</div></div>`;
+  const second = rp.who === 'sec' && rp.kind === 'att' ? 'One page per student'
+    : rp.who === 'sec' && rp.kind === 'tests' ? 'Result card of every student' : '';
+  const csv = rp.kind === 'att' || rp.kind === 'short';
+  h += `<div class="acts2"><button class="btn primary" type="button" id="rpPdf" ${rpBusy ? 'disabled' : ''}>${I.doc}Create PDF</button>${second ? `<button class="btn" type="button" id="rpCards" ${rpBusy ? 'disabled' : ''}>${second}</button>` : ''}${csv ? `<button class="btn" type="button" id="rpCsv" ${rpBusy ? 'disabled' : ''}>Excel (CSV)</button>` : ''}</div>
+    <div id="rpProg"></div>
+    <div class="rnote">${scope ? 'Taken from the college sheets, updated every time a teacher saves.' : 'Only your own subjects are included.'}${rp.kind === 'att' || rp.kind === 'short' ? '' : ' Needs internet.'} Held = lectures delivered, Present = lectures attended.</div></section>`;
+  h += `<section class="card"><h3>${I.alert} Shortcuts</h3><div class="sub">One tap, no choices. Session so far = September to ${MONTHS[monIdx(SEAS[seasNow()])]}.</div>
+    <button class="li" type="button" data-xq="short"><span class="tx"><b>Shortage · whole session</b><small>${esc(allLabel())}, below ${LOW}%</small></span><span class="chev">${I.chev}</span></button>
+    <button class="li" type="button" data-xq="shortm"><span class="tx"><b>Shortage · this month</b><small>${esc(allLabel())}, ${MONTHS[monIdx(SEAS[seasNow()])]}</small></span><span class="chev">${I.chev}</span></button>
+    <button class="li" type="button" data-xq="csv"><span class="tx"><b>All data · Excel (CSV)</b><small>Every student, subject and month</small></span><span class="chev">${I.chev}</span></button>
   </section></div></main>`;
   $q('#app').innerHTML = h;
-  if(rp.type === 'student' && !rp.roll){ rpSearch(''); if(scope && rp.cls && !rpStu[rp.cls]) loadRpStudents(rp.cls); }
+}
+/* ----- student search: own sections on the phone at once, then the server (all sections, father name) ----- */
+function rpLocalFind(v){
+  const out = [], seen = {};
+  rpSections().forEach(c => rpStudents(c).forEach(s => {
+    if(seen[s.roll] || !(String(s.name).toLowerCase().includes(v) || String(s.roll).toLowerCase().includes(v))) return;
+    seen[s.roll] = 1; out.push({ roll:s.roll, name:s.name, cls:c, father:'' });
+  }));
+  return out;
+}
+function rpResHtml(list, busyTxt){
+  const rows = list.slice(0, 10).map(s => `<button class="li" type="button" data-xrps="${esc(s.roll)}" data-xrpn="${esc(s.name)}" data-xrpc="${esc(s.cls || '')}"><span class="av">${esc(initials(s.name))}</span><span class="tx"><b>${esc(s.name)}</b><small>${esc(s.roll)}${s.cls ? ' · ' + esc(s.cls) : ''}${s.father ? ' · D/O ' + esc(s.father) : ''}</small></span><span class="chev">${I.chev}</span></button>`).join('');
+  return rows + (busyTxt ? `<div class="empty">${busyTxt}</div>` : '') || '';
 }
 function rpSearch(v){
   const box = $q('#rpRes'); if(!box) return;
   v = String(v || '').trim().toLowerCase();
-  const list = rpStudents(rp.cls);
-  if(!list.length){ box.innerHTML = `<div class="empty">${scope && navigator.onLine && !(rpStu[rp.cls]) ? 'Loading the students of this section…' : 'No students found for this section.'}</div>`; return; }
-  const out = list.filter(s => !v || String(s.name).toLowerCase().includes(v) || String(s.roll).toLowerCase().includes(v)).slice(0, 8);
-  box.innerHTML = out.map(s => `<button class="li" type="button" data-xrps="${esc(s.roll)}" data-xrpn="${esc(s.name)}"><span class="av">${esc(initials(s.name))}</span><span class="tx"><b>${esc(s.name)}</b><small>${esc(s.roll)}</small></span><span class="chev">${I.chev}</span></button>`).join('') || '<div class="empty">No student matches.</div>';
+  clearTimeout(rpFindT);
+  if(!v){ rpFound = []; box.innerHTML = ''; return; }
+  rpFound = rpLocalFind(v);
+  const srv = window.JCWREG && navigator.onLine && v.length >= 2;
+  box.innerHTML = rpResHtml(rpFound, srv ? 'Searching all sections…' : (rpFound.length ? '' : 'No student matches.'));
+  if(!srv) return;
+  rpFindT = setTimeout(async () => {
+    let list = [];
+    try{ list = await window.JCWREG.find(v); }catch(e){}
+    const b2 = $q('#rpRes'), q2 = $q('#rpQ'); if(!b2 || !q2 || q2.value.trim().toLowerCase() !== v) return;
+    const seen = {}; rpFound.forEach(s => { seen[s.roll] = s; });
+    list.forEach(s => { if(seen[s.roll]){ seen[s.roll].father = s.father || ''; seen[s.roll].cls = s.cls || seen[s.roll].cls; } else { seen[s.roll] = s; rpFound.push(s); } });
+    b2.innerHTML = rpResHtml(rpFound, rpFound.length ? '' : 'No student found.');
+  }, 450);
 }
 async function loadRpStudents(cls){
   if(!scope || rpStu[cls] || !navigator.onLine) return;
@@ -4098,7 +4165,30 @@ async function loadRpStudents(cls){
     rows.forEach(r => r.st.forEach(x => { if(!seen[x[0]]){ seen[x[0]] = 1; out.push({ roll:x[0], name:x[1] }); } }));
     rpStu[cls] = out;
   }catch(e){ rpStu[cls] = []; }
-  const q = $q('#rpQ'); if(q && rp.cls === cls) rpSearch(q.value);
+}
+/** the buttons of the card -> the right report maker */
+async function rpGo(btn){
+  if(rpBusy || (window.JCWREG && window.JCWREG.busy())) return;
+  const k = rp.kind, w = rp.who, base = { from:rp.from, to:rp.to };
+  if(w === 'stu' && !rp.roll) return toast('Search and choose a student first.');
+  if(w === 'sec' && !rp.cls) return toast('Choose a section first.');
+  if(k === 'att' || k === 'short'){
+    if(btn === 'cards') return regRun(Object.assign({ kind:'cards', who:'sec', cls:rp.cls }, base));
+    const kind = btn === 'csv' ? 'csv' : 'pdf';
+    if(k === 'short') return rpCreate(kind, { type:'shortage', cls:w === 'all' ? '*' : rp.cls, sub:w === 'all' ? '' : rp.sub, roll:'' });
+    if(w === 'stu') return rpCreate(kind, { type:'student', cls:'', sub:'', roll:rp.roll, name:rp.name });
+    if(w === 'sec') return rpCreate(kind, { type:'class', cls:rp.cls, sub:rp.sub, roll:'' });
+    return rpCreate(kind, { type:'college', cls:'', sub:'', roll:'', title:allLabel() });
+  }
+  if(k === 'daily') return regRun(Object.assign({ kind:'daily', who:w === 'stu' ? 'stu' : 'sec', cls:w === 'all' ? '*' : rp.cls, sub:w === 'sec' ? rp.sub : '', roll:rp.roll, name:rp.name, scls:rp.scls }, base));
+  return regRun(Object.assign({ kind:'tests', who:w, cls:rp.cls, sub:rp.sub, roll:rp.roll, name:rp.name, scls:rp.scls }, base), btn === 'cards');
+}
+function rpBtns(on){ ['#rpPdf', '#rpCsv', '#rpCards'].forEach(s => { const b = $q(s); if(b) b.disabled = on; }); }
+async function regRun(cfg, every){
+  if(!window.JCWREG) return toast('This report needs the Registers add-on. Reload the app.');
+  rpBusy = true; rpBtns(true);
+  try{ await window.JCWREG.run(cfg, !!every); }
+  finally{ rpBusy = false; rpBtns(false); }
 }
 function quickReport(k){
   const cur = SEAS[seasNow()];
@@ -4669,11 +4759,13 @@ document.addEventListener('click', ev => {
   if(t.closest('#xMore')) return openMore();
   if((b = t.closest('[data-xact]'))) return doAct(b.dataset.xact);
   if((b = t.closest('[data-xts]'))){ store.set('tsize', Number(b.dataset.xts)); applyTs(); b.parentNode.querySelectorAll('[data-xts]').forEach(x => x.classList.toggle('on', x === b)); return toast('Text size: ' + b.textContent); }
-  if((b = t.closest('[data-xrt]'))){ rp.type = b.dataset.xrt; return rerender(); }
-  if((b = t.closest('[data-xrps]'))){ rp.roll = b.dataset.xrps; rp.name = b.dataset.xrpn; return rerender(); }
-  if(t.closest('#rpClr')){ rp.roll = ''; rp.name = ''; return rerender(); }
-  if(t.closest('#rpPdf')) return rpCreate('pdf');
-  if(t.closest('#rpCsv')) return rpCreate('csv');
+  if((b = t.closest('[data-xrk]'))){ rp.kind = b.dataset.xrk; return rerender(); }
+  if((b = t.closest('[data-xrw]'))){ rp.who = b.dataset.xrw; return rerender(); }
+  if((b = t.closest('[data-xrps]'))){ rp.roll = b.dataset.xrps; rp.name = b.dataset.xrpn; rp.scls = b.dataset.xrpc || ''; rpFound = []; return rerender(); }
+  if(t.closest('#rpClr')){ rp.roll = ''; rp.name = ''; rp.scls = ''; return rerender(); }
+  if(t.closest('#rpPdf')) return rpGo('pdf');
+  if(t.closest('#rpCsv')) return rpGo('csv');
+  if(t.closest('#rpCards')) return rpGo('cards');
   if((b = t.closest('[data-xq]'))) return quickReport(b.dataset.xq);
   if((b = t.closest('[data-xwt]'))){ const w = workList[Number(b.dataset.xwt)]; if(w) openTT(w.name, w.rows); return; }
   if(t.closest('#xTtPdf')) return P.run(ttPdf);
@@ -4734,9 +4826,9 @@ document.addEventListener('change', ev => {
   const t = ev.target; if(!t) return;
   if(t.id === 'adept'){ aF.dept = t.value; return refreshABody(); }
   if(t.id === 'fdept'){ fr.dept = t.value; return refreshFree(); }
-  if(t.id === 'rpCls'){ rp.cls = t.value; rp.sub = ''; rp.roll = ''; rp.name = ''; return rerender(); }
+  if(t.id === 'rpCls'){ rp.cls = t.value; rp.sub = ''; return rerender(); }
   if(t.id === 'rpSub'){ rp.sub = t.value; return rerender(); }
-  if(t.id === 'rpFrom'){ rp.from = t.value; if(SEAS.indexOf(rp.to) < SEAS.indexOf(rp.from)) rp.to = rp.from; return rerender(); }
+  if(t.id === 'rpFrom'){ rp.from = t.value; if(rpOneMonthOnly() || SEAS.indexOf(rp.to) < SEAS.indexOf(rp.from)) rp.to = rp.from; return rerender(); }
   if(t.id === 'rpTo'){ rp.to = t.value; if(SEAS.indexOf(rp.from) > SEAS.indexOf(rp.to)) rp.from = rp.to; return rerender(); }
 });
 document.addEventListener('focusout', ev => {
@@ -4872,8 +4964,8 @@ document.addEventListener('click', ev => {
 })();
 </script>
 <script>
-/* ===== JCW Registers & Results add-on v1.0 =====
-   Adds a "Registers & results" card to the Reports screen:
+/* ===== JCW Registers & Results add-on v1.1 =====
+   Report makers used by the single "Create a report" card on the Reports screen (no card of its own since v1.1):
    1) Daily register  - day-by-day P / A / L / B for any months: one section (one or all subjects),
                          all sections (admin / principal / HOD), or one student (subjects x days).
    2) Session register - one page per student of a section: every subject, month by month (Present / Held / %).
@@ -4893,17 +4985,24 @@ const CHUNK = 12;                          // sheets read per server call
 
 const css = document.createElement('style');
 css.textContent = `
-#zrCard .zprog{margin-top:8px;font-size:12.5px;font-weight:700;color:var(--muted)}
-#zrCard .zbar{height:6px;border-radius:6px;background:var(--surface2);overflow:hidden;margin-top:6px}
-#zrCard .zbar i{display:block;height:100%;width:0;background:var(--acc,#2F5BEA);transition:width .3s}
-#zrCard .zres{max-height:260px;overflow:auto}
-#zrCard .zwarn{margin-top:8px;font-size:12px;color:var(--absent);font-weight:650}`;
+.rpstep{margin:12px 0 6px;font-size:11.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.rpmain h3+.rpstep{margin-top:4px}
+.rpkinds{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.rpkinds button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:10px 12px;border-radius:14px;border:1.5px solid var(--tabline,var(--line));background:var(--tabbg,var(--surface2));color:var(--tabink,var(--ink));min-height:72px;transition:background .2s,border-color .2s}
+.rpkinds button svg{width:20px;height:20px;margin-bottom:2px}
+.rpkinds button b{font-size:14.5px;font-weight:800;line-height:1.2}
+.rpkinds button small{font-size:12px;opacity:.8;line-height:1.25}
+.rpkinds button.on{background:var(--tabon,#2F55D4);border-color:var(--tabon,#2F55D4);color:var(--tabonink,#fff);box-shadow:0 6px 14px -8px var(--tabon,#2F55D4)}
+.rpres{max-height:280px;overflow:auto}
+#rpProg .zprog{margin-top:8px;font-size:12.5px;font-weight:700;color:var(--muted)}
+#rpProg .zbar{height:6px;border-radius:6px;background:var(--surface2);overflow:hidden;margin-top:6px}
+#rpProg .zbar i{display:block;height:100%;width:0;background:var(--ring,#2F5BEA);transition:width .3s}`;
 document.head.appendChild(css);
 
-/* ---------- state ---------- */
+/* ---------- state (set by the Reports card through window.JCWREG.run) ---------- */
 const seasNow = () => { const m = new Date().getMonth(), i = m >= 8 ? m - 8 : (m === 0 ? 4 : -1); return i < 0 ? 4 : i; };
 let zr = { kind:'daily', who:'sec', cls:'', sub:'', from:SEAS[seasNow()], to:SEAS[seasNow()], roll:'', name:'', scls:'' };
-let opts = null, optsAt = 0, optsBusy = false, optsErr = '', busy = false, prog = null, found = [], findT = 0;
+let opts = null, optsAt = 0, optsBusy = false, busy = false, prog = null;
 const scope = () => store.get('scope', '');
 const allLabel = () => scope() === 'all' ? 'Whole college' : scope() === 'dept' ? 'My department' : 'All my sections';
 const monName = t => MONTHS[monIdx(t)];
@@ -4925,10 +5024,14 @@ async function call(payload, ms){
 async function loadOpts(force){
   if(optsBusy || (!force && opts && Date.now() - optsAt < 600000)) return;
   if(!navigator.onLine){ if(!opts) optsFromSheets(); return; }
-  optsBusy = true; optsErr = '';
-  try{ const r = await call({ action:'reg_opts' }, 60000); opts = r.sections; optsAt = Date.now(); }
-  catch(e){ optsErr = e.message; if(!opts) optsFromSheets(); }
-  finally{ optsBusy = false; paint(); }
+  optsBusy = true; let changed = false;
+  try{ const r = await call({ action:'reg_opts' }, 60000); opts = r.sections; changed = true; }
+  catch(e){ if(!opts) optsFromSheets(); }
+  finally{
+    optsBusy = false; optsAt = Date.now();                                 // also after an error: no retry loop
+    const ae = document.activeElement;
+    if(changed && document.body.dataset.screen === 'reports' && !(ae && ae.id === 'rpQ')) window.renderMain();   // new sections in the list
+  }
 }
 function optsFromSheets(){
   const m = {};
@@ -4936,116 +5039,37 @@ function optsFromSheets(){
   opts = Object.keys(m).sort((a, b) => a.localeCompare(b, undefined, { numeric:true })).map(c => ({ cls:c, subs:[...m[c]].sort() }));
 }
 
-/* ---------- card ---------- */
-const fld = (l, inner, wide) => `<div class="fld ${wide ? 'wide' : ''}"><span>${l}</span>${inner}</div>`;
-const seg = (name, cur, list) => `<div class="seg2" role="tablist">${list.map(x => `<button type="button" data-z${name}="${x[0]}" class="${cur === x[0] ? 'on' : ''}">${x[1]}</button>`).join('')}</div>`;
-function cardHtml(){
-  const secs = opts || [], mons = SEAS.slice(0, seasNow() + 1);
-  if(!mons.includes(zr.from)) zr.from = mons[mons.length - 1];
-  if(!mons.includes(zr.to)) zr.to = mons[mons.length - 1];
-  if(SEAS.indexOf(zr.from) > SEAS.indexOf(zr.to)) zr.from = zr.to;
-  const allOk = zr.kind === 'daily';                                   // "all sections" only for the daily register
-  if(zr.cls === '*' && !allOk) zr.cls = '';
-  if(zr.cls !== '*' && !secs.some(s => s.cls === zr.cls)) zr.cls = secs[0] ? secs[0].cls : '';
-  const subs = zr.cls && zr.cls !== '*' ? (secs.find(s => s.cls === zr.cls) || { subs:[] }).subs
-             : [...new Set(secs.flatMap(s => s.subs))].sort();
-  if(zr.sub && !subs.includes(zr.sub)) zr.sub = '';
-  if(zr.kind === 'cards') zr.who = 'sec';
-  const desc = {
-    daily:'Every date of the month with P / A / L / B, then Present, Held and %. One page per subject and month.',
-    cards:'One page for every student of the section: each subject month by month (Present / Held / %) and the session total.',
-    tests:'Monthly tests: Obtained / Total for each test, session %, and the class position.'
-  }[zr.kind];
-  let h = `<section class="card" id="zrCard"><h3>Registers &amp; results</h3>
-    ${seg('k', zr.kind, [['daily', 'Daily register'], ['cards', 'Session register'], ['tests', 'Test results']])}
-    <div class="sub">${desc}</div>`;
-  if(zr.kind !== 'cards') h += seg('w', zr.who, [['sec', 'Section'], ['stu', 'One student']]);
-  h += '<div class="form">';
-  if(zr.who === 'sec'){
-    h += fld('Section', `<select id="zrCls" aria-label="Section">${allOk ? `<option value="*" ${zr.cls === '*' ? 'selected' : ''}>${esc(allLabel())}</option>` : ''}${secs.map(s => `<option ${s.cls === zr.cls ? 'selected' : ''}>${esc(s.cls)}</option>`).join('')}</select>`);
-    if(zr.kind !== 'cards') h += fld('Subject', `<select id="zrSub" aria-label="Subject"><option value="">All subjects</option>${subs.map(x => `<option value="${esc(x)}" ${x === zr.sub ? 'selected' : ''}>${esc(titleCase(x))}</option>`).join('')}</select>`);
-  } else {
-    h += fld('Student', zr.roll
-      ? `<div class="pickd"><span class="av">${esc(initials(zr.name))}</span><span class="tx"><b>${esc(zr.name)}</b><small>${esc(zr.roll)} · ${esc(zr.scls)}</small></span><button type="button" class="btn small" id="zrClr">Change</button></div>`
-      : `<input id="zrQ" class="sq" type="search" placeholder="Name, father name or roll no." autocomplete="off" autocapitalize="none" spellcheck="false"><div id="zrRes" class="zres">${resHtml()}</div>`, true);
-  }
-  const ms = o => `<select id="${o}" aria-label="${o === 'zrFrom' ? 'From month' : 'To month'}">${mons.map(t => `<option value="${t}" ${t === zr[o === 'zrFrom' ? 'from' : 'to']}>${monName(t)}</option>`).join('')}</select>`;
-  h += `<div class="frow">${fld('From', ms('zrFrom'))}${fld('To', ms('zrTo'))}</div></div>`;
-  if(zr.kind === 'daily' && zr.who === 'sec' && zr.cls === '*' && scope() && zr.from !== zr.to)
-    h += '<div class="zwarn">All sections: choose ONE month (From = To). It is a very big register.</div>';
-  const btn2 = zr.kind === 'tests' && zr.who === 'sec' ? `<button class="btn" type="button" id="zrGo2" ${busy ? 'disabled' : ''}>Result card of every student</button>` : '';
-  h += `<div class="acts2"><button class="btn primary" type="button" id="zrGo" ${busy ? 'disabled' : ''}>${I_DOC}Create PDF</button>${btn2}</div>`;
-  if(prog) h += `<div class="zprog">${esc(prog.txt)}</div><div class="zbar"><i style="width:${prog.pct || 0}%"></i></div>`;
-  h += `<div class="rnote">${optsBusy ? 'Loading your sections… ' : ''}${optsErr ? esc(optsErr) + ' ' : ''}Needs internet. ${scope() ? 'Taken from the college sheets.' : 'Only your own subjects are included.'} Held = lectures delivered, Present = lectures attended.</div></section>`;
-  return h;
-}
-const I_DOC = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>';
-function resHtml(){
-  if(!found.length) return '';
-  return found.map(s => `<button class="li" type="button" data-zst="${esc(s.roll)}" data-zsn="${esc(s.name)}" data-zsc="${esc(s.cls)}"><span class="av">${esc(initials(s.name))}</span><span class="tx"><b>${esc(s.name)}</b><small>${esc(s.roll)} · ${esc(s.cls)}${s.father ? ' · D/O ' + esc(s.father) : ''}</small></span></button>`).join('');
-}
-function paint(){
-  if(document.body.dataset.screen !== 'reports') return;
-  const old = $q('#zrCard'), grid = $q('#app .grid2');
-  if(!grid) return;
-  const tmp = document.createElement('div'); tmp.innerHTML = cardHtml();
-  if(old) old.replaceWith(tmp.firstElementChild); else grid.appendChild(tmp.firstElementChild);
-}
-function setProg(txt, pct){ prog = txt ? { txt, pct } : null; const c = $q('#zrCard'); if(!c) return;
-  let p = c.querySelector('.zprog'), b = c.querySelector('.zbar');
-  if(!prog){ if(p) p.remove(); if(b) b.remove(); return; }
-  if(!p){ paint(); return; }
-  p.textContent = txt; if(b) b.firstElementChild.style.width = (pct || 0) + '%';
+/* ---------- progress, shown inside the Reports card ---------- */
+function setProg(txt, pct){
+  prog = txt ? { txt, pct } : null;
+  const box = $q('#rpProg'); if(!box) return;
+  box.innerHTML = prog ? `<div class="zprog">${esc(prog.txt)}</div><div class="zbar"><i style="width:${prog.pct || 0}%"></i></div>` : '';
 }
 
-/* hook: add the card every time the Reports screen is drawn */
+/* hook: load the section list when the Reports screen is drawn (the card itself is drawn by renderReports) */
 const baseRender = window.renderMain;
 window.renderMain = function(){
-  const ae = document.activeElement;
-  if(document.body.dataset.screen === 'reports' && ae && ae.id === 'zrQ' && $q('#zrCard')) return;   // do not wipe the search box while typing
   const r = baseRender.apply(this, arguments);
-  try{ if(document.body.dataset.screen === 'reports'){ paint(); loadOpts(false); } }catch(e){ console.error(e); }
+  try{ if(document.body.dataset.screen === 'reports'){ loadOpts(false); if(prog) setProg(prog.txt, prog.pct); } }catch(e){ console.error(e); }
   return r;
 };
 
-/* ---------- events ---------- */
-document.addEventListener('click', ev => {
-  const t = ev.target; if(!t || !t.closest || !t.closest('#zrCard')) return;
-  let b;
-  if((b = t.closest('[data-zk]'))){ zr.kind = b.dataset.zk; return paint(); }
-  if((b = t.closest('[data-zw]'))){ zr.who = b.dataset.zw; return paint(); }
-  if((b = t.closest('[data-zst]'))){ zr.roll = b.dataset.zst; zr.name = b.dataset.zsn; zr.scls = b.dataset.zsc; found = []; return paint(); }
-  if(t.closest('#zrClr')){ zr.roll = ''; zr.name = ''; zr.scls = ''; return paint(); }
-  if(t.closest('#zrGo')) return create(false);
-  if(t.closest('#zrGo2')) return create(true);
-});
-document.addEventListener('change', ev => {
-  const t = ev.target; if(!t || !t.closest || !t.closest('#zrCard')) return;
-  if(t.id === 'zrCls'){ zr.cls = t.value; zr.sub = ''; if(zr.cls === '*' && scope()) zr.from = zr.to; return paint(); }
-  if(t.id === 'zrSub'){ zr.sub = t.value; return; }
-  if(t.id === 'zrFrom'){ zr.from = t.value; if(SEAS.indexOf(zr.to) < SEAS.indexOf(zr.from)) zr.to = zr.from; return paint(); }
-  if(t.id === 'zrTo'){ zr.to = t.value; if(SEAS.indexOf(zr.from) > SEAS.indexOf(zr.to)) zr.from = zr.to; return paint(); }
-});
-document.addEventListener('input', ev => {
-  const t = ev.target; if(!t || t.id !== 'zrQ') return;
-  clearTimeout(findT);
-  const q = t.value.trim();
-  if(q.length < 2){ found = []; const box = $q('#zrRes'); if(box) box.innerHTML = ''; return; }
-  findT = setTimeout(async () => {
-    const box = $q('#zrRes'); if(box) box.innerHTML = '<div class="empty">Searching…</div>';
-    try{ const r = await call({ action:'reg_find', q }, 45000); found = r.list || []; }
-    catch(e){ found = []; if(box) box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
-    const b2 = $q('#zrRes'); if(b2) b2.innerHTML = resHtml() || '<div class="empty">No student found.</div>';
-  }, 450);
-});
+/* ---------- used by the Reports card ---------- */
+window.JCWREG = {
+  sections: () => opts || [],
+  busy: () => busy,
+  async find(q){ const r = await call({ action:'reg_find', q }, 45000); return r.list || []; },
+  /** cfg: { kind:'daily'|'cards'|'tests', who:'sec'|'stu', cls, sub, from, to, roll, name, scls } */
+  run(cfg, everyStudent){ Object.assign(zr, { sub:'', roll:'', name:'', scls:'' }, cfg); return create(!!everyStudent); }
+};
 
 /* ---------- create ---------- */
 async function create(everyStudent){
   if(busy) return;
   if(zr.who === 'stu' && !zr.roll) return toast('Search and choose a student first.');
   if(zr.who === 'sec' && !zr.cls) return toast('Choose a section first.');
-  if(zr.kind === 'daily' && zr.cls === '*' && scope() && zr.who === 'sec' && zr.from !== zr.to) return toast('All sections: choose ONE month (From = To).');
-  busy = true; paint();
+  if(zr.kind === 'daily' && zr.cls === '*' && scope() && zr.who === 'sec' && zr.from !== zr.to) return toast('All sections: choose ONE month.');
+  busy = true; setProg('Starting…', 1);
   try{
     await P.libs();
     let r;
@@ -5056,7 +5080,7 @@ async function create(everyStudent){
     await new Promise(res => setTimeout(res, 30));
     await P.deliver(r, true);
   }catch(e){ toast('Report not made: ' + (e && e.message || e)); }
-  finally{ busy = false; prog = null; paint(); }
+  finally{ busy = false; setProg(null); }
 }
 
 /* ======================= 1) DAILY REGISTER ======================= */
@@ -5405,7 +5429,7 @@ async function buildTests(everyStudent){
   return { doc, title:'Test result ' + zr.cls, file:'Test-result_' + P.safe(zr.cls) + '_' + (zr.sub ? P.safe(titleCase(zr.sub)) : 'All-subjects') + '_' + zr.from + '-' + zr.to + '.pdf' };
 }
 
-if(document.body.dataset.screen === 'reports'){ paint(); loadOpts(false); }
+loadOpts(false);
 })();
 </script>
 
