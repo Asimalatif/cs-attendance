@@ -3715,7 +3715,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-28 leaves';
+const APP_BUILD = '2026-10-29 registers';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4871,5 +4871,543 @@ document.addEventListener('click', ev => {
 });
 })();
 </script>
+<script>
+/* ===== JCW Registers & Results add-on v1.0 =====
+   Adds a "Registers & results" card to the Reports screen:
+   1) Daily register  - day-by-day P / A / L / B for any months: one section (one or all subjects),
+                         all sections (admin / principal / HOD), or one student (subjects x days).
+   2) Session register - one page per student of a section: every subject, month by month (Present / Held / %).
+   3) Test results    - monthly tests with Obtained / Total, session %, and class position;
+                         also one result card per student, or one student's card.
+   Needs: Code.gs v6.6 (actions reg_opts, reg_find, reg_plan, reg_days) and the PDF Reports add-on (window.JCWPDF).
+   Paste this block just before </body>, AFTER the other <script> blocks. */
+(function(){
+'use strict';
+const P = window.JCWPDF;
+if(!P) return;
+const $q = s => document.querySelector(s);
+const initials = n => String(n || '?').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+const SEAS = ['SEPT', 'OCT', 'NOV', 'DEC', 'JAN'];
+const TEST_LOW = 50;                       // test % below this is red (same as the rest of the app)
+const CHUNK = 12;                          // sheets read per server call
+
+const css = document.createElement('style');
+css.textContent = `
+#zrCard .zprog{margin-top:8px;font-size:12.5px;font-weight:700;color:var(--muted)}
+#zrCard .zbar{height:6px;border-radius:6px;background:var(--surface2);overflow:hidden;margin-top:6px}
+#zrCard .zbar i{display:block;height:100%;width:0;background:var(--acc,#2F5BEA);transition:width .3s}
+#zrCard .zres{max-height:260px;overflow:auto}
+#zrCard .zwarn{margin-top:8px;font-size:12px;color:var(--absent);font-weight:650}`;
+document.head.appendChild(css);
+
+/* ---------- state ---------- */
+const seasNow = () => { const m = new Date().getMonth(), i = m >= 8 ? m - 8 : (m === 0 ? 4 : -1); return i < 0 ? 4 : i; };
+let zr = { kind:'daily', who:'sec', cls:'', sub:'', from:SEAS[seasNow()], to:SEAS[seasNow()], roll:'', name:'', scls:'' };
+let opts = null, optsAt = 0, optsBusy = false, optsErr = '', busy = false, prog = null, found = [], findT = 0;
+const scope = () => store.get('scope', '');
+const allLabel = () => scope() === 'all' ? 'Whole college' : scope() === 'dept' ? 'My department' : 'All my sections';
+const monName = t => MONTHS[monIdx(t)];
+const enrollN = r => parseInt(String(r).split('-').pop(), 10) || 0;
+const pct1 = (a, b) => b ? Math.round(a / b * 1000) / 10 : null;
+const yearOf = t => { const n = new Date(), s = (n.getMonth() > 7 || (n.getMonth() === 7 && n.getDate() >= 15)) ? n.getFullYear() : n.getFullYear() - 1; return monIdx(t) >= 7 ? s : s + 1; };
+const rangeTxt = (f, t) => f === t ? monName(f) + ' ' + yearOf(f) : monName(f) + ' ' + yearOf(f) + ' to ' + monName(t) + ' ' + yearOf(t);
+const monthsIn = (f, t) => SEAS.slice(SEAS.indexOf(f), SEAS.indexOf(t) + 1);
+
+/* ---------- server ---------- */
+async function call(payload, ms){
+  if(!navigator.onLine) throw new Error('This needs internet.');
+  const r = await api(payload, ms || 120000);
+  if(r && r.error === 'BAD_LOGIN'){ signOut('Your username or password was changed. Sign in again.'); throw new Error('Sign in again.'); }
+  if(r && !r.ok && r.error === 'UNKNOWN_ACTION') throw new Error('The server is not updated yet: deploy Code.gs v6.6 as a New version.');
+  if(!r || !r.ok) throw new Error((r && r.error) || 'Server error');
+  return r;
+}
+async function loadOpts(force){
+  if(optsBusy || (!force && opts && Date.now() - optsAt < 600000)) return;
+  if(!navigator.onLine){ if(!opts) optsFromSheets(); return; }
+  optsBusy = true; optsErr = '';
+  try{ const r = await call({ action:'reg_opts' }, 60000); opts = r.sections; optsAt = Date.now(); }
+  catch(e){ optsErr = e.message; if(!opts) optsFromSheets(); }
+  finally{ optsBusy = false; paint(); }
+}
+function optsFromSheets(){
+  const m = {};
+  sheets.forEach(e => { (m[e.cls] = m[e.cls] || new Set()).add(e.sub); });
+  opts = Object.keys(m).sort((a, b) => a.localeCompare(b, undefined, { numeric:true })).map(c => ({ cls:c, subs:[...m[c]].sort() }));
+}
+
+/* ---------- card ---------- */
+const fld = (l, inner, wide) => `<div class="fld ${wide ? 'wide' : ''}"><span>${l}</span>${inner}</div>`;
+const seg = (name, cur, list) => `<div class="seg2" role="tablist">${list.map(x => `<button type="button" data-z${name}="${x[0]}" class="${cur === x[0] ? 'on' : ''}">${x[1]}</button>`).join('')}</div>`;
+function cardHtml(){
+  const secs = opts || [], mons = SEAS.slice(0, seasNow() + 1);
+  if(!mons.includes(zr.from)) zr.from = mons[mons.length - 1];
+  if(!mons.includes(zr.to)) zr.to = mons[mons.length - 1];
+  if(SEAS.indexOf(zr.from) > SEAS.indexOf(zr.to)) zr.from = zr.to;
+  const allOk = zr.kind === 'daily';                                   // "all sections" only for the daily register
+  if(zr.cls === '*' && !allOk) zr.cls = '';
+  if(zr.cls !== '*' && !secs.some(s => s.cls === zr.cls)) zr.cls = secs[0] ? secs[0].cls : '';
+  const subs = zr.cls && zr.cls !== '*' ? (secs.find(s => s.cls === zr.cls) || { subs:[] }).subs
+             : [...new Set(secs.flatMap(s => s.subs))].sort();
+  if(zr.sub && !subs.includes(zr.sub)) zr.sub = '';
+  if(zr.kind === 'cards') zr.who = 'sec';
+  const desc = {
+    daily:'Every date of the month with P / A / L / B, then Present, Held and %. One page per subject and month.',
+    cards:'One page for every student of the section: each subject month by month (Present / Held / %) and the session total.',
+    tests:'Monthly tests: Obtained / Total for each test, session %, and the class position.'
+  }[zr.kind];
+  let h = `<section class="card" id="zrCard"><h3>Registers &amp; results</h3>
+    ${seg('k', zr.kind, [['daily', 'Daily register'], ['cards', 'Session register'], ['tests', 'Test results']])}
+    <div class="sub">${desc}</div>`;
+  if(zr.kind !== 'cards') h += seg('w', zr.who, [['sec', 'Section'], ['stu', 'One student']]);
+  h += '<div class="form">';
+  if(zr.who === 'sec'){
+    h += fld('Section', `<select id="zrCls" aria-label="Section">${allOk ? `<option value="*" ${zr.cls === '*' ? 'selected' : ''}>${esc(allLabel())}</option>` : ''}${secs.map(s => `<option ${s.cls === zr.cls ? 'selected' : ''}>${esc(s.cls)}</option>`).join('')}</select>`);
+    if(zr.kind !== 'cards') h += fld('Subject', `<select id="zrSub" aria-label="Subject"><option value="">All subjects</option>${subs.map(x => `<option value="${esc(x)}" ${x === zr.sub ? 'selected' : ''}>${esc(titleCase(x))}</option>`).join('')}</select>`);
+  } else {
+    h += fld('Student', zr.roll
+      ? `<div class="pickd"><span class="av">${esc(initials(zr.name))}</span><span class="tx"><b>${esc(zr.name)}</b><small>${esc(zr.roll)} · ${esc(zr.scls)}</small></span><button type="button" class="btn small" id="zrClr">Change</button></div>`
+      : `<input id="zrQ" class="sq" type="search" placeholder="Name, father name or roll no." autocomplete="off" autocapitalize="none" spellcheck="false"><div id="zrRes" class="zres">${resHtml()}</div>`, true);
+  }
+  const ms = o => `<select id="${o}" aria-label="${o === 'zrFrom' ? 'From month' : 'To month'}">${mons.map(t => `<option value="${t}" ${t === zr[o === 'zrFrom' ? 'from' : 'to']}>${monName(t)}</option>`).join('')}</select>`;
+  h += `<div class="frow">${fld('From', ms('zrFrom'))}${fld('To', ms('zrTo'))}</div></div>`;
+  if(zr.kind === 'daily' && zr.who === 'sec' && zr.cls === '*' && scope() && zr.from !== zr.to)
+    h += '<div class="zwarn">All sections: choose ONE month (From = To). It is a very big register.</div>';
+  const btn2 = zr.kind === 'tests' && zr.who === 'sec' ? `<button class="btn" type="button" id="zrGo2" ${busy ? 'disabled' : ''}>Result card of every student</button>` : '';
+  h += `<div class="acts2"><button class="btn primary" type="button" id="zrGo" ${busy ? 'disabled' : ''}>${I_DOC}Create PDF</button>${btn2}</div>`;
+  if(prog) h += `<div class="zprog">${esc(prog.txt)}</div><div class="zbar"><i style="width:${prog.pct || 0}%"></i></div>`;
+  h += `<div class="rnote">${optsBusy ? 'Loading your sections… ' : ''}${optsErr ? esc(optsErr) + ' ' : ''}Needs internet. ${scope() ? 'Taken from the college sheets.' : 'Only your own subjects are included.'} Held = lectures delivered, Present = lectures attended.</div></section>`;
+  return h;
+}
+const I_DOC = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>';
+function resHtml(){
+  if(!found.length) return '';
+  return found.map(s => `<button class="li" type="button" data-zst="${esc(s.roll)}" data-zsn="${esc(s.name)}" data-zsc="${esc(s.cls)}"><span class="av">${esc(initials(s.name))}</span><span class="tx"><b>${esc(s.name)}</b><small>${esc(s.roll)} · ${esc(s.cls)}${s.father ? ' · D/O ' + esc(s.father) : ''}</small></span></button>`).join('');
+}
+function paint(){
+  if(document.body.dataset.screen !== 'reports') return;
+  const old = $q('#zrCard'), grid = $q('#app .grid2');
+  if(!grid) return;
+  const tmp = document.createElement('div'); tmp.innerHTML = cardHtml();
+  if(old) old.replaceWith(tmp.firstElementChild); else grid.appendChild(tmp.firstElementChild);
+}
+function setProg(txt, pct){ prog = txt ? { txt, pct } : null; const c = $q('#zrCard'); if(!c) return;
+  let p = c.querySelector('.zprog'), b = c.querySelector('.zbar');
+  if(!prog){ if(p) p.remove(); if(b) b.remove(); return; }
+  if(!p){ paint(); return; }
+  p.textContent = txt; if(b) b.firstElementChild.style.width = (pct || 0) + '%';
+}
+
+/* hook: add the card every time the Reports screen is drawn */
+const baseRender = window.renderMain;
+window.renderMain = function(){
+  const ae = document.activeElement;
+  if(document.body.dataset.screen === 'reports' && ae && ae.id === 'zrQ' && $q('#zrCard')) return;   // do not wipe the search box while typing
+  const r = baseRender.apply(this, arguments);
+  try{ if(document.body.dataset.screen === 'reports'){ paint(); loadOpts(false); } }catch(e){ console.error(e); }
+  return r;
+};
+
+/* ---------- events ---------- */
+document.addEventListener('click', ev => {
+  const t = ev.target; if(!t || !t.closest || !t.closest('#zrCard')) return;
+  let b;
+  if((b = t.closest('[data-zk]'))){ zr.kind = b.dataset.zk; return paint(); }
+  if((b = t.closest('[data-zw]'))){ zr.who = b.dataset.zw; return paint(); }
+  if((b = t.closest('[data-zst]'))){ zr.roll = b.dataset.zst; zr.name = b.dataset.zsn; zr.scls = b.dataset.zsc; found = []; return paint(); }
+  if(t.closest('#zrClr')){ zr.roll = ''; zr.name = ''; zr.scls = ''; return paint(); }
+  if(t.closest('#zrGo')) return create(false);
+  if(t.closest('#zrGo2')) return create(true);
+});
+document.addEventListener('change', ev => {
+  const t = ev.target; if(!t || !t.closest || !t.closest('#zrCard')) return;
+  if(t.id === 'zrCls'){ zr.cls = t.value; zr.sub = ''; if(zr.cls === '*' && scope()) zr.from = zr.to; return paint(); }
+  if(t.id === 'zrSub'){ zr.sub = t.value; return; }
+  if(t.id === 'zrFrom'){ zr.from = t.value; if(SEAS.indexOf(zr.to) < SEAS.indexOf(zr.from)) zr.to = zr.from; return paint(); }
+  if(t.id === 'zrTo'){ zr.to = t.value; if(SEAS.indexOf(zr.from) > SEAS.indexOf(zr.to)) zr.from = zr.to; return paint(); }
+});
+document.addEventListener('input', ev => {
+  const t = ev.target; if(!t || t.id !== 'zrQ') return;
+  clearTimeout(findT);
+  const q = t.value.trim();
+  if(q.length < 2){ found = []; const box = $q('#zrRes'); if(box) box.innerHTML = ''; return; }
+  findT = setTimeout(async () => {
+    const box = $q('#zrRes'); if(box) box.innerHTML = '<div class="empty">Searching…</div>';
+    try{ const r = await call({ action:'reg_find', q }, 45000); found = r.list || []; }
+    catch(e){ found = []; if(box) box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+    const b2 = $q('#zrRes'); if(b2) b2.innerHTML = resHtml() || '<div class="empty">No student found.</div>';
+  }, 450);
+});
+
+/* ---------- create ---------- */
+async function create(everyStudent){
+  if(busy) return;
+  if(zr.who === 'stu' && !zr.roll) return toast('Search and choose a student first.');
+  if(zr.who === 'sec' && !zr.cls) return toast('Choose a section first.');
+  if(zr.kind === 'daily' && zr.cls === '*' && scope() && zr.who === 'sec' && zr.from !== zr.to) return toast('All sections: choose ONE month (From = To).');
+  busy = true; paint();
+  try{
+    await P.libs();
+    let r;
+    if(zr.kind === 'daily') r = await buildDaily();
+    else if(zr.kind === 'cards') r = await buildCards();
+    else r = await buildTests(everyStudent);
+    setProg('Making the PDF…', 100);
+    await new Promise(res => setTimeout(res, 30));
+    await P.deliver(r, true);
+  }catch(e){ toast('Report not made: ' + (e && e.message || e)); }
+  finally{ busy = false; prog = null; paint(); }
+}
+
+/* ======================= 1) DAILY REGISTER ======================= */
+async function fetchDays(list, roll){
+  const out = [], queue = [];
+  for(let i = 0; i < list.length; i += CHUNK) queue.push(list.slice(i, i + CHUNK));
+  let done = 0, skipped = [];
+  while(queue.length){
+    const part = queue.shift();
+    setProg('Reading attendance sheets… ' + done + ' of ' + list.length, Math.round(done / list.length * 95));
+    let r;
+    try{ r = await call({ action:'reg_days', names:part.map(x => x.name), roll:roll || '' }, 180000); }
+    catch(e){
+      if(/Sign in|internet|not updated/i.test(e.message)) throw e;
+      if(part.length > 1){ const h = Math.ceil(part.length / 2); queue.unshift(part.slice(0, h), part.slice(h)); continue; }
+      skipped.push(part[0].name); done++; continue;
+    }
+    (r.sheets || []).forEach(x => { if(x.missing) skipped.push(x.name); else out.push(x); });
+    done += part.length;
+  }
+  if(skipped.length) toast(skipped.length + ' sheet(s) could not be read and are left out.');
+  return out;
+}
+const cellRe = /^(\d*)([PALB])$/;
+function counts(cells){ let p = 0, l = 0, g = 0; cells.forEach(c => { const m = cellRe.exec(c || ''); if(!m) return; const k = Number(m[1] || 1); if(m[2] === 'P'){ p += k; g += k; } else if(m[2] === 'A'){ g += k; } else if(m[2] === 'L') l += k; }); return { p, l, g }; }
+function styleCell(h, v, C){
+  if(/P$/.test(v)){ h.cell.styles.textColor = C.GREEN; h.cell.styles.fontStyle = 'bold'; }
+  else if(/A$/.test(v)){ h.cell.styles.textColor = C.RED; h.cell.styles.fillColor = C.REDBG; h.cell.styles.fontStyle = 'bold'; }
+  else if(/L$/.test(v)){ h.cell.styles.textColor = C.AMB; h.cell.styles.fillColor = C.AMBBG; h.cell.styles.fontStyle = 'bold'; }
+  else if(/B$/.test(v)){ h.cell.styles.textColor = C.PUR; h.cell.styles.fillColor = C.PURBG; h.cell.styles.fontStyle = 'bold'; }
+}
+const dayLegend = 'P = present (2P = present in 2 lectures that day), A = absent, L = leave, B = bunk. Only P counts as attended. Present = lectures attended, Held = lectures delivered (for a guest: lectures in which she was marked). Red % = below ' + LOW + '%. Grey = Sunday, purple = more than one lecture.';
+
+/** one section + subject + month on its own page(s) */
+function dailySectionPage(doc, x, first){
+  const C = P.C, mName = MONTHS[x.m] + ' ' + x.y, n = x.days.length;
+  const tHeld = x.held.reduce((a, b) => a + b, 0);
+  const rows = x.st.map(s => {
+    const c = counts(s[2]), den = s[4] ? c.g : tHeld, pct = !s[3] && den ? pct1(c.p, den) : null;
+    return { roll:s[0], name:s[1], cells:s[2], off:!!s[3], guest:s[4], p:c.p, l:c.l, den, pct, low:pct != null && pct < LOW };
+  }).sort((a, b) => enrollN(a.roll) - enrollN(b.roll));
+  const act = rows.filter(r => !r.off), ps = act.map(r => r.pct).filter(v => v != null);
+  const avg = ps.length ? Math.round(ps.reduce((a, b) => a + b, 0) / ps.length * 10) / 10 : null, nLow = act.filter(r => r.low).length;
+  if(!first) doc.addPage();
+  let Y = P.heading(doc, P.TOP, 'Daily Attendance Register  ·  ' + x.cls + '  ·  ' + titleCase(x.sub),
+    mName + '  ·  Teacher: ' + (x.teacher || '-') + '  ·  Lectures held: ' + tHeld + '  ·  Students: ' + act.length +
+    '  ·  Average: ' + (avg == null ? '-' : avg + '%') + '  ·  Below ' + LOW + '%: ' + nLow);
+  const D0 = 3, DN = D0 + n - 1, cP = DN + 1, cH = DN + 2, cL = DN + 3, cPc = DN + 4;
+  const isSun = x.days.map(d => new Date(x.y, x.m, d).getDay() === 0);
+  const fixed = 6 + 22 + 38 + 11 + 10 + 9 + 11, dayW = n ? (doc.internal.pageSize.getWidth() - 20 - fixed) / n : 5;
+  const cs = { 0:{ cellWidth:6, halign:'center' }, 1:{ cellWidth:22 }, 2:{ cellWidth:38 } };
+  x.days.forEach((_, i) => { cs[D0 + i] = { cellWidth:dayW, halign:'center', fontSize:5.8 }; });
+  cs[cP] = { cellWidth:11, halign:'center', fontStyle:'bold' }; cs[cH] = { cellWidth:10, halign:'center' }; cs[cL] = { cellWidth:9, halign:'center' }; cs[cPc] = { cellWidth:11, halign:'center', fontStyle:'bold' };
+  P.table(doc, {
+    startY:Y - 2, margin:{ top:P.TOP, left:10, right:10, bottom:15 },
+    styles:{ font:'helvetica', fontSize:6.1, cellPadding:0.32, lineColor:C.LINE, lineWidth:0.12, textColor:C.INK, valign:'middle', overflow:'ellipsize' },
+    headStyles:{ fillColor:C.NAVY, textColor:[255, 255, 255], fontStyle:'bold', halign:'center', valign:'middle', fontSize:5.8, cellPadding:0.5 },
+    head:[['#', 'Roll No', 'Student Name'].concat(x.days.map(d => d + '\n' + WD[new Date(x.y, x.m, d).getDay()].slice(0, 2)), ['Present', 'Held', 'Leave', '%'])],
+    body:rows.map((r, i) => [i + 1, r.roll, r.name + (r.off ? ' (left subject)' : r.guest ? ' (Guest)' : '')].concat(r.off ? r.cells.map(() => '') : r.cells,
+      [r.off ? '' : r.p, r.off ? '' : r.den, r.off || !r.l ? '' : r.l, r.pct == null ? '-' : r.pct])),
+    columnStyles:cs,
+    didParseCell:h => {
+      const c = h.column.index, isDay = c >= D0 && c <= DN, k = c - D0;
+      if(h.section === 'head'){ if(isDay && isSun[k]) h.cell.styles.fillColor = [90, 100, 118]; else if(isDay && x.held[k] > 1) h.cell.styles.fillColor = C.PUR; return; }
+      const r = rows[h.row.index], st = h.cell.styles;
+      if(r.off){ st.textColor = [160, 166, 176]; st.fontStyle = 'italic'; st.fillColor = [242, 243, 245]; return; }
+      if(isDay){ if(isSun[k]) st.fillColor = [228, 231, 236]; styleCell(h, String(h.cell.raw || ''), C); }
+      if(c === cPc){ if(r.low){ st.textColor = C.RED; st.fillColor = C.REDBG; } else if(r.pct != null) st.textColor = C.GREEN; }
+    }
+  });
+  const notes = Object.keys(x.dn || {}).map(d => d + ': ' + x.dn[d]);
+  let y2 = doc.lastAutoTable.finalY + 2;
+  if(notes.length) y2 = P.smallNote(doc, y2, 'Day notes - ' + notes.join('; '));
+  return y2;
+}
+
+/** one student, one month: subjects x days */
+function dailyStudentPage(doc, mon, list, first){
+  const C = P.C, x0 = list[0], m = x0.m, y = x0.y, mName = MONTHS[m] + ' ' + y;
+  const daySet = new Set(); list.forEach(x => x.days.forEach(d => daySet.add(d)));
+  const days = [...daySet].sort((a, b) => a - b), n = days.length, isSun = days.map(d => new Date(y, m, d).getDay() === 0);
+  let gP = 0, gH = 0, gL = 0;
+  const rows = list.slice().sort((a, b) => a.sub.localeCompare(b.sub)).map(x => {
+    const s = x.st[0], pos = {}; x.days.forEach((d, i) => { pos[d] = i; });
+    const cells = days.map(d => pos[d] != null ? s[2][pos[d]] : '');
+    const c = counts(s[2]), den = s[4] ? c.g : x.held.reduce((a, b) => a + b, 0), pct = !s[3] && den ? pct1(c.p, den) : null;
+    if(!s[3]){ gP += c.p; gH += den; gL += c.l; }
+    return { sub:x.sub, teacher:x.teacher, cells, off:!!s[3], p:c.p, l:c.l, den, pct, low:pct != null && pct < LOW };
+  });
+  const gp = pct1(gP, gH);
+  if(!first) doc.addPage();
+  let Y = P.heading(doc, P.TOP, 'Student Daily Attendance  ·  ' + mName, zr.name + '  ·  ' + zr.roll + '  ·  ' + zr.scls);
+  Y = P.statBoxes(doc, Y, [
+    { l:'Overall this month', v:gp == null ? '-' : gp + '%', c:gp != null && gp < LOW ? C.RED : C.GREEN, bg:gp != null && gp < LOW ? C.REDBG : C.GREENBG },
+    { l:'Present / Held', v:gP + ' / ' + gH }, { l:'Leave', v:gL },
+    { l:'Subjects below ' + LOW + '%', v:rows.filter(r => r.low).length, c:rows.some(r => r.low) ? C.RED : C.INK, bg:rows.some(r => r.low) ? C.REDBG : C.SOFT }]) + 3;
+  const D0 = 2, DN = D0 + n - 1, cPc = DN + 3;
+  const fixed = 32 + 28 + 11 + 10 + 11, dayW = n ? (doc.internal.pageSize.getWidth() - 20 - fixed) / n : 5;
+  const cs = { 0:{ cellWidth:32, fontStyle:'bold' }, 1:{ cellWidth:28 } };
+  days.forEach((_, i) => { cs[D0 + i] = { cellWidth:dayW, halign:'center', fontSize:6 }; });
+  cs[DN + 1] = { cellWidth:11, halign:'center', fontStyle:'bold' }; cs[DN + 2] = { cellWidth:10, halign:'center' }; cs[cPc] = { cellWidth:11, halign:'center', fontStyle:'bold' };
+  const body = rows.map(r => [titleCase(r.sub) + (r.off ? ' (left)' : ''), r.teacher || ''].concat(r.off ? r.cells.map(() => '') : r.cells, [r.off ? '' : r.p, r.off ? '' : r.den, r.pct == null ? '-' : r.pct]));
+  body.push(['Overall', ''].concat(days.map(() => ''), [gP, gH, gp == null ? '-' : gp]));
+  P.table(doc, {
+    startY:Y, margin:{ top:P.TOP, left:10, right:10, bottom:16 },
+    styles:{ font:'helvetica', fontSize:7, cellPadding:0.9, lineColor:C.LINE, lineWidth:0.12, textColor:C.INK, valign:'middle', overflow:'ellipsize' },
+    headStyles:{ fillColor:C.NAVY, textColor:[255, 255, 255], fontStyle:'bold', halign:'center', valign:'middle', fontSize:6, cellPadding:0.7 },
+    head:[['Subject', 'Teacher'].concat(days.map(d => d + '\n' + WD[new Date(y, m, d).getDay()].slice(0, 2)), ['Present', 'Held', '%'])],
+    body, columnStyles:cs,
+    didParseCell:h => {
+      const c = h.column.index, isDay = c >= D0 && c <= DN, k = c - D0;
+      if(h.section === 'head'){ if(isDay && isSun[k]) h.cell.styles.fillColor = [90, 100, 118]; return; }
+      if(h.row.index === body.length - 1){ h.cell.styles.fontStyle = 'bold'; h.cell.styles.fillColor = [234, 238, 246]; if(c === cPc && gp != null && gp < LOW) h.cell.styles.textColor = C.RED; return; }
+      const r = rows[h.row.index];
+      if(r.off){ h.cell.styles.textColor = [160, 166, 176]; h.cell.styles.fontStyle = 'italic'; return; }
+      if(isDay){ if(isSun[k]) h.cell.styles.fillColor = [228, 231, 236]; styleCell(h, String(h.cell.raw || ''), C); }
+      if(c === cPc){ if(r.low){ h.cell.styles.textColor = C.RED; h.cell.styles.fillColor = C.REDBG; } else if(r.pct != null) h.cell.styles.textColor = C.GREEN; }
+    }
+  });
+  return doc.lastAutoTable.finalY + 3;
+}
+
+async function buildDaily(){
+  setProg('Finding the attendance sheets…', 2);
+  const stu = zr.who === 'stu';
+  const plan = await call({ action:'reg_plan', from:zr.from, to:zr.to, cls:stu ? '' : zr.cls, sub:stu ? '' : zr.sub, roll:stu ? zr.roll : '' }, 90000);
+  const list = plan.sheets || [];
+  if(!list.length) throw new Error('No attendance sheets found for this choice.');
+  if(list.length > 120 && !confirm(list.length + ' attendance sheets will be put in one PDF. This can take several minutes. Continue?')) throw new Error('Cancelled.');
+  const got = await fetchDays(list, stu ? zr.roll : '');
+  if(!got.length) throw new Error('No attendance could be read.');
+  setProg('Making the PDF…', 97);
+  await new Promise(res => setTimeout(res, 30));
+  const doc = P.newDoc('landscape'); let Y = P.TOP;
+  doc.setLineHeightFactor(1.12);                                       // tighter rows: a 45-student section fits on one page
+  if(stu){
+    const byMon = {};
+    got.filter(x => x.st && x.st.length).forEach(x => { (byMon[x.mon] = byMon[x.mon] || []).push(x); });
+    const mons = SEAS.filter(t => byMon[t]);
+    if(!mons.length) throw new Error('No daily attendance found for this student.');
+    mons.forEach((t, i) => { Y = dailyStudentPage(doc, t, byMon[t], i === 0); });
+  } else {
+    got.forEach((x, i) => { Y = dailySectionPage(doc, x, i === 0); });
+  }
+  Y = P.smallNote(doc, Y, dayLegend + (scope() ? '' : ' Only the subjects taught by ' + (teacher || user) + ' are included.'));
+  P.signatures(doc, Y, stu ? ['Class In-charge', 'HOD', 'Principal'] : ['Subject Teacher', 'HOD', 'Principal']);
+  P.finalize(doc);
+  const what = stu ? zr.name + '_' + zr.roll : zr.cls === '*' ? allLabel() : zr.cls + (zr.sub ? '_' + titleCase(zr.sub) : '_All-subjects');
+  return { doc, title:'Daily register ' + (stu ? zr.name : zr.cls === '*' ? allLabel() : zr.cls), file:'Daily-register_' + P.safe(what) + '_' + zr.from + '-' + zr.to + '.pdf' };
+}
+
+/* ======================= shared: report_data -> students ======================= */
+async function reportRows(q){
+  const r = await call(Object.assign({ action:'report_data' }, q), 180000);
+  return r.rows || [];
+}
+/** rows -> { roll: { roll, name, cls, guest, subs:{ SUB:{ sub, teacher, cls, months:{ MON:{ p, d, mt, mtT, off } } } } } } */
+function model(rows){
+  const S = {};
+  rows.forEach(r => (r.st || []).forEach(x => {
+    const s = S[x[0]] = S[x[0]] || { roll:x[0], name:x[1], cls:r.cls, guest:'', subs:{} };
+    if(x[6]) s.guest = x[6];
+    if(!/optional/i.test(r.cls) && /optional/i.test(s.cls)) s.cls = r.cls;
+    const g = s.subs[r.sub] = s.subs[r.sub] || { sub:r.sub, teacher:r.teacher, cls:r.cls, months:{} };
+    g.months[r.mon] = { p:Number(x[2]) || 0, d:Number(x[3]) || 0, mt:x[4], mtT:Number(r.mt) || 0, off:!!x[5] };
+  }));
+  Object.values(S).forEach(s => Object.values(s.subs).forEach(g => {
+    const ms = Object.keys(g.months).sort((a, b) => SEAS.indexOf(b) - SEAS.indexOf(a));
+    g.off = !!(ms[0] && g.months[ms[0]].off);
+    let p = 0, d = 0, o = 0, t = 0, n = 0;
+    Object.values(g.months).forEach(m => {
+      if(m.off) return; p += m.p; d += m.d;
+      if(m.mtT && m.mt !== '' && m.mt != null){ t += m.mtT; n++; if(m.mt !== 'A') o += Number(m.mt) || 0; }
+    });
+    Object.assign(g, { p, d, pct:pct1(p, d), o, t, n, tp:t ? pct1(o, t) : null });
+  }));
+  return S;
+}
+const sortStu = S => Object.values(S).sort((a, b) => a.cls.localeCompare(b.cls, undefined, { numeric:true }) || enrollN(a.roll) - enrollN(b.roll));
+/** ranks by % (higher first), ties share the place */
+function ranks(list){ const s = list.filter(x => x.v != null).sort((a, b) => b.v - a.v), out = {}; let last = null, r = 0;
+  s.forEach((x, i) => { const k = Math.round(x.v * 100); if(k !== last){ r = i + 1; last = k; } out[x.k] = r; }); return { pos:out, of:s.length }; }
+
+/* ======================= 2) SESSION REGISTER: one page per student ======================= */
+function studentSessionPage(doc, s, mons, first, q){
+  const C = P.C, subs = Object.values(s.subs).sort((a, b) => a.sub.localeCompare(b.sub)), live = subs.filter(g => !g.off);
+  const gP = live.reduce((a, g) => a + g.p, 0), gD = live.reduce((a, g) => a + g.d, 0), gp = pct1(gP, gD), short = live.filter(g => g.d && g.pct < LOW).length;
+  if(!first) doc.addPage();
+  let Y = P.heading(doc, P.TOP, 'Student Session Attendance Register', s.name + '  ·  ' + s.roll + '  ·  ' + s.cls + '  ·  ' + rangeTxt(q.from, q.to));
+  Y = P.statBoxes(doc, Y, [
+    { l:'Overall attendance', v:gp == null ? '-' : gp + '%', c:gp != null && gp < LOW ? C.RED : C.GREEN, bg:gp != null && gp < LOW ? C.REDBG : C.GREENBG },
+    { l:'Present / Held', v:gP + ' / ' + gD },
+    { l:'Subjects below ' + LOW + '%', v:short, c:short ? C.RED : C.INK, bg:short ? C.REDBG : C.SOFT }]) + 3;
+  const head = [[{ content:'Subject', rowSpan:2 }, { content:'Teacher', rowSpan:2 }].concat(mons.map(t => ({ content:monName(t), colSpan:2 })), [{ content:'SESSION', colSpan:2 }, { content:'Status', rowSpan:2 }]),
+    mons.flatMap(() => ['Present / Held', '%']).concat(['Present / Held', '%'])];
+  const body = subs.map(g => [titleCase(g.sub) + (g.off ? ' (left)' : ''), g.teacher || ''].concat(
+    mons.flatMap(t => { const m = g.months[t]; return !m ? ['-', ''] : m.off ? ['left', ''] : [m.p + ' / ' + m.d, m.d ? pct1(m.p, m.d) : '-']; }),
+    g.off ? ['', '', 'Left subject'] : [g.p + ' / ' + g.d, g.pct == null ? '-' : g.pct, g.pct == null ? '' : g.pct < LOW ? 'SHORTAGE' : 'OK']));
+  body.push(['Overall', ''].concat(mons.flatMap(t => { let p = 0, d = 0; live.forEach(g => { const m = g.months[t]; if(m && !m.off){ p += m.p; d += m.d; } }); return d ? [p + ' / ' + d, pct1(p, d)] : ['-', '']; }),
+    [gP + ' / ' + gD, gp == null ? '-' : gp, short ? short + ' short' : 'OK']));
+  const pctCols = new Set(); mons.forEach((_, i) => pctCols.add(3 + i * 2)); pctCols.add(3 + mons.length * 2);
+  P.table(doc, { startY:Y, margin:{ top:P.TOP, left:10, right:10, bottom:16 },
+    styles:{ font:'helvetica', fontSize:8, cellPadding:1.4, lineColor:C.LINE, lineWidth:0.15, textColor:C.INK, valign:'middle', halign:'center' },
+    head, body, columnStyles:{ 0:{ halign:'left', fontStyle:'bold', cellWidth:38 }, 1:{ halign:'left', cellWidth:36 } },
+    didParseCell:h => {
+      if(h.section !== 'body') return;
+      const v = String(h.cell.raw == null ? '' : h.cell.raw), last = h.row.index === body.length - 1;
+      if(last){ h.cell.styles.fontStyle = 'bold'; h.cell.styles.fillColor = [234, 238, 246]; }
+      if(pctCols.has(h.column.index) && v !== '' && v !== '-' && Number(v) < LOW){ h.cell.styles.textColor = C.RED; h.cell.styles.fillColor = C.REDBG; h.cell.styles.fontStyle = 'bold'; }
+      if(/SHORTAGE|short$/.test(v)){ h.cell.styles.textColor = C.RED; h.cell.styles.fontStyle = 'bold'; }
+      if(v === 'OK') h.cell.styles.textColor = C.GREEN;
+      if(v === 'left'){ h.cell.styles.textColor = [150, 156, 168]; h.cell.styles.fontStyle = 'italic'; }
+    } });
+  Y = doc.lastAutoTable.finalY + 3;
+  Y = P.smallNote(doc, Y, 'Present = lectures attended, Held = lectures delivered (for a guest: lectures in which she was marked). Only P counts as attended. Minimum required: ' + LOW + '%.' + (scope() ? '' : ' Only the subjects taught by ' + (teacher || user) + ' are included.'));
+  P.signatures(doc, Y, ['Class In-charge', 'HOD', 'Principal']);
+}
+async function buildCards(){
+  setProg('Reading the section…', 20);
+  const q = { from:zr.from, to:zr.to, cls:zr.cls };
+  const S = sortStu(model(await reportRows(q)));
+  if(!S.length) throw new Error('No students found for this section.');
+  setProg('Making ' + S.length + ' pages…', 80);
+  await new Promise(res => setTimeout(res, 30));
+  const doc = P.newDoc('landscape'), mons = monthsIn(zr.from, zr.to);
+  S.forEach((s, i) => studentSessionPage(doc, s, mons, i === 0, q));
+  P.finalize(doc);
+  return { doc, title:'Session registers ' + zr.cls, file:'Session-registers_' + P.safe(zr.cls) + '_' + zr.from + '-' + zr.to + '.pdf' };
+}
+
+/* ======================= 3) TEST RESULTS ======================= */
+const mtTxt = m => !m || m.off || m.mt === '' || m.mt == null || !m.mtT ? '' : m.mt === 'A' ? 'Absent' : m.mt + ' / ' + m.mtT;
+const mtPct = m => !m || m.off || m.mt === '' || m.mt == null || !m.mtT ? null : m.mt === 'A' ? 0 : pct1(Number(m.mt) || 0, m.mtT);
+/** grand obtained / total of a student over the given subjects */
+function grand(s, subs){ let o = 0, t = 0; subs.forEach(x => { const g = s.subs[x]; if(g && !g.off && g.t){ o += g.o; t += g.t; } }); return { o, t, p:t ? pct1(o, t) : null }; }
+const testLegend = 'Obtained / Total for each monthly test. Session % = all marks obtained ÷ all total marks of the chosen months (a test marked Absent counts as 0). Red = below ' + TEST_LOW + '% or absent. Tests not entered are left out.';
+
+function subjectResultPage(doc, list, sub, mons, q, first){
+  const C = P.C, rk = ranks(list.map(s => ({ k:s.roll, v:s.subs[sub] && !s.subs[sub].off ? s.subs[sub].tp : null })));
+  const g0 = list.find(s => s.subs[sub]), teacherName = g0 ? g0.subs[sub].teacher : '';
+  if(!first) doc.addPage();
+  let Y = P.heading(doc, P.TOP, 'Monthly Test Result  ·  ' + q.cls + '  ·  ' + titleCase(sub), 'Teacher: ' + (teacherName || '-') + '  ·  ' + rangeTxt(q.from, q.to));
+  const head = [[{ content:'#', rowSpan:2 }, { content:'Roll No', rowSpan:2 }, { content:'Student Name', rowSpan:2 }].concat(mons.map(t => ({ content:monName(t) + ' test', colSpan:2 })),
+    [{ content:'SESSION', colSpan:2 }, { content:'Position', rowSpan:2 }]), mons.flatMap(() => ['Obtained / Total', '%']).concat(['Obtained / Total', '%'])];
+  const rows = list.filter(s => s.subs[sub]);
+  const body = rows.map((s, i) => { const g = s.subs[sub];
+    return [i + 1, s.roll, s.name + (g.off ? ' (left)' : '')].concat(mons.flatMap(t => { const m = g.months[t], p = mtPct(m); return [mtTxt(m) || '-', p == null ? '' : p]; }),
+      g.off || !g.t ? ['-', '', ''] : [g.o + ' / ' + g.t, g.tp, rk.pos[s.roll] || '']); });
+  const pctCols = new Set(); mons.forEach((_, i) => pctCols.add(4 + i * 2)); pctCols.add(4 + mons.length * 2);
+  P.table(doc, { startY:Y, margin:{ top:P.TOP, left:10, right:10, bottom:16 },
+    styles:{ font:'helvetica', fontSize:7.6, cellPadding:1.1, lineColor:C.LINE, lineWidth:0.15, textColor:C.INK, valign:'middle', halign:'center' },
+    head, body, columnStyles:{ 0:{ cellWidth:8 }, 1:{ cellWidth:24, halign:'left' }, 2:{ cellWidth:44, halign:'left' } },
+    didParseCell:h => { if(h.section !== 'body') return; const v = String(h.cell.raw == null ? '' : h.cell.raw);
+      if(v === 'Absent' || (pctCols.has(h.column.index) && v !== '' && Number(v) < TEST_LOW)){ h.cell.styles.textColor = C.RED; h.cell.styles.fillColor = C.REDBG; h.cell.styles.fontStyle = 'bold'; }
+      if(h.column.index === 5 + mons.length * 2 && v){ h.cell.styles.fontStyle = 'bold'; if(Number(v) <= 3){ h.cell.styles.fillColor = C.GREENBG; h.cell.styles.textColor = C.GREEN; } } } });
+  Y = doc.lastAutoTable.finalY + 3;
+  const ok = rows.filter(s => s.subs[sub].t && !s.subs[sub].off), low = ok.filter(s => s.subs[sub].tp < TEST_LOW).length;
+  Y = P.smallNote(doc, Y, 'Students with marks: ' + ok.length + '  ·  Below ' + TEST_LOW + '%: ' + low + '.  ' + testLegend);
+  P.signatures(doc, Y, ['Subject Teacher', 'HOD', 'Principal']);
+}
+function summaryResultPage(doc, list, subs, q){
+  const C = P.C, rk = ranks(list.map(s => ({ k:s.roll, v:grand(s, subs).p })));
+  let Y = P.heading(doc, P.TOP, 'Monthly Test Result Summary  ·  ' + q.cls, (scope() ? 'All subjects' : 'Subjects taught by ' + (teacher || user)) + '  ·  ' + rangeTxt(q.from, q.to));
+  const head = [['#', 'Roll No', 'Student Name'].concat(subs.map(x => titleCase(x).split(' ').map(w => w.length > 8 ? w.slice(0, 6) + '.' : w).join(' ') + '\n%'), ['Obtained', 'Total', '%', 'Position'])];
+  const body = list.map((s, i) => { const G = grand(s, subs);
+    return [i + 1, s.roll, s.name].concat(subs.map(x => { const g = s.subs[x]; return !g ? '—' : g.off ? 'left' : g.tp == null ? '' : g.tp; }),
+      G.t ? [G.o, G.t, G.p, rk.pos[s.roll] || ''] : ['', '', '', '']); });
+  const n = subs.length;
+  P.table(doc, { startY:Y, margin:{ top:P.TOP, left:10, right:10, bottom:16 },
+    styles:{ font:'helvetica', fontSize:7.2, cellPadding:1, lineColor:C.LINE, lineWidth:0.15, textColor:C.INK, valign:'middle', halign:'center' },
+    headStyles:{ fillColor:C.NAVY, textColor:[255, 255, 255], fontStyle:'bold', halign:'center', valign:'middle', fontSize:6.6 },
+    head, body, columnStyles:{ 0:{ cellWidth:7 }, 1:{ cellWidth:23, halign:'left' }, 2:{ cellWidth:42, halign:'left' } },
+    didParseCell:h => { if(h.section !== 'body') return; const c = h.column.index, v = String(h.cell.raw == null ? '' : h.cell.raw);
+      if(((c >= 3 && c < 3 + n) || c === 5 + n) && v !== '' && !isNaN(Number(v)) && Number(v) < TEST_LOW){ h.cell.styles.textColor = C.RED; h.cell.styles.fillColor = C.REDBG; h.cell.styles.fontStyle = 'bold'; }
+      if(c === 6 + n && v){ h.cell.styles.fontStyle = 'bold'; if(Number(v) <= 3){ h.cell.styles.fillColor = C.GREENBG; h.cell.styles.textColor = C.GREEN; } }
+      if(v === 'left'){ h.cell.styles.textColor = [150, 156, 168]; h.cell.styles.fontStyle = 'italic'; } } });
+  Y = doc.lastAutoTable.finalY + 3;
+  Y = P.smallNote(doc, Y, 'Subject % = session test % in that subject. Position = by overall % of the subjects shown. — = subject not taken. ' + testLegend);
+  P.signatures(doc, Y, ['Class In-charge', 'HOD', 'Principal']);
+}
+function studentResultPage(doc, s, mons, q, first, place){
+  const C = P.C, subs = Object.keys(s.subs).sort(), G = grand(s, subs);
+  if(!first) doc.addPage();
+  let Y = P.heading(doc, P.TOP, 'Student Monthly Test Report', s.name + '  ·  ' + s.roll + '  ·  ' + s.cls + '  ·  ' + rangeTxt(q.from, q.to));
+  Y = P.statBoxes(doc, Y, [
+    { l:'Overall test %', v:G.p == null ? '-' : G.p + '%', c:G.p != null && G.p < TEST_LOW ? C.RED : C.GREEN, bg:G.p != null && G.p < TEST_LOW ? C.REDBG : C.GREENBG },
+    { l:'Obtained / Total', v:G.t ? G.o + ' / ' + G.t : '-' },
+    { l:'Class position', v:place ? place.pos + ' of ' + place.of : '-' }]) + 3;
+  const head = [[{ content:'Subject', rowSpan:2 }, { content:'Teacher', rowSpan:2 }].concat(mons.map(t => ({ content:monName(t) + ' test', colSpan:2 })), [{ content:'SESSION', colSpan:2 }]),
+    mons.flatMap(() => ['Obtained / Total', '%']).concat(['Obtained / Total', '%'])];
+  const body = subs.map(x => { const g = s.subs[x];
+    return [titleCase(x) + (g.off ? ' (left)' : ''), g.teacher || ''].concat(mons.flatMap(t => { const m = g.months[t], p = mtPct(m); return [mtTxt(m) || '-', p == null ? '' : p]; }),
+      g.off || !g.t ? ['-', ''] : [g.o + ' / ' + g.t, g.tp]); });
+  body.push(['Overall', ''].concat(mons.flatMap(t => { let o = 0, tt = 0; subs.forEach(x => { const g = s.subs[x], m = g.months[t]; if(g.off || !m || m.off || !m.mtT || m.mt === '' || m.mt == null) return; tt += m.mtT; if(m.mt !== 'A') o += Number(m.mt) || 0; }); return tt ? [o + ' / ' + tt, pct1(o, tt)] : ['-', '']; }),
+    G.t ? [G.o + ' / ' + G.t, G.p] : ['-', '']));
+  const pctCols = new Set(); mons.forEach((_, i) => pctCols.add(3 + i * 2)); pctCols.add(3 + mons.length * 2);
+  P.table(doc, { startY:Y, margin:{ top:P.TOP, left:10, right:10, bottom:16 },
+    styles:{ font:'helvetica', fontSize:8, cellPadding:1.4, lineColor:C.LINE, lineWidth:0.15, textColor:C.INK, valign:'middle', halign:'center' },
+    head, body, columnStyles:{ 0:{ halign:'left', fontStyle:'bold', cellWidth:38 }, 1:{ halign:'left', cellWidth:36 } },
+    didParseCell:h => { if(h.section !== 'body') return; const v = String(h.cell.raw == null ? '' : h.cell.raw);
+      if(h.row.index === body.length - 1){ h.cell.styles.fontStyle = 'bold'; h.cell.styles.fillColor = [234, 238, 246]; }
+      if(v === 'Absent' || (pctCols.has(h.column.index) && v !== '' && v !== '-' && Number(v) < TEST_LOW)){ h.cell.styles.textColor = C.RED; h.cell.styles.fillColor = C.REDBG; h.cell.styles.fontStyle = 'bold'; } } });
+  Y = doc.lastAutoTable.finalY + 3;
+  Y = P.smallNote(doc, Y, testLegend + (place ? ' Position = among the students of ' + s.cls + ', by overall % of ' + (scope() ? 'the subjects of that section.' : 'the subjects shown.') : '') + (scope() ? '' : ' Only the subjects taught by ' + (teacher || user) + ' are included.'));
+  P.signatures(doc, Y, ['Class In-charge', 'HOD', 'Principal']);
+}
+async function buildTests(everyStudent){
+  const mons = monthsIn(zr.from, zr.to), doc = P.newDoc('landscape');
+  if(zr.who === 'stu'){
+    setProg('Reading the student’s tests…', 20);
+    const mine = model(await reportRows({ from:zr.from, to:zr.to, roll:zr.roll }))[zr.roll];
+    if(!mine) throw new Error('No monthly test data found for this student.');
+    setProg('Working out the class position…', 55);
+    let place = null;
+    try{
+      const S = model(await reportRows({ from:zr.from, to:zr.to, cls:mine.cls })), subs = [...new Set(Object.values(S).flatMap(s => Object.keys(s.subs)))];
+      const rk = ranks(Object.values(S).map(s => ({ k:s.roll, v:grand(s, subs).p })));
+      if(rk.pos[zr.roll]) place = { pos:rk.pos[zr.roll], of:rk.of };
+    }catch(e){}
+    studentResultPage(doc, mine, mons, { from:zr.from, to:zr.to }, true, place);
+    P.finalize(doc);
+    return { doc, title:'Test report ' + zr.name, file:'Test-report_' + P.safe(zr.name) + '_' + P.safe(zr.roll) + '_' + zr.from + '-' + zr.to + '.pdf' };
+  }
+  setProg('Reading the section’s tests…', 20);
+  const q = { from:zr.from, to:zr.to, cls:zr.cls };
+  const S = sortStu(model(await reportRows(q)));
+  if(!S.length) throw new Error('No students found for this section.');
+  const subsAll = [...new Set(S.flatMap(s => Object.keys(s.subs)))].sort();
+  if(!subsAll.some(x => S.some(s => s.subs[x] && s.subs[x].t))) throw new Error('No monthly test marks are entered for this section in the chosen months.');
+  setProg('Making the PDF…', 80);
+  await new Promise(res => setTimeout(res, 30));
+  if(everyStudent){
+    const rk = ranks(S.map(s => ({ k:s.roll, v:grand(s, subsAll).p })));
+    S.forEach((s, i) => studentResultPage(doc, s, mons, q, i === 0, rk.pos[s.roll] ? { pos:rk.pos[s.roll], of:rk.of } : null));
+    P.finalize(doc);
+    return { doc, title:'Test result cards ' + zr.cls, file:'Test-cards_' + P.safe(zr.cls) + '_' + zr.from + '-' + zr.to + '.pdf' };
+  }
+  if(zr.sub){
+    if(!subsAll.includes(zr.sub)) throw new Error('No test data for ' + titleCase(zr.sub) + ' in this section.');
+    subjectResultPage(doc, S, zr.sub, mons, q, true);
+  } else {
+    summaryResultPage(doc, S, subsAll, q);
+    subsAll.forEach(x => subjectResultPage(doc, S, x, mons, q, false));
+  }
+  P.finalize(doc);
+  return { doc, title:'Test result ' + zr.cls, file:'Test-result_' + P.safe(zr.cls) + '_' + (zr.sub ? P.safe(titleCase(zr.sub)) : 'All-subjects') + '_' + zr.from + '-' + zr.to + '.pdf' };
+}
+
+if(document.body.dataset.screen === 'reports'){ paint(); loadOpts(false); }
+})();
+</script>
+
 </body>
 </html>
