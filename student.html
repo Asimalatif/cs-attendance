@@ -53,7 +53,43 @@ tr.tot td{font-weight:800;border-bottom:0}
 .okmsg{margin-top:10px;background:var(--good-bg);color:var(--good);border-radius:10px;padding:10px 12px;font-weight:650}
 .row2{display:flex;gap:10px}.row2 .btn{flex:1}
 .mb.on{background:var(--navy);color:#fff}
-.dtab{min-width:0;font-size:12.5px}.dtab th,.dtab td{padding:4px 3px}.dtab td:first-child,.dtab th:first-child{position:sticky;left:0;background:var(--surface);min-width:110px}
+.dd-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.dd-load{display:flex;align-items:center;gap:12px;padding:22px 4px;color:var(--muted);font-weight:650}
+.spin{width:26px;height:26px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--acc);animation:sp .8s linear infinite;flex:none}
+@keyframes sp{to{transform:rotate(360deg)}}
+.mtabs{display:flex;gap:8px;overflow-x:auto;padding:2px 0 4px;margin-top:10px;scrollbar-width:none}
+.mtab{flex:1 0 auto;min-width:92px;border:1.5px solid var(--line);background:var(--surface2);color:var(--ink);border-radius:12px;padding:7px 12px;cursor:pointer;text-align:left}
+.mtab b{display:block;font-size:14px}.mtab small{font-weight:750;font-size:12.5px}
+.mtab.on{border-color:var(--acc);background:var(--surface);box-shadow:0 0 0 2px color-mix(in srgb,var(--acc) 22%,transparent)}
+.mtab .good{color:var(--good)}.mtab .bad{color:var(--bad)}.mtab .mid{color:var(--mid)}
+.msum{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0 10px}
+.msum div{background:var(--surface2);border-radius:12px;padding:8px 10px}.msum b{display:block;font-size:18px}.msum small{color:var(--muted);font-size:11.5px}
+.msum .good b{color:var(--good)}.msum .bad b{color:var(--bad)}.msum .mid b{color:var(--mid)}
+@media(max-width:480px){.msum{grid-template-columns:repeat(2,1fr)}}
+.dgrid{border:1px solid var(--line);border-radius:12px;overflow:auto;max-width:100%}
+.dtab{min-width:0;font-size:12.5px;border-collapse:separate;border-spacing:0}
+.dtab th,.dtab td{padding:5px 2px;border-bottom:1px solid var(--line)}
+.dtab thead th{background:var(--surface2);color:var(--muted);font-size:11px;line-height:1.15;text-transform:none;letter-spacing:0;position:sticky;top:0;z-index:1}
+.dtab thead th b{display:block;color:var(--ink);font-size:12.5px}
+.dtab th.today{background:var(--acc);color:#fff}.dtab th.today b{color:#fff}
+.dtab th.sat b,.dtab th.sat{color:var(--bad)}
+.dtab .sj{position:sticky;left:0;z-index:2;background:var(--surface);text-align:left;padding:6px 10px;min-width:118px;max-width:150px;white-space:normal;line-height:1.2;border-right:1px solid var(--line)}
+.dtab thead .sj{z-index:3;background:var(--surface2)}
+.dtab .sj small{display:block;color:var(--muted);font-size:11px;font-weight:500}
+.dtab .tc{position:sticky;right:0;z-index:2;background:var(--surface);border-left:1px solid var(--line);padding:5px 8px;min-width:78px}
+.dtab thead .tc{z-index:3;background:var(--surface2)}
+.dtab tr.low .sj{box-shadow:inset 4px 0 0 var(--bad)}
+.dtab tr.tot td{background:var(--surface2);font-weight:800;border-bottom:0}
+.c{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:7px;font-weight:800;font-size:12px;font-style:normal}
+.c.P{background:var(--good-bg);color:var(--good)}.c.A{background:var(--bad);color:#fff}.c.L{background:var(--mid-bg);color:var(--mid)}.c.B{background:#E1EAFF;color:#2F55D4}
+.c.no{width:6px;height:6px;border-radius:50%;background:var(--line)}
+.tv{display:block;font-weight:800;font-size:13px}
+.legend{display:flex;flex-wrap:wrap;gap:10px 14px;margin-top:10px;color:var(--muted);font-size:12.5px;align-items:center}
+.legend span{display:inline-flex;align-items:center;gap:6px}.legend .c{width:20px;height:20px;font-size:10.5px;border-radius:5px}.legend .c.no{width:6px;height:6px;border-radius:50%;margin:0 7px}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .c.B{background:#1E2A4A;color:#8EA8FF}}
+.nolec{margin-top:8px;color:var(--muted);font-size:12.5px}
+.dmon[hidden]{display:none}
+@media print{.dmon[hidden]{display:block!important}.dmon{break-inside:avoid;margin-bottom:14px}.dgrid{overflow:visible;border:0}.c{print-color-adjust:exact;-webkit-print-color-adjust:exact}.dtab .sj,.dtab .tc{position:static}}
 [hidden]{display:none!important}
 @media print{header,.noprint{display:none!important}body{background:#fff;color:#000}.card{box-shadow:none;border-color:#bbb;break-inside:avoid}}
 </style>
@@ -84,19 +120,80 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&am
 const title = s => String(s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 const pct = (a, b) => b ? Math.round(a / b * 1000) / 10 : null;
 let cred = null;
-async function days(mon){
-  const box = $('#days'); box.innerHTML = '<div class="sub">Loading ' + MON[mon] + '…</div>';
-  document.querySelectorAll('[data-mon]').forEach(b => b.classList.toggle('on', b.dataset.mon === mon));
-  try{
-    const res = await fetch(API, { method:'POST', body:JSON.stringify({ action:'student_days', roll:cred.roll, code:cred.code, mon }), redirect:'follow' });
-    const r = JSON.parse(await res.text()); if(!r.ok) throw new Error(r.error || 'Could not open the days.');
-    if(!r.subjects.length){ box.innerHTML = '<div class="sub">No attendance in ' + MON[mon] + '.' + (r.note ? '<br><small>' + esc(r.note) + '</small>' : '') + '</div>'; return; }
-    const all = [...new Set(r.subjects.flatMap(s => s.days))].sort((a, b) => a - b), x0 = r.subjects[0], WD = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-    const col = v => /P$/.test(v) ? 'good' : /A$/.test(v) ? 'bad' : /[LB]$/.test(v) ? 'mid' : '';
-    box.innerHTML = `<div class="tw"><table class="dtab"><thead><tr><th>Subject</th>${all.map(d => `<th>${d}<br><span class="sub">${WD[new Date(x0.y, x0.m, d).getDay()]}</span></th>`).join('')}</tr></thead><tbody>
-      ${r.subjects.sort((a, b) => a.sub.localeCompare(b.sub)).map(s => `<tr><td><b>${esc(title(s.sub))}</b>${s.off ? ' <span class="sub">(left)</span>' : ''}</td>${all.map(d => { const i = s.days.indexOf(d), v = i < 0 ? '' : s.cells[i] || ''; return `<td>${v ? `<span class="p ${col(v)}" style="min-width:0;padding:1px 5px">${esc(v)}</span>` : ''}</td>`; }).join('')}</tr>`).join('')}
-      </tbody></table></div><div class="sub" style="margin-top:6px">P = present (2P = 2 lectures), A = absent, L = leave, B = bunk. Empty = no lecture of that subject.</div>`;
-  }catch(e){ box.innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
+let LOWP = 73;
+const KEYM = ['JAN', '', '', '', '', '', '', '', 'SEPT', 'OCT', 'NOV', 'DEC'];
+/** months of the season up to (and including) this month */
+function monthsTillNow(order, have){
+  const now = KEYM[new Date().getMonth()], k = order.indexOf(now);
+  const upto = k === -1 ? order.slice() : order.slice(0, k + 1);
+  return order.filter(m => upto.includes(m) || have.includes(m));
+}
+/** a cell like P, 2P, A, 3A, L, B -> { n lectures, letter } */
+const cellOf = v => { const m = /^(\d*)\s*([PALB])$/.exec(String(v || '').trim().toUpperCase()); return m ? { n:Number(m[1]) || 1, k:m[2] } : null; };
+const band = v => v == null ? '' : v < LOWP ? 'bad' : v < LOWP + 5 ? 'mid' : 'good';
+async function loadMonth(mon){
+  const res = await fetch(API, { method:'POST', body:JSON.stringify({ action:'student_days', roll:cred.roll, code:cred.code, mon }), redirect:'follow' });
+  const r = JSON.parse(await res.text()); if(!r.ok) throw new Error(r.error || 'Could not open ' + MON[mon] + '.');
+  return r;
+}
+async function loadDays(months){
+  const box = $('#days'); if(!box || !months.length) return;
+  let done = 0;
+  const msg = () => { const b = $('#ddMsg'); if(b) b.textContent = 'Loading your attendance… ' + done + ' of ' + months.length + ' month' + (months.length === 1 ? '' : 's'); };
+  box.innerHTML = '<div class="dd-load"><span class="spin"></span><span id="ddMsg"></span></div>'; msg();
+  const got = await Promise.all(months.map(m => loadMonth(m).then(r => (done++, msg(), r)).catch(e => (done++, msg(), { ok:false, mon:m, err:e.message }))));
+  if(!cred) return;                                             // closed while loading
+  const data = got.map(monthData);
+  const tabs = data.map(d => `<button type="button" class="mtab" data-dm="${d.mon}"><b>${MON[d.mon]}</b><small class="${band(d.pct)}">${d.err ? 'not loaded' : d.held ? d.att + '/' + d.held + ' · ' + d.pct + '%' : 'no lectures'}</small></button>`).join('');
+  box.innerHTML = `<div class="mtabs noprint">${tabs}</div>${data.map(monthHtml).join('')}
+    <div class="legend"><span><i class="c P">P</i>Present</span><span><i class="c A">A</i>Absent</span><span><i class="c L">L</i>Leave</span><span><i class="c B">B</i>Bunk</span><span><i class="c no"></i>No lecture</span><span>2P = 2 lectures</span></div>`;
+  const pick = m => { box.querySelectorAll('[data-dm]').forEach(b => b.classList.toggle('on', b.dataset.dm === m)); box.querySelectorAll('.dmon').forEach(x => x.hidden = x.dataset.m !== m); };
+  box.querySelectorAll('[data-dm]').forEach(b => b.onclick = () => pick(b.dataset.dm));
+  const last = [...data].reverse().find(d => d.held) || data[data.length - 1];
+  pick(last.mon);
+  const on = box.querySelector('.mtab.on'); if(on) on.scrollIntoView({ block:'nearest', inline:'center' });
+}
+function monthData(r){
+  const d = { mon:r.mon, err:r.ok === false ? r.err : '', note:r.note || '', att:0, held:0, abs:0, lv:0, subs:[], empty:[], days:[], y:0, m:0 };
+  (r.subjects || []).forEach(s => {
+    const row = { sub:s.sub, teacher:s.teacher, off:s.off, cell:{}, att:0, held:0 };
+    (s.days || []).forEach((day, i) => { const c = cellOf((s.cells || [])[i]); if(!c) return;
+      row.cell[day] = c; row.held += c.n; if(c.k === 'P') row.att += c.n; if(c.k === 'A' || c.k === 'B') d.abs += c.n; if(c.k === 'L') d.lv += c.n; });
+    d.y = s.y; d.m = s.m;
+    if(!row.held){ d.empty.push(s.sub); return; }
+    row.pct = Math.round(row.att / row.held * 1000) / 10;
+    if(!row.off){ d.att += row.att; d.held += row.held; }
+    d.subs.push(row);
+  });
+  d.subs.sort((a, b) => a.sub.localeCompare(b.sub));
+  d.days = [...new Set(d.subs.flatMap(x => Object.keys(x.cell).map(Number)))].sort((a, b) => a - b);
+  d.pct = d.held ? Math.round(d.att / d.held * 1000) / 10 : null;
+  return d;
+}
+function monthHtml(d){
+  const head = `<h3 style="margin:12px 0 0;font-size:15px">${MON[d.mon]}</h3>`;
+  if(d.err) return `<div class="dmon" data-m="${d.mon}" hidden>${head}<div class="err">${esc(d.err)}</div></div>`;
+  if(!d.subs.length) return `<div class="dmon" data-m="${d.mon}" hidden>${head}<div class="nolec" style="padding:14px 0">No attendance marked for you in ${MON[d.mon]} yet.${d.note ? '<br><small>' + esc(d.note) + '</small>' : ''}</div></div>`;
+  const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], t = new Date();
+  const isToday = day => t.getFullYear() === d.y && t.getMonth() === d.m && t.getDate() === day;
+  const cell = c => !c ? '<i class="c no"></i>' : `<i class="c ${c.k}" title="${c.n} lecture${c.n > 1 ? 's' : ''}">${c.n > 1 ? c.n : ''}${c.k}</i>`;
+  const tot = (a, h, p) => `<span class="tv">${a}/${h}</span><span class="p ${band(p)}" style="min-width:0;padding:1px 7px;font-size:12px">${p == null ? '–' : p + '%'}</span>`;
+  return `<div class="dmon" data-m="${d.mon}" hidden>${head}
+    <div class="msum"><div class="${band(d.pct)}"><b>${d.pct == null ? '–' : d.pct + '%'}</b><small>Attendance</small></div>
+      <div><b>${d.att}/${d.held}</b><small>Attended / held</small></div>
+      <div class="${d.abs ? 'bad' : ''}"><b>${d.abs}</b><small>Absent / bunk</small></div>
+      <div class="${d.lv ? 'mid' : ''}"><b>${d.lv}</b><small>On leave</small></div></div>
+    <div class="dgrid"><table class="dtab"><thead><tr><th class="sj">Subject</th>
+      ${d.days.map(x => { const w = new Date(d.y, d.m, x).getDay(); return `<th class="${isToday(x) ? 'today' : w === 6 ? 'sat' : ''}"><b>${x}</b>${WD[w]}</th>`; }).join('')}
+      <th class="tc">Total</th></tr></thead><tbody>
+      ${d.subs.map(x => `<tr class="${x.pct < LOWP && !x.off ? 'low' : ''}"><td class="sj"><b>${esc(title(x.sub))}</b><small>${x.off ? 'left this subject' : esc(x.teacher || '')}</small></td>
+        ${d.days.map(day => `<td>${cell(x.cell[day])}</td>`).join('')}<td class="tc">${tot(x.att, x.held, x.pct)}</td></tr>`).join('')}
+      <tr class="tot"><td class="sj">Overall</td>${d.days.map(day => { let a = 0, h = 0; d.subs.forEach(x => { const c = x.cell[day]; if(c && !x.off){ h += c.n; if(c.k === 'P') a += c.n; } });
+        return `<td style="font-size:11px;color:${a < h ? 'var(--bad)' : 'var(--muted)'}">${h ? a + '/' + h : ''}</td>`; }).join('')}<td class="tc">${tot(d.att, d.held, d.pct)}</td></tr>
+    </tbody></table></div>
+    ${d.subs.some(x => x.pct < LOWP && !x.off) ? `<div class="warn" style="font-size:13.5px">Below ${LOWP}% in ${MON[d.mon]}: ${d.subs.filter(x => x.pct < LOWP && !x.off).map(x => esc(title(x.sub)) + ' (' + x.pct + '%)').join(', ')}.</div>` : ''}
+    ${d.empty.length ? `<div class="nolec">No lectures marked yet in ${MON[d.mon]} for: ${d.empty.map(x => esc(title(x))).join(', ')}.</div>` : ''}
+  </div>`;
 }
 try{ const r = localStorage.getItem('jcwRoll'); if(r) $('#roll').value = r; }catch(e){}
 
@@ -121,7 +218,7 @@ $('#f').addEventListener('submit', async ev => {
 });
 
 function show(r){
-  const LOW = r.low || 73, order = r.season || ['SEPT', 'OCT', 'NOV', 'DEC', 'JAN'];
+  const LOW = r.low || 73; LOWP = LOW; const order = r.season || ['SEPT', 'OCT', 'NOV', 'DEC', 'JAN'];
   const mons = order.filter(m => r.rows.some(x => x[2] === m));
   const subs = {};
   r.rows.forEach(x => { const s = subs[x[0]] = subs[x[0]] || { sub:x[0], teacher:x[1], m:{} }; s.m[x[2]] = { p:x[3], d:x[4], t:x[5], tt:x[6], off:x[7] }; });
@@ -160,13 +257,12 @@ function show(r){
       const v = pct(Number(x.t) || 0, x.tt); return `<td>${esc(x.t)}/${x.tt}<br><span class="p ${tcls(v)}">${v}%</span></td>`; }).join('')}
       <td>${s.tt ? `<b>${s.to}/${s.tt}</b><br><span class="p ${tcls(s.tp)}">${s.tp}%</span>` : '–'}</td></tr>`).join('')}
     </tbody></table></div>` : '<div class="sub">No monthly test marks entered yet.</div>'}</section>`;
-  h += `<section class="card"><h2>Day by day</h2><div class="sub">Tap a month to see every date.</div>
-    <div class="row2 noprint" style="flex-wrap:wrap;margin-top:8px">${mons.map(m => `<button class="btn ghost mb" type="button" data-mon="${m}" style="margin-top:0;height:40px;flex:1 1 30%">${MON[m].slice(0, 3)}</button>`).join('')}</div><div id="days" style="margin-top:8px"></div></section>`;
+  h += `<section class="card"><div class="dd-head"><span><h2 style="margin:0">Day by day</h2><div class="sub">Every lecture, date by date. Choose a month.</div></span></div><div id="days"></div></section>`;
   h += `<div class="row2 noprint"><button class="btn ghost" type="button" id="pr">Print / save as PDF</button><button class="btn ghost" type="button" id="bye">Close</button></div>
     <div class="note">If something looks wrong, speak to your subject teacher or class in-charge in college.</div>`;
   $('#out').innerHTML = h; $('#login').hidden = true; window.scrollTo(0, 0);
   $('#pr').onclick = () => window.print();
-  document.querySelectorAll('[data-mon]').forEach(b => b.onclick = () => days(b.dataset.mon));
+  loadDays(monthsTillNow(order, mons));
   $('#bye').onclick = () => { $('#out').innerHTML = ''; $('#login').hidden = false; cred = null; };
 }
 </script>
