@@ -5064,7 +5064,9 @@ let hc = null, rinfo = null;
 function adminExtraCards(){
   if(scope !== 'all') return '';
   const page = studentPageUrl();
-  return `<div class="grid2" style="margin-top:12px">${shsCard()}${rosCard()}${leftCard()}<section class="card"><h3>${I.check} System health check</h3>
+  return `<div class="grid2" style="margin-top:12px">${shsCard()}${rosCard()}${leftCard()}<section class="card"><h3>${I.doc} Admissions</h3>
+      <div class="sub">Add a new student or change an old admission (program, year, section, quota, roll no, subjects, marks). Saves go straight into Transform-ALL-COLLEGE-STRENGTH, also without internet. Then run <b>Sheets vs strength sheet</b> so the attendance sheets follow.</div>
+      <div class="acts2"><a class="btn primary" href="admission.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Admissions</a></div></section><section class="card"><h3>${I.check} System health check</h3>
       <div class="sub">Finds problems before they stop the work: duplicate roll numbers, students without subjects or class, timetable teachers without a login, classes with no students, sections with no attendance this month, missing sheets and automatic jobs that are off.</div>
       <div class="acts2"><button class="btn primary" type="button" id="xHc">${I.check}Run health check</button></div></section>
     <section class="card"><h3>${I.doc} Student result page</h3>

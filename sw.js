@@ -1,6 +1,6 @@
 // Bump VERSION every time you change index.html so phones pick up the update.
-const VERSION = 'csa-v43';
-const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
+const VERSION = 'csa-v44';
+const CORE = ['./', './index.html', './admission.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
@@ -22,12 +22,13 @@ self.addEventListener('fetch', e => {
 
   // Pages: network first, fall back to the saved copy when offline
   if (req.mode === 'navigate') {
+    const page = /admission\.html$/.test(url.pathname) ? './admission.html' : /student\.html$/.test(url.pathname) ? './student.html' : './index.html';
     e.respondWith(
       fetch(req).then(res => {
         const copy = res.clone();
-        caches.open(VERSION).then(c => c.put('./index.html', copy));
+        caches.open(VERSION).then(c => c.put(page, copy));
         return res;
-      }).catch(() => caches.match('./index.html'))
+      }).catch(() => caches.match(page).then(hit => hit || caches.match('./index.html')))
     );
     return;
   }
