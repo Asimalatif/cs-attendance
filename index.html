@@ -598,6 +598,14 @@ a.pill{text-decoration:none;background:var(--present-bg);color:var(--present)}
 .pchips button{border-color:var(--tabline);background:var(--tabbg);color:var(--tabink)}
 .pchips button.on{background:var(--tabon);border-color:var(--tabon);color:var(--tabonink)}
 
+/* ===================== v3.7: free teachers, whole week ===================== */
+.fwrow{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid var(--line)}
+.fwk h3+.fwrow{border-top:0}
+.fwp{flex:none;display:grid;grid-template-columns:auto auto;column-gap:6px;align-items:center;min-width:86px;padding:5px 8px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface2);color:var(--ink);text-align:left}
+.fwp b{font-size:13px}.fwp small{grid-column:1;font-size:11px;color:var(--muted)}
+.fwp i{grid-column:2;grid-row:1/3;font-style:normal;font-weight:800;font-size:15px;color:var(--present,#17A673)}
+.fwp.few i{color:var(--absent)}
+.fwn{flex:1;min-width:0;font-size:13.5px;line-height:1.45;padding-top:3px}
 /* ===================== v3.6: private teacher contacts ===================== */
 .ctnote{display:flex;gap:8px;align-items:flex-start;margin:10px 0 0;padding:10px 12px;border-radius:12px;background:var(--tabbg);border:1px solid var(--tabline);color:var(--tabink);font-size:.86em;line-height:1.35}
 .ctnote svg{width:18px;height:18px;flex:none;margin-top:1px}
@@ -2004,11 +2012,11 @@ const HINTS = [
  ['[data-view=free],[data-xact=free]','Free teachers','Who has no class in a period: for substitutions and duties. Share as PDF or text.','free'],
  ['[data-view=contacts],[data-xact=contacts]','Teacher contacts','Private list of teachers\' numbers with Call and WhatsApp. Only admin, principal, HODs and Chief Proctors. Never printed in reports.','free'],
  ['[data-xct]','Contact','Shows this teacher\'s number privately, with Call and WhatsApp.','free'],
- ['[data-xfd]','Day','Choose the day.','free'],
+ ['[data-xfd]','Day','One day (then choose the day), or All week: Monday to Saturday in one list and one PDF.','free'],
  ['[data-xfs]','Shift','Morning or evening periods (timings from the timetable settings).','free'],
  ['[data-xfp]','Period','Choose the period. It opens on the period going on now.','free'],
  ['[data-xfc]','Free count','Number of teachers free in this period. Red = fewer than 3. Tap to see the names.','free'],
- ['#xFrPdf,#xFrDay,#xFrTxt','Share','This period, or the whole day, as PDF; or the list as text for WhatsApp.','free'],
+ ['#xFrPdf,#xFrDay,#xFrWk,#xFrTxt,#xFrWkTxt','Share','This period, the whole day or the whole week (Mon to Sat) as PDF; or the list as text for WhatsApp.','free'],
  ['.ttline','Today in the timetable','Period, time, Theory or Practical and room of this class on the selected day. "No class" = not in the timetable that day.','timetable'],
  ['.pbadge','Period','Period of this class today and its start time (from the timetable).','timetable'],
  ['.offt','No class today','Your classes that are not in today\'s timetable. Tap one to open it anyway.','timetable'],
@@ -2029,9 +2037,9 @@ const HINTS = [
  ['[data-xts]','Text size','Normal, Large or Extra large. Extra large puts each name on its own line with four big buttons.','textsize'],
  ['.vtabs [data-view=reports]','Reports','Student, class, shortage and complete reports as PDF or Excel (CSV).','reports'],
  ['[data-xopen]','Class','Tap to open this class for today. Green = marked, red = still to mark.','home'],
- ['[data-xlow]','This week / This month','Show students below 73% for this week or for the whole month.','home'],
- ['#xLowPdf,#xLowPdf2','Share PDF','Weekly (or monthly) low-attendance report as PDF for WhatsApp or email.','home'],
- ['#hq','Find a student','Type a name or roll number to open her full profile.','home'],
+ ['[data-xlow]','This week / This month','Show students below 73% for this week or for the whole month.','reports'],
+ ['#xLowPdf,#xLowPdf2','Share PDF','Weekly (or monthly) low-attendance report as PDF for WhatsApp or email.','reports'],
+ ['#hq','Student profile','Type a name or roll number to open her full profile.','reports'],
  ['#xpPdf','Share PDF','The whole student profile as a PDF report.','home'],
  ['[data-xrk]','1 · What do you need?','Attendance (month-wise %), Daily register (P / A / L / B for every date), Test results (marks and position) or Shortage.','reports'],
  ['[data-xrw]','2 · For whom?','One student, one section, or all your sections (whole college / department for admin, principal and HOD).','reports'],
@@ -2060,7 +2068,7 @@ const HINTS = [
  ['#guestBtn','Add guest student','Adds a student of another section who attends this subject with you. Her own teacher is informed.','guest'],
  ['#sumBtn','Monthly summary','Shows every student with attendance %, and test marks. Filter low attendance and share the list.','summary'],
  ['#printBtn','Print register','Makes a designed attendance register (PDF) of this month: every day, totals, % and test marks. Works offline.','summary'],
- ['.vtabs [data-view=home]','Home','Today\'s classes, low attendance, your sections, recent reports and student search.','home'],
+ ['.vtabs [data-view=home]','Home','Today\'s classes, your sections this month, students reported to the Chief Proctor and your timetable.','home'],
  ['.vtabs [data-view=att]','Attendance','Mark daily attendance and monthly test marks.','mark'],
  ['.vtabs [data-view=admin]','College / Department overview','Who has marked attendance today, section-wise percentages and low attendance for the whole college (admin, principal) or your department (HOD).','home'],
  ['#xFull','Full profile','Opens the student\'s full page: every month, test results, comments and reports.','home'],
@@ -2269,11 +2277,11 @@ function sections(){
     <div class="tip">If <b>My timetable</b> is empty, the teacher's name in the Timetable sheet is spelled differently from the Users sheet. Make them match (Ms./Dr. and spaces are ignored).</div>` },
 
   { id:'free', nav:'Free teachers', title:'Free teachers (admin, principal, HOD, Chief Proctor)', html:`
-    <p>Open <b>Free teachers</b> from Home or <b>⋯ More</b>. Choose the <b>day</b>, the <b>shift</b> (morning / evening) and the <b>period</b>; it opens on today and the period going on now.</p>
+    <p>Open <b>Free teachers</b> from Home or <b>⋯ More</b>. Choose the <b>day</b>, the <b>shift</b> (morning / evening) and the <b>period</b>; it opens on today and the period going on now. Choose <b>All week</b> to see Monday to Saturday together: every day, every period and the free teachers' names.</p>
     <ul><li><b>Free in this period</b>: teachers who teach in that shift that day but have no class in that period, grouped by department, with <b>Visiting</b> marked, their class <b>before</b> and <b>after</b>, and a <b>Contact</b> button (opens her number privately; see below).</li>
     <li><b>No class that day</b>: teachers with no period in that shift that day (they may not be in college).</li>
     <li><b>Free teachers in the week</b>: how many teachers are free in every period; red = fewer than 3. Tap a number to see the names.</li>
-    <li><b>Share as text</b> (WhatsApp), <b>This period PDF</b> and <b>Whole day PDF</b> (every period of the day with the free teachers).</li></ul>
+    <li><b>Share as text</b> (WhatsApp), <b>This period PDF</b>, <b>Whole day PDF</b> (every period of the day with the free teachers) and <b>Whole week PDF</b> (a Monday-to-Saturday summary grid, then one page per day with the names).</li></ul>
     <div class="tip">The list comes from the timetable. The app does not know who is on leave or absent today, so confirm before giving a duty. Chief Proctors are the users marked CP in the Users sheet; they always see free teachers of <b>all departments</b>, even when they are also an HOD.</div>
     <h3>Teacher contacts (private)</h3>
     <p>Phone numbers are <b>never</b> printed in any report, PDF or shared text (free teachers, workload, timetables …). Admin, principal and Chief Proctors see every teacher's number, an HOD only her own department (an HOD who is also a Chief Proctor sees everyone); other teachers cannot see them. Open <b>Teacher contacts</b> from Home, <b>⋯ More</b> or the <b>Contacts</b> button under the free list; search a name and tap <b>Call</b> or <b>WhatsApp</b>. In the free list, <b>Contact</b> opens one teacher's number.</p>
@@ -2281,9 +2289,9 @@ function sections(){
 
   { id:'home', nav:'Home & overview', title:'Home, student profile and college overview', html:`
     <p>Use the tabs at the top to move between screens: <b>Home</b>, <b>Attendance</b>, <b>Reports</b> and (for admin, principal and HOD) <b>College</b> or <b>Dept.</b> On the Attendance screen the tabs are replaced by a small <b>Home</b> button, to leave more room for students.</p>
-    <ul><li><b>Home</b> shows <b>Today</b> (your classes of today in period order: green badge and ✓ = marked, red badge and <b>Mark</b> = still to do; tap a line to open it; see <i>Timetable & workload</i>), students with <b>low attendance</b> this week or this month across all your sections, each section's percentage this month, your recent reports and a <b>Find a student</b> search.</li>
-    <li><b>Low attendance</b>: switch between <i>This week</i> and <i>This month</i>, tap <b>See all</b> for the full list, and <b>Share PDF</b> to send the weekly low-attendance report on WhatsApp or email.</li>
-    <li><b>Student profile</b>: tap any student on Home, or <b>Full profile</b> in a student's window. It shows every month's attendance and test, a day-by-day calendar, your tags and comments and her reports. <b>Share PDF</b> sends the profile as a report.</li>
+    <ul><li><b>Home</b> shows <b>Today</b> (your classes of today in period order: green badge and ✓ = marked, red badge and <b>Mark</b> = still to do; tap a line to open it; see <i>Timetable & workload</i>), each section's percentage this month (with how many students are below 73% this week), <b>Students reported to Chief Proctor</b> (the discipline reports you sent and their status) and your timetable. <b>Low attendance</b> and the <b>Student profile</b> search are in the <b>Reports</b> tab.</li>
+    <li><b>Low attendance</b> (Reports tab): switch between <i>This week</i> and <i>This month</i>, tap <b>See all</b> for the full list, and <b>Share PDF</b> to send the weekly low-attendance report on WhatsApp or email.</li>
+    <li><b>Student profile</b>: search in the Reports tab, tap a student in Low attendance, or tap <b>Full profile</b> in a student's window. It shows every month's attendance and test, a day-by-day calendar, your tags and comments and her reports. <b>Share PDF</b> sends the profile as a report.</li>
     <li><b>College / Department overview</b>: <i>Today</i> shows who has and has not marked attendance today (only classes in today's timetable); <i>Workload</i> shows every teacher's periods per week; <i>Sections</i> shows section-wise percentages (tap a section for its subjects); <i>Low attendance</i> lists every student below 73%. Each tab has <b>Share as text</b> and a <b>PDF</b> button. HODs see their own department, admin and principal see the whole college.</li></ul>` },
 
   { id:'reports', nav:'Reports', title:'Reports: attendance, daily register, tests, shortage', html:`
@@ -3238,33 +3246,36 @@ function renderHome(){
     }).join('') || `<div class="empty">${sun ? 'Sunday: no classes.' : 'You have no class in today\'s timetable.'}</div>`}
     ${offs.length && !sun ? `<div class="offt"><span>No class today:</span> ${offs.map(x => `<button type="button" data-xopen="${esc(x.e.name)}" data-xday="${day}">${esc(x.e.cls)} · ${esc(abbr(x.e.sub))}</button>`).join('')}</div>` : ''}</section>`;
 
-  if(myRows().length) h += myTTCard();
-  if(canFree()) h += freeCard();
-
   if(cur.length){
-    const lows = lowList(lowMode, cur), wk = weekRange();
-    h += `<section class="card"><h3>${I.alert} Low attendance <span class="ct">${lows.length}</span></h3>
-      <div class="seg2" role="group" aria-label="Period"><button type="button" data-xlow="week" class="${lowMode === 'week' ? 'on' : ''}">This week</button><button type="button" data-xlow="month" class="${lowMode === 'month' ? 'on' : ''}">This month</button></div>
-      <div class="sub">${lowMode === 'week' ? 'Below ' + LOW + '% from ' + wk.from + ' to ' + wk.to + ' ' + MONTHS[now.getMonth()].slice(0, 3) : 'Below ' + LOW + '% so far in ' + MONTHS[now.getMonth()]}</div>
-      ${lows.slice(0, 4).map(lowRow).join('') || '<div class="empty">Nobody is below ' + LOW + '%. </div>'}
-      ${lows.length ? `<div class="acts2"><button class="btn" type="button" id="xLowAll">See all (${lows.length})</button><button class="btn primary" type="button" id="xLowPdf">${I.share}Share PDF</button></div>` : ''}</section>`;
-
-    const aggs = cur.map(e => secAgg(e)).filter(Boolean);
+    const aggs = cur.map(e => secAgg(e)).filter(Boolean), nLow = lowList('week', cur).length;
     if(aggs.length) h += `<section class="card"><h3>${I.chart} My sections this month</h3><div class="sub">${MONTHS[now.getMonth()]} attendance by class. Tap for the summary.</div>${aggs.map(g =>
-      `<button class="li" type="button" data-xsum="${esc(g.e.name)}"><span class="tx"><b>${esc(g.e.cls)} · ${esc(titleCase(g.e.sub))}</b><small>${g.st.lect} lectures · ${g.n} students${g.low ? ' · ' + g.low + ' below ' + LOW + '%' : ''}</small><span class="mbar"><i class="${tone(g.pct)}" style="width:${g.pct || 0}%"></i></span></span><span class="pill ${tone(g.pct)}">${g.pct == null ? '–' : g.pct + '%'}</span></button>`).join('')}</section>`;
-
-    h += `<section class="card"><h3>${I.search} Find a student</h3><div class="sub">Search all your sections and open the full profile</div>
-      <input id="hq" class="sq" type="search" placeholder="Name or roll no." autocomplete="off" autocapitalize="none" spellcheck="false"><div id="hres"></div></section>`;
+      `<button class="li" type="button" data-xsum="${esc(g.e.name)}"><span class="tx"><b>${esc(g.e.cls)} · ${esc(titleCase(g.e.sub))}</b><small>${g.st.lect} lectures · ${g.n} students${g.low ? ' · ' + g.low + ' below ' + LOW + '%' : ''}</small><span class="mbar"><i class="${tone(g.pct)}" style="width:${g.pct || 0}%"></i></span></span><span class="pill ${tone(g.pct)}">${g.pct == null ? '–' : g.pct + '%'}</span></button>`).join('')}
+      <button class="more" type="button" data-view="reports">${nLow ? nLow + ' student' + (nLow === 1 ? '' : 's') + ' below ' + LOW + '% this week · ' : ''}Low attendance, student search &amp; PDFs in Reports</button></section>`;
   }
 
   lastReps = rq.map(x => Object.assign({}, x, { wait:true })).concat(myReports).slice(0, 5);
-  if(cur.length || lastReps.length) h += `<section class="card"><h3>${I.flag} Recent reports <span class="ct">${rq.length + myReports.length}</span></h3><div class="sub">Reports you sent to the Chief Proctor</div>
+  if(cur.length || lastReps.length) h += `<section class="card"><h3>${I.flag} Students reported to Chief Proctor <span class="ct">${rq.length + myReports.length}</span></h3><div class="sub">Discipline reports you sent about students, and what the Chief Proctor did. Newest first.</div>
     ${lastReps.map((r, i) => `<button class="li" type="button" data-xrep="${i}"><span class="av" style="background:var(--absent-bg);color:var(--absent)">${esc(initials(r.who))}</span><span class="tx"><b>${esc(r.who)}</b><small>${esc(r.cls || '')} · ${esc(r.cat || '')} · ${esc(fmtIso(r.date) || r.at || '')}</small></span><span class="pill ${r.wait ? 'mid' : /Action|Closed/.test(r.status) ? 'good' : ''}">${esc(r.wait ? 'Waiting' : r.status || 'Received')}</span></button>`).join('') || '<div class="empty">No reports yet.</div>'}
-    <button class="more" type="button" id="xRepAll">All reports</button></section>`;
+    <button class="more" type="button" id="xRepAll">All my Chief Proctor reports</button></section>`;
 
+  if(myRows().length) h += myTTCard();
+  if(canFree()) h += freeCard();
   if(college && cur.length) h += college;
   h += '</div></main>';
   $q('#app').innerHTML = h;
+}
+/* ---------- Reports tab: low attendance + student profile (moved here from Home) ---------- */
+function lowCard(cur){
+  const lows = lowList(lowMode, cur), wk = weekRange(), now = new Date();
+  return `<section class="card"><h3>${I.alert} Low attendance <span class="ct">${lows.length}</span></h3>
+    <div class="seg2" role="group" aria-label="Period"><button type="button" data-xlow="week" class="${lowMode === 'week' ? 'on' : ''}">This week</button><button type="button" data-xlow="month" class="${lowMode === 'month' ? 'on' : ''}">This month</button></div>
+    <div class="sub">Your sections · ${lowMode === 'week' ? 'below ' + LOW + '% from ' + wk.from + ' to ' + wk.to + ' ' + MONTHS[now.getMonth()].slice(0, 3) : 'below ' + LOW + '% so far in ' + MONTHS[now.getMonth()]}</div>
+    ${lows.slice(0, 5).map(lowRow).join('') || '<div class="empty">Nobody is below ' + LOW + '%.</div>'}
+    ${lows.length ? `<div class="acts2"><button class="btn" type="button" id="xLowAll">See all (${lows.length})</button><button class="btn primary" type="button" id="xLowPdf">${I.share}Share PDF</button></div>` : ''}</section>`;
+}
+function findCard(){
+  return `<section class="card"><h3>${I.search} Student profile</h3><div class="sub">Find a student of your sections and open her full profile: day-by-day calendar, every month's attendance and test, comments and reports.</div>
+    <input id="hq" class="sq" type="search" placeholder="Name or roll no." autocomplete="off" autocapitalize="none" spellcheck="false"><div id="hres"></div></section>`;
 }
 function lowRow(x){
   const r = lowMode === 'week' ? x.w : x.c;
@@ -3717,7 +3728,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-29 reports v2';
+const APP_BUILD = '2026-10-30 home, reports, free week';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4087,7 +4098,7 @@ function rpPickerHtml(){
   return `<input id="rpQ" class="sq" type="search" placeholder="Name, father name or roll no." autocomplete="off" autocapitalize="none" spellcheck="false"><div id="rpRes" class="rpres"></div>`;
 }
 function renderReports(){
-  if(scope && !ov && !ovBusy) loadOv();
+  if(scope && !ov && !ovBusy && !ovErr) loadOv();                      // after a failed load: no retry loop (the College tab retries)
   if(!RP_WHO[rp.kind]) rp.kind = 'att';
   if(!RP_WHO[rp.kind].includes(rp.who)) rp.who = RP_WHO[rp.kind][0];
   const secs = rpSections();
@@ -4120,7 +4131,9 @@ function renderReports(){
   h += `<div class="acts2"><button class="btn primary" type="button" id="rpPdf" ${rpBusy ? 'disabled' : ''}>${I.doc}Create PDF</button>${second ? `<button class="btn" type="button" id="rpCards" ${rpBusy ? 'disabled' : ''}>${second}</button>` : ''}${csv ? `<button class="btn" type="button" id="rpCsv" ${rpBusy ? 'disabled' : ''}>Excel (CSV)</button>` : ''}</div>
     <div id="rpProg"></div>
     <div class="rnote">${scope ? 'Taken from the college sheets, updated every time a teacher saves.' : 'Only your own subjects are included.'}${rp.kind === 'att' || rp.kind === 'short' ? '' : ' Needs internet.'} Held = lectures delivered, Present = lectures attended.</div></section>`;
-  h += `<section class="card"><h3>${I.alert} Shortcuts</h3><div class="sub">One tap, no choices. Session so far = September to ${MONTHS[monIdx(SEAS[seasNow()])]}.</div>
+  const cur = mine();
+  if(cur.length) h += lowCard(cur) + findCard();
+  h += `<section class="card"><h3>${I.doc} Shortcuts</h3><div class="sub">One tap, no choices. Session so far = September to ${MONTHS[monIdx(SEAS[seasNow()])]}.</div>
     <button class="li" type="button" data-xq="short"><span class="tx"><b>Shortage · whole session</b><small>${esc(allLabel())}, below ${LOW}%</small></span><span class="chev">${I.chev}</span></button>
     <button class="li" type="button" data-xq="shortm"><span class="tx"><b>Shortage · this month</b><small>${esc(allLabel())}, ${MONTHS[monIdx(SEAS[seasNow()])]}</small></span><span class="chev">${I.chev}</span></button>
     <button class="li" type="button" data-xq="csv"><span class="tx"><b>All data · Excel (CSV)</b><small>Every student, subject and month</small></span><span class="chev">${I.chev}</span></button>
@@ -4468,7 +4481,7 @@ window.pickDay = function(day){
 };
 
 /* ======================= FREE TEACHERS (admin, principal, HOD, Chief Proctor) ======================= */
-let isCP = store.get('isCP', false), fr = { d:0, sh:'M', p:'', q:'', dept:'' };
+let isCP = store.get('isCP', false), fr = { d:0, sh:'M', p:'', q:'', dept:'', wk:false };   // wk = All week (Mon to Sat)
 const canFree = () => !!scope || isCP;
 /** time range (minutes) of one period of one shift */
 function slotRange(p, sh){ const t = timeOf(p, sh); return t ? { s:toM(t.start), e:toM(t.end) } : null; }
@@ -4537,15 +4550,19 @@ function renderFree(){
   const T = timesAll(), hasE = T.E.length > 0, list = times(fr.sh);
   if(!list.find(t => t.p === fr.p) && list.length) fr.p = list[0].p;
   const M = freeModel(), depts = [...new Set(freeTeachers().map(t => t.dept).filter(Boolean))].sort();
-  h += `<section class="card"><div class="seg2" role="group" aria-label="Day">${[1, 2, 3, 4, 5, 6].map(d => `<button type="button" data-xfd="${d}" class="${fr.d === d ? 'on' : ''}">${DOWN[d]}</button>`).join('')}</div>
-    ${hasE ? `<div class="seg2" role="group" aria-label="Shift"><button type="button" data-xfs="M" class="${fr.sh === 'M' ? 'on' : ''}">Morning</button><button type="button" data-xfs="E" class="${fr.sh === 'E' ? 'on' : ''}">Evening</button></div>` : ''}
-    <div class="pchips" role="group" aria-label="Period">${list.map(t => `<button type="button" data-xfp="${t.p}" class="${fr.p === t.p ? 'on' : ''}"><b>P${t.p}</b><small>${fmtT(toM(t.start))}</small></button>`).join('')}</div>
+  h += `<section class="card"><div class="seg2" role="group" aria-label="One day or the whole week"><button type="button" data-xfd="${fr.d || 1}" class="${fr.wk ? '' : 'on'}">One day</button><button type="button" data-xfd="wk" class="${fr.wk ? 'on' : ''}">All week (Mon–Sat)</button></div>
+    ${fr.wk ? '' : `<div class="seg2" role="group" aria-label="Day">${[1, 2, 3, 4, 5, 6].map(d => `<button type="button" data-xfd="${d}" class="${fr.d === d ? 'on' : ''}">${DOWN[d]}</button>`).join('')}</div>`}
+    ${hasE ? `<div class="seg2" role="group" aria-label="Shift"><button type="button" data-xfs="M" class="${fr.sh === 'M' ? 'on' : ''}">Morning</button><button type="button" data-xfs="E" class="${fr.sh === 'E' ? 'on' : ''}">Evening</button></div>` : ''}`;
+  if(fr.wk){
+    h += `<div class="sub" style="margin:2px 0 0">Monday to Saturday${hasE ? ', ' + (fr.sh === 'E' ? 'evening' : 'morning') + ' shift' : ''}: the free teachers of every period of every day. Share it as one PDF.</div></section>`;
+  } else h += `<div class="pchips" role="group" aria-label="Period">${list.map(t => `<button type="button" data-xfp="${t.p}" class="${fr.p === t.p ? 'on' : ''}"><b>P${t.p}</b><small>${fmtT(toM(t.start))}</small></button>`).join('')}</div>
     <div class="kpis" style="margin:10px 0 0"><div class="kpi good"><b>${M.free.length}</b><small>Free in ${esc(freeSlotLabel())}</small></div><div class="kpi"><b>${M.none.length}</b><small>No ${hasE ? (fr.sh === 'E' ? 'evening ' : 'morning ') : ''}class on ${DOWN[fr.d]}</small></div><div class="kpi"><b>${M.busy.length}</b><small>Teaching then</small></div></div></section>`;
   h += `<div class="tools" style="margin-top:12px"><input id="fq" class="sq" type="search" value="${esc(fr.q)}" placeholder="Search teacher or department" autocomplete="off" autocapitalize="none" spellcheck="false">
     ${depts.length > 1 ? `<select id="fdept" aria-label="Department"><option value="">All departments</option>${depts.map(d => `<option ${d === fr.dept ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select>` : ''}</div><div id="fBody">${freeBody(M)}</div>`;
   $q('#app').innerHTML = h + '</main>';
 }
 function freeBody(M){
+  if(fr.wk) return freeWeekBody();
   M = M || freeModel();
   let h = '', dep = null;
   h += `<section class="card"><h3>${I.check} Free in ${esc(freeSlotLabel())} <span class="ct">${M.free.length}</span></h3><div class="sub">They teach ${timesAll().E.length ? 'in the ' + (fr.sh === 'E' ? 'evening' : 'morning') + ' ' : ''}on ${DOWN[fr.d]} but not in this period. "Before / after" = their nearest classes that day.</div>`;
@@ -4559,7 +4576,7 @@ function freeBody(M){
   h += '</section>';
   if(M.none.length) h += `<section class="card" style="margin-top:12px"><h3>No ${timesAll().E.length ? (fr.sh === 'E' ? 'evening ' : 'morning ') : ''}class on ${DOWN[fr.d]} <span class="ct">${M.none.length}</span></h3><div class="sub">They have no period ${timesAll().E.length ? 'in this shift ' : ''}that day in the timetable (they may not be in college).</div>
     ${M.none.map(t => `<div class="li"><span class="tx"><b>${esc(t.name)}${visiting(t) ? ' <span class="rtag">Visiting</span>' : ''}</b><small>${esc(t.dept || 'No department')}</small></span></div>`).join('')}</section>`;
-  h += `<div class="acts2"><button class="btn" type="button" data-view="contacts">${I.lock}Contacts</button><button class="btn" type="button" id="xFrTxt">Share as text</button><button class="btn primary" type="button" id="xFrPdf">${I.share}This period PDF</button><button class="btn" type="button" id="xFrDay">Whole ${DOWN[fr.d]} PDF</button></div>`;
+  h += `<div class="acts2"><button class="btn" type="button" data-view="contacts">${I.lock}Contacts</button><button class="btn" type="button" id="xFrTxt">Share as text</button><button class="btn primary" type="button" id="xFrPdf">${I.share}This period PDF</button><button class="btn" type="button" id="xFrDay">Whole ${DOWN[fr.d]} PDF</button><button class="btn" type="button" id="xFrWk">Whole week PDF</button></div>`;
   h += weekFreeGrid();
   return h;
 }
@@ -4574,6 +4591,60 @@ function weekFreeGrid(){
       return `<td><button type="button" class="fc ${fr.d === d && fr.p === t.p ? 'on' : ''} ${n < 3 ? 'few' : ''}" data-xfc="${d}|${t.p}">${n}</button></td>`; }).join('')}</tr>`;
   });
   return h + '</tbody></table></div></section>';
+}
+/** free teachers of one day: [{ t (time row), free:[teachers] }] (uses the search and department filter) */
+function freeDayRows(d){
+  const keepD = fr.d, keepP = fr.p, out = [];
+  fr.d = d;
+  times(fr.sh).forEach(t => { fr.p = t.p; out.push({ t, free:freeModel().free }); });
+  fr.d = keepD; fr.p = keepP;
+  return out;
+}
+const WEEK = [1, 2, 3, 4, 5, 6], DAYFULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const shiftTxt = () => timesAll().E.length ? (fr.sh === 'E' ? 'Evening shift' : 'Morning shift') : '';
+function freeWeekBody(){
+  const today = new Date().getDay();
+  let h = '';
+  WEEK.forEach((d, i) => {
+    const rows = freeDayRows(d);
+    h += `<section class="card fwk" style="${i ? 'margin-top:12px' : ''}"><h3>${I.cal} ${DAYFULL[d]}${d === today ? ' <span class="ct">Today</span>' : ''}</h3>
+      ${rows.map(x => `<div class="fwrow"><button type="button" class="fwp ${x.free.length < 3 ? 'few' : ''}" data-xfc="${d}|${x.t.p}" title="Open this period"><b>P${x.t.p}</b><small>${fmtT(toM(x.t.start))}</small><i>${x.free.length}</i></button>
+        <span class="fwn">${x.free.length ? x.free.map(f => esc(f.name) + (visiting(f) ? ' <span class="rtag">V</span>' : '')).join(', ') : '<span class="muted">Nobody free</span>'}</span></div>`).join('')}</section>`;
+  });
+  h += `<div class="acts2"><button class="btn" type="button" data-view="contacts">${I.lock}Contacts</button><button class="btn" type="button" id="xFrWkTxt">Share as text</button><button class="btn primary" type="button" id="xFrWk">${I.share}Whole week PDF</button></div>`;
+  return h + weekFreeGrid();
+}
+function freeWeekText(){
+  let t = 'FREE TEACHERS - WHOLE WEEK (Mon to Sat)' + (shiftTxt() ? ' - ' + shiftTxt() : '') + (fr.dept ? ' - ' + fr.dept : '') + '\n';
+  WEEK.forEach(d => {
+    t += '\n*' + DOWN[d] + '*\n';
+    freeDayRows(d).forEach(x => { t += 'P' + x.t.p + ' (' + fmtT(toM(x.t.start)) + '): ' + (x.free.map(f => f.name).join(', ') || 'nobody free') + '\n'; });
+  });
+  return t.trim();
+}
+/** week PDF: a summary grid (number free per day x period), then one page per day with the names */
+function freeWeekPdf(){
+  const C = P.C, list = times(fr.sh), doc = P.newDoc('landscape'); let Y = P.TOP;
+  const sub = 'Monday to Saturday' + (shiftTxt() ? ' · ' + shiftTxt() : '') + (fr.dept ? ' · ' + fr.dept : '') + ' · from the timetable';
+  const all = {}; WEEK.forEach(d => { all[d] = freeDayRows(d); });
+  Y = P.heading(doc, Y, 'Free Teachers · Whole Week', sub);
+  Y = P.sectionTitle(doc, Y, 'Number of free teachers in each period');
+  P.table(doc, { startY:Y, head:[['Day'].concat(list.map(t => 'P' + t.p + '\n' + fmtT(toM(t.start))))],
+    body:WEEK.map(d => [DOWN[d]].concat(all[d].map(x => x.free.length))),
+    columnStyles:{ 0:{ fontStyle:'bold', cellWidth:28 } }, styles:{ halign:'center' },
+    didParseCell:h2 => { if(h2.section === 'body' && h2.column.index > 0 && Number(h2.cell.raw) < 3){ h2.cell.styles.textColor = C.RED; h2.cell.styles.fillColor = C.REDBG; h2.cell.styles.fontStyle = 'bold'; } } });
+  Y = doc.lastAutoTable.finalY + 4;
+  P.smallNote(doc, Y, 'Red = fewer than 3 teachers free. The names of each day follow, one page per day.');
+  WEEK.forEach(d => {
+    doc.addPage(); let y = P.heading(doc, P.TOP, 'Free Teachers · ' + DAYFULL[d], sub);
+    P.table(doc, { startY:y, head:[['Period', 'Free', 'Teachers']],
+      body:all[d].map(x => ['P' + x.t.p + '\n' + fmtT(toM(x.t.start)) + '–' + fmtT(toM(x.t.end)), x.free.length, x.free.map(f => f.name + (visiting(f) ? ' (V)' : '')).join(', ') || '-']),
+      columnStyles:{ 0:{ cellWidth:26, halign:'center', fontStyle:'bold' }, 1:{ cellWidth:14, halign:'center' } },
+      didParseCell:h2 => { if(h2.section === 'body' && h2.column.index === 1 && Number(h2.cell.raw) < 3){ h2.cell.styles.textColor = C.RED; h2.cell.styles.fontStyle = 'bold'; } } });
+    P.smallNote(doc, doc.lastAutoTable.finalY + 4, '(V) = visiting faculty. Teachers with no class at all that day are not listed. Leave and absence are not known to the app: confirm before giving a duty.');
+  });
+  P.finalize(doc);
+  return { doc, title:'Free teachers whole week', file:'Free-teachers_Week' + (fr.sh === 'E' ? '_Evening' : '') + (fr.dept ? '_' + P.safe(fr.dept) : '') + '.pdf' };
 }
 function refreshFree(){ const b = $q('#fBody'); if(appView === 'free' && b) b.innerHTML = freeBody(); }
 function freeText(){
@@ -4769,13 +4840,15 @@ document.addEventListener('click', ev => {
   if((b = t.closest('[data-xq]'))) return quickReport(b.dataset.xq);
   if((b = t.closest('[data-xwt]'))){ const w = workList[Number(b.dataset.xwt)]; if(w) openTT(w.name, w.rows); return; }
   if(t.closest('#xTtPdf')) return P.run(ttPdf);
-  if((b = t.closest('[data-xfd]'))){ fr.d = Number(b.dataset.xfd); return rerender(); }
+  if((b = t.closest('[data-xfd]'))){ if(b.dataset.xfd === 'wk') fr.wk = true; else { fr.wk = false; fr.d = Number(b.dataset.xfd); } return rerender(); }
   if((b = t.closest('[data-xfs]'))){ fr.sh = b.dataset.xfs; return rerender(); }
   if((b = t.closest('[data-xfp]'))){ fr.p = b.dataset.xfp; return rerender(); }
-  if((b = t.closest('[data-xfc]'))){ const x = b.dataset.xfc.split('|'); fr.d = Number(x[0]); fr.p = x[1]; rerender(); return window.scrollTo(0, 0); }
+  if((b = t.closest('[data-xfc]'))){ const x = b.dataset.xfc.split('|'); fr.wk = false; fr.d = Number(x[0]); fr.p = x[1]; rerender(); return window.scrollTo(0, 0); }
   if(t.closest('#xFrTxt')) return shareText(freeText(), 'Free teachers');
   if(t.closest('#xFrPdf')) return P.run(freePdf, () => shareText(freeText()));
   if(t.closest('#xFrDay')) return P.run(freeDayPdf, () => shareText(freeText()));
+  if(t.closest('#xFrWk')) return P.run(freeWeekPdf, () => shareText(freeWeekText(), 'Free teachers'));
+  if(t.closest('#xFrWkTxt')) return shareText(freeWeekText(), 'Free teachers');
   if(t.closest('#xTtR')){ ttAllErr = ''; return loadTTAll(); }
   if(t.closest('#xUpd')) return checkUpdate(true);
   if(t.closest('#xCtR')){ ctsErr = ''; return loadContacts(); }
@@ -4786,7 +4859,7 @@ document.addEventListener('click', ev => {
   if((b = t.closest('[data-xprofd]'))){ $q('#dlg').close(); return openProfile(b.dataset.xprofd, b.dataset.xcls, ''); }
   if((b = t.closest('[data-xprof]'))) return openProfile(b.dataset.xprof, b.dataset.xcls, b.dataset.xsheet || '');
   if((b = t.closest('[data-xlow]'))){ lowMode = b.dataset.xlow; return rerender(); }
-  if((b = t.closest('[data-xlowd]'))){ lowMode = b.dataset.xlowd; openLowDialog(); if(appView === 'home') rerender(); return; }
+  if((b = t.closest('[data-xlowd]'))){ lowMode = b.dataset.xlowd; openLowDialog(); if(appView === 'reports') rerender(); return; }
   if(t.closest('#xLowAll')) return openLowDialog();
   if(t.closest('#xLowPdf') || t.closest('#xLowPdf2')) return P.run(weeklyLowPdf, () => shareText(lowText(), 'Low attendance'));
   if(t.closest('#xLowTxt')) return shareText(lowText(), 'Low attendance');
