@@ -2048,7 +2048,10 @@ const HINTS = [
  ['#xHc','Health check','Finds problems in the student, timetable and user data, missing sheets and automatic jobs that are off.','home'],
  ['#xSlips','Code slips','Prints each student\'s private code for the student result page, 10 slips per page.','home'],
  ['#xPkey','Sync key','The key the JCW Portal Sync box on the UOP portal asks for. Keep it private.','home'],
- ['[data-xhx]','Full list','Downloads the whole list of this check (or of every problem) as an Excel file.','home'],
+ ['[data-xhx]','Full list','The whole list of this check (or of every problem) as an Excel file: roll no, name, father name, PCS and status in their own columns, so you can filter them.','home'],
+ ['#xLeftMove,#xLeftMove2','Move students who left','Moves migrated, cancelled, disenrolled and transferred students out of the strength sheet into the sheet Left Students, and takes them out of attendance from this month.','home'],
+ ['#xLeftList','List / restore','Everyone moved so far, with Excel, and Restore for a student moved by mistake.','home'],
+ ['#fOpen','Open / Print','PDF: opens it to view or print. Excel: opens it as a table with a filter on every column and a Print button.','home'],
  ['#xEwTxt,#xEwPdf','Early warning','Students below 73% (lectures each must attend) and students at risk (can miss 2 or fewer more lectures). Share on WhatsApp or as PDF.','reports'],
  ['[data-xfd]','Day','One day (then choose the day), or All week: Monday to Saturday in one list and one PDF.','free'],
  ['[data-xfs]','Shift','Morning or evening periods (timings from the timetable settings).','free'],
@@ -2334,7 +2337,7 @@ function sections(){
     <li><b>Low attendance</b> (Reports tab): switch between <i>This week</i> and <i>This month</i>, tap <b>See all</b> for the full list, and <b>Share PDF</b> to send the weekly low-attendance report on WhatsApp or email.</li>
     <li><b>Change history</b> (bottom of a student's profile): every change or deletion of her saved marks, with the old and new mark, who changed it and when.</li>
     <li><b>Student profile</b>: search in the Reports tab, tap a student in Low attendance, or tap <b>Full profile</b> in a student's window. It shows every month's attendance and test, a day-by-day calendar, your tags and comments and her reports. <b>Share PDF</b> sends the profile as a report.</li>
-    <li><b>College / Department overview</b>: <i>Today</i> shows who has and has not marked attendance today (only classes in today's timetable); <b>Remind</b> next to a teacher opens WhatsApp with a ready reminder listing her unmarked classes (her number stays private); admin and principal also find <b>System health check</b>, <b>Student result page</b> (code slips) and <b>UOP portal sync</b> at the bottom of the College screen. The portal sync brings status, quota, date of birth, photo, contact, matric marks, challans and subjects from portal.uop.edu.pk into the strength sheet, filling only empty cells; the health check then lists students without roll number, cancelled / migrated / disenrolled / transferred students still in attendance, students in two programs, roll numbers out of range, no picture, no date of birth or 01/01/2000, missing matric roll no / marks, no quota, missing subjects, contact or challan, unpaid challans and timetable classes without a room; <i>Workload</i> shows every teacher's periods per week; <i>Sections</i> shows section-wise percentages (tap a section for its subjects); <i>Low attendance</i> lists every student below 73%. Each tab has <b>Share as text</b> and a <b>PDF</b> button. HODs see their own department, admin and principal see the whole college.</li></ul>` },
+    <li><b>College / Department overview</b>: <i>Today</i> shows who has and has not marked attendance today (only classes in today's timetable); <b>Remind</b> next to a teacher opens WhatsApp with a ready reminder listing her unmarked classes (her number stays private); admin and principal also find <b>System health check</b>, <b>Student result page</b> (code slips) and <b>UOP portal sync</b> at the bottom of the College screen. <b>Students who left</b>: <b>Move students who left</b> shows everyone in the strength sheet who is Migrated, Cancelled, Disenrolled or Transfer on the portal (untick anyone who should stay); their rows go to the sheet <b>Left Students</b>. Earlier months of attendance stay as they were, this month her row is struck through and no longer counted, and later months that already have sheets lose her row. <b>List / restore</b> brings back a student moved by mistake. Every Excel file opens with <b>Open / Print</b> as a table you can filter by any column and print. The portal sync brings status, quota, date of birth, photo, contact, matric marks, challans and subjects from portal.uop.edu.pk into the strength sheet, filling only empty cells; the health check then lists students without roll number, cancelled / migrated / disenrolled / transferred students still in attendance, students in two programs, roll numbers out of range, no picture, no date of birth or 01/01/2000, missing matric roll no / marks, no quota, missing subjects, contact or challan, unpaid challans and timetable classes without a room; <i>Workload</i> shows every teacher's periods per week; <i>Sections</i> shows section-wise percentages (tap a section for its subjects); <i>Low attendance</i> lists every student below 73%. Each tab has <b>Share as text</b> and a <b>PDF</b> button. HODs see their own department, admin and principal see the whole college.</li></ul>` },
 
   { id:'reports', nav:'Reports', title:'Reports: attendance, daily register, tests, shortage', html:`
     <p>Open the <b>Reports</b> tab (or <b>⋯ More → Reports</b>). Everything is in one card, <b>Create a report</b>, in three steps:</p>
@@ -2961,7 +2964,7 @@ function offerFile(blob, name, title, preferOpen){
     <div class="fbtns">
       ${canShare ? big('fShare', 'Share', 'WhatsApp, Gmail, Drive…', first === 'share') : ''}
       ${big('fDown', 'Download', 'Save the file on this ' + (/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) ? 'phone' : 'computer'), first === 'down')}
-      ${isPdf ? big('fOpen', 'Open / Print', 'View it now, or print it', first === 'open') : ''}
+      ${big('fOpen', 'Open / Print', isPdf ? 'View it now, or print it' : 'View as a table, filter, print', first === 'open')}
     </div>
     <div class="acts"><button class="btn small grow" id="fClose">Close</button></div>`;
   if(!d.open) d.showModal();
@@ -2975,13 +2978,55 @@ function offerFile(blob, name, title, preferOpen){
     toast('Downloaded: ' + name + '\nYou find it in the Downloads folder' + (isPdf ? ' (Files / My Files app on a phone).' : '. It opens in Excel or Google Sheets.'));
   };
   const op = document.getElementById('fOpen');
-  if(op) op.onclick = () => {
+  if(op && !isPdf) op.onclick = () => { csvView(blob, name, title); close(); };
+  else if(op) op.onclick = () => {
     const u = URL.createObjectURL(blob), w = window.open(u, '_blank');
     if(!w){ download(blob, name); toast('The PDF was downloaded (this browser does not open it directly).'); }
     setTimeout(() => URL.revokeObjectURL(u), 120000); close();
   };
 }
 async function deliver(r, preferOpen){ offerFile(r.doc.output('blob'), r.file, r.title, preferOpen); }
+/** CSV text -> rows (quotes, commas and new lines inside quotes, BOM) */
+function parseCsv(t){
+  t = String(t || '').replace(/^﻿/, ''); const rows = []; let row = [], f = '', q = false;
+  for(let i = 0; i < t.length; i++){
+    const c = t[i];
+    if(q){ if(c === '"'){ if(t[i + 1] === '"'){ f += '"'; i++; } else q = false; } else f += c; }
+    else if(c === '"') q = true; else if(c === ','){ row.push(f); f = ''; }
+    else if(c === '\n' || c === '\r'){ if(c === '\r' && t[i + 1] === '\n') i++; row.push(f); rows.push(row); row = []; f = ''; }
+    else f += c;
+  }
+  if(f !== '' || row.length){ row.push(f); rows.push(row); }
+  return rows.filter(r => r.some(x => x !== ''));
+}
+/** "Open / Print" for an Excel (CSV) file: a table in a new tab with a filter on every column and a Print button. */
+function csvView(blob, name, title){
+  const w = window.open('', '_blank');
+  if(!w){ download(blob, name); return toast('The file was downloaded (this browser blocked the new tab).'); }
+  w.document.write('<p style="font:16px system-ui;padding:20px">Opening…</p>');
+  blob.text().then(txt => {
+    const R = parseCsv(txt), head = R[0] || [], body = R.slice(1), e = x => String(x == null ? '' : x).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' })[c]);
+    const few = head.map((h, c) => { if(/name|roll|father|enroll|item|note|comment|reason|teacher/i.test(h)) return null; const v = [...new Set(body.map(r => r[c] || ''))]; return v.length > 1 && v.length <= 25 ? v.sort((a, b) => a.localeCompare(b, undefined, { numeric:true })) : null; });
+    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${e(title || name)}</title>
+<style>body{margin:0;font:13px/1.4 system-ui,Segoe UI,Arial,sans-serif;color:#101828;background:#fff}
+header{position:sticky;top:0;background:#14213D;color:#fff;padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;z-index:2}
+header h1{font-size:16px;margin:0;flex:1;min-width:180px}header small{opacity:.8}
+button{font:inherit;font-weight:700;border:0;border-radius:8px;padding:7px 14px;cursor:pointer;background:#fff;color:#14213D}
+.wrap{overflow:auto;padding:0 8px 20px}table{border-collapse:collapse;width:100%;margin-top:8px}
+th,td{border:1px solid #d0d5dd;padding:5px 7px;text-align:left;vertical-align:top}th{background:#eef2f6;position:sticky;top:0}
+tr.f th{background:#fff;padding:3px}tr.f input,tr.f select{width:100%;box-sizing:border-box;font:inherit;padding:4px;border:1px solid #d0d5dd;border-radius:6px;min-width:70px}
+tbody tr:nth-child(even){background:#f8fafc}
+@media print{header button,tr.f{display:none}header{position:static;background:#fff;color:#000;padding:0 0 6px}th{position:static}.wrap{overflow:visible;padding:0}}</style></head><body>
+<header><h1>${e(title || name)} <small id="cnt"></small></h1><button onclick="clearF()">Clear filters</button><button onclick="print()">Print</button></header>
+<div class="wrap"><table><thead><tr>${head.map(h => `<th>${e(h)}</th>`).join('')}</tr>
+<tr class="f">${head.map((h, c) => few[c] ? `<th><select data-c="${c}"><option value="">All</option>${few[c].map(v => `<option>${e(v)}</option>`).join('')}</select></th>` : `<th><input data-c="${c}" placeholder="Filter…"></th>`).join('')}</tr></thead>
+<tbody>${body.map(r => `<tr>${head.map((_, c) => `<td>${e(r[c])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+<script>const F=[...document.querySelectorAll('[data-c]')],T=[...document.querySelectorAll('tbody tr')];
+function run(){const f=F.map(x=>[+x.dataset.c,x.value.trim().toLowerCase(),x.tagName==='SELECT']);let n=0;T.forEach(tr=>{const ok=f.every(([c,v,s])=>!v||(s?tr.children[c].textContent.toLowerCase()===v:tr.children[c].textContent.toLowerCase().includes(v)));tr.style.display=ok?'':'none';if(ok)n++;});document.getElementById('cnt').textContent=' · '+n+' of '+T.length+' rows';}
+function clearF(){F.forEach(x=>x.value='');run();}F.forEach(x=>x.addEventListener('input',run));run();<\/script></body></html>`;
+    w.document.open(); w.document.write(html); w.document.close();
+  }).catch(() => { w.close(); download(blob, name); });
+}
 /** builds the PDF, then offers Share / Download / Open. open = true: "Open / Print" is the main button (registers). */
 function run(build, fallback, open){
   if(!ready()) toast('Preparing the PDF...');
@@ -3604,6 +3649,7 @@ function renderAdmin(){
   if(scope === 'all' && !rinfo) setTimeout(loadRinfo, 0);
   if(scope === 'all' && !pinfo) setTimeout(loadPinfo, 0);
   if(scope === 'all') setTimeout(() => loadShs(false), 0);
+  if(scope === 'all' && !left) setTimeout(loadLeft, 0);
 }
 function refreshABody(){ const b = $q('#aBody'); if(appView === 'admin' && b) b.innerHTML = adminBody(); }
 const qOk = (q, ...xs) => !q || xs.some(x => String(x || '').toLowerCase().includes(q));
@@ -3775,7 +3821,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-30 v6.9 duties, month sheets';
+const APP_BUILD = '2026-10-30 v7.0 left students, excel view';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -5013,7 +5059,7 @@ let hc = null, rinfo = null;
 function adminExtraCards(){
   if(scope !== 'all') return '';
   const page = studentPageUrl();
-  return `<div class="grid2" style="margin-top:12px">${shsCard()}<section class="card"><h3>${I.check} System health check</h3>
+  return `<div class="grid2" style="margin-top:12px">${shsCard()}${leftCard()}<section class="card"><h3>${I.check} System health check</h3>
       <div class="sub">Finds problems before they stop the work: duplicate roll numbers, students without subjects or class, timetable teachers without a login, classes with no students, sections with no attendance this month, missing sheets and automatic jobs that are off.</div>
       <div class="acts2"><button class="btn primary" type="button" id="xHc">${I.check}Run health check</button></div></section>
     <section class="card"><h3>${I.doc} Student result page</h3>
@@ -5257,17 +5303,79 @@ function hcShow(){
     ${hc.checks.map(c => `<details class="hcx ${c.level}" ${c.level !== 'ok' ? 'open' : ''}><summary><span class="pill ${c.level === 'ok' ? 'good' : c.level === 'bad' ? 'bad' : 'mid'}">${c.level === 'ok' ? '✓' : c.n}</span> ${esc(c.title)}</summary>
       ${c.level === 'ok' ? '<div class="sub">Nothing found.</div>' : `<div class="sub">${esc(c.help)}</div><ul>${c.items.slice(0, 30).map(x => `<li>${esc(x)}</li>`).join('')}${c.n > 30 ? `<li>… and ${c.n - 30} more</li>` : ''}</ul>
       ${c.n > 0 ? `<button class="btn small" type="button" data-xhx="${esc(c.key)}">Full list (Excel)</button>` : ''}
-      ${HC_FIX[c.key] ? `<button class="btn small" type="button" data-xhf="${HC_FIX[c.key][0]}">${HC_FIX[c.key][1]}</button>` : ''}`}</details>`).join('')}
+      ${HC_FIX[c.key] ? `<button class="btn small" type="button" data-xhf="${HC_FIX[c.key][0]}">${HC_FIX[c.key][1]}</button>` : ''}
+      ${c.key === 'stu_status' ? `<button class="btn small primary" type="button" id="xLeftMove2">Move them to Left Students</button>` : ''}`}</details>`).join('')}
     <div class="sub" style="margin-top:8px">Student result page: ${hc.results.at ? 'updated ' + esc(hc.results.at) + ' (' + hc.results.count + ' students)' : 'not built yet'}. <button class="btn small" type="button" data-xhf="results">Update it now</button></div>
     <div class="acts"><button class="btn small grow" type="button" data-xhx="*">Everything (Excel)</button><button class="btn small grow" id="xHcTxt">Share as text</button><button class="btn small grow" id="closeDlg">Close</button></div>`);
 }
 
+const csvQ = v => { const t = String(v == null ? '' : v); return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+const csvBlob = L => new Blob(['﻿' + L.map(r => r.map(csvQ).join(',')).join('\r\n')], { type:'text/csv' });
+/** health check Excel: one column each for roll no, name, father name, PCS and the detail (status), so it can be filtered */
 function hcCsv(key){
   const list = key === '*' ? hc.checks.filter(c => c.level !== 'ok') : hc.checks.filter(c => c.key === key);
-  const q = v => { const t = String(v == null ? '' : v); return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
-  const L = [['Check', 'Item']].concat(...list.map(c => c.items.map(x => [c.title, x])));
-  P.offerFile(new Blob(['\ufeff' + L.map(r => r.map(q).join(',')).join('\r\n')], { type:'text/csv' }), 'Health-check_' + (key === '*' ? 'all' : key) + '.csv', 'Health check');
+  const L = [['Check', 'Roll No', 'Student Name', 'Father Name', 'PCS', 'Detail / Status']]
+    .concat(...list.map(c => (c.rows || c.items.map(x => ['', '', '', '', x])).map(r => [c.title].concat(r))));
+  P.offerFile(csvBlob(L), 'Health-check_' + (key === '*' ? 'all' : key) + '.csv', 'Health check' + (list.length === 1 ? ': ' + list[0].title : ''));
 }
+
+/* ----- v7.0 students who left: move them out of the strength sheet ----- */
+const LEFT_ST = ['Migrated', 'Cancelled', 'Disenrolled', 'Transfer'];
+let leftSel = { st:LEFT_ST.slice(), list:[], off:{} };
+async function openLeftMove(){
+  dlgOpen('<h2>Move students who left</h2><div class="meta">Reading the strength sheet and the portal data…</div><div class="sk"></div><div class="sk" style="width:70%"></div><div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>');
+  try{ const r = await srv({ action:'left_preview', statuses:leftSel.st }, 120000); leftSel.list = r.list || []; leftSel.off = {}; leftSel.formula = r.formula; }
+  catch(e){ return dlgOpen(`<h2>Move students who left</h2><div class="err2">${esc(e.message)}</div><div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>`); }
+  leftMoveShow();
+}
+function leftMoveShow(){
+  const L = leftSel.list, n = L.filter(x => !leftSel.off[x.roll]).length;
+  dlgOpen(`<h2>Move students who left</h2>
+    <div class="meta">${L.length} student${L.length === 1 ? '' : 's'} in the strength sheet ${L.length === 1 ? 'is' : 'are'} not Enrolled on the portal. Untick anyone who should stay.</div>
+    <div class="chips" style="margin:6px 0">${LEFT_ST.map(s => `<button type="button" class="chip ${leftSel.st.includes(s) ? 'on' : ''}" data-xls="${s}">${s}</button>`).join('')}</div>
+    ${leftSel.formula ? '<div class="err2">The strength sheet is made by a formula, so students cannot be moved here: remove them in its source sheet.</div>' : ''}
+    <div style="max-height:44vh;overflow:auto;border:1px solid var(--line);border-radius:10px">${L.map(x => `<label class="ckrow" style="padding:7px 10px;border-bottom:1px solid var(--line)"><input type="checkbox" data-xlr="${esc(x.roll)}" ${leftSel.off[x.roll] ? '' : 'checked'}>
+      <span style="flex:1;min-width:0"><b>${esc(x.name)}</b> <small style="color:var(--muted)">D/O ${esc(x.father || '–')}</small><br><small style="color:var(--muted)">${esc(x.roll)} · ${esc(x.pcs)}</small></span><span class="pill ${/cancel|disen/i.test(x.status) ? 'bad' : 'mid'}">${esc(x.status)}</span></label>`).join('') || '<div class="empty">Nobody to move.</div>'}</div>
+    <div class="sub" style="margin-top:8px"><b>What happens:</b> their rows go to the sheet <b>Left Students</b> (nothing is lost), and are removed from the strength sheet.
+      In the attendance sheets: <b>earlier months stay as they are</b>; <b>this month</b> her row is struck through and no longer counted; <b>later months</b> (if already made) she is removed. This runs in the background for a few minutes.</div>
+    <div class="acts"><button class="btn small grow" type="button" id="xLmCsv">Excel</button><button class="btn small primary grow" id="xLmGo" ${n && !leftSel.formula ? '' : 'disabled'}>Move ${n} student${n === 1 ? '' : 's'}</button><button class="btn small grow" id="closeDlg">Cancel</button></div>`);
+}
+async function leftMoveGo(){
+  const rolls = leftSel.list.filter(x => !leftSel.off[x.roll]).map(x => x.roll);
+  if(!rolls.length || !confirm('Move ' + rolls.length + ' student(s) to "Left Students" and take them out of attendance from this month?')) return;
+  const b = $q('#xLmGo'); if(b){ b.disabled = true; b.textContent = 'Moving…'; }
+  try{
+    const r = await srv({ action:'left_move', rolls }, 180000);
+    dlgOpen(`<h2>Moved</h2><div class="meta">${r.moved} student${r.moved === 1 ? '' : 's'} moved to the sheet "Left Students".</div>
+      ${r.skipped && r.skipped.length ? `<div class="sub">Not moved: ${r.skipped.map(esc).join(', ')}</div>` : ''}
+      <div class="sub" style="margin-top:6px">The attendance sheets are being updated in the background (a few minutes). See <b>Students who left</b> on the College screen.</div>
+      <div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>`);
+    left = null; if(appView === 'admin') loadLeft();
+  }catch(e){ toast('Not moved: ' + e.message); if(b){ b.disabled = false; b.textContent = 'Move'; } }
+}
+let left = null;
+async function loadLeft(){ if(scope !== 'all' || !navigator.onLine) return; try{ left = await srv({ action:'left_list' }, 60000); }catch(e){ left = { list:[], err:e.message }; } refreshLeft(); }
+function leftCard(){
+  if(scope !== 'all') return '';
+  const J = left && left.job, by = {}; (left && left.list || []).forEach(x => { by[x.status] = (by[x.status] || 0) + 1; });
+  return `<section class="card" id="leftCard"><h3>${I.flag} Students who left <span class="ct">${left ? left.list.length : ''}</span></h3>
+    <div class="sub">Migrated, cancelled, disenrolled and transferred students moved out of the strength sheet. Their rows are kept in the sheet <b>Left Students</b>.</div>
+    ${left ? `<div class="chips" style="margin:6px 0">${Object.keys(by).map(k => `<span class="chip">${esc(k)} · ${by[k]}</span>`).join('') || '<span class="sub">Nobody moved yet.</span>'}</div>` : '<div class="sk"></div>'}
+    ${J && J.running ? '<div class="sub" style="color:var(--leave);font-weight:700">Updating the attendance sheets in the background…</div>' : J && J.finished ? `<div class="sub">Attendance sheets updated ${esc(J.finished)}: ${J.struck || 0} row(s) struck through, ${J.removed || 0} removed from later months.</div>` : ''}
+    <div class="acts2"><button class="btn" type="button" id="xLeftList">List / restore</button><button class="btn primary" type="button" id="xLeftMove">Move students who left</button></div></section>`;
+}
+function refreshLeft(){ const c = $q('#leftCard'); if(c){ const t = document.createElement('div'); t.innerHTML = leftCard(); c.replaceWith(t.firstElementChild); } }
+function openLeftList(){
+  const L = (left && left.list) || [];
+  dlgOpen(`<h2>Students who left <span class="ct">${L.length}</span></h2><div class="meta">Newest first. <b>Restore</b> = moved by mistake: she goes back to the strength sheet and is counted again from this month.</div>
+    <div style="max-height:52vh;overflow:auto">${L.map(x => `<div class="li"><span class="tx"><b>${esc(x.name)}</b><small>${esc(x.roll)} · D/O ${esc(x.father || '–')} · ${esc(x.pcs)}</small><small>${esc(x.status)} · moved ${esc(x.on)} by ${esc(x.by)}</small></span>
+      <button class="pill" type="button" data-xlrest="${esc(x.roll)}">Restore</button></div>`).join('') || '<div class="empty">Nobody moved yet.</div>'}</div>
+    <div class="acts"><button class="btn small primary grow" type="button" id="xLeftCsv">Excel</button><button class="btn small grow" id="closeDlg">Close</button></div>`);
+}
+const leftCsv = () => P.offerFile(csvBlob([['Roll No', 'Student Name', 'Father Name', 'PCS', 'Portal Status', 'Moved On', 'Moved By', 'Left In Month']]
+  .concat(((left && left.list) || []).map(x => [x.roll, x.name, x.father, x.pcs, x.status, x.on, x.by, x.month]))), 'Left-students.csv', 'Students who left');
+const leftMoveCsv = () => P.offerFile(csvBlob([['Roll No', 'Student Name', 'Father Name', 'PCS', 'Portal Status']].concat(leftSel.list.map(x => [x.roll, x.name, x.father, x.pcs, x.status]))), 'Not-enrolled-students.csv', 'Not enrolled on the portal');
+
 const hcText = () => 'JCW ATTENDANCE - HEALTH CHECK ' + hc.at + '\n\n' + hc.checks.map(c => (c.level === 'ok' ? '✓ ' : '! ') + c.title + (c.level === 'ok' ? '' : ' (' + c.n + ')\n' + c.items.slice(0, 15).map(x => '  - ' + x).join('\n'))).join('\n');
 async function healthFix(what){
   try{ const r = await srv({ action:'health_fix', what }); toast(r.msg || 'Started.'); if(what === 'triggers' && rinfo) rinfo.nightly = true; if(what === 'sheets' || what === 'next'){ const d = $q('#dlg'); if(d.open) d.close(); setTimeout(() => loadShs(true), 1500); } }
@@ -5414,6 +5522,14 @@ document.addEventListener('click', ev => {
   if((b = t.closest('[data-xsr]'))){ const x = b.dataset.xsr.split('|'); return subResult(x[0], x[1]); }
   if(t.closest('#xFair')) return openFair();
   if(t.closest('#xDset')) return openDutySettings();
+  if(t.closest('#xLeftMove') || t.closest('#xLeftMove2')) return openLeftMove();
+  if(t.closest('#xLmGo')) return leftMoveGo();
+  if(t.closest('#xLmCsv')) return leftMoveCsv();
+  if(t.closest('#xLeftList')) return left ? openLeftList() : loadLeft().then(openLeftList);
+  if(t.closest('#xLeftCsv')) return leftCsv();
+  if((b = t.closest('[data-xlrest]'))){ const roll = b.dataset.xlrest; if(!confirm('Put ' + roll + ' back into the strength sheet and count her again from this month?')) return;
+    srv({ action:'left_restore', roll }).then(() => { toast(roll + ' restored. The attendance sheets update in a few minutes.'); left = null; loadLeft().then(openLeftList); }).catch(e => toast('Not restored: ' + e.message)); return; }
+  if((b = t.closest('[data-xls]'))){ const k = b.dataset.xls; leftSel.st = leftSel.st.includes(k) ? leftSel.st.filter(x => x !== k) : leftSel.st.concat(k); return openLeftMove(); }
   if(t.closest('#xShsR')){ shs = null; refreshShs(); return loadShs(true); }
   if((b = t.closest('[data-xsd]'))){ if(!confirm('Remove this substitution?')) return; const id = b.dataset.xsd;
     srv({ action:'sub_delete', id }).then(() => { subs.rows = subs.rows.filter(x => x.id !== id); refreshFree(); toast('Removed.'); }).catch(e => toast('Not removed: ' + e.message)); return; }
@@ -5470,6 +5586,7 @@ document.addEventListener('input', ev => {
 });
 document.addEventListener('change', ev => {
   const t = ev.target; if(!t) return;
+  if(t.dataset && t.dataset.xlr != null){ if(t.checked) delete leftSel.off[t.dataset.xlr]; else leftSel.off[t.dataset.xlr] = 1; const n = leftSel.list.filter(x => !leftSel.off[x.roll]).length, b = $q('#xLmGo'); if(b){ b.textContent = 'Move ' + n + ' student' + (n === 1 ? '' : 's'); b.disabled = !n || leftSel.formula; } return; }
   if(t.id === 'adept'){ aF.dept = t.value; return refreshABody(); }
   if(t.id === 'fdept'){ fr.dept = t.value; return refreshFree(); }
   if(t.id === 'rpCls'){ rp.cls = t.value; rp.sub = ''; return rerender(); }
