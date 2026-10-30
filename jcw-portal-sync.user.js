@@ -1,3 +1,4 @@
+//const SAVE_KEY = 'JCW-D12CA0595D22478AA319';
 // ==UserScript==
 // @name         JCW Portal Sync
 // @namespace    jcw-attendance
