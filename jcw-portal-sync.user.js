@@ -28,7 +28,7 @@
   const CONCURRENCY = 4;
   const SEND_SIZE = 250;                       // rows per message to the attendance server
   const PHOTO_BASE_URL = 'https://portal.uop.edu.pk/images/StudentPhoto/';
-  const SAVE_KEY = 'jcw_portal_sync_v1';
+  const SAVE_KEY = 'JCW-D12CA0595D22478AA319';
 
   // ===================== SMALL HELPERS =====================
   const sleep = ms => new Promise(r => setTimeout(r, ms));
