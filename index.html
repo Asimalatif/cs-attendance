@@ -2038,6 +2038,8 @@ const HINTS = [
  ['#xSubPdf,#xSubTxt','Duty report','All substitutions of this month and the count per teacher, as PDF or text.','free'],
  ['#xHc','Health check','Finds problems in the student, timetable and user data, missing sheets and automatic jobs that are off.','home'],
  ['#xSlips','Code slips','Prints each student\'s private code for the student result page, 10 slips per page.','home'],
+ ['#xPkey','Sync key','The key the JCW Portal Sync box on the UOP portal asks for. Keep it private.','home'],
+ ['[data-xhx]','Full list','Downloads the whole list of this check (or of every problem) as an Excel file.','home'],
  ['#xEwTxt,#xEwPdf','Early warning','Students below 73% (lectures each must attend) and students at risk (can miss 2 or fewer more lectures). Share on WhatsApp or as PDF.','reports'],
  ['[data-xfd]','Day','One day (then choose the day), or All week: Monday to Saturday in one list and one PDF.','free'],
  ['[data-xfs]','Shift','Morning or evening periods (timings from the timetable settings).','free'],
@@ -2321,7 +2323,7 @@ function sections(){
     <li><b>Low attendance</b> (Reports tab): switch between <i>This week</i> and <i>This month</i>, tap <b>See all</b> for the full list, and <b>Share PDF</b> to send the weekly low-attendance report on WhatsApp or email.</li>
     <li><b>Change history</b> (bottom of a student's profile): every change or deletion of her saved marks, with the old and new mark, who changed it and when.</li>
     <li><b>Student profile</b>: search in the Reports tab, tap a student in Low attendance, or tap <b>Full profile</b> in a student's window. It shows every month's attendance and test, a day-by-day calendar, your tags and comments and her reports. <b>Share PDF</b> sends the profile as a report.</li>
-    <li><b>College / Department overview</b>: <i>Today</i> shows who has and has not marked attendance today (only classes in today's timetable); <b>Remind</b> next to a teacher opens WhatsApp with a ready reminder listing her unmarked classes (her number stays private); admin and principal also find <b>System health check</b> and <b>Student result page</b> (code slips) at the bottom of the College screen; <i>Workload</i> shows every teacher's periods per week; <i>Sections</i> shows section-wise percentages (tap a section for its subjects); <i>Low attendance</i> lists every student below 73%. Each tab has <b>Share as text</b> and a <b>PDF</b> button. HODs see their own department, admin and principal see the whole college.</li></ul>` },
+    <li><b>College / Department overview</b>: <i>Today</i> shows who has and has not marked attendance today (only classes in today's timetable); <b>Remind</b> next to a teacher opens WhatsApp with a ready reminder listing her unmarked classes (her number stays private); admin and principal also find <b>System health check</b>, <b>Student result page</b> (code slips) and <b>UOP portal sync</b> at the bottom of the College screen. The portal sync brings status, quota, date of birth, photo, contact, matric marks, challans and subjects from portal.uop.edu.pk into the strength sheet, filling only empty cells; the health check then lists students without roll number, cancelled / migrated / disenrolled / transferred students still in attendance, students in two programs, roll numbers out of range, no picture, no date of birth or 01/01/2000, missing matric roll no / marks, no quota, missing subjects, contact or challan, unpaid challans and timetable classes without a room; <i>Workload</i> shows every teacher's periods per week; <i>Sections</i> shows section-wise percentages (tap a section for its subjects); <i>Low attendance</i> lists every student below 73%. Each tab has <b>Share as text</b> and a <b>PDF</b> button. HODs see their own department, admin and principal see the whole college.</li></ul>` },
 
   { id:'reports', nav:'Reports', title:'Reports: attendance, daily register, tests, shortage', html:`
     <p>Open the <b>Reports</b> tab (or <b>⋯ More → Reports</b>). Everything is in one card, <b>Create a report</b>, in three steps:</p>
@@ -3589,6 +3591,7 @@ function renderAdmin(){
     <div id="aBody">${adminBody()}</div>${adminExtraCards()}</main>`;
   $q('#app').innerHTML = h;
   if(scope === 'all' && !rinfo) setTimeout(loadRinfo, 0);
+  if(scope === 'all' && !pinfo) setTimeout(loadPinfo, 0);
 }
 function refreshABody(){ const b = $q('#aBody'); if(appView === 'admin' && b) b.innerHTML = adminBody(); }
 const qOk = (q, ...xs) => !q || xs.some(x => String(x || '').toLowerCase().includes(q));
@@ -3760,7 +3763,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-30 v6.7 history, substitutions, health';
+const APP_BUILD = '2026-10-30 v6.8 portal sync';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -5051,9 +5054,35 @@ function adminExtraCards(){
     <section class="card"><h3>${I.doc} Student result page</h3>
       <div class="sub">Students see their own attendance and test results with their roll number and a private 6-digit code. Read-only: they cannot message anyone. ${rinfo ? (rinfo.at ? 'Updated ' + esc(rinfo.at) + ' · ' + rinfo.count + ' students.' : 'Not built yet.') + (rinfo.nightly ? '' : ' <b>Nightly update is off</b> (Health check > Switch on automatic jobs).') : ''}</div>
       <div class="chips" style="margin:6px 0"><span class="chip" style="user-select:all">${esc(page)}</span></div>
-      <div class="acts2"><button class="btn" type="button" id="xRcopy">Copy link</button><button class="btn primary" type="button" id="xSlips">${I.doc}Code slips for a section</button></div></section></div>`;
+      <div class="acts2"><button class="btn" type="button" id="xRcopy">Copy link</button><button class="btn primary" type="button" id="xSlips">${I.doc}Code slips for a section</button></div></section>
+    <section class="card"><h3>${I.refresh} UOP portal sync</h3>
+      <div class="sub">Brings the students' details from portal.uop.edu.pk (status, quota, DOB, photo, contact, matric marks, challans, subjects) into the strength sheet. <b>Only empty cells are filled</b>; nothing already there is changed. The health check then finds what is still missing.</div>
+      ${pinfo && pinfo.last ? `<div class="sub" style="margin-top:6px"><b>Last sync:</b> ${esc(pinfo.last.at)} · ${esc(pinfo.last.mode === 'quick' ? 'quick' : 'full')} · ${pinfo.last.rows} students${portalFillTxt(pinfo.last.fill)}</div>` : `<div class="sub" style="margin-top:6px">${pinfo ? 'Never synced yet.' : ''}</div>`}
+      <ol class="sub" style="margin:6px 0 0 18px;padding:0"><li>Once: install the free <b>Tampermonkey</b> extension in Chrome, then tap <b>Install the sync button</b>.</li><li>Tap <b>Get sync key</b> and copy it.</li><li>Open the portal, log in, go to <b>Student › Students</b>: a <b>JCW Portal Sync</b> box appears. Choose <b>Quick</b> (1–2 min) or <b>Full</b> (all details, about an hour) and paste the key when it asks.</li></ol>
+      <div class="acts2"><a class="btn" href="${esc(portalScriptUrl())}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center;color:var(--ink)">Install the sync button</a><button class="btn primary" type="button" id="xPkey">Get sync key</button></div></section></div>`;
 }
 const studentPageUrl = () => location.origin + location.pathname.replace(/[^/]*$/, '') + 'student.html';
+const portalScriptUrl = () => location.origin + location.pathname.replace(/[^/]*$/, '') + 'jcw-portal-sync.user.js';
+let pinfo = null;
+function portalFillTxt(f){
+  if(!f) return '';
+  if(f.skipped) return ' · strength sheet not changed: ' + esc(f.skipped);
+  if(f.error) return ' · ' + esc(f.error);
+  const n = Object.values(f.cells || {}).reduce((a, b) => a + b, 0);
+  return ' · ' + n + ' empty cell' + (n === 1 ? '' : 's') + ' filled' + (f.rollsFilled ? ', ' + f.rollsFilled + ' roll no. added' : '') + (f.added && f.added.length ? ' · new columns: ' + esc(f.added.join(', ')) : '');
+}
+async function loadPinfo(){ if(pinfo || scope !== 'all' || !navigator.onLine) return; try{ pinfo = await srv({ action:'portal_info' }); }catch(e){ pinfo = { last:null }; } if(appView === 'admin') rerender(); }
+async function portalKey(renew){
+  try{
+    const r = await srv({ action:'portal_key', renew:!!renew });
+    dlgOpen(`<h2>Sync key</h2><div class="meta">Paste it in the JCW Portal Sync box on the portal when it asks (only once on each computer).</div>
+      <div class="chips" style="margin:10px 0"><span class="chip" style="user-select:all;font-size:16px;font-weight:800">${esc(r.key)}</span></div>
+      <div class="sub">Keep it private: with it anybody could send student data to the system. <b>New key</b> stops the old one.</div>
+      <div class="acts"><button class="btn small primary grow" id="pkCopy">Copy</button><button class="btn small grow" id="pkNew">New key</button><button class="btn small grow" id="closeDlg">Close</button></div>`);
+    $q('#pkCopy').onclick = () => (navigator.clipboard ? navigator.clipboard.writeText(r.key) : Promise.reject()).then(() => toast('Key copied.')).catch(() => toast(r.key));
+    $q('#pkNew').onclick = () => { if(confirm('Make a new key? The old key stops working.')) portalKey(true); };
+  }catch(e){ toast('No key: ' + e.message); }
+}
 async function loadRinfo(){ if(rinfo || scope !== 'all' || !navigator.onLine) return; try{ rinfo = await srv({ action:'results_info' }); if(appView === 'admin') rerender(); }catch(e){ rinfo = { at:'', count:0, nightly:true }; } }
 const HC_FIX = { sheets:['sheets', 'Create missing sheets'], next:['next', 'Prepare next month'], triggers:['triggers', 'Switch on automatic jobs'] };
 async function runHealth(){
@@ -5063,10 +5092,17 @@ async function runHealth(){
   const bad = hc.checks.filter(c => c.level !== 'ok');
   dlgOpen(`<h2>System health check</h2><div class="meta">${esc(hc.at)} · ${bad.length ? bad.length + ' thing' + (bad.length === 1 ? '' : 's') + ' to look at' : 'everything is fine'}</div>
     ${hc.checks.map(c => `<details class="hcx ${c.level}" ${c.level !== 'ok' ? 'open' : ''}><summary><span class="pill ${c.level === 'ok' ? 'good' : c.level === 'bad' ? 'bad' : 'mid'}">${c.level === 'ok' ? '✓' : c.n}</span> ${esc(c.title)}</summary>
-      ${c.level === 'ok' ? '<div class="sub">Nothing found.</div>' : `<div class="sub">${esc(c.help)}</div><ul>${c.items.map(x => `<li>${esc(x)}</li>`).join('')}${c.n > c.items.length ? `<li>… and ${c.n - c.items.length} more</li>` : ''}</ul>
+      ${c.level === 'ok' ? '<div class="sub">Nothing found.</div>' : `<div class="sub">${esc(c.help)}</div><ul>${c.items.slice(0, 30).map(x => `<li>${esc(x)}</li>`).join('')}${c.n > 30 ? `<li>… and ${c.n - 30} more</li>` : ''}</ul>
+      ${c.n > 0 ? `<button class="btn small" type="button" data-xhx="${esc(c.key)}">Full list (Excel)</button>` : ''}
       ${HC_FIX[c.key] ? `<button class="btn small" type="button" data-xhf="${HC_FIX[c.key][0]}">${HC_FIX[c.key][1]}</button>` : ''}`}</details>`).join('')}
     <div class="sub" style="margin-top:8px">Student result page: ${hc.results.at ? 'updated ' + esc(hc.results.at) + ' (' + hc.results.count + ' students)' : 'not built yet'}. <button class="btn small" type="button" data-xhf="results">Update it now</button></div>
-    <div class="acts"><button class="btn small grow" id="xHcTxt">Share as text</button><button class="btn small grow" id="closeDlg">Close</button></div>`);
+    <div class="acts"><button class="btn small grow" type="button" data-xhx="*">Everything (Excel)</button><button class="btn small grow" id="xHcTxt">Share as text</button><button class="btn small grow" id="closeDlg">Close</button></div>`);
+}
+function hcCsv(key){
+  const list = key === '*' ? hc.checks.filter(c => c.level !== 'ok') : hc.checks.filter(c => c.key === key);
+  const q = v => { const t = String(v == null ? '' : v); return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+  const L = [['Check', 'Item']].concat(...list.map(c => c.items.map(x => [c.title, x])));
+  P.offerFile(new Blob(['\ufeff' + L.map(r => r.map(q).join(',')).join('\r\n')], { type:'text/csv' }), 'Health-check_' + (key === '*' ? 'all' : key) + '.csv', 'Health check');
 }
 const hcText = () => 'JCW ATTENDANCE - HEALTH CHECK ' + hc.at + '\n\n' + hc.checks.map(c => (c.level === 'ok' ? '✓ ' : '! ') + c.title + (c.level === 'ok' ? '' : ' (' + c.n + ')\n' + c.items.slice(0, 15).map(x => '  - ' + x).join('\n'))).join('\n');
 async function healthFix(what){
@@ -5219,6 +5255,8 @@ document.addEventListener('click', ev => {
   if(t.closest('#xHcTxt')) return hc && shareText(hcText(), 'Health check');
   if(t.closest('#xRcopy')){ const u = studentPageUrl(); (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(() => toast('Link copied: ' + u)).catch(() => toast(u)); return; }
   if(t.closest('#xSlips')) return openSlips();
+  if(t.closest('#xPkey')) return portalKey(false);
+  if((b = t.closest('[data-xhx]'))) return hc && hcCsv(b.dataset.xhx);
   if(t.closest('#xWkTxt')) return shareText(workText(), 'Teacher workload');
   if(t.closest('#xWkPdf')) return P.run(workPdf, () => shareText(workText()));
   if((b = t.closest('[data-xopen]'))){ const e = sheets.find(s => s.name === b.dataset.xopen); if(e) goAttend(e, Number(b.dataset.xday) || 0); return; }
