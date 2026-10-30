@@ -598,6 +598,11 @@ a.pill{text-decoration:none;background:var(--present-bg);color:var(--present)}
 .pchips button{border-color:var(--tabline);background:var(--tabbg);color:var(--tabink)}
 .pchips button.on{background:var(--tabon);border-color:var(--tabon);color:var(--tabonink)}
 
+/* ===================== v3.9: duties ===================== */
+.dtags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.rtag.dg{background:var(--present-bg);color:var(--present)}.rtag.dm{background:var(--leave-bg);color:var(--leave)}.rtag.db{background:var(--absent-bg);color:var(--absent)}
+.li.dim{opacity:.55}
+.ckrow{display:flex;gap:8px;align-items:center;padding:6px 2px;font-size:14px;cursor:pointer}.ckrow input{width:18px;height:18px;flex:none}
 /* ===================== v3.8: health check ===================== */
 .hcx{border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin:6px 0;background:var(--surface)}
 .hcx summary{cursor:pointer;font-weight:750;display:flex;gap:8px;align-items:center}
@@ -2034,7 +2039,11 @@ const HINTS = [
  ['[data-xrem]','Remind','Opens WhatsApp with a ready reminder to this teacher, listing the classes she has not marked today. Press Send in WhatsApp.','home'],
  ['[data-xew]','Early warning period','This month, or the whole session so far.','reports'],
  ['#xHist','Change history','Every change or deletion of this student\'s saved marks: old mark, new mark, who and when.','home'],
- ['[data-xsa]','Assign','Give this free teacher a class whose teacher is absent. The number = her substitutions this month.','free'],
+ ['[data-xsa]','Assign','Give this free teacher a class whose teacher is absent.','free'],
+ ['[data-xfo]','Order','Best for a duty: teachers who do not have to wait (her class is just before or after), with the fewest duties, first. Or grouped by department.','free'],
+ ['[data-xsr]','Done / Not done','After the period, mark whether the teacher did the duty. Missed duties are remembered for fairness.','free'],
+ ['#xFair','Fairness report','Every teacher\'s duties this session: given, done, not done, this month.','free'],
+ ['#xDset','Duty settings','Most duties per day, exempt teachers, and the order of the free list. Shared by all Chief Proctors.','free'],
  ['#xSubPdf,#xSubTxt','Duty report','All substitutions of this month and the count per teacher, as PDF or text.','free'],
  ['#xHc','Health check','Finds problems in the student, timetable and user data, missing sheets and automatic jobs that are off.','home'],
  ['#xSlips','Code slips','Prints each student\'s private code for the student result page, 10 slips per page.','home'],
@@ -2311,7 +2320,9 @@ function sections(){
     <li><b>No class that day</b>: teachers with no period in that shift that day (they may not be in college).</li>
     <li><b>Free teachers in the week</b>: how many teachers are free in every period; red = fewer than 3. Tap a number to see the names.</li>
     <li><b>Share as text</b> (WhatsApp), <b>This period PDF</b>, <b>Whole day PDF</b> (every period of the day with the free teachers) and <b>Whole week PDF</b> (a Monday-to-Saturday summary grid, then one page per day with the names).</li>
-    <li><b>Assign</b> next to a free teacher saves a substitution (date, the class whose teacher is absent, a note). The number on the button = her substitutions this month. <b>Substitutions</b> at the bottom lists the month's duties with <b>Duty report PDF</b>.</li></ul>
+    <li><b>Best for a duty</b> (default order): first the teachers who do not have to wait. If a teacher has periods 1 and 2 and is free in 3, 4 and 5, she comes first for a duty in period 3, later for period 4 and last for period 5. "Between her classes" = she is in college anyway. Then the teachers with the fewest duties this month, and (if switched on) the teachers who missed a duty. <b>By department</b> shows the old grouping.</li>
+    <li><b>Assign</b> next to a free teacher saves a duty (date, the class whose teacher is absent, a note). After the period the Chief Proctor taps <b>Done</b> or <b>Not done</b>.</li>
+    <li><b>Fairness report</b>: every teacher's duties this session (given, done, not done, this month), as a list and PDF. <b>Duty settings</b>: most duties per teacher per day, exempt teachers, and whether missed duties come first. The settings are shared by all Chief Proctors.</li></ul>
     <div class="tip">The list comes from the timetable. The app does not know who is on leave or absent today, so confirm before giving a duty. Chief Proctors are the users marked CP in the Users sheet; they always see free teachers of <b>all departments</b>, even when they are also an HOD.</div>
     <h3>Teacher contacts (private)</h3>
     <p>Phone numbers are <b>never</b> printed in any report, PDF or shared text (free teachers, workload, timetables …). Admin, principal and Chief Proctors see every teacher's number, an HOD only her own department (an HOD who is also a Chief Proctor sees everyone); other teachers cannot see them. Open <b>Teacher contacts</b> from Home, <b>⋯ More</b> or the <b>Contacts</b> button under the free list; search a name and tap <b>Call</b> or <b>WhatsApp</b>. In the free list, <b>Contact</b> opens one teacher's number.</p>
@@ -3592,6 +3603,7 @@ function renderAdmin(){
   $q('#app').innerHTML = h;
   if(scope === 'all' && !rinfo) setTimeout(loadRinfo, 0);
   if(scope === 'all' && !pinfo) setTimeout(loadPinfo, 0);
+  if(scope === 'all') setTimeout(() => loadShs(false), 0);
 }
 function refreshABody(){ const b = $q('#aBody'); if(appView === 'admin' && b) b.innerHTML = adminBody(); }
 const qOk = (q, ...xs) => !q || xs.some(x => String(x || '').toLowerCase().includes(q));
@@ -3763,7 +3775,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-30 v6.8 portal sync';
+const APP_BUILD = '2026-10-30 v6.9 duties, month sheets';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4688,12 +4700,7 @@ function freeBody(M){
   M = M || freeModel();
   let h = '', dep = null;
   h += `<section class="card"><h3>${I.check} Free in ${esc(freeSlotLabel())} <span class="ct">${M.free.length}</span></h3><div class="sub">They teach ${timesAll().E.length ? 'in the ' + (fr.sh === 'E' ? 'evening' : 'morning') + ' ' : ''}on ${DOWN[fr.d]} but not in this period. "Before / after" = their nearest classes that day.</div>`;
-  M.free.forEach(t => {
-    if(t.dept !== dep){ dep = t.dept; h += `<div class="lb2">${esc(dep || 'No department')}</div>`; }
-    h += `<div class="li"><span class="av">${esc(initials(t.name))}</span><span class="tx"><b>${esc(niceName(t.name))}${visiting(t) ? ' <span class="rtag">Visiting</span>' : ''}</b>
-      <small>${t.before ? 'Before: ' + esc(clsTxt(t.before)) : 'No class before'} · ${t.after ? 'After: ' + esc(clsTxt(t.after)) : 'no class after'}</small></span>
-      <button class="pill" type="button" data-xct="${esc(t.name)}" aria-label="Contact ${esc(t.name)}">Contact</button><button class="pill good" type="button" data-xsa="${esc(t.name)}" aria-label="Assign ${esc(t.name)}">Assign${dutyN(t.name) ? ' · ' + dutyN(t.name) : ''}</button></div>`;
-  });
+  h += freeListHtml(M);
   if(!M.free.length) h += '<div class="empty">No teacher who teaches that day is free in this period.</div>';
   h += '</section>';
   if(M.none.length) h += `<section class="card" style="margin-top:12px"><h3>No ${timesAll().E.length ? (fr.sh === 'E' ? 'evening ' : 'morning ') : ''}class on ${DOWN[fr.d]} <span class="ct">${M.none.length}</span></h3><div class="sub">They have no period ${timesAll().E.length ? 'in this shift ' : ''}that day in the timetable (they may not be in college).</div>
@@ -4972,19 +4979,13 @@ async function loadHist(){
 }
 
 /* ----- 2) substitutions: Assign on Free teachers + duties of the month ----- */
-let subs = { at:0, rows:[], can:false, busy:false, err:'' };
 const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-async function loadSubs(force){
-  if(subs.busy || (!force && Date.now() - subs.at < 120000) || !navigator.onLine) return;
-  subs.busy = true; subs.err = '';
-  try{ const r = await srv({ action:'sub_list' }); subs.rows = r.rows || []; subs.can = !!r.can; subs.at = Date.now(); }
-  catch(e){ subs.err = e.message; subs.at = Date.now(); }
-  finally{ subs.busy = false; refreshFree(); }
-}
-const dutyN = name => subs.rows.filter(x => normalizeKey(x.teacher) === normalizeKey(name)).length;
 /** the next date (from today) that falls on weekday d */
 function dateFor(d){ const t = new Date(); t.setHours(12, 0, 0, 0); const k = (d - t.getDay() + 7) % 7; t.setDate(t.getDate() + k); return ymd(t); }
 function openAssign(name){
+  const st0 = dutyStats(name, dateFor(fr.d)), S0 = subs.settings;
+  if(isExempt(name) && !confirm(niceName(name) + ' is exempt from duties. Assign anyway?')) return;
+  if(S0.maxDay > 0 && st0.on >= S0.maxDay && !confirm(niceName(name) + ' already has ' + st0.on + ' duty that day. Assign another?')) return;
   const slot = slotRange(fr.p, fr.sh) || { s:Number(fr.p) * 100, e:Number(fr.p) * 100 + 60 };
   const opts = [];
   freeModel().busy.forEach(t => dayClasses(t, fr.d).filter(c => busyAt([c], slot)).forEach(c => opts.push({ cls:c.r.cls, sub:c.r.sub, absent:t.name })));
@@ -5007,48 +5008,12 @@ function openAssign(name){
     catch(e){ toast('Not saved: ' + e.message); $q('#saGo').disabled = false; }
   };
 }
-function subsCard(){
-  if(!canFree()) return '';
-  const now = new Date(), list = subs.rows.slice().reverse();
-  const by = {}; subs.rows.forEach(x => { by[x.teacher] = (by[x.teacher] || 0) + 1; });
-  const top = Object.keys(by).sort((a, b) => by[b] - by[a]).slice(0, 6);
-  return `<section class="card" style="margin-top:12px"><h3>${I.flag} Substitutions in ${MONTHS[now.getMonth()]} <span class="ct">${subs.rows.length}</span></h3>
-    <div class="sub">Tap <b>Assign</b> next to a free teacher to give her a class. The count next to each name keeps duties fair.${subs.busy ? ' Loading…' : ''}</div>
-    ${subs.err ? `<div class="err2">${esc(subs.err)}</div>` : ''}
-    ${top.length ? `<div class="chips" style="margin:6px 0">${top.map(t => `<span class="chip">${esc(niceName(t))} · ${by[t]}</span>`).join('')}</div>` : ''}
-    ${list.slice(0, 8).map(x => `<div class="li"><span class="tx"><b>${esc(fmtIso(x.date) || x.date)} · ${x.sh === 'E' ? 'Evening ' : ''}P${esc(x.p)} · ${esc(x.cls)}${x.sub ? ' ' + esc(titleCase(x.sub)) : ''}</b>
-      <small>${esc(niceName(x.teacher))}${x.absent ? ' for ' + esc(niceName(x.absent)) : ''}${x.note ? ' · ' + esc(x.note) : ''} · by ${esc(x.by)}</small></span>
-      ${isAdmin || x.user === user ? `<button class="pill" type="button" data-xsd="${esc(x.id)}" aria-label="Remove">Remove</button>` : ''}</div>`).join('') || '<div class="empty">No substitution this month yet.</div>'}
-    <div class="acts2"><button class="btn" type="button" id="xSubTxt">Share as text</button><button class="btn primary" type="button" id="xSubPdf">${I.share}Duty report PDF</button></div></section>`;
-}
-function subsText(){
-  const now = new Date();
-  return 'SUBSTITUTIONS - ' + MONTHS[now.getMonth()] + ' ' + now.getFullYear() + '\n\n' + (subs.rows.map((x, i) => (i + 1) + '. ' + (fmtIso(x.date) || x.date) + ' P' + x.p + ' ' + x.cls + (x.sub ? ' ' + titleCase(x.sub) : '') + ': ' + niceName(x.teacher) + (x.absent ? ' (for ' + niceName(x.absent) + ')' : '')).join('\n') || 'None.');
-}
-function subsPdf(){
-  const C = P.C, now = new Date(), doc = P.newDoc(); let Y = P.TOP;
-  const by = {}; subs.rows.forEach(x => { by[x.teacher] = (by[x.teacher] || 0) + 1; });
-  Y = P.heading(doc, Y, 'Substitution Duty Report', MONTHS[now.getMonth()] + ' ' + now.getFullYear() + ' · ' + subs.rows.length + ' substitution' + (subs.rows.length === 1 ? '' : 's'));
-  Y = P.sectionTitle(doc, Y, 'Duties per teacher');
-  P.table(doc, { startY:Y, head:[['#', 'Teacher', 'Substitutions']], body:Object.keys(by).sort((a, b) => by[b] - by[a] || a.localeCompare(b)).map((t, i) => [i + 1, niceName(t), by[t]]),
-    columnStyles:{ 0:{ halign:'center', cellWidth:10 }, 2:{ halign:'center', cellWidth:30 } } });
-  Y = doc.lastAutoTable.finalY + 6;
-  Y = P.sectionTitle(doc, Y, 'All substitutions');
-  P.table(doc, { startY:Y, head:[['Date', 'Period', 'Class', 'Absent teacher', 'Substitute', 'Note', 'Assigned by']],
-    body:subs.rows.map(x => [fmtIso(x.date) || x.date, (x.sh === 'E' ? 'E-' : '') + 'P' + x.p, x.cls + (x.sub ? ' ' + titleCase(x.sub) : ''), niceName(x.absent) || '-', niceName(x.teacher), x.note || '', x.by]),
-    styles:{ font:'helvetica', fontSize:8, cellPadding:1.5, lineColor:C.LINE, lineWidth:0.2, textColor:C.INK } });
-  Y = doc.lastAutoTable.finalY + 4;
-  P.signatures(doc, P.smallNote(doc, Y, 'From the substitutions saved in the app (Free teachers > Assign).'), ['Chief Proctor', 'Principal']);
-  P.finalize(doc);
-  return { doc, title:'Substitution duty report', file:'Substitutions_' + MONTHS[now.getMonth()] + '-' + now.getFullYear() + '.pdf' };
-}
-
 /* ----- 3) College screen: health check + student result page (admin, principal) ----- */
 let hc = null, rinfo = null;
 function adminExtraCards(){
   if(scope !== 'all') return '';
   const page = studentPageUrl();
-  return `<div class="grid2" style="margin-top:12px"><section class="card"><h3>${I.check} System health check</h3>
+  return `<div class="grid2" style="margin-top:12px">${shsCard()}<section class="card"><h3>${I.check} System health check</h3>
       <div class="sub">Finds problems before they stop the work: duplicate roll numbers, students without subjects or class, timetable teachers without a login, classes with no students, sections with no attendance this month, missing sheets and automatic jobs that are off.</div>
       <div class="acts2"><button class="btn primary" type="button" id="xHc">${I.check}Run health check</button></div></section>
     <section class="card"><h3>${I.doc} Student result page</h3>
@@ -5085,12 +5050,210 @@ async function portalKey(renew){
 }
 async function loadRinfo(){ if(rinfo || scope !== 'all' || !navigator.onLine) return; try{ rinfo = await srv({ action:'results_info' }); if(appView === 'admin') rerender(); }catch(e){ rinfo = { at:'', count:0, nightly:true }; } }
 const HC_FIX = { sheets:['sheets', 'Create missing sheets'], next:['next', 'Prepare next month'], triggers:['triggers', 'Switch on automatic jobs'] };
+/* ----- v6.9 duties: the whole session is loaded, so duties can be shared fairly ----- */
+let subs = { at:0, rows:[], can:false, busy:false, err:'', settings:{ maxDay:1, exempt:[], owedFirst:true, fit:true } };
+const sessionStart = () => { const n = new Date(), y = n.getMonth() >= 7 ? n.getFullYear() : n.getFullYear() - 1; return y + '-08-01'; };
+const sessionEnd = () => (Number(sessionStart().slice(0, 4)) + 1) + '-07-31';
+async function loadSubs(force){
+  if(subs.busy || (!force && Date.now() - subs.at < 120000) || !navigator.onLine) return;
+  subs.busy = true; subs.err = '';
+  try{ const r = await srv({ action:'sub_list', from:sessionStart(), to:sessionEnd() }); subs.rows = r.rows || []; subs.can = !!r.can; if(r.settings) subs.settings = r.settings; subs.at = Date.now(); }
+  catch(e){ subs.err = e.message; subs.at = Date.now(); }
+  finally{ subs.busy = false; refreshFree(); }
+}
+const curMonthKey = () => ymd(new Date()).slice(0, 7);
+/** a teacher's duties: month = this month (done or still assigned), done / missed = whole session, on = duties on a date */
+function dutyStats(name, date){
+  const k = normalizeKey(name), mine = subs.rows.filter(x => normalizeKey(x.teacher) === k), m = curMonthKey();
+  return { month:mine.filter(x => x.date.slice(0, 7) === m && x.result !== 'Not done').length,
+    done:mine.filter(x => x.result === 'Done').length, missed:mine.filter(x => x.result === 'Not done').length,
+    total:mine.filter(x => x.result !== 'Not done').length, on:date ? mine.filter(x => x.date === date && x.result !== 'Not done').length : 0,
+    last:mine.map(x => x.date).sort().pop() || '' };
+}
+const dutyN = name => dutyStats(name).month;
+const isExempt = name => (subs.settings.exempt || []).some(x => normalizeKey(x) === normalizeKey(name));
+/** how well a free period suits this teacher: 0 = right after her class or between her classes, n = she waits n periods / comes n periods early */
+function dutyFit(t){
+  const p = Number(fr.p), b = t.before ? Number(t.before.p) : null, a = t.after ? Number(t.after.p) : null;
+  if(b != null && a != null) return { rank:0, tag:'Between her classes', tone:'good' };
+  if(b != null){ const w = p - b - 1; return w <= 0 ? { rank:0, tag:'Right after her class', tone:'good' } : { rank:w, tag:'Waits ' + w + ' period' + (w === 1 ? '' : 's') + ' after her last class', tone:w > 1 ? 'bad' : 'mid' }; }
+  if(a != null){ const e = a - p; return { rank:e, tag:'Comes ' + e + ' period' + (e === 1 ? '' : 's') + ' early', tone:e > 1 ? 'bad' : 'mid' }; }
+  return { rank:9, tag:'', tone:'' };
+}
+/** free teachers in the order a Chief Proctor should ask them */
+function dutyOrder(list){
+  const S = subs.settings, date = dateFor(fr.d);
+  return list.map(t => { const st = dutyStats(t.name, date), f = dutyFit(t), ex = isExempt(t.name), full = S.maxDay > 0 && st.on >= S.maxDay;
+    return Object.assign({}, t, { st, fit:f, ex, full, owes:S.owedFirst && st.missed > 0 }); })
+    .sort((x, y) => (x.ex - y.ex) || (x.full - y.full) || (y.owes - x.owes) || (S.fit ? x.fit.rank - y.fit.rank : 0) || (x.st.month - y.st.month) || (x.st.total - y.st.total) || x.name.localeCompare(y.name));
+}
+function freeListHtml(M){
+  const best = fr.sort !== 'dept';
+  let h = `<div class="seg2" role="group" aria-label="Order" style="margin:6px 0"><button type="button" data-xfo="fit" class="${best ? 'on' : ''}">Best for a duty</button><button type="button" data-xfo="dept" class="${best ? '' : 'on'}">By department</button></div>`;
+  if(best) h += `<div class="sub">First: no waiting (her class is just before or after), fewest duties this month${subs.settings.owedFirst ? ', and teachers who missed a duty' : ''}. ${subs.busy ? 'Loading duties…' : ''}</div>`;
+  const list = best ? dutyOrder(M.free) : M.free.map(t => Object.assign({}, t, { st:dutyStats(t.name, dateFor(fr.d)), fit:dutyFit(t), ex:isExempt(t.name), full:false, owes:false }));
+  let dep = null, nBest = 0;
+  list.forEach(t => {
+    if(!best && t.dept !== dep){ dep = t.dept; h += `<div class="lb2">${esc(dep || 'No department')}</div>`; }
+    const top = best && !t.ex && !t.full && nBest < 3 && ++nBest;
+    const tags = [top ? '<span class="rtag dg">Best choice</span>' : '', t.fit.tag ? `<span class="rtag d${t.fit.tone[0] || 'm'}">${esc(t.fit.tag)}</span>` : '',
+      t.owes ? '<span class="rtag db">Missed ' + t.st.missed + ' duty' + (t.st.missed === 1 ? '' : 'ies') + '</span>' : '', t.ex ? '<span class="rtag">Exempt</span>' : '',
+      t.full ? '<span class="rtag">Already has a duty that day</span>' : ''].filter(Boolean).join(' ');
+    h += `<div class="li ${t.ex || t.full ? 'dim' : ''}"><span class="av">${esc(initials(t.name))}</span><span class="tx"><b>${esc(niceName(t.name))}${visiting(t) ? ' <span class="rtag">Visiting</span>' : ''}</b>
+      <small>${t.before ? 'Before: ' + esc(clsTxt(t.before)) : 'No class before'} · ${t.after ? 'After: ' + esc(clsTxt(t.after)) : 'no class after'}</small>
+      <small>Duties: ${t.st.month} this month · ${t.st.done} done this session${t.st.missed ? ' · <b style="color:var(--absent)">' + t.st.missed + ' not done</b>' : ''}</small>${tags ? `<span class="dtags">${tags}</span>` : ''}</span>
+      <button class="pill" type="button" data-xct="${esc(t.name)}" aria-label="Contact ${esc(t.name)}">Contact</button><button class="pill good" type="button" data-xsa="${esc(t.name)}" aria-label="Assign ${esc(t.name)}">Assign</button></div>`;
+  });
+  return h;
+}
+function subsCard(){
+  if(!canFree()) return '';
+  const now = new Date(), m = curMonthKey(), today = ymd(now), list = subs.rows.filter(x => x.date.slice(0, 7) === m).reverse();
+  const pend = subs.rows.filter(x => x.result === 'Assigned' && x.date <= today);
+  return `<section class="card" style="margin-top:12px"><h3>${I.flag} Duties in ${MONTHS[now.getMonth()]} <span class="ct">${list.length}</span></h3>
+    <div class="sub">Tap <b>Assign</b> next to a free teacher. After the period, mark each duty <b>Done</b> or <b>Not done</b>: missed duties are remembered and shown in the fairness report.${subs.busy ? ' Loading…' : ''}</div>
+    ${subs.err ? `<div class="err2">${esc(subs.err)}</div>` : ''}
+    ${pend.length && subs.can ? `<div class="sub" style="color:var(--leave);font-weight:700;margin-top:6px">${pend.length} duty${pend.length === 1 ? '' : 'ies'} still to mark Done / Not done.</div>` : ''}
+    ${list.slice(0, 12).map(x => `<div class="li"><span class="tx"><b>${esc(fmtIso(x.date) || x.date)} · ${x.sh === 'E' ? 'Evening ' : ''}P${esc(x.p)} · ${esc(x.cls)}${x.sub ? ' ' + esc(titleCase(x.sub)) : ''}</b>
+      <small>${esc(niceName(x.teacher))}${x.absent ? ' for ' + esc(niceName(x.absent)) : ''}${x.note ? ' · ' + esc(x.note) : ''} · by ${esc(x.by)}</small></span>
+      ${x.result !== 'Assigned' ? `<span class="pill ${x.result === 'Done' ? 'good' : 'bad'}">${esc(x.result)}</span>` : ''}
+      ${subs.can && x.date <= today ? (x.result === 'Assigned' ? `<button class="pill good" type="button" data-xsr="${esc(x.id)}|Done">Done</button><button class="pill bad" type="button" data-xsr="${esc(x.id)}|Not done">Not done</button>`
+        : `<button class="pill" type="button" data-xsr="${esc(x.id)}|Assigned" aria-label="Undo">Undo</button>`) : ''}
+      ${isAdmin || x.user === user ? `<button class="pill" type="button" data-xsd="${esc(x.id)}" aria-label="Remove">Remove</button>` : ''}</div>`).join('') || '<div class="empty">No duty this month yet.</div>'}
+    <div class="acts2"><button class="btn" type="button" id="xFair">Fairness report</button>${subs.can ? `<button class="btn" type="button" id="xDset">Duty settings</button>` : ''}<button class="btn primary" type="button" id="xSubPdf">${I.share}This month PDF</button></div></section>`;
+}
+async function subResult(id, result){
+  try{ await srv({ action:'sub_result', id, result }); const x = subs.rows.find(r => r.id === id); if(x){ x.result = result; x.rby = teacher || user; } refreshFree(); }
+  catch(e){ toast('Not saved: ' + e.message); }
+}
+/** every teacher who teaches (from the timetable), with her duties of the whole session */
+function fairRows(){
+  const names = {}; freeTeachers().forEach(t => { names[normalizeKey(t.name)] = t.name; }); subs.rows.forEach(x => { names[normalizeKey(x.teacher)] = names[normalizeKey(x.teacher)] || x.teacher; });
+  return Object.values(names).map(n => Object.assign({ name:n, ex:isExempt(n) }, dutyStats(n)))
+    .sort((a, b) => (a.ex - b.ex) || (b.missed - a.missed) || (a.total - b.total) || a.name.localeCompare(b.name));
+}
+function openFair(){
+  const R = fairRows(), act = R.filter(r => !r.ex), avg = act.length ? Math.round(act.reduce((a, r) => a + r.total, 0) / act.length * 10) / 10 : 0;
+  dlgOpen(`<h2>Duty fairness</h2><div class="meta">Whole session · ${subs.rows.filter(x => x.result !== 'Not done').length} duties · average ${avg} per teacher. Teachers who missed duties and teachers with the fewest duties come first.</div>
+    <div class="wgw"><table class="mtab"><thead><tr><th>Teacher</th><th class="c">Duties</th><th class="c">Done</th><th class="c">Not done</th><th class="c">This month</th><th>Last</th></tr></thead><tbody>
+    ${R.map(r => `<tr${r.ex ? ' style="opacity:.55"' : ''}><td>${esc(niceName(r.name))}${r.ex ? ' <span class="rtag">Exempt</span>' : ''}</td><td class="c"><b>${r.total}</b></td><td class="c">${r.done}</td>
+      <td class="c">${r.missed ? `<span class="pill bad">${r.missed}</span>` : '0'}</td><td class="c">${r.month}</td><td>${esc(fmtIso(r.last) || '–')}</td></tr>`).join('')}</tbody></table></div>
+    <div class="acts"><button class="btn small primary grow" id="xFairPdf">Fairness PDF</button><button class="btn small grow" id="closeDlg">Close</button></div>`);
+  $q('#xFairPdf').onclick = () => P.run(fairPdf, () => {});
+}
+function fairPdf(){
+  const C = P.C, R = fairRows(), doc = P.newDoc(); let Y = P.TOP;
+  Y = P.heading(doc, Y, 'Duty Fairness Report', 'Session ' + sessionStart().slice(0, 4) + '-' + (Number(sessionStart().slice(0, 4)) + 1).toString().slice(2) + ' · ' + fmtDate(new Date()));
+  P.table(doc, { startY:Y, head:[['#', 'Teacher', 'Duties', 'Done', 'Not done', 'This month', 'Last duty']],
+    body:R.map((r, i) => [i + 1, niceName(r.name) + (r.ex ? ' (exempt)' : ''), r.total, r.done, r.missed, r.month, fmtIso(r.last) || '-']),
+    columnStyles:{ 0:{ halign:'center', cellWidth:9 }, 2:{ halign:'center' }, 3:{ halign:'center' }, 4:{ halign:'center' }, 5:{ halign:'center' } },
+    didParseCell:h => { if(h.section === 'body' && h.column.index === 4 && Number(h.cell.raw) > 0){ h.cell.styles.textColor = C.RED; h.cell.styles.fontStyle = 'bold'; } } });
+  Y = doc.lastAutoTable.finalY + 4;
+  P.signatures(doc, P.smallNote(doc, Y, 'Duties = substitutions assigned (not counting the ones marked Not done). Not done = duties she was given but did not do.'), ['Chief Proctor', 'Principal']);
+  P.finalize(doc);
+  return { doc, title:'Duty fairness report', file:'Duty-fairness_' + ymd(new Date()) + '.pdf' };
+}
+function openDutySettings(){
+  const S = subs.settings, names = [...new Set(freeTeachers().map(t => t.name))].sort((a, b) => a.localeCompare(b));
+  dlgOpen(`<h2>Duty settings</h2><div class="meta">Shared by every Chief Proctor.${S.by ? ' Last changed by ' + esc(S.by) + ', ' + esc(S.at) + '.' : ''}</div>
+    <div class="form"><div class="fld"><span>Most duties per teacher per day</span><select id="dsMax">${[0, 1, 2, 3].map(n => `<option value="${n}" ${Number(S.maxDay) === n ? 'selected' : ''}>${n || 'No limit'}</option>`).join('')}</select></div></div>
+    <label class="ckrow"><input type="checkbox" id="dsFit" ${S.fit !== false ? 'checked' : ''}> Prefer teachers who do not have to wait (her class is just before or after the duty)</label>
+    <label class="ckrow"><input type="checkbox" id="dsOwe" ${S.owedFirst !== false ? 'checked' : ''}> Teachers who missed a duty (Not done) are asked first</label>
+    <div class="lb2" style="margin-top:10px">Exempt from duties (e.g. principal, very senior, medical)</div>
+    <input id="dsQ" class="sq" type="search" placeholder="Search a teacher" autocomplete="off">
+    <div id="dsList" style="max-height:240px;overflow:auto;margin-top:6px">${names.map(n => `<label class="ckrow" data-n="${esc(n.toLowerCase())}"><input type="checkbox" value="${esc(n)}" ${isExempt(n) ? 'checked' : ''}> ${esc(niceName(n))}</label>`).join('')}</div>
+    <div class="acts"><button class="btn small primary grow" id="dsGo">Save</button><button class="btn small grow" id="closeDlg">Cancel</button></div>`);
+  $q('#dsQ').oninput = e => { const v = e.target.value.trim().toLowerCase(); $q('#dsList').querySelectorAll('[data-n]').forEach(l => { l.style.display = !v || l.dataset.n.includes(v) ? '' : 'none'; }); };
+  $q('#dsGo').onclick = async () => {
+    const st = { maxDay:Number($q('#dsMax').value), fit:$q('#dsFit').checked, owedFirst:$q('#dsOwe').checked, exempt:[...$q('#dsList').querySelectorAll('input:checked')].map(i => i.value) };
+    try{ const r = await srv({ action:'duty_save', settings:st }); subs.settings = r.settings; $q('#dlg').close(); toast('Duty settings saved.'); refreshFree(); }
+    catch(e){ toast('Not saved: ' + e.message); }
+  };
+}
+function subsText(){
+  const now = new Date(), m = curMonthKey(), L = subs.rows.filter(x => x.date.slice(0, 7) === m);
+  return 'DUTIES - ' + MONTHS[now.getMonth()] + ' ' + now.getFullYear() + '\n\n' + (L.map((x, i) => (i + 1) + '. ' + (fmtIso(x.date) || x.date) + ' P' + x.p + ' ' + x.cls + (x.sub ? ' ' + titleCase(x.sub) : '') + ': ' + niceName(x.teacher) + (x.absent ? ' (for ' + niceName(x.absent) + ')' : '') + (x.result !== 'Assigned' ? ' - ' + x.result : '')).join('\n') || 'None.');
+}
+function subsPdf(){
+  const C = P.C, now = new Date(), m = curMonthKey(), L = subs.rows.filter(x => x.date.slice(0, 7) === m), doc = P.newDoc(); let Y = P.TOP;
+  const by = {}; L.forEach(x => { const k = x.teacher; by[k] = by[k] || { a:0, d:0, n:0 }; by[k].a++; if(x.result === 'Done') by[k].d++; if(x.result === 'Not done') by[k].n++; });
+  Y = P.heading(doc, Y, 'Substitution Duty Report', MONTHS[now.getMonth()] + ' ' + now.getFullYear() + ' · ' + L.length + ' dut' + (L.length === 1 ? 'y' : 'ies'));
+  Y = P.sectionTitle(doc, Y, 'Duties per teacher');
+  P.table(doc, { startY:Y, head:[['#', 'Teacher', 'Assigned', 'Done', 'Not done']], body:Object.keys(by).sort((a, b) => by[b].a - by[a].a || a.localeCompare(b)).map((t, i) => [i + 1, niceName(t), by[t].a, by[t].d, by[t].n]),
+    columnStyles:{ 0:{ halign:'center', cellWidth:10 }, 2:{ halign:'center' }, 3:{ halign:'center' }, 4:{ halign:'center' } },
+    didParseCell:h => { if(h.section === 'body' && h.column.index === 4 && Number(h.cell.raw) > 0){ h.cell.styles.textColor = C.RED; h.cell.styles.fontStyle = 'bold'; } } });
+  Y = doc.lastAutoTable.finalY + 6;
+  Y = P.sectionTitle(doc, Y, 'All duties');
+  P.table(doc, { startY:Y, head:[['Date', 'Period', 'Class', 'Absent teacher', 'Substitute', 'Result', 'Note']],
+    body:L.map(x => [fmtIso(x.date) || x.date, (x.sh === 'E' ? 'E-' : '') + 'P' + x.p, x.cls + (x.sub ? ' ' + titleCase(x.sub) : ''), niceName(x.absent) || '-', niceName(x.teacher), x.result, x.note || '']),
+    styles:{ font:'helvetica', fontSize:8, cellPadding:1.5, lineColor:C.LINE, lineWidth:0.2, textColor:C.INK },
+    didParseCell:h => { if(h.section === 'body' && h.column.index === 5){ const v = String(h.cell.raw); if(v === 'Not done'){ h.cell.styles.textColor = C.RED; h.cell.styles.fontStyle = 'bold'; } else if(v === 'Done') h.cell.styles.textColor = C.GREEN; } } });
+  Y = doc.lastAutoTable.finalY + 4;
+  P.signatures(doc, P.smallNote(doc, Y, 'From the duties saved in the app (Free teachers > Assign) and marked Done / Not done by the Chief Proctor.'), ['Chief Proctor', 'Principal']);
+  P.finalize(doc);
+  return { doc, title:'Substitution duty report', file:'Duties_' + MONTHS[now.getMonth()] + '-' + now.getFullYear() + '.pdf' };
+}
+
+/* ----- v6.9 month sheets card (College screen) with a live bar while sheets are being made ----- */
+let shs = null, shsAt = 0, shsT = 0;
+async function loadShs(force){
+  if(scope !== 'all' || !navigator.onLine || (!force && Date.now() - shsAt < 30000)) return;
+  shsAt = Date.now();
+  try{ shs = await srv({ action:'sheets_status' }, 90000); }catch(e){ shs = { err:e.message }; }
+  if(appView === 'admin') refreshShs();
+  clearTimeout(shsT);
+  if(shs && shs.job && shs.job.running && !shs.job.stalled && appView === 'admin') shsT = setTimeout(() => loadShs(true), 8000);   // live while the job runs
+}
+const pctBar = (a, b, cls) => `<span class="mbar" style="margin-top:6px"><i class="${cls || ''}" style="width:${b ? Math.round(a / b * 100) : 0}%"></i></span>`;
+function shsCard(){
+  if(scope !== 'all') return '';
+  let body = '';
+  if(!shs) body = '<div class="sk"></div><div class="sk" style="width:70%"></div>';
+  else if(shs.err) body = `<div class="err2">${esc(shs.err)}</div>`;
+  else {
+    const J = shs.job, line = (x, which) => {
+      if(!x) return '';
+      const done = x.have >= x.need, run = J && J.running && J.tok === x.tok;
+      return `<div style="margin-top:10px"><b>${esc(x.label)}</b> <span class="pill ${done ? 'good' : run ? 'mid' : which === 'next' ? '' : 'bad'}">${x.have} of ${x.need} sheets ready</span>
+        ${pctBar(x.have, x.need, done ? '' : 'mid')}
+        ${run ? `<div class="sub" style="margin-top:4px">${J.starting ? 'Starting in the background…' : 'Being created now: ' + J.made + ' of ' + J.total + (J.stalled ? ' (no progress for 15 minutes: tap the button again)' : ' · updates by itself')}</div>${J.starting ? '' : pctBar(J.made, J.total)}` : ''}
+        ${!done && !run ? `<button class="btn small" type="button" data-xhf="${which === 'next' ? 'next' : 'sheets'}" style="margin-top:6px">${which === 'next' ? 'Prepare ' + esc(x.label.split(' ')[0]) + ' now' : 'Create missing sheets'}</button>` : ''}
+        ${!done && x.missing.length && !run ? `<details style="margin-top:4px"><summary class="sub">Which sections?</summary><ul class="sub" style="margin:4px 0 0 18px">${x.missing.slice(0, 40).map(m => `<li>${esc(m)}</li>`).join('')}${x.missing.length > 40 ? `<li>… ${x.missing.length - 40} more</li>` : ''}</ul></details>` : ''}</div>`;
+    };
+    body = line(shs.cur, 'cur') + line(shs.next, 'next')
+      + (J && !J.running && J.failed && J.failed.length ? `<div class="sub" style="color:var(--absent);margin-top:8px">Could not be made last time (${J.failed.length}):<br>${J.failed.slice(0, 8).map(esc).join('<br>')}</div>` : '')
+      + `<div class="sub" style="margin-top:8px">${shs.auto ? '✓ New month sheets are made by themselves on the 1st at 1 am.' : '<b>Automatic monthly creation is off</b>: Health check › Switch on automatic jobs.'}</div>`;
+  }
+  return `<section class="card" id="shsCard"><h3>${I.cal} Month sheets <button class="btn small" type="button" id="xShsR" style="margin-left:auto" aria-label="Refresh">${I.refresh}</button></h3>
+    <div class="sub">Every teacher's attendance sheet for this month and next month.</div>${body}</section>`;
+}
+function refreshShs(){ const c = $q('#shsCard'); if(c){ const t = document.createElement('div'); t.innerHTML = shsCard(); c.replaceWith(t.firstElementChild); } }
+
+/* ----- v6.9 health check in three steps with a progress bar ----- */
+const HC_STEPS = [['data', 'Students and timetable'], ['month', 'This month\'s sheets and automatic jobs'], ['students', 'Student details and portal data']];
 async function runHealth(){
-  dlgOpen('<h2>System health check</h2><div class="meta">Checking the strength sheet, timetable, users and this month\'s sheets… (up to a minute)</div><div class="sk"></div><div class="sk" style="width:70%"></div><div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>');
-  try{ hc = await srv({ action:'health' }, 180000); }
-  catch(e){ return dlgOpen(`<h2>System health check</h2><div class="err2">${esc(e.message)}</div><div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>`); }
+  const show = (i, msg) => dlgOpen(`<h2>System health check</h2><div class="meta">${esc(msg)}</div>
+    <span class="mbar" style="height:10px;margin:12px 0 6px"><i style="width:${Math.round(i / HC_STEPS.length * 100)}%;transition:width .4s"></i></span>
+    <ol class="sub" style="margin:6px 0 0 18px">${HC_STEPS.map((s, k) => `<li style="${k < i ? 'color:var(--present)' : k === i ? 'font-weight:800;color:var(--ink)' : ''}">${k < i ? '✓ ' : ''}${esc(s[1])}${k === i ? '…' : ''}</li>`).join('')}</ol>
+    <div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>`);
+  let all = null;
+  for(let i = 0; i < HC_STEPS.length; i++){
+    show(i, 'Step ' + (i + 1) + ' of ' + HC_STEPS.length + ': ' + HC_STEPS[i][1]);
+    let r;
+    try{ r = await srv({ action:'health', part:HC_STEPS[i][0] }, 180000); }
+    catch(e){ return dlgOpen(`<h2>System health check</h2><div class="err2">${esc(e.message)}</div><div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>`); }
+    if(!all) all = r; else { all.checks = all.checks.concat(r.checks); if(r.results) all.results = r.results; }
+    if(!r.part || r.part === 'all') break;                              // older server: everything came in one go
+  }
+  show(HC_STEPS.length, 'Done');
+  hc = all; hc.results = hc.results || { at:'', count:0 };
+  loadShs(true);
+  hcShow();
+}
+function hcShow(){
   const bad = hc.checks.filter(c => c.level !== 'ok');
   dlgOpen(`<h2>System health check</h2><div class="meta">${esc(hc.at)} · ${bad.length ? bad.length + ' thing' + (bad.length === 1 ? '' : 's') + ' to look at' : 'everything is fine'}</div>
+    <span class="mbar" style="height:10px;margin:8px 0"><i style="width:100%"></i></span>
     ${hc.checks.map(c => `<details class="hcx ${c.level}" ${c.level !== 'ok' ? 'open' : ''}><summary><span class="pill ${c.level === 'ok' ? 'good' : c.level === 'bad' ? 'bad' : 'mid'}">${c.level === 'ok' ? '✓' : c.n}</span> ${esc(c.title)}</summary>
       ${c.level === 'ok' ? '<div class="sub">Nothing found.</div>' : `<div class="sub">${esc(c.help)}</div><ul>${c.items.slice(0, 30).map(x => `<li>${esc(x)}</li>`).join('')}${c.n > 30 ? `<li>… and ${c.n - 30} more</li>` : ''}</ul>
       ${c.n > 0 ? `<button class="btn small" type="button" data-xhx="${esc(c.key)}">Full list (Excel)</button>` : ''}
@@ -5098,6 +5261,7 @@ async function runHealth(){
     <div class="sub" style="margin-top:8px">Student result page: ${hc.results.at ? 'updated ' + esc(hc.results.at) + ' (' + hc.results.count + ' students)' : 'not built yet'}. <button class="btn small" type="button" data-xhf="results">Update it now</button></div>
     <div class="acts"><button class="btn small grow" type="button" data-xhx="*">Everything (Excel)</button><button class="btn small grow" id="xHcTxt">Share as text</button><button class="btn small grow" id="closeDlg">Close</button></div>`);
 }
+
 function hcCsv(key){
   const list = key === '*' ? hc.checks.filter(c => c.level !== 'ok') : hc.checks.filter(c => c.key === key);
   const q = v => { const t = String(v == null ? '' : v); return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
@@ -5106,7 +5270,7 @@ function hcCsv(key){
 }
 const hcText = () => 'JCW ATTENDANCE - HEALTH CHECK ' + hc.at + '\n\n' + hc.checks.map(c => (c.level === 'ok' ? '✓ ' : '! ') + c.title + (c.level === 'ok' ? '' : ' (' + c.n + ')\n' + c.items.slice(0, 15).map(x => '  - ' + x).join('\n'))).join('\n');
 async function healthFix(what){
-  try{ const r = await srv({ action:'health_fix', what }); toast(r.msg || 'Started.'); if(what === 'triggers' && rinfo) rinfo.nightly = true; }
+  try{ const r = await srv({ action:'health_fix', what }); toast(r.msg || 'Started.'); if(what === 'triggers' && rinfo) rinfo.nightly = true; if(what === 'sheets' || what === 'next'){ const d = $q('#dlg'); if(d.open) d.close(); setTimeout(() => loadShs(true), 1500); } }
   catch(e){ toast('Not started: ' + e.message); }
 }
 async function openSlips(){
@@ -5246,6 +5410,11 @@ document.addEventListener('click', ev => {
   if((b = t.closest('[data-xrem]'))) return remindTeacher(b.dataset.xrem);
   if(t.closest('#xHist')) return loadHist();
   if((b = t.closest('[data-xsa]'))) return openAssign(b.dataset.xsa);
+  if((b = t.closest('[data-xfo]'))){ fr.sort = b.dataset.xfo; return refreshFree(); }
+  if((b = t.closest('[data-xsr]'))){ const x = b.dataset.xsr.split('|'); return subResult(x[0], x[1]); }
+  if(t.closest('#xFair')) return openFair();
+  if(t.closest('#xDset')) return openDutySettings();
+  if(t.closest('#xShsR')){ shs = null; refreshShs(); return loadShs(true); }
   if((b = t.closest('[data-xsd]'))){ if(!confirm('Remove this substitution?')) return; const id = b.dataset.xsd;
     srv({ action:'sub_delete', id }).then(() => { subs.rows = subs.rows.filter(x => x.id !== id); refreshFree(); toast('Removed.'); }).catch(e => toast('Not removed: ' + e.message)); return; }
   if(t.closest('#xSubTxt')) return shareText(subsText(), 'Substitutions');
