@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>JCW Student Result</title>
+<link rel="icon" href="icon-192.png">
+<style>
+:root{--bg:#F3F5F9;--surface:#fff;--surface2:#F7F8FB;--ink:#101828;--muted:#5F6B7E;--line:#E3E7EE;--navy:#14213D;--acc:#2F55D4;
+  --good:#12805C;--good-bg:#E6F4EE;--bad:#D92D20;--bad-bg:#FDECEA;--mid:#B7791F;--mid-bg:#FFF4DB}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0B111C;--surface:#131B29;--surface2:#182233;--ink:#E8EDF5;--muted:#93A0B5;--line:#232F43;--navy:#8EA8FF;--acc:#8EA8FF;
+  --good:#3CC38A;--good-bg:#12302A;--bad:#F26B60;--bad-bg:#3A1C1F;--mid:#E8B04A;--mid-bg:#3A2F14}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+.wrap{max-width:760px;margin:0 auto;padding:16px 16px 40px}
+header{background:var(--navy);color:#fff;padding:18px 16px 22px}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) header{background:#16233D}}
+header .in{max-width:760px;margin:0 auto}
+header small{opacity:.8;font-weight:600;letter-spacing:.04em;text-transform:uppercase;font-size:11.5px}
+header h1{margin:4px 0 0;font-size:21px;line-height:1.25}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;margin-top:14px;box-shadow:0 1px 3px rgba(16,24,40,.06)}
+.card h2{margin:0 0 10px;font-size:16.5px}
+label{display:block;font-size:12px;font-weight:750;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:12px 0 5px}
+input{width:100%;height:48px;border:1.5px solid var(--line);border-radius:12px;padding:0 14px;font-size:17px;background:var(--surface2);color:var(--ink)}
+input:focus{outline:none;border-color:var(--acc)}
+#code{letter-spacing:.3em;font-family:ui-monospace,Menlo,Consolas,monospace}
+button{font:inherit}
+.btn{height:48px;border:0;border-radius:12px;background:var(--navy);color:#fff;font-weight:750;font-size:16px;width:100%;margin-top:16px;cursor:pointer}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .btn{background:var(--acc);color:#0B111C}}
+.btn.ghost{background:var(--surface2);color:var(--ink);border:1.5px solid var(--line)}
+.btn:disabled{opacity:.6}
+.err{margin-top:12px;color:var(--bad);background:var(--bad-bg);border-radius:10px;padding:10px 12px;font-weight:650}
+.note{color:var(--muted);font-size:13px;margin-top:10px}
+.who{display:flex;gap:12px;align-items:center}
+.who .av{flex:none;width:48px;height:48px;border-radius:50%;background:var(--surface2);display:grid;place-items:center;font-weight:800;color:var(--acc)}
+.who b{display:block;font-size:17px}.who small{color:var(--muted)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:14px}
+.kpi{background:var(--surface2);border-radius:12px;padding:10px 12px}
+.kpi b{display:block;font-size:22px}.kpi small{color:var(--muted);font-size:12.5px}
+.kpi.good b{color:var(--good)}.kpi.bad b{color:var(--bad)}
+.tw{overflow-x:auto;margin-top:6px}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:420px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap}
+th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+td:first-child,th:first-child{text-align:left}
+tr.tot td{font-weight:800;border-bottom:0}
+.p{display:inline-block;min-width:54px;padding:2px 8px;border-radius:999px;font-weight:750}
+.p.good{background:var(--good-bg);color:var(--good)}.p.bad{background:var(--bad-bg);color:var(--bad)}.p.mid{background:var(--mid-bg);color:var(--mid)}
+.sub{color:var(--muted);font-size:13px}
+.warn{margin-top:10px;background:var(--bad-bg);color:var(--bad);border-radius:10px;padding:10px 12px;font-weight:650}
+.okmsg{margin-top:10px;background:var(--good-bg);color:var(--good);border-radius:10px;padding:10px 12px;font-weight:650}
+.row2{display:flex;gap:10px}.row2 .btn{flex:1}
+[hidden]{display:none!important}
+@media print{header,.noprint{display:none!important}body{background:#fff;color:#000}.card{box-shadow:none;border-color:#bbb;break-inside:avoid}}
+</style>
+</head>
+<body>
+<header><div class="in"><small>Jinnah College for Women · University of Peshawar</small><h1>My attendance &amp; test results</h1></div></header>
+<main class="wrap">
+  <section class="card noprint" id="login">
+    <h2>Open your result</h2>
+    <form id="f" autocomplete="off">
+      <label for="roll">Roll number</label>
+      <input id="roll" name="roll" inputmode="text" autocapitalize="characters" spellcheck="false" placeholder="JCW-F26-2301" required>
+      <label for="code">Private code (6 digits, on your slip)</label>
+      <input id="code" name="code" inputmode="numeric" pattern="[0-9 ]*" maxlength="7" placeholder="••• •••" required>
+      <button class="btn" id="go" type="submit">Show my result</button>
+      <div class="err" id="err" hidden></div>
+    </form>
+    <div class="note">Only you can open your result with your own code. This page only shows your record: no messages can be sent or received here.</div>
+  </section>
+  <div id="out"></div>
+</main>
+<script>
+'use strict';
+const API = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm7d7-UKg0W-OoWAiuRBHe4mjlRgMQXIHuLm6zi--i/exec';
+const MON = { SEPT:'September', OCT:'October', NOV:'November', DEC:'December', JAN:'January' };
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c]);
+const title = s => String(s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+const pct = (a, b) => b ? Math.round(a / b * 1000) / 10 : null;
+try{ const r = localStorage.getItem('jcwRoll'); if(r) $('#roll').value = r; }catch(e){}
+
+$('#f').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const roll = $('#roll').value.trim().toUpperCase(), code = $('#code').value.replace(/\D/g, '');
+  const err = $('#err'); err.hidden = true;
+  if(!roll || code.length !== 6){ err.textContent = 'Enter your roll number and your 6-digit code.'; err.hidden = false; return; }
+  const b = $('#go'); b.disabled = true; b.textContent = 'Opening…';
+  try{
+    const res = await fetch(API, { method:'POST', body:JSON.stringify({ action:'student_report', roll, code }), redirect:'follow' });
+    const r = JSON.parse(await res.text());
+    if(!r.ok) throw new Error(r.error || 'Could not open the result.');
+    try{ localStorage.setItem('jcwRoll', roll); }catch(e){}
+    $('#code').value = '';
+    show(r);
+  }catch(e){
+    err.textContent = /Failed to fetch|NetworkError|JSON/i.test(e.message) ? 'No connection to the college server. Check your internet and try again.' : e.message;
+    err.hidden = false;
+  }finally{ b.disabled = false; b.textContent = 'Show my result'; }
+});
+
+function show(r){
+  const LOW = r.low || 73, order = r.season || ['SEPT', 'OCT', 'NOV', 'DEC', 'JAN'];
+  const mons = order.filter(m => r.rows.some(x => x[2] === m));
+  const subs = {};
+  r.rows.forEach(x => { const s = subs[x[0]] = subs[x[0]] || { sub:x[0], teacher:x[1], m:{} }; s.m[x[2]] = { p:x[3], d:x[4], t:x[5], tt:x[6], off:x[7] }; });
+  const list = Object.values(subs).sort((a, b) => a.sub.localeCompare(b.sub));
+  let P = 0, D = 0, TO = 0, TT = 0;
+  list.forEach(s => {
+    s.p = 0; s.d = 0; s.to = 0; s.tt = 0;
+    Object.values(s.m).forEach(m => { if(m.off) return; s.p += m.p; s.d += m.d; if(m.tt && m.t !== '' && m.t != null){ s.tt += m.tt; if(m.t !== 'A') s.to += Number(m.t) || 0; } });
+    s.pct = pct(s.p, s.d); s.tp = s.tt ? pct(s.to, s.tt) : null;
+    P += s.p; D += s.d; TO += s.to; TT += s.tt;
+  });
+  const all = pct(P, D), tp = TT ? pct(TO, TT) : null, short = list.filter(s => s.d && s.pct < LOW);
+  const cls = v => v == null ? '' : v < LOW ? 'bad' : v < LOW + 5 ? 'mid' : 'good';
+  const tcls = v => v == null ? '' : v < 50 ? 'bad' : 'good';
+  const ini = r.name.split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
+  let h = `<section class="card"><div class="who"><span class="av">${esc(ini)}</span><span><b>${esc(r.name)}</b><small>${esc(r.roll)} · ${esc(r.cls)}</small></span></div>
+    <div class="kpis"><div class="kpi ${cls(all)}"><b>${all == null ? '–' : all + '%'}</b><small>Attendance, whole session</small></div>
+      <div class="kpi"><b>${P} / ${D}</b><small>Lectures attended / held</small></div>
+      <div class="kpi ${tcls(tp)}"><b>${tp == null ? '–' : tp + '%'}</b><small>Monthly tests</small></div></div>
+    ${short.length ? `<div class="warn">Below ${LOW}% in ${short.map(s => esc(title(s.sub))).join(', ')}. You need at least ${LOW}% in every subject.</div>`
+      : D ? `<div class="okmsg">Your attendance is ${LOW}% or more in every subject. Keep it up.</div>` : ''}
+    <div class="sub" style="margin-top:10px">Updated ${esc(r.updated)}. Attendance of today appears after tonight's update.</div></section>`;
+  h += `<section class="card"><h2>Attendance by subject</h2><div class="sub">Lectures attended / held in each month. Minimum required: ${LOW}%.</div><div class="tw"><table>
+    <thead><tr><th>Subject</th>${mons.map(m => `<th>${MON[m].slice(0, 3)}</th>`).join('')}<th>Session</th></tr></thead><tbody>
+    ${list.map(s => `<tr><td><b>${esc(title(s.sub))}</b><br><span class="sub">${esc(s.teacher)}</span></td>${mons.map(m => { const x = s.m[m];
+      if(!x) return '<td>–</td>'; if(x.off) return '<td class="sub">left</td>';
+      const v = pct(x.p, x.d); return `<td>${x.p}/${x.d}<br><span class="p ${cls(v)}">${v == null ? '–' : v + '%'}</span></td>`; }).join('')}
+      <td><b>${s.p}/${s.d}</b><br><span class="p ${cls(s.pct)}">${s.pct == null ? '–' : s.pct + '%'}</span></td></tr>`).join('')}
+    <tr class="tot"><td>Overall</td>${mons.map(m => { let p = 0, d = 0; list.forEach(s => { const x = s.m[m]; if(x && !x.off){ p += x.p; d += x.d; } }); const v = pct(p, d); return `<td><span class="p ${cls(v)}">${v == null ? '–' : v + '%'}</span></td>`; }).join('')}<td><span class="p ${cls(all)}">${all == null ? '–' : all + '%'}</span></td></tr>
+    </tbody></table></div></section>`;
+  const tmons = mons.filter(m => list.some(s => s.m[m] && s.m[m].tt && s.m[m].t !== '' && s.m[m].t != null));
+  h += `<section class="card"><h2>Monthly tests</h2>${tmons.length ? `<div class="tw"><table><thead><tr><th>Subject</th>${tmons.map(m => `<th>${MON[m].slice(0, 3)}</th>`).join('')}<th>Session</th></tr></thead><tbody>
+    ${list.map(s => `<tr><td><b>${esc(title(s.sub))}</b></td>${tmons.map(m => { const x = s.m[m];
+      if(!x || x.off || !x.tt || x.t === '' || x.t == null) return '<td>–</td>';
+      if(x.t === 'A') return '<td><span class="p bad">Absent</span></td>';
+      const v = pct(Number(x.t) || 0, x.tt); return `<td>${esc(x.t)}/${x.tt}<br><span class="p ${tcls(v)}">${v}%</span></td>`; }).join('')}
+      <td>${s.tt ? `<b>${s.to}/${s.tt}</b><br><span class="p ${tcls(s.tp)}">${s.tp}%</span>` : '–'}</td></tr>`).join('')}
+    </tbody></table></div>` : '<div class="sub">No monthly test marks entered yet.</div>'}</section>`;
+  h += `<div class="row2 noprint"><button class="btn ghost" type="button" id="pr">Print / save as PDF</button><button class="btn ghost" type="button" id="bye">Close</button></div>
+    <div class="note">If something looks wrong, speak to your subject teacher or class in-charge in college.</div>`;
+  $('#out').innerHTML = h; $('#login').hidden = true; window.scrollTo(0, 0);
+  $('#pr').onclick = () => window.print();
+  $('#bye').onclick = () => { $('#out').innerHTML = ''; $('#login').hidden = false; };
+}
+</script>
+</body>
+</html>
