@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0F1B2D">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>JCW Admissions</title>
+<style>
+:root{--bg:#F2F5FA;--surface:#fff;--surface2:#F7F8FB;--ink:#0F1B2D;--muted:#667085;--line:#E3E7EE;--accent:#0F1B2D;--on-accent:#fff;--ring:#2F5BEA;
+--good:#12805C;--good-bg:#E6F4EE;--bad:#D92D20;--bad-bg:#FDECEA;--mid:#B7791F;--mid-bg:#FFF4DB;--info:#1C4A7E;--info-bg:#E4EEFA;--hero:#0F1B2D;--hero2:#1C3158;
+--shadow:0 1px 2px rgba(15,27,45,.06),0 2px 8px rgba(15,27,45,.05);--r:14px;--sab:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0B1220;--surface:#141E31;--surface2:#18233A;--ink:#EAF0FA;--muted:#9AA9C0;--line:#25324A;--accent:#EAF0FA;--on-accent:#0B1220;--ring:#7AA2FF;
+--good:#3CC38A;--good-bg:#12302A;--bad:#F26B60;--bad-bg:#3A1C1F;--mid:#E8B04A;--mid-bg:#3A2F14;--info:#8EB4F0;--info-bg:#17294A;--hero:#16233D;--hero2:#233B68;--shadow:0 1px 2px rgba(0,0,0,.4)}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:calc(90px + var(--sab))}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;touch-action:manipulation}
+:focus-visible{outline:3px solid var(--ring);outline-offset:2px}
+header{background:linear-gradient(160deg,var(--hero),var(--hero2));color:#fff;padding:calc(12px + env(safe-area-inset-top,0px)) 16px 0}
+.hin{max-width:820px;margin:0 auto}
+.top{display:flex;align-items:center;gap:10px}
+.back{color:#BFD2FF;text-decoration:none;font-weight:700;font-size:14px;white-space:nowrap}
+h1{margin:6px 0 2px;font-size:21px;line-height:1.2}
+.hsub{color:rgba(255,255,255,.75);font-size:12.5px}
+.net{margin-left:auto;font-size:12px;font-weight:700;border-radius:999px;padding:4px 10px;background:rgba(255,255,255,.14);white-space:nowrap}
+.net.off{background:#7A2E2A}
+nav{display:flex;gap:4px;margin-top:12px;overflow-x:auto;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav button{flex:0 0 auto;background:transparent;border:0;color:rgba(255,255,255,.75);font-weight:700;padding:10px 14px;border-radius:12px 12px 0 0;font-size:14px}
+nav button[aria-selected="true"]{background:var(--bg);color:var(--ink)}
+.badge{display:inline-block;min-width:20px;padding:0 6px;border-radius:999px;background:var(--bad);color:#fff;font-size:11.5px;line-height:18px;margin-left:4px;text-align:center}
+main{max-width:820px;margin:0 auto;padding:14px 16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px;box-shadow:var(--shadow)}
+.card h2{margin:0 0 8px;font-size:16px}
+.card h3{margin:0 0 6px;font-size:15px}
+.sub{color:var(--muted);font-size:13px}
+label{display:block;font-size:12px;font-weight:750;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:12px 0 5px}
+input,select,textarea{width:100%;min-height:48px;border:1.5px solid var(--line);border-radius:12px;padding:0 12px;font-size:16px;background:var(--surface2)}
+textarea{padding:10px 12px;min-height:64px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--ring)}
+input[readonly]{opacity:.75}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 10px}
+@media(max-width:420px){.g3{grid-template-columns:1fr 1fr}}
+.rowi{display:flex;gap:8px;align-items:stretch}
+.rowi input{flex:1;min-width:0}
+.btn{min-height:48px;border:1.5px solid var(--line);border-radius:12px;background:var(--surface);font-weight:750;font-size:15px;padding:0 16px;white-space:nowrap}
+.btn.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.btn.danger{background:var(--bad);border-color:var(--bad);color:#fff}
+.btn.small{min-height:38px;font-size:13.5px;padding:0 12px;border-radius:10px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.seg{display:flex;border:1.5px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface2)}
+.seg button{flex:1;min-height:46px;border:0;background:transparent;font-weight:700;font-size:14px}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+.hint{font-size:12.5px;color:var(--muted);margin-top:5px}
+.seat{margin-top:6px;font-size:13px;font-weight:650;padding:7px 10px;border-radius:10px;background:var(--surface2)}
+.seat.ok{background:var(--good-bg);color:var(--good)}.seat.near{background:var(--mid-bg);color:var(--mid)}
+.seat.full,.seat.over{background:var(--bad-bg);color:var(--bad)}
+.pill{display:inline-block;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:700;white-space:nowrap;background:var(--surface2);color:var(--muted)}
+.pill.ok{background:var(--good-bg);color:var(--good)}.pill.near{background:var(--mid-bg);color:var(--mid)}
+.pill.full,.pill.over{background:var(--bad-bg);color:var(--bad)}.pill.info{background:var(--info-bg);color:var(--info)}
+.editbar{background:var(--info-bg);color:var(--info);border-radius:12px;padding:10px 12px;font-weight:650;font-size:14px;display:flex;gap:10px;align-items:center;margin-bottom:12px}
+.editbar span{flex:1}
+.done{background:var(--good-bg);color:var(--good);border-radius:12px;padding:12px;margin-bottom:12px;font-weight:650}
+.done big{display:block;font-size:22px;letter-spacing:.02em;font-variant-numeric:tabular-nums;margin:2px 0}
+.subs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.subs input{min-height:44px;font-size:14px;padding:0 10px;text-transform:uppercase}
+.agg{font-size:14px;font-weight:700;margin-top:8px}
+details{margin-top:6px}
+summary{cursor:pointer;font-weight:750;padding:10px 0;color:var(--ink)}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding:10px 16px calc(10px + var(--sab));z-index:10}
+.bar .in{max-width:820px;margin:0 auto;display:flex;gap:10px}
+.bar .btn{flex:1}
+.bar .btn.primary{flex:2}
+.list{display:flex;flex-direction:column;gap:8px}
+.it{display:flex;gap:10px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;text-align:left;width:100%}
+.it .who{flex:1;min-width:0}
+.it b{display:block;font-size:15px}
+.it small{display:block;color:var(--muted);font-size:12.5px;overflow:hidden;text-overflow:ellipsis}
+.it img{width:40px;height:40px;border-radius:50%;object-fit:cover;background:var(--surface2);flex:0 0 40px}
+.av{width:40px;height:40px;border-radius:50%;background:var(--surface2);display:grid;place-items:center;font-weight:800;color:var(--muted);flex:0 0 40px}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line);font-size:13.5px;vertical-align:middle}
+th{color:var(--muted);font-weight:700;font-size:12px}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:0}
+.iss{list-style:none;margin:8px 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.iss li{padding:8px 10px;border-radius:10px;font-size:14px;background:var(--surface2)}
+.iss .danger,.iss .error{background:var(--bad-bg);color:var(--bad);font-weight:650}
+.iss .warn,.iss .note{background:var(--mid-bg);color:var(--mid)}
+.iss .good{background:var(--good-bg);color:var(--good)}
+.iss .info{background:var(--info-bg);color:var(--info)}
+dialog{border:0;border-radius:18px;padding:0;max-width:min(560px,calc(100vw - 24px));width:100%;background:var(--surface);color:var(--ink);box-shadow:0 20px 50px rgba(0,0,0,.35)}
+dialog::backdrop{background:rgba(10,15,25,.55)}
+.dlg{padding:18px}
+.dlg h2{margin:0 0 6px;font-size:18px}
+.acts{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.acts .btn{flex:1}
+.toast{position:fixed;left:50%;bottom:calc(90px + var(--sab));transform:translateX(-50%) translateY(20px);background:#101828;color:#fff;padding:10px 16px;border-radius:12px;font-weight:650;font-size:14px;opacity:0;pointer-events:none;transition:.2s;max-width:calc(100vw - 32px);z-index:20}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.empty{color:var(--muted);text-align:center;padding:24px 8px}
+.err{background:var(--bad-bg);color:var(--bad);border-radius:12px;padding:12px;font-weight:650;margin-bottom:12px}
+.req{color:var(--bad)}
+.hidden{display:none!important}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header><div class="hin">
+  <div class="top"><a class="back" href="./">&#8249; Attendance</a><span class="net" id="net">…</span></div>
+  <h1>Admissions</h1>
+  <div class="hsub">New students and changes go straight into Transform-ALL-COLLEGE-STRENGTH. Works without internet.</div>
+  <nav role="tablist">
+    <button role="tab" data-tab="form" aria-selected="true">New</button>
+    <button role="tab" data-tab="find" aria-selected="false">Find &amp; edit</button>
+    <button role="tab" data-tab="seats" aria-selected="false">Seats</button>
+    <button role="tab" data-tab="wait" aria-selected="false">Waiting<span class="badge hidden" id="qb">0</span></button>
+  </nav>
+</div></header>
+<main id="main"></main>
+<div class="bar hidden" id="bar"><div class="in">
+  <button class="btn" type="button" id="bClear">Clear</button>
+  <button class="btn primary" type="button" id="bSave">Save</button>
+</div></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<dialog id="dlg"><div class="dlg" id="dlgBody"></div></dialog>
+<datalist id="subList"></datalist>
+<datalist id="boardList"><option>BISE Peshawar</option><option>BISE Mardan</option><option>BISE Malakand</option><option>BISE Swat</option><option>BISE Kohat</option><option>BISE Bannu</option><option>BISE Abbottabad</option><option>FBISE Islamabad</option><option>Cambridge (O-Level)</option></datalist>
+<script>
+'use strict';
+/* Same server as the attendance app (index.html). Change both together. */
+const API = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm7d7-UKg0W-OoWAiuRBHe4mjlRgMQXIHuLm6zi--i/exec';
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ls = {
+  get(k, d){ try{ const v = localStorage.getItem('csa2_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem('csa2_' + k, JSON.stringify(v)); }catch(e){} }
+};
+/* login is shared with the attendance app */
+const user = ls.get('user', ''), pass = ls.get('pass', '');
+
+/* ---------- big student list lives in IndexedDB (about 1 MB) ---------- */
+function idb(){ return new Promise((res, rej) => { const r = indexedDB.open('csa_adm', 1);
+  r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function idbGet(k){ try{ const db = await idb(); return await new Promise((res, rej) => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); }catch(e){ return null; } }
+async function idbSet(k, v){ try{ const db = await idb(); await new Promise((res, rej) => { const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = res; t.onerror = () => rej(t.error); }); }catch(e){} }
+
+let init = ls.get('adm_init', null);          // programs, sections, seats, subjects, rooms (from the server)
+let idx = null;                               // { cols, rows, at }
+let queue = ls.get('adm_q', []);              // saves waiting for the server
+let tab = 'form', form = null, lastDone = null, syncing = false, nextRoll = {}, searchQ = '', fatal = '';
+const saveQ = () => { ls.set('adm_q', queue); paintBadge(); };
+
+async function api(payload, ms = 60000){
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms);
+  try{
+    const r = await fetch(API, { method:'POST', body:JSON.stringify({ username:user, password:pass, ...payload }), signal:ctl.signal, redirect:'follow' });
+    const txt = await r.text();
+    let j; try{ j = JSON.parse(txt); }catch(e){ throw new Error('The server sent a web page instead of data. Check the deployment.'); }
+    if(j && j.error === 'UNKNOWN_ACTION') throw Object.assign(new Error('The server does not know Admissions yet: add Admissions.gs and the doPost line, then deploy a new version.'), { fatal:true });
+    if(j && j.error === 'ADM_NO_ACCESS') throw Object.assign(new Error('Your login cannot add admissions. Ask the admin to add your username to ADM_USERS.'), { fatal:true });
+    if(j && j.error === 'BAD_LOGIN') throw Object.assign(new Error('Your saved login was refused. Open the attendance app, log out and sign in again.'), { fatal:true });
+    return j;
+  } catch(e){
+    if(e.name === 'AbortError') throw new Error('The server took too long. Try again.');
+    if(e instanceof TypeError) throw Object.assign(new Error('No internet'), { net:true });
+    throw e;
+  } finally { clearTimeout(t); }
+}
+let toastT;
+function toast(msg, ms = 3200){ const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms); }
+function dlgOpen(html){ $('#toast').classList.remove('show'); $('#dlgBody').innerHTML = html; const d = $('#dlg'); if(!d.open) d.showModal(); }
+function dlgClose(){ const d = $('#dlg'); if(d.open) d.close(); }
+const online = () => navigator.onLine !== false;
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+const nrm = s => String(s == null ? '' : s).toLowerCase().replace(/[^a-z؀-ۿ\s]/g, ' ').split(/\s+/).filter(Boolean).sort().join(' ');
+const nroll = s => { const m = String(s || '').trim().toUpperCase().match(/^(.*?)(\d+)$/); return m ? m[1] + parseInt(m[2], 10) : String(s || '').trim().toUpperCase(); };
+const qk = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+const prog = k => (init && init.programs.find(p => p.key === k)) || null;
+const isMig = y => y === '2nd Year';
+
+/* ---------- index helpers ---------- */
+function recOf(row){ const o = {}; idx.cols.forEach((c, i) => o[c] = row[i]); return o; }
+function putRec(row, ctx){
+  if(!idx || !row) return;
+  const o = recOf(row), was = ctx ? { roll:ctx.roll, sno:ctx.sno } : o;
+  const i = idx.rows.findIndex(r => (was.roll && nroll(r[1]) === nroll(was.roll)) || (!was.roll && r[0] === was.sno));
+  if(i >= 0) idx.rows[i] = row; else idx.rows.push(row);
+  idbSet('index', idx);
+}
+function dFromRec(o){
+  return { program:o.key, year:o.year || '1st Year', section:o.pcs, quota:o.quota, rollNo:o.roll, name:o.name, father:o.father, id:o.id,
+    subjects:[o.s1,o.s2,o.s3,o.s4,o.s5,o.s6,o.s7].map(x => x || ''), metric:o.metric, total:o.total, hq:o.hq, room:o.room,
+    dob:o.dob, contact:o.contact, email:o.email, board:o.board, passYear:o.passYear, matricRoll:o.matricRoll, challan:o.challan, pic:o.pic, migratedFrom:'' };
+}
+
+/* ---------- form state ---------- */
+function blankForm(keep){
+  const k = keep || {};
+  const p = k.program || (init && init.programs[0] && init.programs[0].key) || '';
+  const year = k.year || '1st Year';
+  const f = { program:p, year, section:k.section || '', quota:k.quota || 'Open Quota', rollNo:'', rollManual:false,
+    name:'', father:'', id:'', subjects:compulsory(p, year).concat(groupsOf(p, year).length === 1 ? groupsOf(p, year)[0].subjects : ['', '', '']), metric:'', total:'', hq:'No', room:'',
+    dob:'', contact:'', email:'', board:'', passYear:'', matricRoll:'', challan:'', pic:'', migratedFrom:'', group:'', ctx:null, qid:null };
+  if(!f.section) f.section = sectionsOf(p, year)[0] || '';
+  f.room = roomOf(f.section);
+  if(isMig(year)) f.quota = init ? init.cfg.mig.QUOTA : 'Open Quota';
+  return f;
+}
+function compulsory(p, year){ const s = init && init.subjects[p] && init.subjects[p][year]; return s ? s.compulsory.slice() : ['ENGLISH','URDU', isMig(year) ? 'PAK-STUDIES' : 'ISLAMIYAT','MUTALIA QURAN']; }
+function groupsOf(p, year){ const s = init && init.subjects[p] && init.subjects[p][year]; return s ? s.groups : []; }
+function sectionsOf(p, year){ return (init && init.sections[p] && init.sections[p][year]) || []; }
+function roomOf(pcs){ return (init && init.rooms && init.rooms[pcs]) || ''; }
+function quotasOf(p){
+  const pr = prog(p); if(!init) return ['Open Quota'];
+  return pr && pr.only ? pr.only : init.quotas;
+}
+function mapYear(subj, p, year){
+  const s = String(subj || '').trim().toUpperCase(), pr = prog(p);
+  if(!isMig(year)) return s;
+  if(s === 'ISLAMIYAT') return 'PAK-STUDIES';
+  if(s === 'BOTANY' && pr && pr.classProgram === 'Pre-Medical') return 'ZOOLOGY';
+  return s;
+}
+function toD(f){
+  const d = {}; ['program','year','section','quota','name','father','id','metric','total','hq','room','dob','contact','email','board','passYear','matricRoll','challan','pic','migratedFrom'].forEach(k => d[k] = String(f[k] == null ? '' : f[k]).trim());
+  d.subjects = f.subjects.map(x => String(x || '').trim().toUpperCase());
+  d.rollNo = f.ctx || f.rollManual ? String(f.rollNo || '').trim() : '';
+  if(f.ctx && d.hq === 'No' && f.ctx.orig.hq !== 'Yes') d.hq = f.ctx.orig.hq;   // a blank HQ cell stays blank unless she is Hafiz-e-Quran   // new + not typed: the server gives the next free number at save time
+  return d;
+}
+
+/* ---------- seats (from the last server state) ---------- */
+function seatFor(p, quota){
+  if(!init || !init.seats) return null;
+  const pr = init.seats.programs.find(x => x.key === p); if(!pr) return null;
+  return pr.quotas.find(q => qk(q.name) === qk(quota)) || { name:quota, seats:'', filled:0, status:'unset' };
+}
+function pendingFor(p, quota){ return queue.filter(q => !q.d.ctx && q.d.d.program === p && qk(q.d.d.quota) === qk(quota) && !isMig(q.d.d.year)).length; }
+function seatText(p, quota, year){
+  if(isMig(year)) return { cls:'', t:'2nd Year migration: always Open Quota, not counted against the 1st-year seats.' };
+  const s = seatFor(p, quota); if(!s) return { cls:'', t:'' };
+  const pend = pendingFor(p, quota), extra = pend ? ' · ' + pend + ' more waiting on this phone' : '';
+  if(s.seats === '' || s.seats == null) return { cls:'', t:s.filled + ' admitted · no seat limit set' + extra };
+  const left = s.seats - s.filled;
+  return { cls:s.status, t:s.filled + ' of ' + s.seats + ' taken' + (s.pooled ? ' (shared pool)' : '') + ' · ' + (left > 0 ? left + ' left' : left === 0 ? 'FULL' : (-left) + ' over the limit') + extra };
+}
+
+/* ---------- rendering ---------- */
+function paintNet(){
+  const n = $('#net'), w = queue.length;
+  n.textContent = (online() ? 'Online' : 'Offline') + (w ? ' · ' + w + ' waiting' : '');
+  n.classList.toggle('off', !online());
+}
+function paintBadge(){ const b = $('#qb'); b.textContent = queue.length; b.classList.toggle('hidden', !queue.length); paintNet(); }
+function setTab(t){
+  tab = t;
+  document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t ? 'true' : 'false'));
+  if(t === 'form' && !form) form = blankForm();
+  render();
+}
+function render(){
+  paintBadge();
+  $('#bar').classList.toggle('hidden', tab !== 'form' || !init);
+  const m = $('#main');
+  if(!user || !pass){ m.innerHTML = `<div class="card"><h2>Sign in first</h2><div class="sub">Open the attendance app, sign in with your admin login, then come back to this page.</div><p><a class="btn primary" href="./" style="display:inline-flex;align-items:center;text-decoration:none">Open the attendance app</a></p></div>`; return; }
+  if(!init){ m.innerHTML = fatal ? `<div class="err">${esc(fatal)}</div>` : `<div class="card"><h2>Getting ready…</h2><div class="sub">${online() ? 'Downloading programs, sections, seats and the student list. This happens once; after that the page works without internet.' : 'This phone has not downloaded the admission lists yet. Connect to the internet once, then it works offline.'}</div></div>`; return; }
+  const top = fatal ? `<div class="err">${esc(fatal)}</div>` : '';
+  if(tab === 'form') m.innerHTML = top + formHtml();
+  else if(tab === 'find') m.innerHTML = top + findHtml();
+  else if(tab === 'seats') m.innerHTML = top + seatsHtml();
+  else m.innerHTML = top + waitHtml();
+  if(tab === 'form') wireForm();
+  if(tab === 'find') wireFind();
+  if(tab === 'wait') wireWait();
+}
+const opt = (v, cur, label) => `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(label == null ? v : label)}</option>`;
+
+function formHtml(){
+  const f = form, pr = prog(f.program), mig = isMig(f.year), secs = sectionsOf(f.program, f.year);
+  const st = seatText(f.program, f.quota, f.year), groups = groupsOf(f.program, f.year);
+  const nr = nextRoll[f.program + '|' + f.year];
+  const rollHint = f.ctx ? 'Changing an Enroll# also changes it on her attendance rows only after "Sheets vs strength sheet".'
+    : f.rollManual ? 'You typed this number. Clear the box to let the app give the next free number.'
+    : (nr && nr.roll ? 'Next free: <b>' + esc(nr.roll) + '</b>. The number is fixed when you save, so two phones never get the same one.' : online() ? 'The next free number is given when you save.' : 'Offline: the number is given when this phone is back online.');
+  const m = Number(f.metric), t = Number(f.total);
+  const agg = f.metric !== '' && t ? Math.round(((m + (f.hq === 'Yes' ? 20 : 0)) / t) * 100) : '';
+  const secList = secs.indexOf(f.section) < 0 && f.section ? secs.concat([f.section]) : secs;
+  return `
+  ${lastDone && !f.ctx ? `<div class="done">Saved: ${esc(lastDone.name)}<big>${esc(lastDone.roll || 'Roll No on upload')}</big>${esc(lastDone.where)}</div>` : ''}
+  ${f.ctx ? `<div class="editbar"><span>Editing <b>${esc(f.ctx.origName)}</b> · ${esc(f.ctx.roll || 'no Enroll#')}<br><small>Only what you change is written; the portal-sync columns stay as they are.</small></span><button class="btn small" type="button" id="xEditOff">Stop editing</button></div>` : ''}
+  ${f.qid ? `<div class="editbar"><span>Fixing a save that is waiting on this phone.</span></div>` : ''}
+  <section class="card">
+    <h2>Class</h2>
+    <label for="fProg">Program</label>
+    <select id="fProg">${init.programs.map(p => opt(p.key, f.program, p.label + (p.fee === 'non' ? ' · non-subsidized' : ''))).join('')}</select>
+    <label>Year</label>
+    <div class="seg" role="group"><button type="button" data-year="1st Year" aria-pressed="${!mig}">1st Year</button><button type="button" data-year="2nd Year" aria-pressed="${mig}">2nd Year (migration)</button></div>
+    <div class="g2">
+      <div><label for="fSec">Section</label><select id="fSec">${secList.length ? secList.map(s => opt(s, f.section)).join('') : '<option value="">No sections</option>'}</select></div>
+      <div><label for="fRoom">Room</label><input id="fRoom" value="${esc(f.room)}" autocomplete="off"></div>
+    </div>
+    <label for="fQuota">Quota</label>
+    <select id="fQuota" ${mig ? 'disabled' : ''}>${quotasOf(f.program).map(q => opt(q, f.quota)).join('')}${quotasOf(f.program).some(q => qk(q) === qk(f.quota)) ? '' : opt(f.quota, f.quota)}</select>
+    ${st.t ? `<div class="seat ${esc(st.cls)}">${esc(st.t)}</div>` : ''}
+    <label for="fRoll">Roll No / Enroll#</label>
+    <div class="rowi"><input id="fRoll" value="${esc(f.ctx || f.rollManual ? f.rollNo : '')}" placeholder="${esc(nr && nr.roll ? nr.roll + ' (automatic)' : 'Automatic')}" autocomplete="off" autocapitalize="characters">${f.ctx && pr && f.ctx.orig.program !== f.program ? '<button class="btn small" type="button" id="xNewRoll">New number for this program</button>' : ''}</div>
+    <div class="hint">${rollHint}</div>
+  </section>
+  <section class="card">
+    <h2>Student</h2>
+    <label for="fId">Portal Student ID</label>
+    <div class="rowi"><input id="fId" value="${esc(f.id)}" inputmode="numeric" autocomplete="off"><button class="btn small" type="button" id="xPortal" ${online() ? '' : 'disabled'}>Fill from portal</button></div>
+    <div class="hint">Fills name, father, marks, contact, photo and subjects from the portal copy (Portal Data sheet). Needs internet.</div>
+    <label for="fName">Student name <span class="req">*</span></label><input id="fName" value="${esc(f.name)}" autocomplete="off" autocapitalize="words">
+    <label for="fFather">Father name</label><input id="fFather" value="${esc(f.father)}" autocomplete="off" autocapitalize="words">
+    <div class="g3">
+      <div><label for="fMetric">Matric marks</label><input id="fMetric" value="${esc(f.metric)}" inputmode="numeric"></div>
+      <div><label for="fTotal">Total marks</label><input id="fTotal" value="${esc(f.total)}" inputmode="numeric" placeholder="1200"></div>
+      <div><label for="fHq">Hafiz-e-Quran</label><select id="fHq">${opt('No', f.hq === 'Yes' ? '' : 'No')}${opt('Yes', f.hq)}</select></div>
+    </div>
+    <div class="agg">Aggregate: ${agg === '' ? '–' : agg + '%'}</div>
+  </section>
+  <section class="card">
+    <h2>Subjects</h2>
+    ${groups.length > 1 ? `<label for="fGroup">Subject group</label><select id="fGroup"><option value="">Choose a group…</option>${groups.map((g, i) => opt(i, f.group, g.name + ' — ' + g.subjects.join(', '))).join('')}</select>` : ''}
+    <div class="subs" style="margin-top:10px">${f.subjects.map((s, i) => `<input data-sub="${i}" value="${esc(s)}" list="subList" aria-label="Subject ${i + 1}" placeholder="Subject ${i + 1}${i < 4 ? ' (compulsory)' : ''}">`).join('')}</div>
+    ${groups.length === 1 ? '' : '<div class="hint">Choose a group to fill subjects 5 to 7, or type them.</div>'}
+  </section>
+  <section class="card">
+    <details ${f.ctx || f.dob || f.contact ? 'open' : ''}><summary>More details (DOB, contact, board, challan, photo)</summary>
+      <div class="g2">
+        <div><label for="fDob">Date of birth</label><input id="fDob" value="${esc(f.dob)}" placeholder="dd/mm/yyyy" inputmode="numeric"></div>
+        <div><label for="fContact">Student contact</label><input id="fContact" value="${esc(f.contact)}" inputmode="tel"></div>
+      </div>
+      <label for="fEmail">Email</label><input id="fEmail" value="${esc(f.email)}" inputmode="email" autocapitalize="off">
+      <div class="g3">
+        <div><label for="fBoard">Board</label><input id="fBoard" value="${esc(f.board)}" list="boardList"></div>
+        <div><label for="fPass">Passing year</label><input id="fPass" value="${esc(f.passYear)}" inputmode="numeric"></div>
+        <div><label for="fMroll">Matric roll no</label><input id="fMroll" value="${esc(f.matricRoll)}" inputmode="numeric"></div>
+      </div>
+      <label for="fChallan">Challan details</label><input id="fChallan" value="${esc(f.challan)}" placeholder="P-2600.00, P-60000.00">
+      <label for="fPic">Picture URL</label><input id="fPic" value="${esc(f.pic)}" inputmode="url" autocapitalize="off">
+      ${mig ? `<label for="fMigFrom">Migrated from (college)</label><input id="fMigFrom" value="${esc(f.migratedFrom)}">` : ''}
+    </details>
+  </section>`;
+}
+function readForm(){
+  const v = id => { const e = $(id); return e ? e.value : undefined; };
+  const f = form;
+  [['#fRoom','room'],['#fName','name'],['#fFather','father'],['#fId','id'],['#fMetric','metric'],['#fTotal','total'],['#fHq','hq'],
+   ['#fDob','dob'],['#fContact','contact'],['#fEmail','email'],['#fBoard','board'],['#fPass','passYear'],['#fMroll','matricRoll'],
+   ['#fChallan','challan'],['#fPic','pic'],['#fMigFrom','migratedFrom']].forEach(([id, k]) => { const x = v(id); if(x !== undefined) f[k] = x; });
+  const q = v('#fQuota'); if(q !== undefined && !isMig(f.year)) f.quota = q;
+  const r = v('#fRoll'); if(r !== undefined){ if(f.ctx) f.rollNo = r.trim(); else { f.rollManual = !!r.trim(); f.rollNo = r.trim(); } }
+  document.querySelectorAll('[data-sub]').forEach(e => f.subjects[+e.dataset.sub] = e.value.toUpperCase());
+}
+function wireForm(){
+  const sl = $('#subList'); const all = new Set();
+  Object.values(init.subjects).forEach(y => Object.values(y).forEach(s => { s.compulsory.forEach(x => all.add(x)); s.groups.forEach(g => g.subjects.forEach(x => all.add(x))); }));
+  sl.innerHTML = [...all].sort().map(x => `<option value="${esc(x)}">`).join('');
+  $('#fProg').onchange = e => {
+    readForm(); const old = form.program; form.program = e.target.value;
+    form.section = sectionsOf(form.program, form.year)[0] || ''; form.room = roomOf(form.section);
+    if(!quotasOf(form.program).some(q => qk(q) === qk(form.quota))) form.quota = quotasOf(form.program)[0];
+    const og = groupsOf(old, form.year).map(g => g.subjects.join('|')), cur = form.subjects.slice(4).join('|');
+    if(!form.ctx || og.indexOf(cur) >= 0 || !cur.replace(/\|/g, '')) { const g = groupsOf(form.program, form.year); form.subjects = compulsory(form.program, form.year).concat(g.length === 1 ? g[0].subjects : ['', '', '']); form.group = ''; }
+    fetchNext(); render();
+  };
+  document.querySelectorAll('[data-year]').forEach(b => b.onclick = () => {
+    readForm(); const y = b.dataset.year; if(y === form.year) return;
+    form.year = y; form.section = sectionsOf(form.program, y)[0] || ''; form.room = roomOf(form.section);
+    form.subjects = form.subjects.map(s => mapYear(s, form.program, y));
+    if(!isMig(y)) form.subjects = form.subjects.map(s => s === 'PAK-STUDIES' ? 'ISLAMIYAT' : s);
+    form.subjects.splice(0, 4, ...compulsory(form.program, y));
+    if(isMig(y)) form.quota = init.cfg.mig.QUOTA;
+    fetchNext(); render();
+  });
+  $('#fSec').onchange = e => { readForm(); const auto = form.room === roomOf(form.section) || !form.room; form.section = e.target.value; if(auto) form.room = roomOf(form.section); render(); };
+  $('#fQuota').onchange = () => { readForm(); render(); };
+  ['#fMetric','#fTotal','#fHq'].forEach(id => $(id).onchange = () => { readForm(); render(); });
+  const g = $('#fGroup'); if(g) g.onchange = () => { readForm(); const gr = groupsOf(form.program, form.year)[+g.value]; form.group = g.value; if(gr) form.subjects.splice(4, 3, ...gr.subjects); render(); };
+  const off = $('#xEditOff'); if(off) off.onclick = () => { form = blankForm(form); lastDone = null; render(); };
+  const nr = $('#xNewRoll'); if(nr) nr.onclick = async () => {
+    readForm(); nr.disabled = true;
+    try{ const r = await api({ action:'adm_next_roll', program:form.program, year:form.year }); if(r.roll){ form.rollNo = r.roll; render(); toast('New number ' + r.roll + ' (saved only when you press Save)'); } else toast(r.error || 'No number'); }
+    catch(e){ toast(e.message); nr.disabled = false; }
+  };
+  $('#xPortal').onclick = portalFill;
+  if(!form.ctx && !form.rollManual) fetchNext();
+}
+let nextT;
+function fetchNext(){
+  if(!online() || form.ctx) return;
+  const key = form.program + '|' + form.year, have = nextRoll[key];
+  if(have && Date.now() - have.t < 60000) return;
+  clearTimeout(nextT);
+  nextT = setTimeout(async () => {
+    try{ const r = await api({ action:'adm_next_roll', program:form.program, year:form.year }); nextRoll[key] = { roll:r.roll || '', t:Date.now() };
+      if(tab === 'form' && form.program + '|' + form.year === key && !form.rollManual && !form.ctx){ const i = $('#fRoll'); if(i && !i.value) i.placeholder = (r.roll || 'Automatic') + ' (automatic)'; } }
+    catch(e){ if(e.fatal){ fatal = e.message; render(); } }
+  }, 300);
+}
+async function portalFill(){
+  readForm();
+  const id = String(form.id || '').trim(); if(!id) return toast('Type the portal Student ID first.');
+  const b = $('#xPortal'); b.disabled = true; b.textContent = 'Looking…';
+  try{
+    const r = await api({ action:'adm_portal', id });
+    if(!r.ok){ toast(r.error || 'Not found', 5000); return; }
+    const p = r.p, f = form, filled = [];
+    const set = (k, v) => { if(v && String(v).trim() && String(f[k] || '').trim() !== String(v).trim()){ if(!f.ctx || !String(f[k] || '').trim()){ f[k] = v; filled.push(k); } } };
+    ['name','father','dob','contact','email','pic','board','passYear','matricRoll','metric','total','challan'].forEach(k => set(k, p[k]));
+    set('id', p.id);
+    if(!f.ctx && p.quota && quotasOf(f.program).some(q => qk(q) === qk(p.quota))) { f.quota = quotasOf(f.program).find(q => qk(q) === qk(p.quota)); filled.push('quota'); }
+    if(p.subjects && p.subjects.filter(Boolean).length >= 5 && (!f.ctx || !f.subjects.slice(4).join(''))) { f.subjects = p.subjects.map(s => mapYear(s, f.program, f.year)); filled.push('subjects'); }
+    const warn = [];
+    if(p.program && p.program !== f.program) warn.push('Portal program: ' + p.programName + ' ' + p.year + (p.section ? ' section ' + p.section : ''));
+    if(p.status && !/enrolled/i.test(p.status)) warn.push('Portal status: ' + p.status);
+    if(p.portalRoll && !f.ctx){ f.rollNo = p.portalRoll; f.rollManual = true; filled.push('roll no'); }
+    const nice = { passYear:'passing year', matricRoll:'matric roll no', pic:'photo', dob:'date of birth', metric:'marks', total:'total marks' };
+    render();
+    toast(filled.length ? 'Filled: ' + filled.map(k => nice[k] || k).join(', ') + (warn.length ? '. ' + warn.join('. ') : '') : 'Nothing new on the portal. ' + warn.join('. '), 6000);
+  } catch(e){ toast(e.message, 5000); }
+  finally { const bb = $('#xPortal'); if(bb){ bb.disabled = !online(); bb.textContent = 'Fill from portal'; } }
+}
+
+/* ---------- save ---------- */
+function localCheck(d, ctx){
+  const errors = [], issues = [];
+  if(!d.name) errors.push('Student name is required.');
+  if(!d.quota) errors.push('Please choose a quota.');
+  if(!d.section) errors.push('Please choose a section.');
+  if(ctx && !d.rollNo) errors.push('Roll No is required.');
+  if(d.subjects.slice(0, 4).filter(Boolean).length < 4) issues.push({ level:'danger', text:'The 4 compulsory subjects are not all filled in.' });
+  const fs = d.subjects.filter(Boolean), dup = fs.find((x, i) => fs.indexOf(x) !== i);
+  if(dup) issues.push({ level:'danger', text:'The subject ' + dup + ' is listed more than once.' });
+  if(d.dob && !/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(d.dob)) issues.push({ level:'note', text:'Date of birth should look like 18/01/2011.' });
+  if(idx){
+    const me = ctx ? (ctx.roll ? nroll(ctx.roll) : '#' + ctx.sno) : null;
+    const others = idx.rows.map(recOf).filter(o => !me || (o.roll ? nroll(o.roll) : '#' + o.sno) !== me);
+    if(d.rollNo){ const r = others.find(o => nroll(o.roll) === nroll(d.rollNo)); if(r) errors.push('Roll No ' + d.rollNo + ' is already used by ' + r.name + ' (' + r.pcs + ').'); }
+    if(d.id){ const r = others.find(o => o.id === d.id); if(r) issues.push({ level:'danger', text:'Portal ID ' + d.id + ' already belongs to ' + r.name + ' (' + (r.roll || r.pcs) + ').' }); }
+    const nn = nrm(d.name), nf = nrm(d.father);
+    others.forEach(o => { if(nrm(o.name) !== nn || !nn) return; const same = nf && nrm(o.father) === nf;
+      if(same) issues.push({ level:'danger', text:'Possible duplicate: ' + o.name + ' (father ' + o.father + ') is already in ' + o.pcs + ', ' + (o.roll || 'no roll no') + '.' });
+      else if(!nf || !nrm(o.father)) issues.push({ level:'note', text:'Another ' + o.name + ' is in ' + o.pcs + '. Check she is a different girl.' }); });
+  }
+  queue.filter(q => q.qid !== form.qid && !q.d.ctx && nrm(q.d.d.name) === nrm(d.name) && nrm(q.d.d.father) === nrm(d.father))
+    .forEach(() => issues.push({ level:'danger', text:'The same name and father are already waiting on this phone (Waiting tab).' }));
+  if(!ctx && !isMig(d.year)){ const s = seatFor(d.program, d.quota), pend = pendingFor(d.program, d.quota);
+    if(s && s.seats !== '' && s.filled + pend >= s.seats) issues.push({ level:'danger', text:'"' + d.quota + '" looked full when this phone last checked: ' + (s.filled + pend) + ' of ' + s.seats + ' (incl. waiting).' }); }
+  return { errors, issues };
+}
+function issuesHtml(errors, issues){
+  return `<ul class="iss">${(errors || []).map(e => `<li class="error">${esc(e)}</li>`).join('')}${(issues || []).map(i => `<li class="${esc(i.level)}">${esc(i.text)}</li>`).join('')}</ul>`;
+}
+async function onSave(){
+  readForm();
+  const f = form, d = toD(f), ctx = f.ctx ? { roll:f.ctx.roll, sno:f.ctx.sno, origName:f.ctx.origName, orig:f.ctx.orig } : null;
+  const pr = prog(d.program), sum = `<div class="sub">${esc(d.name || '(no name)')} · ${esc(pr ? pr.label : d.program)} · ${esc(d.year)} · ${esc(d.section)} · ${esc(d.quota)}</div>`;
+  const lc = localCheck(d, ctx);
+  if(lc.errors.length) return dlgOpen(`<h2>Please fix first</h2>${sum}${issuesHtml(lc.errors, [])}<div class="acts"><button class="btn primary" id="dOk">OK</button></div>`), ($('#dOk').onclick = dlgClose);
+  if(online()){
+    dlgOpen(`<h2>Checking…</h2>${sum}<div class="sub" style="margin-top:8px">Checking seats, roll number and duplicates on the server.</div>`);
+    try{
+      const r = await api({ action:'adm_check', d, ctx });
+      if(r.ok === false && r.error) throw new Error(r.error);
+      const danger = (r.issues || []).some(i => i.level === 'danger');
+      const can = !r.errors.length && !r.blocking;
+      dlgOpen(`<h2>${r.errors.length ? 'Cannot save yet' : r.blocking ? 'Seats are full' : danger ? 'Please check' : 'Ready to save'}</h2>${sum}
+        ${!ctx ? `<div class="seat">Roll No: <b>${esc(r.rollNo)}</b>${r.autoRoll ? ' (next free number)' : ''} · Room ${esc(r.room || '–')}</div>` : ''}
+        ${issuesHtml(r.errors, r.issues)}
+        <div class="acts"><button class="btn" id="dBack">Back</button>${can ? `<button class="btn ${danger ? 'danger' : 'primary'}" id="dGo">${danger ? 'Save anyway' : ctx ? 'Save changes' : 'Save admission'}</button>` : ''}</div>`);
+      $('#dBack').onclick = dlgClose;
+      const go = $('#dGo'); if(go) go.onclick = () => { dlgClose(); enqueue(d, ctx, danger); };
+      return;
+    } catch(e){
+      if(e.fatal){ dlgClose(); fatal = e.message; return render(); }
+      if(!e.net) return dlgOpen(`<h2>Could not check</h2>${sum}<div class="err">${esc(e.message)}</div><div class="acts"><button class="btn" id="dBack">Back</button><button class="btn primary" id="dGo">Keep on phone, send later</button></div>`), ($('#dBack').onclick = dlgClose), ($('#dGo').onclick = () => { dlgClose(); enqueue(d, ctx, false); });
+    }
+  }
+  const danger = lc.issues.some(i => i.level === 'danger');
+  dlgOpen(`<h2>Save on this phone</h2>${sum}<div class="sub" style="margin-top:6px">No internet. It is kept here and sent to the strength sheet as soon as the phone is online; the server then checks seats and gives the roll number. Anything that needs your decision shows on the <b>Waiting</b> tab.</div>
+    ${issuesHtml([], lc.issues)}
+    <div class="acts"><button class="btn" id="dBack">Back</button><button class="btn ${danger ? 'danger' : 'primary'}" id="dGo">${danger ? 'Keep anyway' : 'Keep and send later'}</button></div>`);
+  $('#dBack').onclick = dlgClose;
+  $('#dGo').onclick = () => { dlgClose(); enqueue(d, ctx, danger); };
+}
+function enqueue(d, ctx, override){
+  const f = form, pr = prog(d.program);
+  const item = { qid:f.qid || uid(), cid:uid(), d:{ d, ctx }, override:!!override, at:Date.now(), state:'wait', errors:[], issues:[], label:(pr ? pr.label : d.program) + ' · ' + d.year + ' · ' + d.section };
+  const i = queue.findIndex(q => q.qid === item.qid);
+  if(i >= 0) queue[i] = item; else queue.push(item);
+  saveQ();
+  lastDone = { name:d.name, roll:d.rollNo || (online() ? 'sending…' : ''), where:item.label + ' · ' + d.quota + (online() ? '' : ' · waiting for internet') };
+  const keep = { program:d.program, year:d.year, section:d.section, quota:d.quota };
+  form = blankForm(ctx ? null : keep);
+  if(ctx){ lastDone = null; toast(online() ? 'Saving changes…' : 'Changes kept on this phone'); setTab(online() ? 'find' : 'wait'); }
+  else { render(); window.scrollTo({ top:0, behavior:'smooth' }); }
+  sync();
+}
+
+/* ---------- send waiting saves ---------- */
+async function sync(){
+  if(syncing || !online() || !queue.length || !user) return;
+  syncing = true;
+  try{
+    for(const item of queue.slice()){
+      if(item.state === 'problem' || item.state === 'error') continue;
+      let r;
+      try{ r = await api({ action:'adm_save', d:item.d.d, ctx:item.d.ctx, override:item.override, cid:item.cid }); }
+      catch(e){ if(e.fatal){ fatal = e.message; } else if(!e.net){ item.state = 'error'; item.errors = [e.message]; saveQ(); } break; }
+      if(r && r.ok){
+        queue = queue.filter(q => q.qid !== item.qid); saveQ();
+        if(r.rec) putRec(r.rec, item.d.ctx);
+        if(r.seats && init){ init.seats = r.seats; ls.set('adm_init', init); }
+        if(r.next && r.next.roll) nextRoll[item.d.d.program + '|' + item.d.d.year] = { roll:r.next.roll, t:Date.now() };
+        if(lastDone && lastDone.name === item.d.d.name && !item.d.ctx) lastDone.roll = r.roll;
+        toast(r.nothing ? 'No change to save for ' + item.d.d.name : (item.d.ctx ? 'Updated: ' : 'Admitted: ') + item.d.d.name + ' · ' + (r.roll || ''), 4500);
+      } else if(r){
+        item.state = r.error ? 'error' : 'problem';
+        item.errors = r.errors || (r.error ? [r.error] : []); item.issues = r.issues || []; item.blocked = !!r.blocked;
+        saveQ();
+        toast('Needs your decision: ' + item.d.d.name + ' (Waiting tab)', 5000);
+        if(lastDone && lastDone.name === item.d.d.name) lastDone.roll = 'not saved, see Waiting';
+      }
+    }
+  } finally { syncing = false; render(); }
+}
+
+/* ---------- find ---------- */
+function findHtml(){
+  const q = searchQ.trim().toLowerCase();
+  let res = [];
+  if(idx && q.length >= 2){
+    const words = q.split(/\s+/);
+    for(const row of idx.rows){
+      const hay = (row[1] + ' ' + row[2] + ' ' + row[3] + ' ' + row[4] + ' ' + row[7]).toLowerCase();
+      if(words.every(w => hay.indexOf(w) >= 0)){ res.push(row); if(res.length >= 60) break; }
+    }
+  }
+  const lbl = k => { const p = prog(k); return p ? p.label : k || 'No program'; };
+  return `<section class="card">
+    <label for="fq" style="margin-top:0">Search by name, father, roll no, portal ID or section</label>
+    <input id="fq" value="${esc(searchQ)}" placeholder="e.g. ayesha khan, 2384, FCS-1 D3" autocomplete="off" autofocus>
+    <div class="hint">${idx ? idx.rows.length + ' students · list from ' + esc(idx.at) : 'Student list not downloaded yet.'} <button class="btn small" type="button" id="xRef" ${online() ? '' : 'disabled'} style="margin-left:6px">Refresh list</button></div>
+  </section>
+  <div class="list">${q.length < 2 ? '<div class="empty">Type at least 2 letters.</div>' : res.length ? res.map(row => { const o = recOf(row);
+    return `<button class="it" type="button" data-roll="${esc(o.roll)}" data-sno="${esc(o.sno)}">${o.pic ? `<img src="${esc(o.pic)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'av',textContent:'${esc((o.name || '?').charAt(0).toUpperCase())}'}))">` : `<span class="av">${esc((o.name || '?').charAt(0).toUpperCase())}</span>`}
+      <span class="who"><b>${esc(o.name)}</b><small>${esc(o.father ? 'd/o ' + o.father : '')}</small><small>${esc(o.roll || 'no Enroll#')} · ${esc(lbl(o.key))} · ${esc(o.year)} · ${esc(o.pcs)} · ${esc(o.quota)}</small></span><span class="pill">Edit</span></button>`; }).join('') : '<div class="empty">No student found.</div>'}</div>`;
+}
+function wireFind(){
+  const i = $('#fq'); let t;
+  i.oninput = () => { clearTimeout(t); t = setTimeout(() => { searchQ = i.value; const pos = i.selectionStart; render(); const j = $('#fq'); j.focus(); try{ j.setSelectionRange(pos, pos); }catch(e){} }, 150); };
+  $('#xRef').onclick = async () => { $('#xRef').disabled = true; await loadIndex(true); render(); };
+  document.querySelectorAll('[data-sno]').forEach(b => b.onclick = () => {
+    const row = idx.rows.find(r => (b.dataset.roll && r[1] === b.dataset.roll) || (!b.dataset.roll && r[0] === b.dataset.sno));
+    if(!row) return;
+    const o = recOf(row), d = dFromRec(o);
+    form = Object.assign(blankForm(), d, { rollManual:true, group:'', qid:null,
+      ctx:{ roll:o.roll, sno:o.sno, origName:o.name, orig:JSON.parse(JSON.stringify(Object.assign({}, d, { rollNo:o.roll }))) } });
+    form.rollNo = o.roll; lastDone = null;
+    setTab('form'); window.scrollTo({ top:0 });
+  });
+}
+
+/* ---------- seats ---------- */
+function seatsHtml(){
+  const s = init.seats;
+  const row = q => { const left = q.seats === '' ? '' : q.seats - q.filled;
+    return `<tr><td>${esc(q.name)}${q.pooled ? ' <span class="pill info">pool</span>' : ''}</td><td class="n">${q.filled}${q.pooled && q.own !== q.filled ? ' <small class="sub">(' + q.own + ' here)</small>' : ''}</td><td class="n">${q.seats === '' ? '–' : q.seats}</td><td class="n">${left === '' ? '' : `<span class="pill ${esc(q.status)}">${left < 0 ? (-left) + ' over' : left === 0 ? 'full' : left + ' left'}</span>`}</td></tr>`; };
+  return `<div class="sub" style="margin-bottom:10px">1st Year only, counted from Transform-ALL-COLLEGE-STRENGTH · ${esc(s.at)}${queue.length ? ' · ' + queue.length + ' save(s) still waiting on this phone are not counted yet' : ''}. Seat limits come from "Quota Settings" in the admissions workbook.</div>
+  ${s.programs.map(p => { const pr = prog(p.key);
+    return `<section class="card"><h3>${esc(pr ? pr.label : p.key)} <span class="pill ${pr && pr.fee === 'non' ? 'near' : 'ok'}">${pr && pr.fee === 'non' ? 'non-subsidized' : 'subsidized'}</span></h3>
+      <div class="sub">${p.filled} admitted${p.total !== '' ? ' of ' + p.total : ''}${p.noQuota ? ' · ' + p.noQuota + ' without quota' : ''}</div>
+      <table><thead><tr><th>Quota</th><th class="n">Taken</th><th class="n">Seats</th><th class="n">Left</th></tr></thead><tbody>${p.quotas.map(row).join('')}</tbody></table></section>`; }).join('')}
+  <section class="card"><h3>Shared seat pools</h3><table><thead><tr><th>Quota</th><th>Used by</th><th class="n">Taken</th><th class="n">Seats</th></tr></thead><tbody>
+    ${s.pools.map(pl => `<tr><td>${esc(pl.quota)}</td><td class="sub">${pl.members.filter(m => m.filled).map(m => esc((prog(m.key) || {}).label || m.key) + ' ' + m.filled).join(', ') || '–'}</td><td class="n">${pl.filled}</td><td class="n"><span class="pill ${esc(pl.status)}">${pl.seats === '' ? '–' : pl.seats}</span></td></tr>`).join('')}</tbody></table></section>
+  <div class="acts"><button class="btn" type="button" onclick="refreshInit(true)" ${online() ? '' : 'disabled'}>Refresh seats</button></div>`;
+}
+
+/* ---------- waiting ---------- */
+function waitHtml(){
+  if(!queue.length) return `<div class="card"><h2>Nothing waiting</h2><div class="sub">Every admission and change made on this phone has reached the strength sheet.</div></div>`;
+  return `<div class="acts" style="margin:0 0 12px"><button class="btn primary" type="button" id="xSend" ${online() ? '' : 'disabled'}>${online() ? 'Send now' : 'Offline: sends when internet returns'}</button></div>
+  ${queue.map(q => `<section class="card"><h3>${esc(q.d.d.name || '(no name)')} <span class="pill ${q.state === 'wait' ? 'info' : 'full'}">${q.state === 'wait' ? 'waiting' : 'needs attention'}</span></h3>
+    <div class="sub">${q.d.ctx ? 'Change to ' + esc(q.d.ctx.roll || q.d.ctx.origName) : 'New admission'} · ${esc(q.label)} · ${esc(q.d.d.quota)} · kept ${esc(new Date(q.at).toLocaleString())}</div>
+    ${q.state !== 'wait' ? issuesHtml(q.errors, q.issues) : ''}
+    <div class="acts">${q.state !== 'wait' ? `<button class="btn small" type="button" data-qopen="${esc(q.qid)}">Open and fix</button>` : ''}
+      ${q.state === 'problem' && !q.errors.length && !q.blocked ? `<button class="btn small danger" type="button" data-qforce="${esc(q.qid)}">Save anyway</button>` : ''}
+      ${q.state === 'error' ? `<button class="btn small" type="button" data-qretry="${esc(q.qid)}">Try again</button>` : ''}
+      <button class="btn small" type="button" data-qdel="${esc(q.qid)}">Delete</button></div></section>`).join('')}`;
+}
+function wireWait(){
+  const s = $('#xSend'); if(s) s.onclick = () => { queue.forEach(q => { if(q.state === 'error') q.state = 'wait'; }); saveQ(); sync(); };
+  document.querySelectorAll('[data-qdel]').forEach(b => b.onclick = () => {
+    const q = queue.find(x => x.qid === b.dataset.qdel);
+    dlgOpen(`<h2>Delete this save?</h2><div class="sub">${esc(q.d.d.name)} will not reach the strength sheet.</div><div class="acts"><button class="btn" id="dBack">Keep</button><button class="btn danger" id="dGo">Delete</button></div>`);
+    $('#dBack').onclick = dlgClose; $('#dGo').onclick = () => { queue = queue.filter(x => x.qid !== q.qid); saveQ(); dlgClose(); render(); };
+  });
+  document.querySelectorAll('[data-qforce]').forEach(b => b.onclick = () => { const q = queue.find(x => x.qid === b.dataset.qforce); q.override = true; q.state = 'wait'; q.cid = uid(); saveQ(); sync(); render(); });
+  document.querySelectorAll('[data-qretry]').forEach(b => b.onclick = () => { const q = queue.find(x => x.qid === b.dataset.qretry); q.state = 'wait'; saveQ(); sync(); render(); });
+  document.querySelectorAll('[data-qopen]').forEach(b => b.onclick = () => {
+    const q = queue.find(x => x.qid === b.dataset.qopen), d = q.d.d;
+    form = Object.assign(blankForm(), d, { rollManual:!!d.rollNo, ctx:q.d.ctx, qid:q.qid, group:'', subjects:d.subjects.slice() });
+    lastDone = null; setTab('form');
+  });
+}
+
+/* ---------- loading ---------- */
+async function refreshInit(show){
+  if(!online() || !user) return;
+  try{
+    const r = await api({ action:'adm_init' }, 90000);
+    if(!r.ok) throw new Error(r.error || 'Could not load');
+    init = r; ls.set('adm_init', init); fatal = '';
+    if(!form) form = blankForm();
+    if(show) toast('Seats and lists updated');
+  } catch(e){ if(e.fatal || !init) fatal = e.message; if(show) toast(e.message); }
+  render();
+}
+async function loadIndex(force){
+  if(!idx) idx = await idbGet('index');
+  if(!online() || !user) return;
+  if(!force && idx && Date.now() - (idx.t || 0) < 10 * 60000) return;
+  try{ const r = await api({ action:'adm_index' }, 120000); if(r.ok){ idx = { cols:r.cols, rows:r.rows, at:r.at, t:Date.now() }; idbSet('index', idx); if(force) toast(idx.rows.length + ' students downloaded'); } }
+  catch(e){ if(force) toast(e.message); }
+}
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => { if(tab === 'form' && form) readForm(); setTab(b.dataset.tab); });
+$('#bSave').onclick = onSave;
+$('#bClear').onclick = () => {
+  dlgOpen(`<h2>Clear the form?</h2><div class="sub">${form && form.ctx ? 'Your unsaved changes to ' + esc(form.ctx.origName) + ' are dropped.' : 'Everything typed is removed. Program, year, section and quota stay.'}</div><div class="acts"><button class="btn" id="dBack">Back</button><button class="btn danger" id="dGo">Clear</button></div>`);
+  $('#dBack').onclick = dlgClose; $('#dGo').onclick = () => { dlgClose(); readForm(); form = blankForm(form.ctx ? null : form); lastDone = null; render(); };
+};
+$('#dlg').addEventListener('click', e => { if(e.target.id === 'dlg') dlgClose(); });
+window.addEventListener('online', () => { paintNet(); sync(); refreshInit(); render(); });
+window.addEventListener('offline', () => { paintNet(); render(); });
+window.addEventListener('beforeunload', () => { if(tab === 'form' && form) { readForm(); ls.set('adm_draft', form); } });
+setInterval(() => { if(queue.some(q => q.state === 'wait')) sync(); }, 60000);
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+(async function start(){
+  const draft = ls.get('adm_draft', null); ls.set('adm_draft', null);
+  if(init) form = draft && draft.program ? Object.assign(blankForm(), draft) : blankForm();
+  render();
+  idx = await idbGet('index');
+  if(online() && user){ await refreshInit(); await loadIndex(false); sync(); if(tab === 'find') render(); }
+})();
+</script>
+</body>
+</html>
