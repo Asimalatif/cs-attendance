@@ -90,7 +90,7 @@ async function days(mon){
   try{
     const res = await fetch(API, { method:'POST', body:JSON.stringify({ action:'student_days', roll:cred.roll, code:cred.code, mon }), redirect:'follow' });
     const r = JSON.parse(await res.text()); if(!r.ok) throw new Error(r.error || 'Could not open the days.');
-    if(!r.subjects.length){ box.innerHTML = '<div class="sub">No attendance in ' + MON[mon] + '.</div>'; return; }
+    if(!r.subjects.length){ box.innerHTML = '<div class="sub">No attendance in ' + MON[mon] + '.' + (r.note ? '<br><small>' + esc(r.note) + '</small>' : '') + '</div>'; return; }
     const all = [...new Set(r.subjects.flatMap(s => s.days))].sort((a, b) => a - b), x0 = r.subjects[0], WD = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
     const col = v => /P$/.test(v) ? 'good' : /A$/.test(v) ? 'bad' : /[LB]$/.test(v) ? 'mid' : '';
     box.innerHTML = `<div class="tw"><table class="dtab"><thead><tr><th>Subject</th>${all.map(d => `<th>${d}<br><span class="sub">${WD[new Date(x0.y, x0.m, d).getDay()]}</span></th>`).join('')}</tr></thead><tbody>
