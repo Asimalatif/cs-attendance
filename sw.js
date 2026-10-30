@@ -1,5 +1,5 @@
 // Bump VERSION every time you change index.html so phones pick up the update.
-const VERSION = 'csa-v41';
+const VERSION = 'csa-v42';
 const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
