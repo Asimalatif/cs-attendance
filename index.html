@@ -2026,6 +2026,9 @@ const HINTS = [
  ['[data-view=free],[data-xact=free]','Free teachers','Who has no class in a period: for substitutions and duties. Share as PDF or text.','free'],
  ['[data-view=contacts],[data-xact=contacts]','Teacher contacts','Private list of teachers\' numbers with Call and WhatsApp. Only admin, principal, HODs and Chief Proctors. Never printed in reports.','free'],
  ['[data-xct]','Contact','Shows this teacher\'s number privately, with Call and WhatsApp.','free'],
+ ['[data-xrem]','Remind','Opens WhatsApp with a ready reminder to this teacher, listing the classes she has not marked today. Press Send in WhatsApp.','home'],
+ ['[data-xew]','Early warning period','This month, or the whole session so far.','reports'],
+ ['#xEwTxt,#xEwPdf','Early warning','Students below 73% (lectures each must attend) and students at risk (can miss 2 or fewer more lectures). Share on WhatsApp or as PDF.','reports'],
  ['[data-xfd]','Day','One day (then choose the day), or All week: Monday to Saturday in one list and one PDF.','free'],
  ['[data-xfs]','Shift','Morning or evening periods (timings from the timetable settings).','free'],
  ['[data-xfp]','Period','Choose the period. It opens on the period going on now.','free'],
@@ -2306,7 +2309,7 @@ function sections(){
     <ul><li><b>Home</b> shows <b>Today</b> (your classes of today in period order: green badge and ✓ = marked, red badge and <b>Mark</b> = still to do; tap a line to open it; see <i>Timetable & workload</i>), each section's percentage this month (with how many students are below 73% this week), <b>Students reported to Chief Proctor</b> (the discipline reports you sent and their status) and your timetable. <b>Low attendance</b> and the <b>Student profile</b> search are in the <b>Reports</b> tab.</li>
     <li><b>Low attendance</b> (Reports tab): switch between <i>This week</i> and <i>This month</i>, tap <b>See all</b> for the full list, and <b>Share PDF</b> to send the weekly low-attendance report on WhatsApp or email.</li>
     <li><b>Student profile</b>: search in the Reports tab, tap a student in Low attendance, or tap <b>Full profile</b> in a student's window. It shows every month's attendance and test, a day-by-day calendar, your tags and comments and her reports. <b>Share PDF</b> sends the profile as a report.</li>
-    <li><b>College / Department overview</b>: <i>Today</i> shows who has and has not marked attendance today (only classes in today's timetable); <i>Workload</i> shows every teacher's periods per week; <i>Sections</i> shows section-wise percentages (tap a section for its subjects); <i>Low attendance</i> lists every student below 73%. Each tab has <b>Share as text</b> and a <b>PDF</b> button. HODs see their own department, admin and principal see the whole college.</li></ul>` },
+    <li><b>College / Department overview</b>: <i>Today</i> shows who has and has not marked attendance today (only classes in today's timetable); <b>Remind</b> next to a teacher opens WhatsApp with a ready reminder listing her unmarked classes (her number stays private); <i>Workload</i> shows every teacher's periods per week; <i>Sections</i> shows section-wise percentages (tap a section for its subjects); <i>Low attendance</i> lists every student below 73%. Each tab has <b>Share as text</b> and a <b>PDF</b> button. HODs see their own department, admin and principal see the whole college.</li></ul>` },
 
   { id:'reports', nav:'Reports', title:'Reports: attendance, daily register, tests, shortage', html:`
     <p>Open the <b>Reports</b> tab (or <b>⋯ More → Reports</b>). Everything is in one card, <b>Create a report</b>, in three steps:</p>
@@ -2317,6 +2320,7 @@ function sections(){
     <li><b>Test results</b>: Obtained / Total for each monthly test, session % and class position. <b>Result card of every student</b> makes one card per student of the section.</li>
     <li><b>Shortage</b>: everyone below the limit (73% unless you change <b>Below %</b>) in the months you choose. <b>Needed</b> = lectures in a row she must attend to reach the limit. A dot after a name = short in more than one subject.</li>
     <li><b>From / To</b>: any range from September up to this month. September to now = the whole session so far.</li>
+    <li><b>Early warning</b>: students already below 73% (with the lectures each must attend in a row) and students <b>at risk</b>, who can miss only 2 more lectures or fewer before falling below 73%. Choose <i>This month</i> or <i>Session so far</i>, then <b>Share on WhatsApp</b> or <b>Early warning PDF</b>. Send it to the HOD or Chief Proctor every week.</li>
     <li><b>Shortcuts</b>: one tap for the session shortage, this month's shortage, and all data for Excel.</li></ul>` },
 
   { id:'start', nav:'Quick start', title:'Quick start', html:`
@@ -3583,7 +3587,7 @@ function adminBody(){
     return `${sun ? '' : `<div class="seg2"><button type="button" data-xpend="1" class="${aF.pend ? 'on' : ''}">Not marked (${pendT.length})</button><button type="button" data-xpend="0" class="${aF.pend ? '' : 'on'}">All teachers (${T.length})</button></div>`}
       <section class="card">${list.slice(0, CAP).map(t => `<div class="li"><span class="av">${esc(initials(t.name))}</span><span class="tx"><b>${esc(t.name)}</b><small>${esc(t.dept || 'No department')} · ${t.done}/${t.rows.length} marked today</small>
         <span class="tchips">${t.rows.slice().sort((a, b) => a.today - b.today).map(r => `<span class="tchip ${r.today ? '' : 'no'}" title="${esc(r.last ? 'Last marked on day ' + r.last : 'Not marked this month')}">${r.today ? '✓ ' : ''}${esc(r.cls)} · ${esc(shortSub(r.sub))}</span>`).join('')}</span></span>
-        <span class="pill ${t.done === t.rows.length ? 'good' : 'bad'}">${t.done}/${t.rows.length}</span></div>`).join('') || `<div class="empty">${aF.pend && !sun ? 'Every teacher has marked attendance today.' : 'No teacher matches.'}</div>`}
+        <span class="pill ${t.done === t.rows.length ? 'good' : 'bad'}">${t.done}/${t.rows.length}</span>${!sun && t.done < t.rows.length ? `<button class="pill good" type="button" data-xrem="${esc(t.name)}" aria-label="Remind ${esc(t.name)} on WhatsApp">Remind</button>` : ''}</div>`).join('') || `<div class="empty">${aF.pend && !sun ? 'Every teacher has marked attendance today.' : 'No teacher matches.'}</div>`}
       ${list.length > CAP ? `<div class="empty">Showing ${CAP} of ${list.length}. Use search to narrow.</div>` : ''}</section>
       <div class="acts2"><button class="btn" type="button" id="xNmTxt">Share as text</button><button class="btn primary" type="button" id="xNmPdf">${I.share}Not-marked PDF</button></div>`;
   }
@@ -3742,7 +3746,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-30 free: tidy period blocks';
+const APP_BUILD = '2026-10-30 early warning, reminders';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4048,6 +4052,74 @@ function shortageCsv(S, q){
   return { text:L.map(csvLine).join('\r\n'), file:'Shortage_' + P.safe(q.cls && q.cls !== '*' ? q.cls : allLabel()) + '_' + q.from + '-' + q.to + '.csv', title:'Shortage list' };
 }
 async function deliverFile(blob, name, title){ P.offerFile(blob, name, title); }
+/* ----- early shortage warning: below the limit (lectures needed) and at risk (only a few absences left) ----- */
+const RISK = 2;                                                     // "at risk" = can miss at most this many more lectures
+const canMiss = (p, d, t) => d ? Math.floor(p * 100 / t - d) : 0;   // more absences she can take and stay at t%
+let ew = { span:'month' }, ewBusy = false;
+const ewQ = () => { const cur = SEAS[seasNow()]; return { from:ew.span === 'month' ? cur : 'SEPT', to:cur, below:LOW }; };
+function ewCases(S){
+  const below = [], risk = [];
+  S.forEach(s => Object.values(s.subs).forEach(g => {
+    if(g.off || !g.d) return;
+    if(g.pct < LOW) below.push({ s, g, need:needed(g.p, g.d, LOW) });
+    else { const m = canMiss(g.p, g.d, LOW); if(m <= RISK) risk.push({ s, g, miss:m }); }
+  }));
+  const ord = (a, b) => a.s.cls.localeCompare(b.s.cls, undefined, { numeric:true }) || enrollN(a.s.roll) - enrollN(b.s.roll) || a.g.sub.localeCompare(b.g.sub);
+  return { below:below.sort((a, b) => b.need - a.need || ord(a, b)), risk:risk.sort((a, b) => a.miss - b.miss || ord(a, b)) };
+}
+const ewSpan = q => ew.span === 'month' ? monName(q.to) + ' (this month)' : 'session so far (' + rangeTxt(q) + ')';
+function ewText(E, q){
+  const L = ['EARLY ATTENDANCE WARNING · ' + (scope ? allLabel() : 'Teacher: ' + (teacher || user)), ewSpan(q) + ' · limit ' + LOW + '%', ''];
+  L.push('*Below ' + LOW + '% (' + E.below.length + ')* · lectures she must attend in a row:');
+  E.below.forEach((x, i) => L.push((i + 1) + '. ' + x.s.name + ' (' + x.s.roll + ') ' + x.s.cls + ' ' + titleCase(x.g.sub) + ': ' + x.g.pct + '% · needs ' + x.need));
+  if(!E.below.length) L.push('Nobody.');
+  L.push('', '*At risk (' + E.risk.length + ')* · more absences she can take before falling below ' + LOW + '%:');
+  E.risk.forEach((x, i) => L.push((i + 1) + '. ' + x.s.name + ' (' + x.s.roll + ') ' + x.s.cls + ' ' + titleCase(x.g.sub) + ': ' + x.g.pct + '% · can miss ' + x.miss));
+  if(!E.risk.length) L.push('Nobody.');
+  return L.join('\n');
+}
+function ewPdf(E, q){
+  const C = P.C, doc = P.newDoc(); let Y = P.TOP;
+  const studs = new Set(E.below.concat(E.risk).map(x => x.s.roll));
+  Y = P.heading(doc, Y, 'Early Attendance Warning', (scope ? allLabel() : 'Subjects of ' + (teacher || user)) + ' · ' + ewSpan(q) + ' · limit ' + LOW + '%');
+  Y = P.statBoxes(doc, Y, [
+    { l:'Below ' + LOW + '% now', v:E.below.length, c:E.below.length ? C.RED : C.GREEN, bg:E.below.length ? C.REDBG : C.GREENBG },
+    { l:'At risk', v:E.risk.length, c:E.risk.length ? C.AMB : C.INK, bg:E.risk.length ? C.AMBBG : C.SOFT },
+    { l:'Students in the list', v:studs.size }]) + 5;
+  const tbl = (title, list, last, lastHead, color) => {
+    Y = P.sectionTitle(doc, Y, title);
+    if(!list.length){ Y = P.notice(doc, Y, 'Nobody.', 'ok'); return; }
+    P.table(doc, { startY:Y, styles:{ font:'helvetica', fontSize:8, cellPadding:1.6, lineColor:C.LINE, lineWidth:0.2, textColor:C.INK, valign:'middle' },
+      head:[['#', 'Section', 'Roll No', 'Student Name', 'Subject', 'Attended / Held', '%', lastHead]],
+      body:list.map((x, i) => [i + 1, x.s.cls, x.s.roll, x.s.name, titleCase(x.g.sub), x.g.p + ' / ' + x.g.d, x.g.pct + '%', last(x)]),
+      columnStyles:{ 0:{ halign:'center', cellWidth:8 }, 1:{ cellWidth:20 }, 2:{ cellWidth:25 }, 5:{ halign:'center', cellWidth:22 }, 6:{ halign:'center', cellWidth:13 }, 7:{ halign:'center', cellWidth:18, fontStyle:'bold' } },
+      didParseCell:h => { if(h.section === 'body' && (h.column.index === 6 || h.column.index === 7)) h.cell.styles.textColor = color; } });
+    Y = doc.lastAutoTable.finalY + 6;
+  };
+  tbl('Below ' + LOW + '% now', E.below, x => x.need, 'Must attend', C.RED);
+  tbl('At risk: may fall below ' + LOW + '% soon', E.risk, x => x.miss, 'Can miss', C.AMB);
+  Y = P.smallNote(doc, Y, 'Must attend = lectures in a row she must attend (missing none) to reach ' + LOW + '%. Can miss = more absences she can take and still stay at ' + LOW + '% or above (0 = the next absence puts her below). Only P counts as attended.');
+  P.signatures(doc, Y, ['Prepared by', 'HOD', 'Chief Proctor']);
+  P.finalize(doc);
+  return { doc, title:'Early attendance warning', file:'Early-warning_' + P.safe(scope ? allLabel() : teacher || user) + '_' + (ew.span === 'month' ? q.to : 'Session') + '.pdf' };
+}
+async function ewMake(kind){
+  if(ewBusy) return; ewBusy = true; toast('Preparing the early warning…');
+  try{
+    const q = ewQ(), rows = await getRows({ from:q.from, to:q.to });
+    if(!rows.length) throw new Error('No attendance found for ' + ewSpan(q) + '.');
+    const E = ewCases(aggregate(rows));
+    if(kind === 'txt') shareText(ewText(E, q), 'Early warning');
+    else { await P.libs(); await P.deliver(ewPdf(E, q)); }
+  }catch(e){ toast('Early warning not made: ' + (e && e.message || e)); }
+  finally{ ewBusy = false; }
+}
+function ewCard(){
+  return `<section class="card"><h3>${I.alert} Early warning</h3>
+    <div class="seg2" role="group" aria-label="Period"><button type="button" data-xew="month" class="${ew.span === 'month' ? 'on' : ''}">This month</button><button type="button" data-xew="session" class="${ew.span === 'session' ? 'on' : ''}">Session so far</button></div>
+    <div class="sub">${scope ? esc(allLabel()) : 'Your subjects'}: students already below ${LOW}% (with the lectures each must attend) and students <b>at risk</b>, who can miss only ${RISK} more lectures or fewer. Send it to the HOD or Chief Proctor every week.</div>
+    <div class="acts2"><button class="btn" type="button" id="xEwTxt">Share on WhatsApp</button><button class="btn primary" type="button" id="xEwPdf">${I.share}Early warning PDF</button></div></section>`;
+}
 /** one student may come back under two sections (guest in one subject): join them into one report, home section first */
 function oneStudent(S, roll){
   const list = S.filter(s => s.roll === roll); if(list.length < 2) return list;
@@ -4146,7 +4218,9 @@ function renderReports(){
     <div id="rpProg"></div>
     <div class="rnote">${scope ? 'Taken from the college sheets, updated every time a teacher saves.' : 'Only your own subjects are included.'}${rp.kind === 'att' || rp.kind === 'short' ? '' : ' Needs internet.'} Held = lectures delivered, Present = lectures attended.</div></section>`;
   const cur = mine();
-  if(cur.length) h += lowCard(cur) + findCard();
+  if(cur.length) h += lowCard(cur);
+  h += ewCard();
+  if(cur.length) h += findCard();
   h += `<section class="card"><h3>${I.doc} Shortcuts</h3><div class="sub">One tap, no choices. Session so far = September to ${MONTHS[monIdx(SEAS[seasNow()])]}.</div>
     <button class="li" type="button" data-xq="short"><span class="tx"><b>Shortage · whole session</b><small>${esc(allLabel())}, below ${LOW}%</small></span><span class="chev">${I.chev}</span></button>
     <button class="li" type="button" data-xq="shortm"><span class="tx"><b>Shortage · this month</b><small>${esc(allLabel())}, ${MONTHS[monIdx(SEAS[seasNow()])]}</small></span><span class="chev">${I.chev}</span></button>
@@ -4793,6 +4867,20 @@ function ctButtons(c){
   const w = waNum(c), t = telNum(c);
   return (t ? `<a class="pill solid" href="tel:${esc(t)}" aria-label="Call ${esc(c.name)}">Call</a>` : '') + (w ? `<a class="pill good" href="${esc(w)}" target="_blank" rel="noopener" aria-label="WhatsApp ${esc(c.name)}">WhatsApp</a>` : '');
 }
+/** WhatsApp reminder to a teacher who has not marked today (College > Today). The number stays private: it only opens WhatsApp. */
+async function remindTeacher(name){
+  if(!ctsOk() || !ctOf(name)){
+    if(!navigator.onLine) return toast('Contacts need internet once.');
+    toast('Loading teacher contacts…'); await loadContacts();
+  }
+  const c = ctOf(name); if(!c) return toast('No WhatsApp number for ' + name + ' in the Users sheet' + (scope === 'dept' ? ' (or she is not in your department).' : '.'));
+  const w = waNum(c); if(!w) return toast('No WhatsApp number for ' + name + '.');
+  const T = teachersAgg(ovRows().filter(r => r.sched !== false)).find(t => nkey(t.name) === nkey(name));
+  const left = T ? T.rows.filter(r => !r.today).map(r => r.cls + ' ' + titleCase(r.sub)) : [];
+  const msg = 'Assalam-o-Alaikum ' + name + ',\nToday\'s attendance (' + fmtDate(new Date()) + ') is not marked yet' + (left.length ? ' for:\n- ' + left.join('\n- ') : '.') + '\nPlease mark it in the JCW attendance app. JazakAllah.\n- ' + (teacher || user);
+  const url = /wa\.me\//.test(w) ? w + '?text=' + encodeURIComponent(msg) : w;
+  window.open(url, '_blank', 'noopener');
+}
 const ctNote = t => `<div class="ctnote">${I.lock}<span>${t}</span></div>`;
 function renderContacts(){
   ctsOk();
@@ -4921,10 +5009,14 @@ document.addEventListener('click', ev => {
   if(t.closest('#xFrDay')) return P.run(freeDayPdf, () => shareText(freeText()));
   if(t.closest('#xFrWk')) return P.run(freeWeekPdf, () => shareText(freeWeekText(), 'Free teachers'));
   if(t.closest('#xFrWkTxt')) return shareText(freeWeekText(), 'Free teachers');
+  if((b = t.closest('[data-xew]'))){ ew.span = b.dataset.xew; return rerender(); }
+  if(t.closest('#xEwTxt')) return ewMake('txt');
+  if(t.closest('#xEwPdf')) return ewMake('pdf');
   if(t.closest('#xTtR')){ ttAllErr = ''; return loadTTAll(); }
   if(t.closest('#xUpd')) return checkUpdate(true);
   if(t.closest('#xCtR')){ ctsErr = ''; return loadContacts(); }
   if((b = t.closest('[data-xct]'))) return openContact(b.dataset.xct);
+  if((b = t.closest('[data-xrem]'))) return remindTeacher(b.dataset.xrem);
   if(t.closest('#xWkTxt')) return shareText(workText(), 'Teacher workload');
   if(t.closest('#xWkPdf')) return P.run(workPdf, () => shareText(workText()));
   if((b = t.closest('[data-xopen]'))){ const e = sheets.find(s => s.name === b.dataset.xopen); if(e) goAttend(e, Number(b.dataset.xday) || 0); return; }
