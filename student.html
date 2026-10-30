@@ -88,7 +88,8 @@ tr.tot td{font-weight:800;border-bottom:0}
 .legend span{display:inline-flex;align-items:center;gap:6px}.legend .c{width:20px;height:20px;font-size:10.5px;border-radius:5px}.legend .c.no{width:6px;height:6px;border-radius:50%;margin:0 7px}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .c.B{background:#1E2A4A;color:#8EA8FF}}
 .nolec{margin-top:8px;color:var(--muted);font-size:12.5px}
-.dmon[hidden]{display:none}
+.dmon+.dmon{margin-top:22px;padding-top:18px;border-top:2px dashed var(--line)}
+.mhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:14px 0 0;font-size:16px}
 @media print{.dmon[hidden]{display:block!important}.dmon{break-inside:avoid;margin-bottom:14px}.dgrid{overflow:visible;border:0}.c{print-color-adjust:exact;-webkit-print-color-adjust:exact}.dtab .sj,.dtab .tc{position:static}}
 [hidden]{display:none!important}
 @media print{header,.noprint{display:none!important}body{background:#fff;color:#000}.card{box-shadow:none;border-color:#bbb;break-inside:avoid}}
@@ -144,14 +145,8 @@ async function loadDays(months){
   const got = await Promise.all(months.map(m => loadMonth(m).then(r => (done++, msg(), r)).catch(e => (done++, msg(), { ok:false, mon:m, err:e.message }))));
   if(!cred) return;                                             // closed while loading
   const data = got.map(monthData);
-  const tabs = data.map(d => `<button type="button" class="mtab" data-dm="${d.mon}"><b>${MON[d.mon]}</b><small class="${band(d.pct)}">${d.err ? 'not loaded' : d.held ? d.att + '/' + d.held + ' · ' + d.pct + '%' : 'no lectures'}</small></button>`).join('');
-  box.innerHTML = `<div class="mtabs noprint">${tabs}</div>${data.map(monthHtml).join('')}
+  box.innerHTML = `${data.map(monthHtml).join('')}
     <div class="legend"><span><i class="c P">P</i>Present</span><span><i class="c A">A</i>Absent</span><span><i class="c L">L</i>Leave</span><span><i class="c B">B</i>Bunk</span><span><i class="c no"></i>No lecture</span><span>2P = 2 lectures</span></div>`;
-  const pick = m => { box.querySelectorAll('[data-dm]').forEach(b => b.classList.toggle('on', b.dataset.dm === m)); box.querySelectorAll('.dmon').forEach(x => x.hidden = x.dataset.m !== m); };
-  box.querySelectorAll('[data-dm]').forEach(b => b.onclick = () => pick(b.dataset.dm));
-  const last = [...data].reverse().find(d => d.held) || data[data.length - 1];
-  pick(last.mon);
-  const on = box.querySelector('.mtab.on'); if(on) on.scrollIntoView({ block:'nearest', inline:'center' });
 }
 function monthData(r){
   const d = { mon:r.mon, err:r.ok === false ? r.err : '', note:r.note || '', att:0, held:0, abs:0, lv:0, subs:[], empty:[], days:[], y:0, m:0 };
@@ -171,14 +166,14 @@ function monthData(r){
   return d;
 }
 function monthHtml(d){
-  const head = `<h3 style="margin:12px 0 0;font-size:15px">${MON[d.mon]}</h3>`;
-  if(d.err) return `<div class="dmon" data-m="${d.mon}" hidden>${head}<div class="err">${esc(d.err)}</div></div>`;
-  if(!d.subs.length) return `<div class="dmon" data-m="${d.mon}" hidden>${head}<div class="nolec" style="padding:14px 0">No attendance marked for you in ${MON[d.mon]} yet.${d.note ? '<br><small>' + esc(d.note) + '</small>' : ''}</div></div>`;
+  const head = `<h3 class="mhead"><span>${MON[d.mon]} ${d.y || ''}</span>${d.held ? `<span class="p ${band(d.pct)}" style="min-width:0">${d.att}/${d.held} · ${d.pct}%</span>` : ''}</h3>`;
+  if(d.err) return `<div class="dmon" data-m="${d.mon}">${head}<div class="err">${esc(d.err)}</div></div>`;
+  if(!d.subs.length) return `<div class="dmon" data-m="${d.mon}">${head}<div class="nolec" style="padding:14px 0">No attendance marked for you in ${MON[d.mon]} yet.${d.note ? '<br><small>' + esc(d.note) + '</small>' : ''}</div></div>`;
   const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], t = new Date();
   const isToday = day => t.getFullYear() === d.y && t.getMonth() === d.m && t.getDate() === day;
   const cell = c => !c ? '<i class="c no"></i>' : `<i class="c ${c.k}" title="${c.n} lecture${c.n > 1 ? 's' : ''}">${c.n > 1 ? c.n : ''}${c.k}</i>`;
   const tot = (a, h, p) => `<span class="tv">${a}/${h}</span><span class="p ${band(p)}" style="min-width:0;padding:1px 7px;font-size:12px">${p == null ? '–' : p + '%'}</span>`;
-  return `<div class="dmon" data-m="${d.mon}" hidden>${head}
+  return `<div class="dmon" data-m="${d.mon}">${head}
     <div class="msum"><div class="${band(d.pct)}"><b>${d.pct == null ? '–' : d.pct + '%'}</b><small>Attendance</small></div>
       <div><b>${d.att}/${d.held}</b><small>Attended / held</small></div>
       <div class="${d.abs ? 'bad' : ''}"><b>${d.abs}</b><small>Absent / bunk</small></div>
@@ -257,7 +252,7 @@ function show(r){
       const v = pct(Number(x.t) || 0, x.tt); return `<td>${esc(x.t)}/${x.tt}<br><span class="p ${tcls(v)}">${v}%</span></td>`; }).join('')}
       <td>${s.tt ? `<b>${s.to}/${s.tt}</b><br><span class="p ${tcls(s.tp)}">${s.tp}%</span>` : '–'}</td></tr>`).join('')}
     </tbody></table></div>` : '<div class="sub">No monthly test marks entered yet.</div>'}</section>`;
-  h += `<section class="card"><div class="dd-head"><span><h2 style="margin:0">Day by day</h2><div class="sub">Every lecture, date by date. Choose a month.</div></span></div><div id="days"></div></section>`;
+  h += `<section class="card"><div class="dd-head"><span><h2 style="margin:0">Day by day</h2><div class="sub">Every lecture, date by date: September first, then each month till now.</div></span></div><div id="days"></div></section>`;
   h += `<div class="row2 noprint"><button class="btn ghost" type="button" id="pr">Print / save as PDF</button><button class="btn ghost" type="button" id="bye">Close</button></div>
     <div class="note">If something looks wrong, speak to your subject teacher or class in-charge in college.</div>`;
   $('#out').innerHTML = h; $('#login').hidden = true; window.scrollTo(0, 0);
