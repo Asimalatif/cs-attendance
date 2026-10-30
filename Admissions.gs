@@ -13,11 +13,14 @@
  *
  * Install:
  *   1) In the attendance Apps Script project: + (Add a file) > Script > name it "Admissions" > paste this whole file.
- *   2) In doPost, right after the line  if (!user) return json_({ ok: false, error: 'BAD_LOGIN' });  add:
+ *   2) In doPost, right after these two lines
+ *        var user = authenticate_(req.username, req.password);
+ *        if (!user) return json_({ ok: false, error: 'BAD_LOGIN' });
+ *      add:
  *        if (/^adm_/.test(String(req.action || ''))) return json_(admRoute_(user, req));
  *   3) Deploy > Manage deployments > Edit > Version: New version > Deploy.
  *
- * Who can use it: admin logins (isAdmin_), plus the usernames listed in ADM_CFG.EXTRA_USERS
+ * Who can use it: the admin login, users whose Role in the Users sheet is ADMIN or PRINCIPAL, plus the usernames listed in ADM_CFG.EXTRA_USERS
  * (or in the Script Property ADM_USERS, comma separated) for admission clerks.
  */
 
@@ -135,6 +138,7 @@ function admRoute_(user, req) {
 
 function admCanUse_(user) {
   try { if (typeof isAdmin_ === 'function' && isAdmin_(user)) return true; } catch (e) {}
+  try { var sc = typeof scopeOf_ === 'function' ? scopeOf_(user) : null; if (sc && sc.all) return true; } catch (e) {}   // Users sheet Role = ADMIN or PRINCIPAL
   var u = String(user && user.username || '').trim().toLowerCase();
   var extra = ADM_CFG.EXTRA_USERS.concat(String(PropertiesService.getScriptProperties().getProperty('ADM_USERS') || '').split(','));
   return extra.some(function (x) { return String(x).trim().toLowerCase() === u && u; });
