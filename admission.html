@@ -198,7 +198,7 @@ function putRec(row, ctx){
 function dFromRec(o){
   return { program:o.key, year:o.year || '1st Year', section:o.pcs, quota:o.quota, rollNo:o.roll, name:o.name, father:o.father, id:o.id,
     subjects:[o.s1,o.s2,o.s3,o.s4,o.s5,o.s6,o.s7].map(x => x || ''), metric:o.metric, total:o.total, hq:o.hq, room:o.room,
-    dob:o.dob, contact:o.contact, email:o.email, board:o.board, passYear:o.passYear, matricRoll:o.matricRoll, challan:o.challan, pic:o.pic, migratedFrom:'' };
+    dob:o.dob, contact:o.contact, email:o.email, board:o.board, passYear:o.passYear, matricRoll:o.matricRoll, challan:o.challan, pic:o.pic, groupOnly:o.groupOnly || '', meritNo:o.meritNo || '', batch:o.batch || '', migratedFrom:'' };
 }
 
 /* ---------- form state ---------- */
@@ -208,7 +208,7 @@ function blankForm(keep){
   const year = k.year || '1st Year';
   const f = { program:p, year, section:k.section || '', quota:k.quota || 'Open Quota', rollNo:'', rollManual:false,
     name:'', father:'', id:'', subjects:compulsory(p, year).concat(groupsOf(p, year).length === 1 ? groupsOf(p, year)[0].subjects : ['', '', '']), metric:'', total:'', hq:'No', room:'',
-    dob:'', contact:'', email:'', board:'', passYear:'', matricRoll:'', challan:'', pic:'', migratedFrom:'', group:'', ctx:null, qid:null };
+    dob:'', contact:'', email:'', board:'', passYear:'', matricRoll:'', challan:'', pic:'', groupOnly:'', meritNo:'', batch:'', migratedFrom:'', group:'', ctx:null, qid:null, pq:'' };
   if(!f.section) f.section = sectionsOf(p, year)[0] || '';
   f.room = roomOf(f.section);
   if(isMig(year)) f.quota = init ? init.cfg.mig.QUOTA : 'Open Quota';
@@ -230,7 +230,7 @@ function mapYear(subj, p, year){
   return s;
 }
 function toD(f){
-  const d = {}; ['program','year','section','quota','name','father','id','metric','total','hq','room','dob','contact','email','board','passYear','matricRoll','challan','pic','migratedFrom'].forEach(k => d[k] = String(f[k] == null ? '' : f[k]).trim());
+  const d = {}; ['program','year','section','quota','name','father','id','metric','total','hq','room','dob','contact','email','board','passYear','matricRoll','challan','pic','groupOnly','meritNo','batch','migratedFrom'].forEach(k => d[k] = String(f[k] == null ? '' : f[k]).trim());
   d.subjects = f.subjects.map(x => String(x || '').trim().toUpperCase());
   d.rollNo = f.ctx || f.rollManual ? String(f.rollNo || '').trim() : '';
   if(f.ctx && d.hq === 'No' && f.ctx.orig.hq !== 'Yes') d.hq = f.ctx.orig.hq;   // a blank HQ cell stays blank unless she is Hafiz-e-Quran   // new + not typed: the server gives the next free number at save time
@@ -316,11 +316,12 @@ function formHtml(){
   </section>
   <section class="card">
     <h2>Student</h2>
-    <label for="fId">Portal Student ID</label>
-    <div class="rowi"><input id="fId" value="${esc(f.id)}" inputmode="numeric" autocomplete="off"><button class="btn small" type="button" id="xPortal" ${online() ? '' : 'disabled'}>Fill from portal</button></div>
-    <div class="hint">Fills name, father, marks, contact, photo and subjects from the portal copy (Portal Data sheet). Needs internet.</div>
+    <label for="fPq">Search the portal</label>
+    <div class="rowi"><input id="fPq" value="${esc(f.pq || '')}" placeholder="Her name, or name + father name" autocomplete="off" autocapitalize="words" enterkeyhint="search"><button class="btn small" type="button" id="xPortal" ${online() ? '' : 'disabled'}>Search</button></div>
+    <div class="hint">Pick her from the list to fill name, father, portal ID, marks, DOB, contact, photo, challan, batch and subjects from the portal copy (Portal Data sheet). Needs internet.</div>
     <label for="fName">Student name <span class="req">*</span></label><input id="fName" value="${esc(f.name)}" autocomplete="off" autocapitalize="words">
     <label for="fFather">Father name</label><input id="fFather" value="${esc(f.father)}" autocomplete="off" autocapitalize="words">
+    <label for="fId">Portal Student ID</label><input id="fId" value="${esc(f.id)}" inputmode="numeric" autocomplete="off">
     <div class="g3">
       <div><label for="fMetric">Matric marks</label><input id="fMetric" value="${esc(f.metric)}" inputmode="numeric"></div>
       <div><label for="fTotal">Total marks</label><input id="fTotal" value="${esc(f.total)}" inputmode="numeric" placeholder="1200"></div>
@@ -335,7 +336,7 @@ function formHtml(){
     ${groups.length === 1 ? '' : '<div class="hint">Choose a group to fill subjects 5 to 7, or type them.</div>'}
   </section>
   <section class="card">
-    <details ${f.ctx || f.dob || f.contact ? 'open' : ''}><summary>More details (DOB, contact, board, challan, photo)</summary>
+    <details ${f.ctx || f.dob || f.contact ? 'open' : ''}><summary>More details (DOB, contact, board, challan, photo, batch, merit no)</summary>
       <div class="g2">
         <div><label for="fDob">Date of birth</label><input id="fDob" value="${esc(f.dob)}" placeholder="dd/mm/yyyy" inputmode="numeric"></div>
         <div><label for="fContact">Student contact</label><input id="fContact" value="${esc(f.contact)}" inputmode="tel"></div>
@@ -347,7 +348,13 @@ function formHtml(){
         <div><label for="fMroll">Matric roll no</label><input id="fMroll" value="${esc(f.matricRoll)}" inputmode="numeric"></div>
       </div>
       <label for="fChallan">Challan details</label><input id="fChallan" value="${esc(f.challan)}" placeholder="P-2600.00, P-60000.00">
-      <label for="fPic">Picture URL</label><input id="fPic" value="${esc(f.pic)}" inputmode="url" autocapitalize="off">
+      <div class="g3">
+        <div><label for="fBatch">Batch</label><input id="fBatch" value="${esc(f.batch)}" placeholder="2026-27"></div>
+        <div><label for="fMerit">Merit no</label><input id="fMerit" value="${esc(f.meritNo)}" inputmode="numeric"></div>
+        <div><label for="fGonly">Group</label><input id="fGonly" value="${esc(f.groupOnly)}" placeholder="F.A only" list="gonlyList"></div>
+      </div>
+      <datalist id="gonlyList"><option>Economics Group 1</option><option>Economics Group 2</option><option>Geography Group 1</option><option>Geography Group 2</option></datalist>
+      <label for="fPic">Picture URL (also written as PHOTO)</label><input id="fPic" value="${esc(f.pic)}" inputmode="url" autocapitalize="off">
       ${mig ? `<label for="fMigFrom">Migrated from (college)</label><input id="fMigFrom" value="${esc(f.migratedFrom)}">` : ''}
     </details>
   </section>`;
@@ -357,7 +364,7 @@ function readForm(){
   const f = form;
   [['#fRoom','room'],['#fName','name'],['#fFather','father'],['#fId','id'],['#fMetric','metric'],['#fTotal','total'],['#fHq','hq'],
    ['#fDob','dob'],['#fContact','contact'],['#fEmail','email'],['#fBoard','board'],['#fPass','passYear'],['#fMroll','matricRoll'],
-   ['#fChallan','challan'],['#fPic','pic'],['#fMigFrom','migratedFrom']].forEach(([id, k]) => { const x = v(id); if(x !== undefined) f[k] = x; });
+   ['#fChallan','challan'],['#fPic','pic'],['#fMigFrom','migratedFrom'],['#fBatch','batch'],['#fMerit','meritNo'],['#fGonly','groupOnly'],['#fPq','pq']].forEach(([id, k]) => { const x = v(id); if(x !== undefined) f[k] = x; });
   const q = v('#fQuota'); if(q !== undefined && !isMig(f.year)) f.quota = q;
   const r = v('#fRoll'); if(r !== undefined){ if(f.ctx) f.rollNo = r.trim(); else { f.rollManual = !!r.trim(); f.rollNo = r.trim(); } }
   document.querySelectorAll('[data-sub]').forEach(e => f.subjects[+e.dataset.sub] = e.value.toUpperCase());
@@ -393,7 +400,8 @@ function wireForm(){
     try{ const r = await api({ action:'adm_next_roll', program:form.program, year:form.year }); if(r.roll){ form.rollNo = r.roll; render(); toast('New number ' + r.roll + ' (saved only when you press Save)'); } else toast(r.error || 'No number'); }
     catch(e){ toast(e.message); nr.disabled = false; }
   };
-  $('#xPortal').onclick = portalFill;
+  $('#xPortal').onclick = portalSearch;
+  $('#fPq').onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); portalSearch(); } };
   if(!form.ctx && !form.rollManual) fetchNext();
 }
 let nextT;
@@ -408,28 +416,51 @@ function fetchNext(){
     catch(e){ if(e.fatal){ fatal = e.message; render(); } }
   }, 300);
 }
-async function portalFill(){
+async function portalSearch(){
   readForm();
-  const id = String(form.id || '').trim(); if(!id) return toast('Type the portal Student ID first.');
-  const b = $('#xPortal'); b.disabled = true; b.textContent = 'Looking…';
+  const q = String(form.pq || '').trim() || String(form.name || '').trim();
+  if(q.length < 2) return toast('Type her name in the portal search box first.');
+  const b = $('#xPortal'); b.disabled = true; b.textContent = 'Searching…';
   try{
-    const r = await api({ action:'adm_portal', id });
+    const r = await api({ action:'adm_portal', q });
     if(!r.ok){ toast(r.error || 'Not found', 5000); return; }
-    const p = r.p, f = form, filled = [];
-    const set = (k, v) => { if(v && String(v).trim() && String(f[k] || '').trim() !== String(v).trim()){ if(!f.ctx || !String(f[k] || '').trim()){ f[k] = v; filled.push(k); } } };
-    ['name','father','dob','contact','email','pic','board','passYear','matricRoll','metric','total','challan'].forEach(k => set(k, p[k]));
-    set('id', p.id);
-    if(!f.ctx && p.quota && quotasOf(f.program).some(q => qk(q) === qk(p.quota))) { f.quota = quotasOf(f.program).find(q => qk(q) === qk(p.quota)); filled.push('quota'); }
-    if(p.subjects && p.subjects.filter(Boolean).length >= 5 && (!f.ctx || !f.subjects.slice(4).join(''))) { f.subjects = p.subjects.map(s => mapYear(s, f.program, f.year)); filled.push('subjects'); }
-    const warn = [];
-    if(p.program && p.program !== f.program) warn.push('Portal program: ' + p.programName + ' ' + p.year + (p.section ? ' section ' + p.section : ''));
-    if(p.status && !/enrolled/i.test(p.status)) warn.push('Portal status: ' + p.status);
-    if(p.portalRoll && !f.ctx){ f.rollNo = p.portalRoll; f.rollManual = true; filled.push('roll no'); }
-    const nice = { passYear:'passing year', matricRoll:'matric roll no', pic:'photo', dob:'date of birth', metric:'marks', total:'total marks' };
-    render();
-    toast(filled.length ? 'Filled: ' + filled.map(k => nice[k] || k).join(', ') + (warn.length ? '. ' + warn.join('. ') : '') : 'Nothing new on the portal. ' + warn.join('. '), 6000);
+    if(!r.list.length) return dlgOpen(`<h2>Not on the portal copy</h2><div class="sub">${esc(r.note || '')}</div><div class="acts"><button class="btn primary" id="dOk">OK</button></div>`), ($('#dOk').onclick = dlgClose);
+    const lbl = k => { const p = prog(k); return p ? p.label : ''; };
+    dlgOpen(`<h2>Portal: ${r.list.length}${r.more ? '+' : ''} found</h2><div class="sub">Tap the right student. ${r.more ? r.more + ' more not shown: add her father name to narrow it.' : ''}</div>
+      <div class="list" style="margin-top:10px;max-height:60vh;overflow:auto">${r.list.map((p, i) => `<button class="it" type="button" data-pi="${i}">${p.pic ? `<img src="${esc(p.pic)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : `<span class="av">${esc((p.name || '?').charAt(0).toUpperCase())}</span>`}
+        <span class="who"><b>${esc(p.name)}</b><small>d/o ${esc(p.father || '-')} · ID ${esc(p.id)}${p.portalRoll ? ' · ' + esc(p.portalRoll) : ''}</small>
+        <small>${esc(lbl(p.program) || p.programName)} · ${esc(p.year)}${p.section ? ' · ' + esc(p.section) : ''} · ${esc(p.quota)}${p.metric ? ' · ' + esc(p.metric) + '/' + esc(p.total) : ''}</small>
+        ${p.inTransform ? `<small style="color:var(--mid);font-weight:700">Already in the strength sheet: ${esc(p.inTransform.roll || '')} ${esc(p.inTransform.pcs)}</small>` : ''}${p.status && !/enrolled/i.test(p.status) ? `<small style="color:var(--bad);font-weight:700">Portal status: ${esc(p.status)}</small>` : ''}</span></button>`).join('')}</div>
+      <div class="acts"><button class="btn" id="dBack">Close</button></div>`);
+    $('#dBack').onclick = dlgClose;
+    document.querySelectorAll('[data-pi]').forEach(x => x.onclick = () => { dlgClose(); applyPortal(r.list[+x.dataset.pi]); });
   } catch(e){ toast(e.message, 5000); }
-  finally { const bb = $('#xPortal'); if(bb){ bb.disabled = !online(); bb.textContent = 'Fill from portal'; } }
+  finally { const bb = $('#xPortal'); if(bb){ bb.disabled = !online(); bb.textContent = 'Search'; } }
+}
+function applyPortal(p){
+  const f = form, filled = [], warn = [];
+  if(p.inTransform && !f.ctx) warn.push('She is already in the strength sheet (' + (p.inTransform.roll || '') + ' ' + p.inTransform.pcs + '): use Find & edit instead of adding her again');
+  // new admission: take program / year / section from the portal when they are known
+  if(!f.ctx && p.program && prog(p.program)){
+    f.program = p.program; f.year = p.year || f.year;
+    const secs = sectionsOf(f.program, f.year), code = String(p.section || '').toUpperCase();
+    const hit = secs.find(x => x.toUpperCase() === code || x.toUpperCase().endsWith(' ' + code) || (x.length === 2 && x.charAt(0).toUpperCase() === code));
+    f.section = hit || secs[0] || ''; f.room = roomOf(f.section);
+    if(isMig(f.year)) f.quota = init.cfg.mig.QUOTA;
+    f.subjects = compulsory(f.program, f.year).concat(groupsOf(f.program, f.year).length === 1 ? groupsOf(f.program, f.year)[0].subjects : ['', '', '']);
+    filled.push('class');
+  } else if(p.program && p.program !== f.program) warn.push('Portal program: ' + p.programName + ' ' + p.year + (p.section ? ' section ' + p.section : ''));
+  const set = (k, v) => { if(v && String(v).trim() && String(f[k] || '').trim() !== String(v).trim()){ if(!f.ctx || !String(f[k] || '').trim()){ f[k] = v; filled.push(k); } } };
+  ['name','father','id','dob','contact','email','pic','board','passYear','matricRoll','metric','total','challan','batch'].forEach(k => set(k, p[k]));
+  if(!f.ctx && !isMig(f.year) && p.quota && quotasOf(f.program).some(q => qk(q) === qk(p.quota))) { f.quota = quotasOf(f.program).find(q => qk(q) === qk(p.quota)); filled.push('quota'); }
+  if(p.subjects && p.subjects.filter(Boolean).length >= 5 && (!f.ctx || !f.subjects.slice(4).join(''))) { f.subjects = p.subjects.map(s => mapYear(s, f.program, f.year)); filled.push('subjects'); }
+  if(p.status && !/enrolled/i.test(p.status)) warn.push('Portal status: ' + p.status);
+  if(p.portalRoll && !f.ctx){ f.rollNo = p.portalRoll; f.rollManual = true; filled.push('roll no'); }
+  f.pq = '';
+  const nice = { passYear:'passing year', matricRoll:'matric roll no', pic:'photo', dob:'date of birth', metric:'marks', total:'total marks', id:'portal ID' };
+  fetchNext(); render();
+  if(warn.length && p.inTransform && !f.ctx) dlgOpen(`<h2>Already admitted?</h2><div class="sub">${esc(warn.join('. '))}.</div><div class="acts"><button class="btn primary" id="dOk">OK</button></div>`), ($('#dOk').onclick = dlgClose);
+  else toast(filled.length ? 'Filled: ' + filled.map(k => nice[k] || k).join(', ') + (warn.length ? '. ' + warn.join('. ') : '') : 'Nothing new on the portal. ' + warn.join('. '), 6000);
 }
 
 /* ---------- save ---------- */

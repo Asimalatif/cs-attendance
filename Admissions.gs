@@ -116,11 +116,16 @@ var ADM_CFG = {
 var ADM_FIELDS = {
   roll: 'enroll', name: 'studentname', father: 'fathername', id: 'portalid', quota: 'quota', dob: 'dob',
   metric: 'obtainedmarks', total: 'totalmarks', hq: 'hq', room: 'room', pic: 'picurl', contact: 'studentcontact',
-  email: 'email', board: 'board', passYear: 'passingyear', matricRoll: 'matricrollno', challan: 'challandetails'
+  email: 'email', board: 'board', passYear: 'passingyear', matricRoll: 'matricrollno', challan: 'challandetails',
+  groupOnly: 'grouponly', meritNo: 'meritno', batch: 'batch'
 };
+/* Columns that always get the same value: Enroll# = REG#, Pic URL = PHOTO, MATRIC ROLL NO = Metric RollNo.
+   S.No, SESSION and STATUS are filled for a new admission; Program/Class/Section, PCS, Appeared in,
+   Aggregate and PERCENTAGE are worked out from the form. So every column of Transform is covered. */
 /* Fields sent to the phone for every student (offline search / edit) */
 var ADM_INDEX = ['sno', 'roll', 'name', 'father', 'id', 'key', 'year', 'pcs', 'quota', 's1', 's2', 's3', 's4', 's5', 's6', 's7',
-  'dob', 'metric', 'total', 'hq', 'room', 'pic', 'contact', 'email', 'board', 'passYear', 'matricRoll', 'challan'];
+  'dob', 'metric', 'total', 'hq', 'room', 'pic', 'contact', 'email', 'board', 'passYear', 'matricRoll', 'challan',
+  'groupOnly', 'meritNo', 'batch', 'session', 'status'];
 
 /* ================= Router (called from doPost) ================= */
 function admRoute_(user, req) {
@@ -129,7 +134,7 @@ function admRoute_(user, req) {
     case 'adm_init':      return admInit_();
     case 'adm_index':     return admIndex_();
     case 'adm_next_roll': return admNextRollFor_(req.program, req.year);
-    case 'adm_portal':    return admPortal_(req.id);
+    case 'adm_portal':    return admPortal_(req.q || req.id);
     case 'adm_check':     return admCheck_(req.d || {}, req.ctx || null);
     case 'adm_save':      return admSave_(user, req.d || {}, req.ctx || null, req.override === true, String(req.cid || ''));
   }
@@ -257,7 +262,9 @@ function admRec_(T, r, i, sections) {
     programName: g('program'), year: admYear_(g('class')), pcs: g('pcs'), section: g('section'), quota: g('quota'),
     dob: g('dob'), metric: g('obtainedmarks'), total: g('totalmarks'), hq: g('hq'), room: g('room'), pic: g('picurl') || g('photo'),
     contact: g('studentcontact'), email: g('email'), board: g('board'), passYear: g('passingyear'),
-    matricRoll: g('matricrollno'), challan: g('challandetails') };
+    matricRoll: g('matricrollno') || g('metricrollno'), challan: g('challandetails'),
+    groupOnly: g('grouponly'), meritNo: g('meritno'), batch: g('batch'), session: g('session'), status: g('status') };
+  if (/^null$/i.test(rec.groupOnly)) rec.groupOnly = '';
   for (var s = 1; s <= 7; s++) rec['s' + s] = g('sub' + s);
   if (!rec.pcs && rec.section) rec.pcs = rec.section;
   rec.key = admKeyOf_(rec.programName, rec.year, rec.pcs, rec.roll, sections);
@@ -494,30 +501,44 @@ function admIndex_() {
 }
 
 /* ================= Fill from the portal copy ("Portal Data" sheet, kept fresh by the UOP portal sync) ================= */
-function admPortal_(id) {
-  var q = admS_(id).toUpperCase();
-  if (!q) return { ok: false, error: 'Type the portal Student ID or Enrollment# first.' };
+/** Search the portal copy by name / father name (all words must match), or by Student ID / Enrollment#.
+ *  Returns up to 25 students; each one says whether she is already in Transform. */
+function admPortal_(query) {
+  var q = admS_(query);
+  if (q.length < 2) return { ok: false, error: 'Type at least 2 letters of her name (or her portal ID).' };
   var sh = admBook_().getSheetByName(ADM_CFG.PORTAL_SHEET);
   if (!sh || sh.getLastRow() < 2) return { ok: false, error: 'The "' + ADM_CFG.PORTAL_SHEET + '" sheet is empty. Run the UOP portal sync first.' };
   var v = sh.getDataRange().getDisplayValues(), c = {};
   v[0].forEach(function (h, j) { var k = admH_(h); if (k && !(k in c)) c[k] = j; });
   var g = function (r, k) { return c[k] === undefined ? '' : admS_(r[c[k]]); };
-  var row = null;
+  var Q = q.toUpperCase(), words = q.toLowerCase().split(/\s+/).filter(Boolean), hits = [], exact = [];
   for (var i = 1; i < v.length; i++) {
-    if (g(v[i], 'studentid').toUpperCase() === q || admNormRoll_(g(v[i], 'enrollment')) === admNormRoll_(q)) { row = v[i]; break; }
+    var r = v[i], id = g(r, 'studentid'), en = g(r, 'enrollment');
+    if (!g(r, 'studentname')) continue;
+    if (id.toUpperCase() === Q || (en && admNormRoll_(en) === admNormRoll_(Q))) { exact.push(r); continue; }
+    var hay = (g(r, 'studentname') + ' ' + g(r, 'fathername') + ' ' + en + ' ' + id).toLowerCase();
+    if (words.every(function (w) { return hay.indexOf(w) >= 0; })) hits.push(r);
   }
-  if (!row) return { ok: false, error: 'Student ' + id + ' is not in "' + ADM_CFG.PORTAL_SHEET + '". If she was added on the portal today, run a quick portal sync and try again.' };
+  var all = exact.concat(hits), more = Math.max(0, all.length - 25);
+  if (!all.length) return { ok: true, list: [], note: 'Nobody called "' + q + '" in "' + ADM_CFG.PORTAL_SHEET + '". If she was added on the portal today, run a quick portal sync and search again.' };
+  var set = admSettings_(), T = admRead_(), byId = {}, byRoll = {};
+  admAll_(T, set.sections).forEach(function (r) { if (r.id) byId[r.id] = r; if (r.roll) byRoll[admNormRoll_(r.roll)] = r; });
   var num = function (x) { var n = admNum_(String(x).replace(/,/g, '')); return n === '' || n === 0 ? '' : String(Math.round(n * 100) / 100); };
-  var yr = admYear_(g(row, 'class')), sub = [];
-  for (var s = 1; s <= 7; s++) sub.push(g(row, 'sub' + s + (admIsMig_(yr) ? '2ndyear' : '1styear')) || g(row, 'sub' + s + '1styear'));
-  var progName = g(row, 'program'), key = admKeyOf_(progName, yr, '', g(row, 'enrollment'), admSettings_().sections);
-  return { ok: true, p: {
-    id: g(row, 'studentid'), portalRoll: g(row, 'enrollment'), name: g(row, 'studentname'), father: g(row, 'fathername'),
-    quota: g(row, 'category'), dob: g(row, 'dob'), contact: g(row, 'studentcontact'), email: g(row, 'emailaddress'),
-    pic: g(row, 'photoname'), board: g(row, 'boarduniversity'), passYear: g(row, 'passingyear'), matricRoll: num(g(row, 'rollno')),
-    metric: num(g(row, 'obtainmarkscgpa')), total: num(g(row, 'totalmarkscgpa')), challan: g(row, 'challandetails'),
-    subjects: sub, program: key, programName: progName, year: yr, section: g(row, 'section'), status: g(row, 'status'),
-    synced: g(row, 'detailssynced') } };
+  var list = all.slice(0, 25).map(function (row) {
+    var yr = admYear_(g(row, 'class')), sub = [];
+    for (var s = 1; s <= 7; s++) sub.push(g(row, 'sub' + s + (admIsMig_(yr) ? '2ndyear' : '1styear')) || g(row, 'sub' + s + '1styear'));
+    var progName = g(row, 'program'), en = g(row, 'enrollment'), id = g(row, 'studentid');
+    var have = byId[id] || (en ? byRoll[admNormRoll_(en)] : null);
+    return {
+      id: id, portalRoll: en, name: g(row, 'studentname'), father: g(row, 'fathername'),
+      quota: g(row, 'category'), dob: g(row, 'dob'), contact: g(row, 'studentcontact'), email: g(row, 'emailaddress'),
+      pic: g(row, 'photoname'), board: g(row, 'boarduniversity'), passYear: g(row, 'passingyear'), matricRoll: num(g(row, 'rollno')),
+      metric: num(g(row, 'obtainmarkscgpa')), total: num(g(row, 'totalmarkscgpa')), challan: g(row, 'challandetails'), batch: g(row, 'batch'),
+      subjects: sub, program: admKeyOf_(progName, yr, '', en, set.sections), programName: progName, year: yr,
+      section: g(row, 'section'), status: g(row, 'status'), synced: g(row, 'detailssynced'),
+      inTransform: have ? { roll: have.roll, pcs: have.pcs, name: have.name } : null };
+  });
+  return { ok: true, list: list, more: more };
 }
 
 /* ================= Validation ================= */
@@ -663,6 +684,7 @@ function admValues_(d, p) {
   var year = admYear_(d.year), sec = admSecCode_(d.section), pcs = admS_(d.section);
   Object.keys(ADM_FIELDS).forEach(function (f) { if (f !== 'roll') v[ADM_FIELDS[f]] = admS_(d[f]); });
   v.enroll = admS_(d.rollNo); v.reg = admS_(d.rollNo);
+  v.photo = v.picurl; v.metricrollno = v.matricrollno;
   v.obtainedmarks = m; v.totalmarks = t; v.hq = hq;
   v.program = p.program; v['class'] = year; v.section = sec; v.pcs = pcs;
   v.programclasssection = p.program + ' - ' + year + ' - ' + sec;
@@ -676,6 +698,7 @@ function admValues_(d, p) {
 var ADM_DERIVED = {
   rollNo: ['enroll', 'reg'], program: ['program', 'programclasssection', 'appearedin', 'section', 'pcs', 'class'],
   year: ['class', 'programclasssection', 'section', 'pcs'], section: ['section', 'pcs', 'programclasssection'],
+  pic: ['picurl', 'photo'], matricRoll: ['matricrollno', 'metricrollno'],
   metric: ['obtainedmarks', 'aggregate', 'percentage'], total: ['totalmarks', 'aggregate', 'percentage'], hq: ['hq', 'aggregate']
 };
 
