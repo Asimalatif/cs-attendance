@@ -957,7 +957,7 @@ function saveR(roll, R){
 }
 const stuOf = roll => ((data[sheetName()] || {}).students || []).find(x => x.roll === roll);
 /** Tag shown on a disabled row: a removed guest or a student who changed subject. */
-const offTag = s => '<span class="rtag">' + (s.offGuest ? 'Guest removed' : 'Changed subject') + '</span>';
+const offTag = s => '<span class="rtag">' + (s.leftAs ? esc(s.leftAs) : s.offGuest ? 'Guest removed' : 'Changed subject') + '</span>';
 /** Guest tags (guest here / guest somewhere else) + remark tags of one student. */
 function tagHtml(roll){
   const s = stuOf(roll); let h = '';
