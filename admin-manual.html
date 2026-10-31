@@ -111,6 +111,14 @@ section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
 <p><b>Report colours</b>: client PDFs use the palette at the top of <code>window.JCWPDF</code> (NAVY = brown, TEA strip, logo from <code>jcw-logo.png</code>); Excel files are built by <code>toXlsx()</code> with xlsx-js-style. Server PDFs (official sheets, grand test, detention) take their colours from the CSS in <code>WorkbookReports.gs</code> (<code>wrCss_</code>), <code>GrandTest.gs</code> and <code>Detention.gs</code>.</p>
 </section>
 
+<section id="boardres"><h2>Board results module (board.html, boardparse.js, BoardResults.gs)</h2>
+<ul><li><b>boardparse.js</b> reads the gazette with pdf.js (cdnjs 3.11.174) on the admin's device: text lines → cells; column edges from the table's ruling lines (or, without lines, from the header and the data); a line with a 4-8 digit number in the first column is a student; a line across columns (or bold, or a college-like name) is the college heading; a name on two lines is joined to the nearest student row.</li>
+<li><code>finish()</code> = the Colab steps: Marks to a number, Position = dense rank (PRIVATE CANDIDATES excluded), sort by Marks, the JCW top 20 (positions 1-20 of “JINNAH COLLEGE FOR WOMEN”).</li>
+<li><b>BoardResults.gs</b> (<code>br_</code> actions, admin login only) writes in parts of 2,500 rows into the workbook <code>BR_CFG.BOOK</code>; Roll No and Registration columns are kept as text.</li>
+<li>Student search can use such a sheet for the 1st year board result: set <code>ST_CFG.BOARD_LIST</code> in StudentSearch.gs to e.g. <code>'HSSC 1st year 2026'</code> (only Jinnah College rows are used; “Remarks” is read as the grade).</li>
+<li>If a new gazette layout is read wrongly, test it with the page's <b>Find a student</b> box before saving and adjust <code>boardparse.js</code> (JUNK, COLLEGEISH, ROLL patterns).</li></ul>
+</section>
+
 <section id="roles"><h2>3. Users and roles</h2>
 <table><tr><th>Who</th><th>Decided by</th><th>Can</th></tr>
 <tr><td>Teacher</td><td>A row in <i>Users</i> + her classes in <i>Timetable</i></td><td>Mark / change her own sheets, tests, grand test, detention of her subjects; reports of her subjects; student search (any student, without contact/email/address)</td></tr>
@@ -295,7 +303,8 @@ if(!r.ok) throw new Error(r.error);</pre>
   try{ rate.value = localStorage.getItem('jcw_ttsrate') || '1'; }catch(e){}
   rate.onchange = () => { try{ localStorage.setItem('jcw_ttsrate', rate.value); }catch(e){} };
   let voices = []; const lv = () => { voices = speechSynthesis.getVoices() || []; }; lv(); speechSynthesis.onvoiceschanged = lv;
-  const voice = () => { const en = voices.filter(v => /^en/i.test(v.lang)); return en.find(v => /female|zira|samantha|heera|veena/i.test(v.name)) || en.find(v => /en-(in|gb)/i.test(v.lang)) || en[0] || null; };
+  const score = v => { const n = v.name || ''; let s = 0; if(/natural|neural/i.test(n)) s += 60; if(/premium|enhanced|siri/i.test(n)) s += 45; if(/google/i.test(n)) s += 35; if(/online/i.test(n)) s += 15; if(/en-(IN|GB)/i.test(v.lang)) s += 6; if(/female|aria|jenny|sonia|libby|neerja|zira|samantha|heera/i.test(n)) s += 4; if(/espeak|compact/i.test(n)) s -= 80; return s; };
+  const voice = () => { let want = ''; try{ want = JSON.parse(localStorage.getItem('csa2_vVoiceEn') || '""'); }catch(e){} const en = voices.filter(v => /^en/i.test(v.lang)).sort((a, b) => score(b) - score(a)); return (want && en.find(v => v.name === want)) || en[0] || null; };
   const speak = t => new Promise(res => { const u = new SpeechSynthesisUtterance(t), v = voice(); if(v){ u.voice = v; u.lang = v.lang; } u.rate = Number(rate.value) || 1; u.onend = u.onerror = () => res(); speechSynthesis.speak(u); });
   let token = 0;
   const stop = () => { token++; speechSynthesis.cancel(); document.querySelectorAll('.tts1.on,#ttsAll.on').forEach(b => { b.classList.remove('on'); b.textContent = b.id === 'ttsAll' ? '🔊 Listen to all' : '🔊'; }); document.querySelectorAll('section.reading').forEach(s => s.classList.remove('reading')); };
