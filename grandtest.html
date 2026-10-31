@@ -76,6 +76,10 @@ input:disabled{opacity:.55}
 .row .mk button{min-height:48px;min-width:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface2);font-weight:800;font-size:14px;color:var(--bad)}
 .row.low{border-color:var(--mid);background:var(--mid-bg)}
 .row.abs{border-color:var(--bad);background:var(--bad-bg)}
+.row.lv{border-color:var(--info);background:var(--info-bg)}
+.setg{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:480px){.setg{grid-template-columns:1fr}}
+.setg label{display:block;font-size:12px;font-weight:750;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:0 0 5px}
 .row.err input{border-color:var(--bad);color:var(--bad)}
 .row.off{opacity:.5}.row.off .who b{text-decoration:line-through}
 .chip{display:inline-block;font-size:11.5px;font-weight:750;border-radius:999px;padding:1px 7px;margin-left:4px;background:var(--info-bg);color:var(--info)}
@@ -113,6 +117,7 @@ dialog::backdrop{background:rgba(10,15,25,.55)}
   <nav role="tablist" id="nav">
     <button role="tab" data-tab="mine" aria-selected="true">My classes</button>
     <button role="tab" data-tab="prog" aria-selected="false" class="hidden" id="tabProg">Progress</button>
+    <button role="tab" data-tab="set" aria-selected="false" class="hidden" id="tabSet">Settings</button>
     <button role="tab" data-tab="wait" aria-selected="false">Waiting<span class="badge hidden" id="qb">0</span></button>
   </nav>
 </div></header>
@@ -134,13 +139,16 @@ const ls = {
   set(k, v){ try{ localStorage.setItem('csa2_' + k, JSON.stringify(v)); }catch(e){} }
 };
 const user = ls.get('user', ''), pass = ls.get('pass', '');
-let info = ls.get('gt_info', null);        // { items, all, deadline, session, title, pass, defTotal }
+const me = String(user || '').toLowerCase();
+if(ls.get('gt_owner', '') !== me){ ls.set('gt_info', null); ls.set('gt_data', {}); ls.set('gt_drafts', {}); ls.set('gt_owner', me); }   // another login used this phone: forget its lists
+let info = ls.get('gt_info', null);        // { user, items, all, opens, deadline, total, session, pass }
+if(info && info.user && info.user !== me) info = null;
 let cache = ls.get('gt_data', {});         // key -> server data of one class + subject
-let drafts = ls.get('gt_drafts', {});      // key -> { total, marks } being typed
-let queue = ls.get('gt_q', []);            // saves waiting for the server
-let tab = 'mine', cur = null, progress = null, findQ = '', progFilter = 'open', syncing = false, fatal = '';
+let drafts = ls.get('gt_drafts', {});      // key -> { marks } being typed
+let queue = ls.get('gt_q', []).filter(q => !q.user || q.user === me);   // saves waiting for the server (this login only)
+let tab = 'mine', setBusy = false, cur = null, progress = null, findQ = '', progFilter = 'open', syncing = false, fatal = '';
 const keyOf = (cls, sub) => cls + '|' + sub;
-const saveQ = () => { ls.set('gt_q', queue); paint(); };
+const saveQ = () => { ls.set('gt_q', ls.get('gt_q', []).filter(q => q.user && q.user !== me).concat(queue)); paint(); };
 const online = () => navigator.onLine !== false;
 
 async function api(payload, ms = 60000){
@@ -170,16 +178,19 @@ function parse(raw, total){
   const s = String(raw == null ? '' : raw).trim().toUpperCase().replace(',', '.');
   if(s === '') return { k:'empty' };
   if(['A','AB','ABS','ABSENT'].includes(s)) return { k:'abs' };
+  if(['L','LEAVE'].includes(s)) return { k:'leave' };
   if(/^\d+(\.\d+)?$/.test(s)){ const v = Number(s); return total > 0 && v > total ? { k:'over', v } : { k:'num', v }; }
   return { k:'bad' };
 }
 function deadlineState(){
-  if(!info || !info.deadline) return { open:true, text:'' };
-  const left = info.deadline - Date.now(), d = new Date(info.deadline);
-  const when = d.toLocaleString([], { day:'numeric', month:'short', hour:'numeric', minute:'2-digit' });
-  if(left <= 0) return { open:false, text:'Closed ' + when + (info.all ? ' · admin can still edit' : ''), cls:'closed' };
+  if(!info) return { open:true, text:'' };
+  const now = Date.now(), fmt = t => new Date(t).toLocaleString([], { day:'numeric', month:'short', year:'numeric', hour:'numeric', minute:'2-digit' });
+  if(info.opens && now < info.opens) return { open:false, before:true, text:'Opens ' + fmt(info.opens) + (info.all ? ' · admin can already enter' : ''), cls:'closed' };
+  if(!info.deadline) return { open:true, text:'Open · no deadline set' };
+  const left = info.deadline - now;
+  if(left <= 0) return { open:false, text:'Closed ' + fmt(info.deadline) + (info.all ? ' · admin can still edit' : ''), cls:'closed' };
   const h = Math.floor(left / 3600000), dd = Math.floor(h / 24);
-  return { open:true, text:'Closes ' + when + ' · ' + (dd ? dd + 'd ' + (h % 24) + 'h' : h ? h + 'h ' + Math.floor(left / 60000) % 60 + 'm' : Math.floor(left / 60000) + 'm') + ' left', cls:h < 24 ? 'soon' : '' };
+  return { open:true, text:'Closes ' + fmt(info.deadline) + ' · ' + (dd ? dd + 'd ' + (h % 24) + 'h' : h ? h + 'h ' + Math.floor(left / 60000) % 60 + 'm' : Math.floor(left / 60000) + 'm') + ' left', cls:h < 24 ? 'soon' : '' };
 }
 const canEdit = () => deadlineState().open || (info && info.all);
 
@@ -190,6 +201,7 @@ function paint(){
   const b = $('#qb'); b.textContent = w; b.classList.toggle('hidden', !w);
   const ds = deadlineState(), dl = $('#dl'); dl.textContent = ds.text; dl.className = 'dl ' + (ds.cls || ''); dl.classList.toggle('hidden', !ds.text);
   $('#tabProg').classList.toggle('hidden', !(info && info.all));
+  $('#tabSet').classList.toggle('hidden', !(info && info.all));
   if(info){ $('#title').textContent = 'Grand Test ' + (info.session || ''); }
 }
 function setTab(t){ tab = t; cur = null; document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t ? 'true' : 'false')); render(); if(t === 'prog') loadProgress(false); }
@@ -205,6 +217,7 @@ function render(){
   if(cur) { m.innerHTML = top + entryHtml(); wireEntry(); return; }
   if(tab === 'mine') m.innerHTML = top + mineHtml();
   else if(tab === 'prog') m.innerHTML = top + progHtml();
+  else if(tab === 'set') m.innerHTML = top + setHtml();
   else m.innerHTML = top + waitHtml();
   wireLists();
 }
@@ -223,7 +236,8 @@ function mineHtml(){
   const items = info.items.filter(it => !findQ || (it.cls + ' ' + it.sub + ' ' + it.teacher).toLowerCase().includes(findQ.toLowerCase()));
   if(!info.items.length) return `<div class="card"><h2>No classes</h2><div class="sub">The Timetable has no class for you. Ask the admin.</div></div>`;
   const ds = deadlineState();
-  return `${!ds.open ? `<div class="note ${info.all ? 'mid' : 'bad'}">The grand test portal is closed. ${info.all ? 'As admin you can still enter and correct marks.' : 'You can view marks and download award lists, but not change them.'}</div>` : ''}
+  if(!ds.open && !info.all) return `<div class="card"><h2>${ds.before ? 'The grand test is not open yet' : 'The grand test is closed'}</h2><div class="sub">${esc(ds.text)}. ${ds.before ? 'Marks can be entered from that date.' : 'Ask the admin if a mark still needs to be corrected.'}</div></div>`;
+  return `${!ds.open ? `<div class="note mid">${ds.before ? 'Teachers cannot enter marks yet.' : 'The grand test is closed for teachers.'} As admin you can still enter and correct marks.</div>` : ''}
   ${info.items.length > 8 ? `<input class="search" id="fq" value="${esc(findQ)}" placeholder="Search class, subject or teacher" autocomplete="off">` : ''}
   <div class="list">${items.map(it => { const s = statusOf(it);
     return `<button class="it" type="button" data-open="${esc(keyOf(it.cls, it.sub))}"><span class="tx"><b>${esc(it.cls)} · ${esc(titleCase(it.sub))}</b><small>${esc(it.teacher)}</small>${s.pct != null ? `<span class="bar"><i class="${s.pct < 100 ? 'mid' : ''}" style="width:${s.pct}%"></i></span>` : ''}</span><span class="pill ${s.cls}">${esc(s.text)}</span></button>`; }).join('') || '<div class="empty">Nothing found.</div>'}</div>`;
@@ -236,7 +250,7 @@ function curDraft(){
   if(!drafts[cur]){
     const q = queue.find(x => x.id === cur), marks = {};
     if(q) Object.assign(marks, q.marks); else d.students.forEach(s => { if(s.mark !== '') marks[s.roll] = s.mark; });
-    drafts[cur] = { total: q ? String(q.total) : String(d.total || info.defTotal || ''), marks, clean:true };
+    drafts[cur] = { marks, clean:true };
   }
   return drafts[cur];
 }
@@ -244,76 +258,65 @@ function saveDraft(){ const dr = drafts[cur]; if(dr) dr.clean = false; ls.set('g
 function entryHtml(){
   const d = curData(), [cls, sub] = cur.split('|');
   if(!d) return `<div class="card"><h2>${esc(cls)} · ${esc(titleCase(sub))}</h2><div class="sub">${online() ? 'Loading the students…' : 'This class has not been opened on this phone yet. Connect to the internet once.'}</div></div>`;
-  const dr = curDraft(), total = Number(dr.total) || 0, edit = canEdit(), q = queue.find(x => x.id === cur);
+  const dr = curDraft(), total = Number(info.total) || 0, edit = canEdit(), q = queue.find(x => x.id === cur);
   const missing = d.students.filter(s => s.missing).length;
   return `<section class="card ehead">
       <div><h2 style="margin:0">${esc(cls)} · ${esc(titleCase(d.sub))}</h2><div class="sub">${esc(d.teacher)} · Grand Test workbook sheet "${esc(d.sheet)}"</div></div>
       ${q ? `<div class="note ${q.state === 'wait' ? 'info' : 'bad'}" style="margin:0">${q.state === 'wait' ? 'Saved on this phone, waiting to be sent.' : esc((q.error || 'Not saved.') + ' See the Waiting tab.')}</div>` : ''}
       ${!edit ? '<div class="note bad" style="margin:0">The portal is closed. Marks can only be viewed.</div>' : ''}
       ${missing ? `<div class="note info" style="margin:0">${missing} new admission${missing > 1 ? 's are' : ' is'} not in the grand test sheet yet. ${missing > 1 ? 'They are' : 'She is'} added when you save.</div>` : ''}
-      <div class="tot"><label for="gTotal">Total marks</label><input id="gTotal" inputmode="decimal" value="${esc(dr.total)}" ${edit ? '' : 'disabled'} autocomplete="off">
-        ${edit ? '<button class="btn small warn" type="button" id="xFillA">Empty rows = A</button>' : ''}</div>
+      <div class="tot"><span class="pill info" style="font-size:14px">Total marks: ${esc(total || '–')}</span><span class="sub">Type marks out of ${esc(total)}, <b>A</b> for absent or <b>L</b> for leave.</span></div>
       <div class="count" id="count"></div>
     </section>
     <ul class="rows" id="rows">${d.students.map((s, i) => `<li class="row ${s.off ? 'off' : ''}" data-roll="${esc(s.roll)}"><span class="no">${i + 1}</span>
       <span class="who"><b>${esc(titleCase(s.name))}</b><small>${esc(s.roll)}${s.father ? ' · d/o ' + esc(titleCase(s.father)) : ''}${s.missing ? '<span class="chip">new</span>' : ''}${s.off ? '<span class="chip">cancelled</span>' : ''} <span class="chip p" data-pc></span></small></span>
-      <span class="mk"><input data-m value="${esc(dr.marks[s.roll] || '')}" inputmode="decimal" autocomplete="off" aria-label="Marks for ${esc(s.name)}" ${edit && !s.off ? '' : 'disabled'}>${edit && !s.off ? '<button type="button" data-a aria-label="Absent">A</button>' : ''}</span></li>`).join('')}</ul>`;
+      <span class="mk"><input data-m value="${esc(dr.marks[s.roll] || '')}" autocomplete="off" autocapitalize="characters" enterkeyhint="next" aria-label="Marks for ${esc(s.name)}" ${edit && !s.off ? '' : 'disabled'}></span></li>`).join('')}</ul>`;
 }
 function tally(){
   const d = curData(), dr = curDraft(); if(!d || !dr) return;
-  const total = Number(dr.total) || 0; let done = 0, left = 0, low = 0, abs = 0, bad = 0;
+  const total = Number(info.total) || 0; let done = 0, left = 0, low = 0, abs = 0, lv = 0, bad = 0;
   document.querySelectorAll('#rows .row').forEach(row => {
     const s = d.students.find(x => x.roll === row.dataset.roll); if(!s || s.off) return;
     const p = parse(dr.marks[s.roll], total), pc = row.querySelector('[data-pc]');
     row.classList.toggle('err', p.k === 'over' || p.k === 'bad');
     row.classList.toggle('abs', p.k === 'abs');
     row.classList.toggle('low', p.k === 'num' && total > 0 && p.v < total * PASS());
-    pc.textContent = p.k === 'num' && total ? '· ' + Math.round(p.v / total * 100) + '%' : p.k === 'over' ? '· more than ' + total : p.k === 'bad' ? '· type a number or A' : '';
+    row.classList.toggle('lv', p.k === 'leave');
+    pc.textContent = p.k === 'num' && total ? '· ' + Math.round(p.v / total * 100) + '%' : p.k === 'leave' ? '· leave' : p.k === 'over' ? '· more than ' + total : p.k === 'bad' ? '· type a number, A or L' : '';
     if(p.k === 'empty') left++; else done++;
-    if(p.k === 'abs') abs++; if(p.k === 'over' || p.k === 'bad') bad++; if(p.k === 'num' && total && p.v < total * PASS()) low++;
+    if(p.k === 'abs') abs++; if(p.k === 'leave') lv++; if(p.k === 'over' || p.k === 'bad') bad++; if(p.k === 'num' && total && p.v < total * PASS()) low++;
   });
-  $('#count').textContent = done + ' entered' + (left ? ' · ' + left + ' left' : ' · all done') + (abs ? ' · ' + abs + ' absent' : '') + (low ? ' · ' + low + ' below ' + Math.round(PASS() * 100) + '%' : '') + (bad ? ' · ' + bad + ' wrong' : '');
-  const sb = $('#bSave'); sb.textContent = !canEdit() ? 'Portal closed' : left ? 'Save marks (' + left + ' left)' : 'Save marks'; sb.disabled = !canEdit();
+  $('#count').textContent = done + ' entered' + (left ? ' · ' + left + ' left' : ' · all done') + (abs ? ' · ' + abs + ' absent' : '') + (lv ? ' · ' + lv + ' leave' : '') + (low ? ' · ' + low + ' below ' + Math.round(PASS() * 100) + '%' : '') + (bad ? ' · ' + bad + ' wrong' : '');
+  const sb = $('#bSave'); sb.textContent = !canEdit() ? 'Closed' : bad ? 'Correct ' + bad + ' wrong entr' + (bad > 1 ? 'ies' : 'y') : left ? 'Fill all marks (' + left + ' left)' : 'Save marks'; sb.disabled = !canEdit() || left > 0 || bad > 0;
 }
 function wireEntry(){
   const d = curData(); if(!d) return;
-  const dr = curDraft(), t = $('#gTotal');
-  if(t) t.oninput = () => { dr.total = t.value.trim().replace(',', '.'); saveDraft(); tally(); };
-  const fa = $('#xFillA'); if(fa) fa.onclick = () => {
-    const empty = d.students.filter(s => !s.off && parse(dr.marks[s.roll], 0).k === 'empty');
-    if(!empty.length) return toast('No empty rows.');
-    dlgOpen(`<h2>Mark ${empty.length} empty row${empty.length > 1 ? 's' : ''} absent?</h2><div class="sub">${empty.slice(0, 8).map(s => esc(titleCase(s.name))).join(', ')}${empty.length > 8 ? '…' : ''}</div><div class="acts"><button class="btn" id="dNo">Back</button><button class="btn primary" id="dYes">Mark A</button></div>`);
-    $('#dNo').onclick = dlgClose; $('#dYes').onclick = () => { empty.forEach(s => dr.marks[s.roll] = 'A'); saveDraft(); dlgClose(); render(); };
-  };
+  const dr = curDraft();
   const inputs = [...document.querySelectorAll('#rows input[data-m]')];
   inputs.forEach((inp, i) => {
     const roll = inp.closest('.row').dataset.roll;
     inp.oninput = () => { dr.marks[roll] = inp.value.trim(); saveDraft(); tally(); };
     inp.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); const n = inputs[i + 1]; if(n){ n.focus(); n.select(); } else inp.blur(); } };
   });
-  document.querySelectorAll('#rows [data-a]').forEach(b => b.onclick = () => {
-    const row = b.closest('.row'), roll = row.dataset.roll, inp = row.querySelector('input');
-    dr.marks[roll] = dr.marks[roll] === 'A' ? '' : 'A'; inp.value = dr.marks[roll]; saveDraft(); tally();
-  });
   tally();
 }
 function onSave(){
   const d = curData(), dr = curDraft(); if(!d || !dr) return;
   if(!canEdit()) return toast('The portal is closed.');
-  const total = Number(dr.total);
-  if(!(total > 0)) return toast('Enter the total marks first.');
+  const total = Number(info.total);
+  if(!(total > 0)) return toast('The admin has not set the total marks yet.');
   const marks = {}, empty = [], wrong = [];
   d.students.forEach(s => {
     if(s.off) return;
     const p = parse(dr.marks[s.roll], total);
     if(p.k === 'empty') empty.push(s); else if(p.k === 'over' || p.k === 'bad') wrong.push(s);
-    else marks[s.roll] = p.k === 'abs' ? 'A' : String(p.v);
+    else marks[s.roll] = p.k === 'abs' ? 'A' : p.k === 'leave' ? 'L' : String(p.v);
   });
-  if(wrong.length) return dlgOpen(`<h2>Please correct</h2><div class="sub">${wrong.map(s => esc(titleCase(s.name)) + ': ' + esc(dr.marks[s.roll])).join('<br>')}<br><br>Marks must be a number up to ${total}, or A for absent.</div><div class="acts"><button class="btn primary" id="dNo">OK</button></div>`), ($('#dNo').onclick = dlgClose);
-  if(empty.length) return dlgOpen(`<h2>${empty.length} student${empty.length > 1 ? 's have' : ' has'} no marks</h2><div class="sub">${empty.slice(0, 10).map(s => esc(titleCase(s.name))).join(', ')}${empty.length > 10 ? '…' : ''}<br><br>Enter marks, or A for absent. You can also tap <b>Empty rows = A</b>.</div><div class="acts"><button class="btn primary" id="dNo">OK</button></div>`), ($('#dNo').onclick = dlgClose);
+  if(wrong.length) return dlgOpen(`<h2>Please correct</h2><div class="sub">${wrong.map(s => esc(titleCase(s.name)) + ': ' + esc(dr.marks[s.roll])).join('<br>')}<br><br>Marks must be a number up to ${total}, A for absent or L for leave.</div><div class="acts"><button class="btn primary" id="dNo">OK</button></div>`), ($('#dNo').onclick = dlgClose);
+  if(empty.length) return dlgOpen(`<h2>${empty.length} student${empty.length > 1 ? 's have' : ' has'} no marks</h2><div class="sub">${empty.slice(0, 10).map(s => esc(titleCase(s.name))).join(', ')}${empty.length > 10 ? '…' : ''}<br><br>Every student needs marks, A for absent or L for leave.</div><div class="acts"><button class="btn primary" id="dNo">OK</button></div>`), ($('#dNo').onclick = dlgClose);
   const [cls, sub] = cur.split('|');
   queue = queue.filter(x => x.id !== cur);
-  queue.push({ id:cur, cls, sub, total, marks, ts:Date.now(), state:'wait' }); saveQ();
+  queue.push({ id:cur, cls, sub, total, marks, ts:Date.now(), state:'wait', user:me }); saveQ();
   delete drafts[cur]; ls.set('gt_drafts', drafts);
   toast(online() ? 'Saving…' : 'Saved on this phone. It is sent when internet returns.', 4000);
   render(); sync();
@@ -370,6 +373,36 @@ async function loadProgress(force){
   if(tab === 'prog') render();
 }
 
+/* ---------- settings (admin) ---------- */
+const toLocal = t => { if(!t) return ''; const d = new Date(t), p = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()); };
+function setHtml(){
+  const ds = deadlineState();
+  return `<section class="card"><h2>Grand test settings</h2><div class="sub">For the whole college. Teachers see the Grand test button on the Home screen only between the opening date and the deadline.</div>
+    <div class="note ${ds.open ? 'good' : 'mid'}" style="margin:12px 0">${ds.open ? 'Open now for teachers' : 'Closed for teachers'}${ds.text ? ' · ' + esc(ds.text) : ''}</div>
+    <div class="setg">
+      <div><label for="sTotal">Total marks (every subject)</label><input id="sTotal" inputmode="numeric" value="${esc(info.total || '')}" autocomplete="off"></div>
+      <div></div>
+      <div><label for="sOpens">Opens on</label><input id="sOpens" type="datetime-local" value="${esc(toLocal(info.opens))}"></div>
+      <div><label for="sDead">Deadline</label><input id="sDead" type="datetime-local" value="${esc(toLocal(info.deadline))}"></div>
+    </div>
+    <div class="sub" style="margin-top:8px">Leave "Opens on" empty to open on 1 January. Leave the deadline empty for no deadline. The deadline is also written to Settings!B2 of the Grand Test workbook.</div>
+    <div class="acts"><button class="btn primary" type="button" id="xSet" ${online() && !setBusy ? '' : 'disabled'}>${setBusy ? 'Saving…' : online() ? 'Save settings' : 'Needs internet'}</button></div></section>`;
+}
+async function saveSettings(){
+  const total = Number($('#sTotal').value), o = $('#sOpens').value, d = $('#sDead').value;
+  if(!(total > 0)) return toast('Type the total marks, for example 40.');
+  const opens = o ? new Date(o).getTime() : '', deadline = d ? new Date(d).getTime() : '';
+  if(opens && deadline && deadline <= opens) return toast('The deadline must be after the opening date.');
+  setBusy = true; render();
+  try{
+    const r = await api({ action:'gt_settings', total, opens, deadline });
+    if(!r.ok) throw new Error(r.error || 'Not saved');
+    Object.assign(info, { total:r.total, opens:r.opens, deadline:r.deadline }); ls.set('gt_info', info);
+    toast('Settings saved. Total ' + r.total + ' marks.');
+  } catch(e){ toast(e.message, 5000); }
+  finally { setBusy = false; render(); }
+}
+
 /* ---------- lists wiring ---------- */
 function wireLists(){
   const f = $('#fq'); if(f){ f.oninput = () => { findQ = f.value; const p = f.selectionStart; render(); const g = $('#fq'); g.focus(); try{ g.setSelectionRange(p, p); }catch(e){} }; }
@@ -381,6 +414,7 @@ function wireLists(){
   document.querySelectorAll('[data-retry]').forEach(b => b.onclick = () => { const q = queue.find(x => x.id === b.dataset.retry); if(q){ q.state = 'wait'; q.error = ''; q.ts = Date.now(); saveQ(); sync(); } });
   const s = $('#xSend'); if(s) s.onclick = () => { queue.forEach(q => { if(q.state !== 'wait' && !q.closed){ q.state = 'wait'; q.error = ''; } }); saveQ(); sync(); };
   document.querySelectorAll('[data-pf]').forEach(b => b.onclick = () => { progFilter = b.dataset.pf; render(); });
+  const xs = $('#xSet'); if(xs) xs.onclick = saveSettings;
   const pr = $('#xProgRef'); if(pr) pr.onclick = () => loadProgress(true);
   const ps = $('#xProgShare'); if(ps) ps.onclick = () => {
     const open = progress.items.filter(x => x.status !== 'done');
@@ -396,7 +430,7 @@ async function openClass(k){
     const r = await api({ action:'gt_get', cls, sub });
     if(!r.ok) throw new Error(r.error || 'Could not load');
     cache[k] = r; ls.set('gt_data', cache);
-    if(r.deadline !== undefined && info){ info.deadline = r.deadline; ls.set('gt_info', info); }
+    if(info){ if(r.deadline !== undefined) info.deadline = r.deadline; if(r.opens) info.opens = r.opens; if(r.total) info.total = r.total; ls.set('gt_info', info); }
     const dr = drafts[k];
     if(dr && dr.clean) delete drafts[k];      // nothing typed yet: show the latest marks from the sheet
     if(cur === k) render();
@@ -429,7 +463,7 @@ async function sync(){
 /* ---------- start ---------- */
 async function loadInfo(){
   if(!online() || !user) return;
-  try{ const r = await api({ action:'gt_list' }); if(r.ok){ info = r; ls.set('gt_info', info); fatal = ''; } else fatal = r.error || 'Could not load'; }
+  try{ const r = await api({ action:'gt_list' }); if(r.ok){ r.user = r.user || me; info = r; ls.set('gt_info', info); fatal = ''; } else fatal = r.error || 'Could not load'; }
   catch(e){ if(e.fatal || !info) fatal = e.message; }
   render();
 }
