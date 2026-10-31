@@ -5122,7 +5122,7 @@ let hc = null, rinfo = null;
 function adminExtraCards(){
   if(scope !== 'all') return '';
   const page = studentPageUrl();
-  return `<div class="grid2" style="margin-top:12px">${shsCard()}${rosCard()}${bkCard()}${leftCard()}<section class="card"><h3>${I.doc} Admissions</h3>
+  return `<div class="grid2" style="margin-top:12px">${shsCard()}${evCard()}${rosCard()}${bkCard()}${leftCard()}<section class="card"><h3>${I.doc} Admissions</h3>
       <div class="sub">Add a new student or change an old admission (program, year, section, quota, roll no, subjects, marks). Saves go straight into Transform-ALL-COLLEGE-STRENGTH, also without internet. Then run <b>Sheets vs strength sheet</b> so the attendance sheets follow.</div>
       <div class="acts2"><a class="btn primary" href="admission.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Admissions</a></div></section><section class="card"><h3>${I.check} System health check</h3>
       <div class="sub">Finds problems before they stop the work: duplicate roll numbers, students without subjects or class, timetable teachers without a login, classes with no students, sections with no attendance this month, missing sheets and automatic jobs that are off.</div>
@@ -5416,7 +5416,7 @@ function rosOpen(){
       ${d.extra.map(x => `<div class="li"><span class="tx">${rosWho(x)}<small><b>Extra</b>: ${esc(x.why)}${x.marks ? ' · has marks: she will be struck through, marks kept' : ''}</small></span><button class="pill bad" type="button" data-xrf="${k}|remove|${esc(x.roll)}">Remove</button></div>`).join('')}
       ${d.off.map(x => `<div class="li"><span class="tx">${rosWho(x)}<small><b>Struck off</b> here but she is in the strength sheet (${esc(x.why)})</small></span><button class="pill good" type="button" data-xrf="${k}|on|${esc(x.roll)}">Switch on</button></div>`).join('')}
       <button class="btn small" type="button" data-xrfa="${k}" style="margin-top:6px">Fix this sheet (${d.missing.length + d.extra.length + d.off.length})</button></details>`).join('')}</div>
-    <div class="acts"><button class="btn small grow" type="button" id="xRosCsv">Excel</button><button class="btn small grow" id="closeDlg">Close</button></div>`);
+    <div class="acts"><button class="btn small primary grow" type="button" id="xRosFixAll">Fix all sheets of ${esc(R.label)}</button><button class="btn small grow" type="button" id="xRosCsv">Excel</button><button class="btn small grow" id="closeDlg">Close</button></div>`);
 }
 async function rosFix(k, op, roll, btn){
   const d = ros.res.diffs[k]; if(btn){ btn.disabled = true; btn.textContent = '…'; }
@@ -5434,11 +5434,106 @@ async function rosFixAll(k, btn){
   for(let i = 0; i < jobs.length; i++){ btn.textContent = 'Fixing ' + (i + 1) + ' of ' + jobs.length + '…'; await rosFix(k, jobs[i][0], jobs[i][1], document.querySelector(`[data-xrf="${k}|${jobs[i][0]}|${jobs[i][1]}"]`)); }
   btn.textContent = '✓ Fixed'; refreshRos();
 }
+/* ----- Check everything: run the strength-sheet check on many workbooks in one go, then fix all ----- */
+let evs = { sel:store.get('evsel', null), busy:false, msg:'', res:{} };   // res[key] = { label, kind, res, fixed }
+function evTargets(){
+  const out = SEAS.map(m => ({ key:'D_' + m, kind:'daily', mon:m, group:'Daily attendance', label:monName(m) }));
+  (bk.list || []).forEach(b => out.push({ key:'B_' + b.key, kind:'book', book:b.key, group:b.group || 'Other', label:b.label.replace(/ (attendance|monthly test)$/i, '') }));
+  return out;
+}
+function evSelected(t){
+  if(evs.sel && evs.sel[t.key] !== undefined) return evs.sel[t.key];
+  if(t.kind === 'daily') return SEAS.indexOf(t.mon) <= seasNow() + 1;
+  return true;
+}
+const evCount = r => r && r.res ? r.res.diffs.reduce((a, d) => a + d.missing.length + d.extra.length + (d.off ? d.off.length : 0), 0) : 0;
+function evCard(){
+  if(scope !== 'all') return '';
+  const T = evTargets(), groups = [...new Set(T.map(t => t.group))], done = T.filter(t => evs.res[t.key]);
+  const total = done.reduce((a, t) => a + evCount(evs.res[t.key]), 0);
+  return `<section class="card" id="evCard"><h3>${I.check} Check everything</h3>
+    <div class="sub">Tick the workbooks, press <b>Check selected</b>, then <b>Fix all</b> for one workbook or <b>Fix everything</b>. Missing students are added, extra students removed (struck through if they already have marks or attendance).</div>
+    ${groups.map(g => `<div class="sub" style="margin-top:10px"><b>${esc(g)}</b></div><div class="chips" style="margin:4px 0">${T.filter(t => t.group === g).map(t => { const r = evs.res[t.key], n = evCount(r);
+      return `<label class="chip ${evSelected(t) ? 'on' : ''}" style="cursor:pointer"><input type="checkbox" data-xevs="${esc(t.key)}" ${evSelected(t) ? 'checked' : ''} ${evs.busy ? 'disabled' : ''} style="margin:0 6px 0 0">${esc(t.label)}${r ? (r.err ? ' ⚠' : n ? ` · <b style="color:var(--absent)">${n}</b>` : ' · ✓') : ''}</label>`; }).join('')}</div>`).join('')}
+    ${!bk.list ? '<div class="sub">Looking for the other workbooks…</div>' : ''}
+    <div class="acts2"><button class="btn primary" type="button" id="xEvCheck" ${evs.busy ? 'disabled' : ''}>Check selected</button>${total ? `<button class="btn" type="button" id="xEvFixAll" ${evs.busy ? 'disabled' : ''}>Fix everything (${total})</button>` : ''}</div>
+    ${evs.msg ? `<div class="sub" style="margin-top:8px">${evs.msg}</div>` : ''}
+    ${done.length && !evs.busy ? `<div style="margin-top:8px">${done.map(t => { const r = evs.res[t.key], n = evCount(r);
+      return `<div class="li"><span class="tx"><b>${esc(t.group)} · ${esc(t.label)}</b><small>${r.err ? esc(r.err) : (r.res.checked || 0) + ' sheets checked · ' + (n ? n + ' difference' + (n === 1 ? '' : 's') + ' in ' + r.res.diffs.length + ' sheet' + (r.res.diffs.length === 1 ? '' : 's') : 'all match') + (r.fixed ? ' · ' + esc(r.fixed) : '')}</small></span>
+        ${n ? `<button class="pill" type="button" data-xevo="${esc(t.key)}">Show</button><button class="pill good" type="button" data-xevf="${esc(t.key)}">Fix all</button>` : '<span class="pill good">✓</span>'}</div>`; }).join('')}</div>` : ''}</section>`;
+}
+function refreshEv(){ const c = $q('#evCard'); if(c){ const t = document.createElement('div'); t.innerHTML = evCard(); c.replaceWith(t.firstElementChild); } }
+async function evCheckOne(t){
+  if(t.kind === 'daily'){
+    let cursor = 0, all = null;
+    do{
+      const r = await srv({ action:'roster_check', mon:t.mon, cursor }, 330000);
+      if(!all) all = r; else { all.diffs = all.diffs.concat(r.diffs); all.checked += r.checked; }
+      cursor = r.cursor; all.done = r.done;
+      evs.msg = 'Checking daily attendance ' + esc(t.label) + '… ' + Math.round(r.cursor / Math.max(1, r.total) * 100) + '%'; refreshEv();
+    } while(!all.done);
+    return all;
+  }
+  return srv({ action:'bk_check', book:t.book }, 330000);
+}
+async function evCheck(){
+  const T = evTargets().filter(evSelected); if(!T.length) return toast('Tick at least one workbook.');
+  evs.busy = true; evs.res = {};
+  for(let i = 0; i < T.length; i++){
+    const t = T[i]; evs.msg = 'Checking ' + (i + 1) + ' of ' + T.length + ': ' + esc(t.group) + ' · ' + esc(t.label) + '…'; refreshEv();
+    try{ evs.res[t.key] = { res:await evCheckOne(t) }; }catch(e){ evs.res[t.key] = { err:'Check stopped: ' + e.message }; }
+  }
+  const n = T.reduce((a, t) => a + evCount(evs.res[t.key]), 0);
+  evs.busy = false; evs.msg = n ? `<b style="color:var(--absent)">${n} difference${n === 1 ? '' : 's'} found.</b> Press <b>Fix all</b> on a line, or <b>Fix everything</b>.` : '<b style="color:var(--present)">✓ Every selected workbook matches the strength sheet.</b>';
+  refreshEv();
+}
+/** fixes every difference of one checked workbook, one sheet per server call */
+async function evFixOne(key, label){
+  const t = evTargets().find(x => x.key === key), r = evs.res[key]; if(!t || !r || !r.res) return 0;
+  let ok = 0, bad = 0;
+  const sheets = r.res.diffs.filter(d => d.missing.length || d.extra.length || (d.off && d.off.length));
+  for(let i = 0; i < sheets.length; i++){
+    const d = sheets[i];
+    let ops = d.missing.map(x => ['add', x.roll]).concat(d.extra.map(x => ['remove', x.roll]), (d.off || []).map(x => ['on', x.roll]));
+    evs.msg = 'Fixing ' + esc(label || t.label) + ': sheet ' + (i + 1) + ' of ' + sheets.length + ' (' + esc(d.sheet) + ')…'; refreshEv();
+    while(ops.length){
+      let res;
+      try{ res = await srv({ action:'bk_batch', kind:t.kind, book:t.book, sheet:d.sheet, ops }, 330000); }
+      catch(e){ bad += ops.length; toast(d.sheet + ': ' + e.message); break; }
+      res.done.forEach(x => { if(x.ok){ ok++; const f = x.op === 'add' ? 'missing' : x.op === 'remove' ? 'extra' : 'off'; d[f] = (d[f] || []).filter(y => y.roll !== x.roll); } else bad++; });
+      ops = res.left || [];
+    }
+  }
+  r.fixed = ok + ' fixed' + (bad ? ', ' + bad + ' not fixed' : '');
+  return ok;
+}
+async function evFix(keys){
+  const list = keys.filter(k => evCount(evs.res[k]));
+  const n = list.reduce((a, k) => a + evCount(evs.res[k]), 0);
+  if(!n || !confirm('Fix ' + n + ' difference(s) in ' + list.length + ' workbook(s)? Missing students are added, extra students removed.')) return;
+  evs.busy = true; let ok = 0;
+  for(const k of list){ const t = evTargets().find(x => x.key === k); ok += await evFixOne(k, t ? t.group + ' · ' + t.label : k); }
+  evs.busy = false; evs.msg = '✓ ' + ok + ' change' + (ok === 1 ? '' : 's') + ' made. Press <b>Check selected</b> again to confirm.'; refreshEv();
+}
+/** "Fix all sheets" inside the month dialogs: fixes the result shown there */
+async function evFixMonth(kind){
+  const key = kind === 'daily' ? 'D_' + ros.mon : 'B_' + (bk.res && bk.res.book);
+  evs.res[key] = { res:kind === 'daily' ? ros.res : bk.res };
+  { const d = $q('#dlg'); if(d && d.open) d.close(); }
+  await evFix([key]);
+  if(kind === 'daily') refreshRos(); else refreshBk();
+}
+function evShow(key){
+  const t = evTargets().find(x => x.key === key), r = evs.res[key]; if(!t || !r || !r.res) return;
+  if(t.kind === 'daily'){ ros = { mon:t.mon, busy:false, res:r.res, pct:100, err:'' }; refreshRos(); rosOpen(); }
+  else { bk.key = t.book; bk.res = r.res; refreshBk(); bkOpen(); }
+}
+
 /* ----- Monthly test / Grand test workbooks vs strength sheet (same idea as the attendance check) ----- */
 let bk = { list:null, key:'', busy:false, res:null, err:'' };
 function bkCard(){
   if(scope !== 'all') return '';
-  if(!bk.list && !bk.loading && navigator.onLine){ bk.loading = true; srv({ action:'bk_list' }, 60000).then(r => { bk.list = r.books || []; }).catch(e => { bk.list = []; bk.err = e.message; }).finally(() => { bk.loading = false; refreshBk(); }); }
+  if(!bk.list && !bk.loading && navigator.onLine){ bk.loading = true; srv({ action:'bk_list' }, 60000).then(r => { bk.list = r.books || []; }).catch(e => { bk.list = []; bk.err = e.message; }).finally(() => { bk.loading = false; refreshBk(); refreshEv(); }); }
   const R = bk.res, n = R ? R.diffs.reduce((a, d) => a + d.missing.length + d.extra.length, 0) : 0;
   const groups = bk.list ? [...new Set(bk.list.map(b => b.group || ''))] : [];
   return `<section class="card" id="bkCard"><h3>${I.check} Monthly attendance, test, grand test &amp; detention workbooks vs strength sheet</h3>
@@ -5464,7 +5559,7 @@ function bkOpen(){
       ${d.missing.map(x => `<div class="li"><span class="tx">${rosWho(x)}<small>In the strength sheet, <b>missing</b> in this sheet</small></span><button class="pill good" type="button" data-xbf="${k}|add|${esc(x.roll)}">Add</button></div>`).join('')}
       ${d.extra.map(x => `<div class="li"><span class="tx">${rosWho(x)}<small><b>Extra</b>: ${esc(x.why)}${x.marks ? ' · has marks: she will be struck through, marks kept' : ''}</small></span><button class="pill bad" type="button" data-xbf="${k}|remove|${esc(x.roll)}">Remove</button></div>`).join('')}
       <button class="btn small" type="button" data-xbfa="${k}" style="margin-top:6px">Fix this sheet (${d.missing.length + d.extra.length})</button></details>`).join('')}</div>
-    <div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>`);
+    <div class="acts"><button class="btn small primary grow" type="button" id="xBkFixAll">Fix all sheets</button><button class="btn small grow" id="closeDlg">Close</button></div>`);
 }
 async function bkFix(k, op, roll, btn){
   const d = bk.res.diffs[k]; if(btn){ btn.disabled = true; btn.textContent = '…'; }
@@ -5710,6 +5805,13 @@ document.addEventListener('click', ev => {
   if(t.closest('#xDset')) return openDutySettings();
   if((b = t.closest('[data-xros]'))) return rosCheck(b.dataset.xros);
   if((b = t.closest('[data-xbk]'))) return bkCheck(b.dataset.xbk);
+  if((b = t.closest('[data-xevs]'))){ evs.sel = Object.assign({}, evs.sel || {}); evs.sel[b.dataset.xevs] = b.checked; store.set('evsel', evs.sel); const l = b.closest('.chip'); if(l) l.classList.toggle('on', b.checked); return; }
+  if(t.closest('#xEvCheck')) return evCheck();
+  if(t.closest('#xEvFixAll')) return evFix(Object.keys(evs.res));
+  if((b = t.closest('[data-xevf]'))) return evFix([b.dataset.xevf]);
+  if((b = t.closest('[data-xevo]'))) return evShow(b.dataset.xevo);
+  if(t.closest('#xRosFixAll')) return evFixMonth('daily');
+  if(t.closest('#xBkFixAll')) return evFixMonth('book');
   if(t.closest('#xBkOpen')) return bkOpen();
   if((b = t.closest('[data-xbf]'))){ const x = b.dataset.xbf.split('|'); return bkFix(Number(x[0]), x[1], x.slice(2).join('|'), b).then(refreshBk); }
   if((b = t.closest('[data-xbfa]'))) return bkFixAll(Number(b.dataset.xbfa), b);
