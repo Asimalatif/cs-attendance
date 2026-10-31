@@ -198,10 +198,10 @@ function wrCss_(ncols) {
   var fs = ncols > 45 ? 6.5 : ncols > 30 ? 7 : 8.5;
   return '<style>@page{size:A4 landscape;margin:5mm}body{margin:0;font-family:Arial,Helvetica,sans-serif;width:' + WR_CFG.PRINT_WIDTH + 'px}' +
     'table{border-collapse:collapse;table-layout:fixed;width:' + WR_CFG.PRINT_WIDTH + 'px}tr{page-break-inside:avoid}' +
-    'td{border:1px solid #000;padding:2px 1px;text-align:center;vertical-align:middle;font-size:' + fs + 'px;line-height:1.1;overflow:hidden;word-break:break-word;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    'td{border:1px solid #8A4A35;padding:2px 1px;text-align:center;vertical-align:middle;font-size:' + fs + 'px;line-height:1.1;overflow:hidden;word-break:break-word;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
     'td.l{text-align:left;white-space:nowrap;text-overflow:ellipsis;padding-left:3px}td.gen{border:none;text-align:right;font-size:8px}' +
-    'td.ttl{font-size:17px;font-weight:bold;padding:5px;line-height:1.3}td.tch{font-size:' + (fs - 0.5) + 'px}td.sub{font-weight:bold;font-size:' + (fs + 0.5) + 'px}' +
-    'td.hd{font-weight:bold;background:#eee}tr.z td{background:#f7f7f7}.hi{background:#ccc!important;font-weight:bold}.ab{background:#ffc0cb!important}' +
+    'td.ttl{font-size:17px;font-weight:bold;color:#fff;background:#6B3423;padding:5px;line-height:1.3}td.tch{font-size:' + (fs - 0.5) + 'px}td.sub{font-weight:bold;font-size:' + (fs + 0.5) + 'px}' +
+    'td.hd{font-weight:bold;background:#E7B7AE;color:#4A2418}tr.z td{background:#FBEDEA}.hi{background:#ccc!important;font-weight:bold}.ab{background:#ffc0cb!important}' +
     '.low{background:#ff0!important;color:#f00;font-weight:bold}.g1{background:#ffd700!important;font-weight:bold}.g2{background:#c0c0c0!important;font-weight:bold}.g3{background:#cd7f32!important;font-weight:bold}' +
     '.note{margin-top:10px;font-size:9px;line-height:1.5}.sum{margin-top:8px;font-size:10px;font-weight:bold}</style>';
 }
@@ -390,7 +390,7 @@ function wrDtPdf_(T, cls) {
   var cg = '<colgroup>' + cols.map(function (c2, i) { return '<col style="width:' + ((i < T.idc ? idw[i] : rest) * scale).toFixed(1) + 'px">'; }).join('') + '</colgroup>';
   var G = wrGroupRows_(T, subCols, wrTeachers_(T, cls)), n = cols.length;
   var h = '<html><head><meta charset="UTF-8">' + wrCss_(n) +
-    '<style>td.hd,td.tch,td.sub{background:#d3d3d3;font-weight:bold}.abt{color:#f00;font-weight:bold}.nrt{color:#008000;font-weight:bold}.flt{color:#b30000;font-weight:bold}</style></head><body><table>' + cg +
+    '<style>td.hd,td.tch,td.sub{background:#E7B7AE;color:#4A2418;font-weight:bold}.abt{color:#f00;font-weight:bold}.nrt{color:#008000;font-weight:bold}.flt{color:#b30000;font-weight:bold}</style></head><body><table>' + cg +
     '<thead><tr><td class="gen" colspan="' + n + '"><b>Generated on:</b> ' + wrNow_() + '</td></tr>' +
     '<tr><td class="ttl" colspan="' + n + '">JCW DETENTION AWARDLIST - SESSION ' + gtSession_() + '<br>SECTION: ' + wrEsc_(T.name) + '</td></tr>' +
     '<tr><td class="hd" colspan="' + T.idc + '" rowspan="2"></td>' + G.t + '</tr><tr>' + G.s + '</tr><tr>';
