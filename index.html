@@ -384,6 +384,18 @@ button.li:hover{background:var(--surface2)}
 .pill{flex:none;font-size:12px;font-weight:800;padding:3px 9px;border-radius:99px;background:var(--surface2);color:var(--muted);white-space:nowrap}
 .pill.bad{background:var(--absent-bg);color:var(--absent)}.pill.mid{background:var(--leave-bg);color:var(--leave)}.pill.good{background:var(--present-bg);color:var(--present)}
 .pill.solid{background:var(--accent);color:var(--on-accent)}
+details.fold{padding:0;overflow:hidden}
+details.fold>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:12px;padding:14px 16px}
+details.fold>summary::-webkit-details-marker{display:none}
+details.fold>summary>span:first-child{flex:1;min-width:0}
+details.fold>summary b{display:block;font-size:15.5px}
+details.fold>summary small{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+details.fold[open]>summary{border-bottom:1px solid var(--line)}
+details.fold[open]>:not(summary){margin-left:12px;margin-right:12px}
+details.fold[open]>#aBody{margin-bottom:12px}
+.xtabs{display:flex;gap:6px;margin:6px 0 10px;flex-wrap:wrap}
+.xtabs button{border:1.5px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 14px;font-weight:700;font-size:13.5px}
+.xtabs button.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 .mbar{display:block;height:6px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:6px}
 .mbar i{display:block;height:100%;border-radius:99px;background:var(--present);transition:width .5s var(--ease)}
 .mbar i.bad{background:var(--absent)}.mbar i.mid{background:var(--leave)}
@@ -3311,7 +3323,18 @@ function mtCard(cur){
     return `<button class="li" type="button" data-xmt="${esc(e.name)}"><span class="tx"><b>${esc(e.cls)} · ${esc(titleCase(e.sub))}</b><small>${st === 'done' ? 'Marks in the sheet, out of ' + esc(d.mt.total) + ' · tap to view or change' : st === 'wait' ? 'Saved on the phone, sending' : st === 'unk' ? 'Tap to open' : 'Not entered yet'}</small></span><span class="pill ${st === 'done' ? 'good' : st === 'wait' ? 'mid' : st === 'unk' ? '' : 'solid'}">${st === 'done' ? '\u2713 Entered' : st === 'wait' ? '\u21bb Waiting' : st === 'unk' ? 'Open' : 'Enter'}</span></button>`;
   }).join('');
   const chips = mons.length > 1 ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 4px">${mons.map(m => `<button type="button" class="pill ${m === mtMon ? 'solid' : ''}" data-mtmon="${esc(m)}" aria-pressed="${m === mtMon}" style="border:0;cursor:pointer;font-size:13px;padding:6px 12px">${esc(MONTHS[monIdx(m)] || m)}</button>`).join('')}</div>` : '';
-  return `<section class="card"><h3>${I.doc} Monthly test <span class="tdate">${esc(MONTHS[monIdx(mtMon)] || '')}</span></h3><div class="sub">Pick the month, then tap a class to enter or change its test marks.</div>${chips}${rows || '<div class="empty">No classes in this month.</div>'}</section>`;
+  return { pill:'', body:`<div class="sub">Pick the month, then tap a class to enter or change its test marks.</div>${chips}${rows || '<div class="empty">No classes in this month.</div>'}` };
+}
+/* ---------- Home: one card for Monthly test, Grand test and Detention exam ---------- */
+let exTab = store.get('exTab', '');
+function examsCard(cur){
+  const g = gtCard(), d = dtCard(), m = cur.length ? mtCard(cur) : null;
+  const tabs = [m ? ['mt', 'Monthly test', m] : null, ['gt', 'Grand test', g], ['dt', 'Detention', d]].filter(Boolean);
+  let t = tabs.find(x => x[0] === exTab) ? exTab : (g.open ? 'gt' : d.open ? 'dt' : tabs[0][0]);
+  const cur2 = tabs.find(x => x[0] === t);
+  return `<section class="card" id="exCard"><h3>${I.doc} Tests &amp; exams ${t === 'mt' ? `<span class="tdate">${esc(MONTHS[monIdx(mtMon)] || '')}</span>` : cur2[2].pill}</h3>
+    <div class="xtabs" role="tablist">${tabs.map(x => `<button type="button" role="tab" data-xex="${x[0]}" class="${x[0] === t ? 'on' : ''}" aria-selected="${x[0] === t}">${x[1]}${x[0] !== 'mt' && x[2].open ? ' ●' : ''}</button>`).join('')}</div>
+    ${cur2[2].body}</section>`;
 }
 function goTest(e){
   goAttend(e, 0);
@@ -3332,8 +3355,8 @@ function gtCard(){
   const state = before ? 'Opens ' + fmt(w.opens) : after ? 'Closed ' + fmt(w.deadline) : w.deadline ? 'Open until ' + fmt(w.deadline) : 'Open';
   const sub = open ? 'Enter grand test marks for your classes (also without internet) and get the award list PDF.'
     : before ? 'Grand test marks can be entered from ' + fmt(w.opens) + '.' : 'The grand test is closed. Ask the admin if a mark must be corrected.';
-  return `<section class="card"><h3>${I.doc} Grand test <span class="pill ${open ? 'good' : ''}">${esc(state)}</span></h3><div class="sub">${esc(sub)}${adm ? ' Admin: set the total marks, opening date and deadline, and see which subjects are still missing.' : ''}</div>
-    <div class="acts2">${open || adm ? '<a class="btn primary" href="grandtest.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Grand test</a>' : '<button class="btn" type="button" disabled>Open Grand test</button>'}</div></section>`;
+  return { open, pill:`<span class="pill ${open ? 'good' : ''}">${esc(state)}</span>`, body:`<div class="sub">${esc(sub)}${adm ? ' Admin: set the total marks, opening date and deadline, and see which subjects are still missing.' : ''}</div>
+    <div class="acts2">${open || adm ? '<a class="btn primary" href="grandtest.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Grand test</a>' : '<button class="btn" type="button" disabled>Open Grand test</button>'}</div>` };
 }
 /* ---------- Home: Detention exam card. Teachers can open it only between the opening date (default 1 February) and the deadline. ---------- */
 let dtWin = store.get('dtwin', null), dtWinAt = 0;
@@ -3349,8 +3372,8 @@ function dtCard(){
   const state = before ? 'Opens ' + fmt(w.opens) : after ? 'Closed ' + fmt(w.deadline) : w.deadline ? 'Open until ' + fmt(w.deadline) : 'Open';
   const sub = open ? 'Enter detention exam marks (theory and practical) for your classes, also without internet, and get the award list PDF.'
     : before ? 'Detention marks can be entered from ' + fmt(w.opens) + '.' : 'The detention exam is closed. Ask the admin if a mark must be corrected.';
-  return `<section class="card"><h3>${I.doc} Detention exam <span class="pill ${open ? 'good' : ''}">${esc(state)}</span></h3><div class="sub">${esc(sub)}${adm ? ' Admin: set the marks, opening date and deadline, and see which subjects are still missing.' : ''}</div>
-    <div class="acts2">${open || adm ? '<a class="btn primary" href="detention.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Detention exam</a>' : '<button class="btn" type="button" disabled>Open Detention exam</button>'}</div></section>`;
+  return { open, pill:`<span class="pill ${open ? 'good' : ''}">${esc(state)}</span>`, body:`<div class="sub">${esc(sub)}${adm ? ' Admin: set the opening date and deadline, and see which subjects are still missing.' : ''}</div>
+    <div class="acts2">${open || adm ? '<a class="btn primary" href="detention.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Detention exam</a>' : '<button class="btn" type="button" disabled>Open Detention exam</button>'}</div>` };
 }
 function renderHome(){
   const now = new Date(), day = now.getDate(), sun = now.getDay() === 0, cur = mine();
@@ -3390,9 +3413,7 @@ function renderHome(){
     }).join('') || `<div class="empty">${sun ? 'Sunday: no classes.' : 'You have no class in today\'s timetable.'}</div>`}
     ${offs.length && !sun ? `<div class="offt"><span>No class today:</span> ${offs.map(x => `<button type="button" data-xopen="${esc(x.e.name)}" data-xday="${day}">${esc(x.e.cls)} · ${esc(abbr(x.e.sub))}</button>`).join('')}</div>` : ''}</section>`;
 
-  if(cur.length) h += mtCard(cur);
-  if(cur.length || scope) h += gtCard();
-  if(cur.length || scope) h += dtCard();
+  if(cur.length || scope) h += examsCard(cur);
 
   if(cur.length){
     const aggs = cur.map(e => secAgg(e)).filter(Boolean), nLow = lowList('week', cur).length;
@@ -3700,11 +3721,12 @@ function renderAdmin(){
     <div class="kpi ${lowN ? 'bad' : 'good'}"><b>${lowN}</b><small>Students below ${LOW}%</small></div>
     <div class="kpi"><b>${new Set(rows.map(r => r.cls)).size}</b><small>Sections</small></div></div>`;
   const depts = scope === 'all' ? [...new Set(all.map(r => r.dept).filter(Boolean))].sort() : [];
-  h += `<div class="seg2" role="tablist"><button type="button" data-xtab="teachers" class="${adminTab === 'teachers' ? 'on' : ''}">Today</button><button type="button" data-xtab="sections" class="${adminTab === 'sections' ? 'on' : ''}">Sections</button><button type="button" data-xtab="low" class="${adminTab === 'low' ? 'on' : ''}">Low %</button><button type="button" data-xtab="work" class="${adminTab === 'work' ? 'on' : ''}">Workload</button></div>
+  const nNot = T.length - tDone;
+  h += `<details class="card fold" id="aFold" ${store.get('aFold', false) ? 'open' : ''}><summary><span><b>Teachers, sections &amp; free periods</b><small>${sun ? 'Sunday' : nNot + ' teacher' + (nNot === 1 ? '' : 's') + ' still to mark today'} · section %, low attendance, workload</small></span><span class="pill">${store.get('aFold', false) ? 'Close' : 'Open'}</span></summary><div class="seg2" role="tablist"><button type="button" data-xtab="teachers" class="${adminTab === 'teachers' ? 'on' : ''}">Today</button><button type="button" data-xtab="sections" class="${adminTab === 'sections' ? 'on' : ''}">Sections</button><button type="button" data-xtab="low" class="${adminTab === 'low' ? 'on' : ''}">Low %</button><button type="button" data-xtab="work" class="${adminTab === 'work' ? 'on' : ''}">Workload</button></div>
     <div class="tools"><input id="aq" class="sq" type="search" value="${esc(aF.q)}" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="${adminTab === 'teachers' || adminTab === 'work' ? 'Search teacher or section' : adminTab === 'sections' ? 'Search section' : 'Search student, section or teacher'}">
       ${depts.length ? `<select id="adept" aria-label="Department"><option value="">All departments</option>${depts.map(d => `<option ${d === aF.dept ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select>` : ''}
       <button class="btn small" type="button" id="xOvR" title="Refresh" aria-label="Refresh">${I.refresh}</button></div>
-    <div id="aBody">${adminBody()}</div>${adminExtraCards()}</main>`;
+    <div id="aBody">${adminBody()}</div></details>${adminExtraCards()}</main>`;
   $q('#app').innerHTML = h;
   if(scope === 'all' && !rinfo) setTimeout(loadRinfo, 0);
   if(scope === 'all' && !pinfo) setTimeout(loadPinfo, 0);
@@ -5122,7 +5144,7 @@ let hc = null, rinfo = null;
 function adminExtraCards(){
   if(scope !== 'all') return '';
   const page = studentPageUrl();
-  return `<div class="grid2" style="margin-top:12px">${shsCard()}${evCard()}${rosCard()}${bkCard()}${leftCard()}<section class="card"><h3>${I.doc} Admissions</h3>
+  return `<div class="grid2" style="margin-top:12px">${shsCard()}${evCard()}${leftCard()}<section class="card"><h3>${I.doc} Admissions</h3>
       <div class="sub">Add a new student or change an old admission (program, year, section, quota, roll no, subjects, marks). Saves go straight into Transform-ALL-COLLEGE-STRENGTH, also without internet. Then run <b>Sheets vs strength sheet</b> so the attendance sheets follow.</div>
       <div class="acts2"><a class="btn primary" href="admission.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Admissions</a></div></section><section class="card"><h3>${I.check} System health check</h3>
       <div class="sub">Finds problems before they stop the work: duplicate roll numbers, students without subjects or class, timetable teachers without a login, classes with no students, sections with no attendance this month, missing sheets and automatic jobs that are off.</div>
@@ -5449,10 +5471,11 @@ function evSelected(t){
 const evCount = r => r && r.res ? r.res.diffs.reduce((a, d) => a + d.missing.length + d.extra.length + (d.off ? d.off.length : 0), 0) : 0;
 function evCard(){
   if(scope !== 'all') return '';
+  if(!bk.list && !bk.loading && navigator.onLine){ bk.loading = true; srv({ action:'bk_list' }, 120000).then(r => { bk.list = r.books || []; }).catch(e => { bk.list = []; bk.err = e.message; }).finally(() => { bk.loading = false; refreshEv(); }); }
   const T = evTargets(), groups = [...new Set(T.map(t => t.group))], done = T.filter(t => evs.res[t.key]);
   const total = done.reduce((a, t) => a + evCount(evs.res[t.key]), 0);
   return `<section class="card" id="evCard"><h3>${I.check} Check everything</h3>
-    <div class="sub">Tick the workbooks, press <b>Check selected</b>, then <b>Fix all</b> for one workbook or <b>Fix everything</b>. Missing students are added, extra students removed (struck through if they already have marks or attendance).</div>
+    <div class="sub">Compares the workbooks with Transform-ALL-COLLEGE-STRENGTH. <b>Daily attendance</b> = the workbooks this app marks in (one sheet per class and subject). The others have one sheet per section. Tick, press <b>Check selected</b>, then <b>Fix all</b> on a line or <b>Fix everything</b>: missing students are added, extra students removed (struck through if they already have marks or attendance).</div>
     ${groups.map(g => `<div class="sub" style="margin-top:10px"><b>${esc(g)}</b></div><div class="chips" style="margin:4px 0">${T.filter(t => t.group === g).map(t => { const r = evs.res[t.key], n = evCount(r);
       return `<label class="chip ${evSelected(t) ? 'on' : ''}" style="cursor:pointer"><input type="checkbox" data-xevs="${esc(t.key)}" ${evSelected(t) ? 'checked' : ''} ${evs.busy ? 'disabled' : ''} style="margin:0 6px 0 0">${esc(t.label)}${r ? (r.err ? ' ⚠' : n ? ` · <b style="color:var(--absent)">${n}</b>` : ' · ✓') : ''}</label>`; }).join('')}</div>`).join('')}
     ${!bk.list ? '<div class="sub">Looking for the other workbooks…</div>' : ''}
@@ -5470,7 +5493,7 @@ async function evCheckOne(t){
       const r = await srv({ action:'roster_check', mon:t.mon, cursor }, 330000);
       if(!all) all = r; else { all.diffs = all.diffs.concat(r.diffs); all.checked += r.checked; }
       cursor = r.cursor; all.done = r.done;
-      evs.msg = 'Checking daily attendance ' + esc(t.label) + '… ' + Math.round(r.cursor / Math.max(1, r.total) * 100) + '%'; refreshEv();
+
     } while(!all.done);
     return all;
   }
@@ -5479,10 +5502,16 @@ async function evCheckOne(t){
 async function evCheck(){
   const T = evTargets().filter(evSelected); if(!T.length) return toast('Tick at least one workbook.');
   evs.busy = true; evs.res = {};
-  for(let i = 0; i < T.length; i++){
-    const t = T[i]; evs.msg = 'Checking ' + (i + 1) + ' of ' + T.length + ': ' + esc(t.group) + ' · ' + esc(t.label) + '…'; refreshEv();
-    try{ evs.res[t.key] = { res:await evCheckOne(t) }; }catch(e){ evs.res[t.key] = { err:'Check stopped: ' + e.message }; }
-  }
+  let next = 0, done = 0;
+  const worker = async () => {
+    while(next < T.length){
+      const t = T[next++];
+      try{ evs.res[t.key] = { res:await evCheckOne(t) }; }catch(e){ evs.res[t.key] = { err:'Check stopped: ' + e.message }; }
+      done++; evs.msg = 'Checked ' + done + ' of ' + T.length + '… (three at a time)'; refreshEv();
+    }
+  };
+  evs.msg = 'Checking ' + T.length + ' workbook' + (T.length === 1 ? '' : 's') + ', three at a time…'; refreshEv();
+  await Promise.all([worker(), worker(), worker()]);
   const n = T.reduce((a, t) => a + evCount(evs.res[t.key]), 0);
   evs.busy = false; evs.msg = n ? `<b style="color:var(--absent)">${n} difference${n === 1 ? '' : 's'} found.</b> Press <b>Fix all</b> on a line, or <b>Fix everything</b>.` : '<b style="color:var(--present)">✓ Every selected workbook matches the strength sheet.</b>';
   refreshEv();
@@ -5805,6 +5834,7 @@ document.addEventListener('click', ev => {
   if(t.closest('#xDset')) return openDutySettings();
   if((b = t.closest('[data-xros]'))) return rosCheck(b.dataset.xros);
   if((b = t.closest('[data-xbk]'))) return bkCheck(b.dataset.xbk);
+  if((b = t.closest('#aFold>summary'))){ setTimeout(() => { const d = $q('#aFold'); if(!d) return; store.set('aFold', d.open); const pl = d.querySelector('summary .pill'); if(pl) pl.textContent = d.open ? 'Close' : 'Open'; }, 0); return; }
   if((b = t.closest('[data-xevs]'))){ evs.sel = Object.assign({}, evs.sel || {}); evs.sel[b.dataset.xevs] = b.checked; store.set('evsel', evs.sel); const l = b.closest('.chip'); if(l) l.classList.toggle('on', b.checked); return; }
   if(t.closest('#xEvCheck')) return evCheck();
   if(t.closest('#xEvFixAll')) return evFix(Object.keys(evs.res));
@@ -5841,6 +5871,7 @@ document.addEventListener('click', ev => {
   if((b = t.closest('[data-xhx]'))) return hc && hcCsv(b.dataset.xhx);
   if(t.closest('#xWkTxt')) return shareText(workText(), 'Teacher workload');
   if(t.closest('#xWkPdf')) return P.run(workPdf, () => shareText(workText()));
+  if((b = t.closest('[data-xex]'))){ exTab = b.dataset.xex; store.set('exTab', exTab); rerender(); return; }
   if((b = t.closest('[data-mtmon]'))){ mtMon = b.dataset.mtmon; rerender(); return; }
   if((b = t.closest('[data-xmt]'))){ const e = sheets.find(s => s.name === b.dataset.xmt); if(e) goTest(e); return; }
   if((b = t.closest('[data-xopen]'))){ const e = sheets.find(s => s.name === b.dataset.xopen); if(e) goAttend(e, Number(b.dataset.xday) || 0); return; }
