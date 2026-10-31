@@ -451,6 +451,8 @@ details.fold[open]>#aBody{margin-bottom:12px}
 .ssgrid .wide{grid-column:1/-1;border-right:0!important;border-bottom:0}
 .chips2{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}.chips2 i{font-style:normal;font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;background:var(--surface2);color:var(--ink)}
 .sswide{grid-column:1/-1}
+.ssbad{color:var(--absent)}.ssdist{background:linear-gradient(135deg,#FFF4C2,#FFE38A)}.ssdist b{color:#7A5200}.ssgrid>div.ssdist span{color:#8A6A10}
+.ptags .gold{background:#FFD54F;color:#5A3D00;font-weight:800}
 .ssmon summary{list-style:none}.ssmon summary::-webkit-details-marker{display:none}.ssmon summary::before{content:'▸ ';color:var(--muted)}.ssmon[open] summary::before{content:'▾ '}
 .sspi{display:flex;gap:14px;align-items:flex-start}.sspi .ssgrid{flex:1;min-width:0}
 .ssbig{width:150px;height:185px;flex:none;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:var(--surface2);display:grid;place-items:center;color:var(--muted);font-size:12px}
@@ -3923,7 +3925,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-31 v7.8.1 board marks out of 600';
+const APP_BUILD = '2026-10-31 v7.8.2 distinctions and compartments';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4911,7 +4913,7 @@ function renderSearch(){
   h += `<div class="acts2" style="margin:0 0 10px"><button class="btn" type="button" id="ssBack">${I.back}Results</button><button class="btn primary" type="button" id="ssPdf" ${P0 && !P0.error ? '' : 'disabled'}>${I.share}Share PDF</button></div>`;
   h += '<div id="ssRec">';
   h += `<section class="hero"><div class="phead grow">${P0 && P0.photo ? `<img class="ssph" src="${esc(P0.photo)}" alt="Photo of ${esc(name)}">` : `<div class="big">${esc(initials(name))}</div>`}<div style="min-width:0;position:relative;z-index:1">
-    <div class="eyebrow">${esc(ssv.roll)}${cls ? ' · ' + esc(cls) : ''}</div><h2>${esc(name)}</h2></div></div>
+    <div class="eyebrow">${esc(ssv.roll)}${cls ? ' · ' + esc(cls) : ''}</div><h2>${esc(name)}</h2>${ssv.board && ssv.board.found && ssv.board.distinction && Number(ssv.board.marks) > 0 ? `<div class="ptags"><span class="gold">1st year distinction · ${ordN(Number(ssv.board.position))} position</span></div>` : ''}</div></div>
     ${A.pct != null ? `<div class="ring" style="--p:${Math.min(100, A.pct)};--c:${A.pct < LOW ? '#FF8A80' : '#5FD3A2'}"><div><b>${Math.round(A.pct)}%</b><small>Session</small></div></div>` : ''}</section>`;
   if(P0 && P0.error){ $q('#app').innerHTML = h + `<section class="card"><div class="empty">${esc(P0.error)}</div></section></div></main>`; return; }
   const mtAll = T && T.mt ? Object.values(T.mt).flatMap(o => Object.values(o).map(ssTestPct)).filter(x => x != null) : [];
@@ -4961,13 +4963,24 @@ function renderSearch(){
   h += '</div></div></main>';
   $q('#app').innerHTML = h;
 }
+/* compartment codes of the board list -> subject names (unknown codes are shown as they are) */
+const BOARD_CODES = { M:'Mathematics', PH:'Physics', CH:'Chemistry', CS:'Computer Science', BIO:'Biology', E:'English', U:'Urdu', PSY:'Psychology', ECO:'Economics', GM:'General Mathematics', GEO:'Geography' };
+const boardCode = c => { c = String(c).trim(); const k = c.toUpperCase().replace(/\(.*\)/, '').split('-')[0]; return BOARD_CODES[k] ? c + ' (' + BOARD_CODES[k] + ')' : c; };
+function ssBoardResult(B){
+  const m = Number(B.marks), g = String(B.grade || '').trim(), abs = /ABSENT/i.test(g), comp = !abs && g && !(m > 0);
+  const marks = abs ? 'Absent' : comp ? 'Compartment' : B.marks ? B.marks + ' / ' + B.total + (B.pct ? ' (' + B.pct + '%)' : '') : '–';
+  const result = abs ? 'Absent' : comp ? 'Compartment in ' + g.split(/[,;]/).map(boardCode).join(', ') : m > 0 ? 'Pass' : '–';
+  const pos = !comp && !abs && Number(B.position) > 0 ? ordN(Number(B.position)) + ' in college' + (B.distinction ? ' · Distinction' : '') : '–';
+  return `<div><span>Marks</span><b>${esc(marks)}</b></div><div><span>Result</span><b class="${comp || abs ? 'ssbad' : ''}">${esc(result)}</b></div>
+    <div class="${B.distinction && !comp ? 'ssdist' : ''}"><span>College position</span><b>${esc(pos)}</b></div>`;
+}
 function ssBoardHtml(){
   const B = ssv.board; if(!B || B.show === false) return '';
   let h = `<section class="card"><h3>${I.doc} 1st year board result</h3>`;
   if(B.error) return h + `<div class="empty">${esc(B.error)}</div></section>`;
   if(B.found){
     h += `<div class="ssgrid"><div><span>Board Roll No</span><b>${esc(B.rollNo)}</b></div><div><span>Registration #</span><b>${esc(B.reg || '–')}</b></div>
-      <div><span>Marks</span><b>${esc(B.marks || '–')}${B.marks && B.total ? ' / ' + B.total : ''}${B.pct ? ' (' + esc(B.pct) + '%)' : ''}</b></div><div><span>Grade</span><b>${esc(B.grade || '–')}</b></div></div>
+      ${ssBoardResult(B)}</div>
       <div class="rnote">${B.how === 'enroll' ? 'From boardResult1STYEAR (matched by Enroll #).' : B.how === 'confirmed' ? 'Confirmed in the app.' : 'Found by name: ' + esc(B.boardName) + ' D/O ' + esc(B.boardFather) + ' (' + B.score + '% alike). Please check.'}</div>`;
     if(B.how === 'name') h += `<div class="acts2 noprint"><button class="btn small primary" type="button" data-xbl="${esc(B.rollNo)}">Yes, this is her</button><button class="btn small" type="button" data-xbl="-">Not her</button></div>`;
   } else {
