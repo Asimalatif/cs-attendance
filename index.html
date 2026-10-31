@@ -3923,7 +3923,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-31 v7.8 student search pdf copy';
+const APP_BUILD = '2026-10-31 v7.8.1 board marks out of 600';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4967,7 +4967,7 @@ function ssBoardHtml(){
   if(B.error) return h + `<div class="empty">${esc(B.error)}</div></section>`;
   if(B.found){
     h += `<div class="ssgrid"><div><span>Board Roll No</span><b>${esc(B.rollNo)}</b></div><div><span>Registration #</span><b>${esc(B.reg || '–')}</b></div>
-      <div><span>Marks</span><b>${esc(B.marks || '–')}${B.pct ? ' (' + esc(B.pct) + '%)' : ''}</b></div><div><span>Grade</span><b>${esc(B.grade || '–')}</b></div></div>
+      <div><span>Marks</span><b>${esc(B.marks || '–')}${B.marks && B.total ? ' / ' + B.total : ''}${B.pct ? ' (' + esc(B.pct) + '%)' : ''}</b></div><div><span>Grade</span><b>${esc(B.grade || '–')}</b></div></div>
       <div class="rnote">${B.how === 'enroll' ? 'From boardResult1STYEAR (matched by Enroll #).' : B.how === 'confirmed' ? 'Confirmed in the app.' : 'Found by name: ' + esc(B.boardName) + ' D/O ' + esc(B.boardFather) + ' (' + B.score + '% alike). Please check.'}</div>`;
     if(B.how === 'name') h += `<div class="acts2 noprint"><button class="btn small primary" type="button" data-xbl="${esc(B.rollNo)}">Yes, this is her</button><button class="btn small" type="button" data-xbl="-">Not her</button></div>`;
   } else {
