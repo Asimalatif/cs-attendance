@@ -5365,8 +5365,8 @@ function rosCard(){
   if(scope !== 'all') return '';
   const cur = SEAS[seasNow()], nxt = SEAS[seasNow() + 1], R = ros.res;
   const n = R ? R.diffs.reduce((a, d) => a + d.missing.length + d.extra.length + d.off.length, 0) : 0;
-  return `<section class="card" id="rosCard"><h3>${I.check} Sheets vs strength sheet</h3>
-    <div class="sub">Checks that every attendance sheet has exactly the students of Transform-ALL-COLLEGE-STRENGTH: nobody missing, nobody extra. Nothing changes until you press a button.</div>
+  return `<section class="card" id="rosCard"><h3>${I.check} Sheets vs strength sheet <span class="tdate">daily attendance</span></h3>
+    <div class="sub">Checks that every daily attendance sheet has exactly the students of Transform-ALL-COLLEGE-STRENGTH: nobody missing, nobody extra. Nothing changes until you press a button.</div>
     <div class="acts2"><button class="btn ${ros.mon === cur ? 'primary' : ''}" type="button" data-xros="${cur}" ${ros.busy ? 'disabled' : ''}>Check ${esc(monName(cur))}</button>${nxt ? `<button class="btn ${ros.mon === nxt ? 'primary' : ''}" type="button" data-xros="${nxt}" ${ros.busy ? 'disabled' : ''}>Check ${esc(monName(nxt))}</button>` : ''}</div>
     ${ros.busy ? `<div class="sub" style="margin-top:8px">Checking ${esc(monName(ros.mon))}… ${ros.pct}%</div><span class="mbar" style="height:10px;margin-top:4px"><i style="width:${ros.pct}%"></i></span>` : ''}
     ${ros.err ? `<div class="err2">${esc(ros.err)}</div>` : ''}
@@ -5422,9 +5422,10 @@ function bkCard(){
   if(scope !== 'all') return '';
   if(!bk.list && !bk.loading && navigator.onLine){ bk.loading = true; srv({ action:'bk_list' }, 60000).then(r => { bk.list = r.books || []; }).catch(e => { bk.list = []; bk.err = e.message; }).finally(() => { bk.loading = false; refreshBk(); }); }
   const R = bk.res, n = R ? R.diffs.reduce((a, d) => a + d.missing.length + d.extra.length, 0) : 0;
-  return `<section class="card" id="bkCard"><h3>${I.check} Test sheets vs strength sheet</h3>
-    <div class="sub">Checks that every section sheet of a Monthly Test workbook or of the Grand Test workbook has exactly the students of Transform-ALL-COLLEGE-STRENGTH. Nothing changes until you press a button.</div>
-    <div class="acts2">${bk.list ? bk.list.map(b => `<button class="btn ${bk.key === b.key ? 'primary' : ''}" type="button" data-xbk="${esc(b.key)}" ${bk.busy ? 'disabled' : ''} title="${esc(b.name)}">Check ${esc(b.label)}</button>`).join('') || '<span class="sub">No Monthly Test or Grand Test workbook found.</span>' : '<span class="sub">Looking for the workbooks…</span>'}</div>
+  const groups = bk.list ? [...new Set(bk.list.map(b => b.group || ''))] : [];
+  return `<section class="card" id="bkCard"><h3>${I.check} Monthly attendance &amp; test sheets vs strength sheet</h3>
+    <div class="sub">Checks that every section sheet of the monthly attendance, monthly test and grand test workbooks has exactly the students of Transform-ALL-COLLEGE-STRENGTH. (Daily attendance sheets: the card <b>Sheets vs strength sheet</b>.) Nothing changes until you press a button.</div>
+    ${bk.list ? (groups.map(g => `<div class="sub" style="margin-top:10px;font-weight:700">${esc(g)}</div><div class="acts2" style="margin-top:4px">${bk.list.filter(b => (b.group || '') === g).map(b => `<button class="btn ${bk.key === b.key ? 'primary' : ''}" type="button" data-xbk="${esc(b.key)}" ${bk.busy ? 'disabled' : ''} title="${esc(b.name)}">Check ${esc(b.label)}</button>`).join('')}</div>`).join('') || '<div class="sub">No workbook found.</div>') : '<div class="acts2"><span class="sub">Looking for the workbooks…</span></div>'}
     ${bk.busy ? `<div class="sub" style="margin-top:8px">Checking… this can take a minute.</div><span class="mbar" style="height:10px;margin-top:4px"><i style="width:60%"></i></span>` : ''}
     ${bk.err ? `<div class="err2">${esc(bk.err)}</div>` : ''}
     ${R && !bk.busy ? `<div class="sub" style="margin-top:8px"><b>${esc(R.label)}:</b> ${R.checked} sheets checked · ${n ? `<b style="color:var(--absent)">${n} difference${n === 1 ? '' : 's'} in ${R.diffs.length} sheet${R.diffs.length === 1 ? '' : 's'}</b>` : '<b style="color:var(--present)">✓ all sheets match the strength sheet</b>'}${R.noSheet && R.noSheet.length ? `<br>No sheet for: ${R.noSheet.map(esc).join(', ')}` : ''}</div>
