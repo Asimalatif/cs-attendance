@@ -1492,7 +1492,7 @@ const perBar = (mode !== 'att' || !hasMulti()) ? '' :
         <div class="pk"><select id="selCls" aria-label="Class">${opts(classes(), sel.cls)}</select>
           <select id="selSub" aria-label="Subject">${opts(subjects(sel.cls), sel.sub, titleCase)}</select>
           <select id="selMon" aria-label="Month">${opts(monthsOf(sel.cls, sel.sub), sel.mon, monLabel)}</select></div>
-        <div class="mrow"><div class="tabs2" role="group"><button data-mode="att" class="${mode === 'att' ? 'on' : ''}">Attendance</button><button data-mode="mt" class="${mode === 'mt' ? 'on' : ''}"><span class="lg">Monthly test</span><span class="sm">Test</span></button></div>
+        <div class="mrow">${mode === 'mt' ? '<div class="tabs2" role="group"><button data-mode="att">\u2039 Attendance</button><button data-mode="mt" class="on"><span class="lg">Monthly test</span><span class="sm">Test</span></button></div>' : '<div></div>'}
           <div class="ibtns">${mode === 'att' ? `<button class="ib" id="calBtn" aria-label="Calendar" title="Calendar">${IC.cal}</button><button class="ib" id="noteBtn" aria-label="${note ? 'Edit note' : 'Add note'}" title="${note ? 'Edit note' : 'Add note'}">${IC.note}</button>
           
           ${hasMulti() ? '' : '<button class="ib" id="multiOn" aria-label="I take more than one lecture of this class today" title="I take more than one lecture of this class today">' + IC.plus + '</button>'}
@@ -3246,7 +3246,7 @@ function injectNav(){
 }
 function rerender(){ forceNext = true; renderMain(); }
 function go(v){
-  if(v === 'att') return goAttend(null);
+  if(v === 'att'){ if(mode === 'mt' && !dirty){ mode = 'att'; store.set('mode', 'att'); } return goAttend(null); }
   if(v === 'mytt' && appView !== 'mytt') ttView = null;
   if(v === appView) return;
   if(v === 'admin' && !scope) return;
@@ -3298,6 +3298,37 @@ function withSel(e, fn){
 }
 
 /* ======================= HOME ======================= */
+/* ---------- Home: monthly test card (monthly test is entered from Home, not from the attendance screen) ---------- */
+function mtCard(cur){
+  const rows = cur.map(e => {
+    const d = data[e.name], q = queue.find(x => x.sheet === e.name && x.kind === 'mt');
+    const st = q ? 'wait' : d && d.mt && Number(d.mt.total) > 0 ? 'done' : '';
+    return `<button class="li" type="button" data-xmt="${esc(e.name)}"><span class="tx"><b>${esc(e.cls)} · ${esc(titleCase(e.sub))}</b><small>${st === 'done' ? 'Marks in the sheet, out of ' + esc(d.mt.total) : st === 'wait' ? 'Saved on the phone, sending' : 'Not entered yet'}</small></span><span class="pill ${st === 'done' ? 'good' : st ? 'mid' : 'solid'}">${st === 'done' ? '\u2713 Entered' : st ? '\u21bb Waiting' : 'Enter'}</span></button>`;
+  }).join('');
+  return `<section class="card"><h3>${I.doc} Monthly test <span class="tdate">${MONTHS[new Date().getMonth()]}</span></h3><div class="sub">Tap a class to enter this month's test marks.</div>${rows}</section>`;
+}
+function goTest(e){
+  goAttend(e, 0);
+  if(dirty || appView !== 'att' || sel.cls !== e.cls || sel.sub !== e.sub || sel.mon !== e.mon) return;
+  mode = 'mt'; store.set('mode', 'mt'); loadMtDraft(); renderMain(); window.scrollTo(0, 0);
+}
+/* ---------- Home: Grand test card. Teachers can open it only between the opening date (default 1 January) and the deadline. ---------- */
+let gtWin = store.get('gtwin', null), gtWinAt = 0;
+function gtCard(){
+  if(navigator.onLine && authed() && Date.now() - gtWinAt > 600000){
+    gtWinAt = Date.now();
+    api({ action:'gt_window' }).then(r => { if(r && r.ok){ gtWin = r; store.set('gtwin', r); if(appView === 'home') rerender(); } }).catch(() => {});
+  }
+  const now = Date.now(), n = new Date(), jan = new Date(n.getMonth() >= 7 ? n.getFullYear() + 1 : n.getFullYear(), 0, 1).getTime();
+  const w = gtWin || { opens:jan, deadline:null }, adm = scope === 'all';
+  const before = w.opens && now < w.opens, after = w.deadline && now > w.deadline, open = !before && !after;
+  const fmt = t => new Date(t).toLocaleString([], { day:'numeric', month:'short', year:'numeric', hour:'numeric', minute:'2-digit' });
+  const state = before ? 'Opens ' + fmt(w.opens) : after ? 'Closed ' + fmt(w.deadline) : w.deadline ? 'Open until ' + fmt(w.deadline) : 'Open';
+  const sub = open ? 'Enter grand test marks for your classes (also without internet) and get the award list PDF.'
+    : before ? 'Grand test marks can be entered from ' + fmt(w.opens) + '.' : 'The grand test is closed. Ask the admin if a mark must be corrected.';
+  return `<section class="card"><h3>${I.doc} Grand test <span class="pill ${open ? 'good' : ''}">${esc(state)}</span></h3><div class="sub">${esc(sub)}${adm ? ' Admin: set the total marks, opening date and deadline, and see which subjects are still missing.' : ''}</div>
+    <div class="acts2">${open || adm ? '<a class="btn primary" href="grandtest.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Grand test</a>' : '<button class="btn" type="button" disabled>Open Grand test</button>'}</div></section>`;
+}
 function renderHome(){
   const now = new Date(), day = now.getDate(), sun = now.getDay() === 0, cur = mine();
   const dow = now.getDay(), nowM = now.getHours() * 60 + now.getMinutes();
@@ -3336,8 +3367,8 @@ function renderHome(){
     }).join('') || `<div class="empty">${sun ? 'Sunday: no classes.' : 'You have no class in today\'s timetable.'}</div>`}
     ${offs.length && !sun ? `<div class="offt"><span>No class today:</span> ${offs.map(x => `<button type="button" data-xopen="${esc(x.e.name)}" data-xday="${day}">${esc(x.e.cls)} · ${esc(abbr(x.e.sub))}</button>`).join('')}</div>` : ''}</section>`;
 
-  if(cur.length || scope) h += `<section class="card"><h3>${I.doc} Grand test</h3><div class="sub">Enter grand test marks for your classes (also without internet) and get the award list PDF.${scope === 'all' ? ' Admin: see which subjects are still missing.' : ''}</div>
-    <div class="acts2"><a class="btn primary" href="grandtest.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Grand test</a></div></section>`;
+  if(cur.length) h += mtCard(cur);
+  if(cur.length || scope) h += gtCard();
 
   if(cur.length){
     const aggs = cur.map(e => secAgg(e)).filter(Boolean), nLow = lowList('week', cur).length;
@@ -5633,6 +5664,7 @@ document.addEventListener('click', ev => {
   if((b = t.closest('[data-xhx]'))) return hc && hcCsv(b.dataset.xhx);
   if(t.closest('#xWkTxt')) return shareText(workText(), 'Teacher workload');
   if(t.closest('#xWkPdf')) return P.run(workPdf, () => shareText(workText()));
+  if((b = t.closest('[data-xmt]'))){ const e = sheets.find(s => s.name === b.dataset.xmt); if(e) goTest(e); return; }
   if((b = t.closest('[data-xopen]'))){ const e = sheets.find(s => s.name === b.dataset.xopen); if(e) goAttend(e, Number(b.dataset.xday) || 0); return; }
   if((b = t.closest('[data-xprofd]'))){ $q('#dlg').close(); return openProfile(b.dataset.xprofd, b.dataset.xcls, ''); }
   if((b = t.closest('[data-xprof]'))) return openProfile(b.dataset.xprof, b.dataset.xcls, b.dataset.xsheet || '');

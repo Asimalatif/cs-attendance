@@ -6,7 +6,10 @@
  *   one sheet per section (A1, FCS-1 D2, F.A-1 Optional Subjects ...),
  *   row 2 = teacher, row 3 = subject, row 4 = headers (S.No, Enroll#, Student Name, Father Name, Class-Sec,
  *   then "Total Marks" / "Obtained Marks" for every subject), students from row 5.
- * The deadline is read from Settings!B2 of the Grand Test workbook (the same cell the old portal used).
+ * The deadline is kept in Settings!B2 of the Grand Test workbook (the same cell the old portal used).
+ * The opening date and the total marks (one total for the whole college, e.g. 40) are kept in a sheet
+ * "App Settings" of the Grand Test workbook. Only the admin changes them, from the Grand test page.
+ * If no opening date is set, the Grand test opens on 1 January of the session.
  * Every change is written to "WebApp Logs" (Before / After), like the old portal.
  *
  * Install:
@@ -27,9 +30,11 @@ var GT_CFG = {
   LOG_SHEET: 'WebApp Logs',
   TITLE: 'JCW GRAND TEST',
   PASS: 0.40,                 // 40% = pass, below is highlighted
-  DEFAULT_TOTAL: 40,          // suggested total when the sheet has none yet
+  DEFAULT_TOTAL: 40,          // used until the admin sets the total marks
+  APP_SETTINGS: 'App Settings',
+  LEAVE: ['L', 'LEAVE'],
   ABSENT: ['A', 'AB', 'ABS', 'ABSENT'],
-  SKIP_SHEETS: ['settings', 'webapp logs', 'login-logout logs', 'awardlist_log', 'missingtransformstudents']
+  SKIP_SHEETS: ['settings', 'app settings', 'webapp logs', 'login-logout logs', 'awardlist_log', 'missingtransformstudents']
 };
 
 /* ================= Router (called from doPost) ================= */
@@ -40,6 +45,8 @@ function gtRoute_(user, req) {
     case 'gt_save':     return gtSave_(user, req);
     case 'gt_pdf':      return gtPdf_(user, req.cls, req.sub);
     case 'gt_progress': return gtProgress_(user);
+    case 'gt_window':   return gtWindowFor_(user);
+    case 'gt_settings': return gtSetSettings_(user, req);
   }
   return { ok: false, error: 'UNKNOWN_ACTION' };
 }
@@ -59,6 +66,15 @@ function gtSession_() {
   return start + '-' + String(start + 1).slice(-2);
 }
 function gtIsAbsent_(v) { return GT_CFG.ABSENT.indexOf(gtS_(v).toUpperCase()) >= 0; }
+function gtIsLeave_(v) { return GT_CFG.LEAVE.indexOf(gtS_(v).toUpperCase()) >= 0; }
+/** 'A' / 'L' / number, or null when the entry is not valid */
+function gtMark_(v, total) {
+  var s = gtS_(v).toUpperCase();
+  if (gtIsAbsent_(s)) return 'A';
+  if (gtIsLeave_(s)) return 'L';
+  if (/^\d+(\.\d+)?$/.test(s) && Number(s) <= total) return Number(s);
+  return null;
+}
 /** the class + subject this user may enter, or null */
 function gtAssignment_(user, cls, sub) {
   var c = gtK_(cls), s = gtK_(sub);
@@ -72,6 +88,64 @@ function gtDeadline_() {
     var d = Object.prototype.toString.call(v) === '[object Date]' ? v : (v ? new Date(String(v)) : null);
     return d && !isNaN(d.getTime()) ? d.getTime() : null;
   } catch (e) { return null; }
+}
+
+/** "App Settings" sheet: Setting | Value rows (Opens, Total marks) */
+function gtAppSheet_() {
+  var book = gtBook_(), sh = book.getSheetByName(GT_CFG.APP_SETTINGS);
+  if (!sh) {
+    sh = book.insertSheet(GT_CFG.APP_SETTINGS);
+    sh.getRange(1, 1, 3, 3).setValues([['Setting', 'Value', 'Note'],
+      ['Opens', '', 'Grand test button opens for teachers (empty = 1 January)'],
+      ['Total marks', GT_CFG.DEFAULT_TOTAL, 'Total marks of every subject, whole college']]);
+    sh.getRange(1, 1, 1, 3).setFontWeight('bold');
+  }
+  return sh;
+}
+function gtApp_() {
+  var out = { opens: null, total: GT_CFG.DEFAULT_TOTAL };
+  try {
+    var sh = gtBook_().getSheetByName(GT_CFG.APP_SETTINGS);
+    if (sh && sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues().forEach(function (r) {
+      var k = gtK_(r[0]), v = r[1];
+      if (k === 'OPENS' && v) { var d = Object.prototype.toString.call(v) === '[object Date]' ? v : new Date(String(v)); if (!isNaN(d.getTime())) out.opens = d.getTime(); }
+      if (k === 'TOTALMARKS' && Number(v) > 0) out.total = Number(v);
+    });
+  } catch (e) {}
+  if (!out.opens) {                                   // default: 1 January of this session
+    var now = new Date(), y = now.getMonth() >= 7 ? now.getFullYear() + 1 : now.getFullYear();
+    out.opens = new Date(y, 0, 1, 0, 0, 0).getTime(); out.defaultOpens = true;
+  }
+  return out;
+}
+/** opening date, deadline and total marks, for the Home button and the Grand test page */
+function gtWindow_() {
+  var app = gtApp_(), dl = gtDeadline_(), now = Date.now();
+  return { opens: app.opens, defaultOpens: !!app.defaultOpens, deadline: dl, total: app.total, now: now,
+           open: now >= app.opens && (!dl || now <= dl) };
+}
+function gtWindowFor_(user) { var w = gtWindow_(); w.ok = true; w.all = gtAll_(user); return w; }
+/** admin: { total, opens (ms or ''), deadline (ms or '') } */
+function gtSetSettings_(user, req) {
+  if (!gtAll_(user)) return { ok: false, error: 'ADMIN_ONLY' };
+  var total = Number(req.total);
+  if (!(total > 0) || total > 1000) return { ok: false, error: 'Total marks must be a number, for example 40.' };
+  var opens = req.opens ? new Date(Number(req.opens)) : null, dl = req.deadline ? new Date(Number(req.deadline)) : null;
+  if (opens && dl && dl.getTime() <= opens.getTime()) return { ok: false, error: 'The deadline must be after the opening date.' };
+  var sh = gtAppSheet_(), rows = sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), 1).getValues().map(function (r) { return gtK_(r[0]); });
+  var put = function (key, label, val) {
+    var i = rows.indexOf(key);
+    var row = i >= 0 ? i + 1 : sh.getLastRow() + 1;
+    if (i < 0) sh.getRange(row, 1).setValue(label);
+    sh.getRange(row, 2).setValue(val);
+  };
+  put('OPENS', 'Opens', opens || '');
+  put('TOTALMARKS', 'Total marks', total);
+  var st = gtBook_().getSheetByName(GT_CFG.SETTINGS_SHEET) || gtBook_().insertSheet(GT_CFG.SETTINGS_SHEET);
+  st.getRange(GT_CFG.DEADLINE_CELL).setValue(dl || '');      // same cell as the old portal
+  SpreadsheetApp.flush();
+  var w = gtWindowFor_(user); w.saved = true;
+  return w;
 }
 
 /** reads a section sheet: header row, enroll / name columns, subject column pairs, student rows */
@@ -151,8 +225,9 @@ function gtLoad_(cls, sub) {
 function gtList_(user) {
   var all = gtAll_(user), items = getAssignments_(user).map(function (a) { return { cls: a.cls, sub: a.subject, teacher: a.teacher }; });
   items.sort(function (x, y) { return x.cls.localeCompare(y.cls, undefined, { numeric: true }) || x.sub.localeCompare(y.sub); });
-  return { ok: true, items: items, all: all, deadline: gtDeadline_(), now: Date.now(), session: gtSession_(), title: GT_CFG.TITLE,
-           pass: GT_CFG.PASS, defTotal: GT_CFG.DEFAULT_TOTAL };
+  var w = gtWindow_();
+  return { ok: true, user: String(user.username).toLowerCase(), items: items, all: all, opens: w.opens, deadline: w.deadline, total: w.total,
+           now: w.now, session: gtSession_(), title: GT_CFG.TITLE, pass: GT_CFG.PASS };
 }
 
 function gtGet_(user, cls, sub) {
@@ -160,9 +235,10 @@ function gtGet_(user, cls, sub) {
   if (!a) return { ok: false, error: 'NOT_ALLOWED: ' + cls + ' ' + sub };
   var x = gtLoad_(cls, sub);
   if (x.error) return { ok: false, error: x.error };
-  return { ok: true, cls: cls, sub: x.S.name, teacher: a.teacher, sheet: x.sh.getName(), total: x.total,
+  var w = gtWindow_();
+  return { ok: true, cls: cls, sub: x.S.name, teacher: a.teacher, sheet: x.sh.getName(), total: w.total,
            students: x.students.map(function (s) { return { roll: s.roll, name: s.name, father: s.father, cs: s.cs, mark: s.mark, off: !!s.off, missing: !!s.missing }; }),
-           deadline: gtDeadline_(), now: Date.now() };
+           opens: w.opens, deadline: w.deadline, now: w.now };
 }
 
 /* ================= save ================= */
@@ -170,10 +246,11 @@ function gtGet_(user, cls, sub) {
 function gtSave_(user, req) {
   var a = gtAssignment_(user, req.cls, req.sub);
   if (!a) return { ok: false, error: 'NOT_ALLOWED: ' + req.cls + ' ' + req.sub };
-  var dl = gtDeadline_(), all = gtAll_(user), ts = Math.min(Number(req.ts) || Date.now(), Date.now());
-  if (dl && ts > dl && !all) return { ok: false, closed: true, error: 'The grand test portal closed on ' + Utilities.formatDate(new Date(dl), Session.getScriptTimeZone(), 'dd MMM yyyy, hh:mm a') + '. Ask the admin to extend the deadline.' };
-  var total = Number(req.total);
-  if (!(total > 0)) return { ok: false, error: 'Total marks are missing.' };
+  var w = gtWindow_(), dl = w.deadline, all = gtAll_(user), ts = Math.min(Number(req.ts) || Date.now(), Date.now());
+  var fmt = function (t) { return Utilities.formatDate(new Date(t), Session.getScriptTimeZone(), 'dd MMM yyyy, hh:mm a'); };
+  if (!all && dl && ts > dl) return { ok: false, closed: true, error: 'The grand test closed on ' + fmt(dl) + '. Ask the admin to extend the deadline.' };
+  if (!all && ts < w.opens) return { ok: false, closed: true, error: 'The grand test opens on ' + fmt(w.opens) + '.' };
+  var total = w.total;                                   // one total for the whole college, set by the admin
   var marks = req.marks || {};
   var lock = LockService.getScriptLock(); lock.waitLock(30000);
   try {
@@ -184,10 +261,11 @@ function gtSave_(user, req) {
     Object.keys(marks).forEach(function (roll) {
       var v = gtS_(marks[roll]).toUpperCase();
       if (!byRoll[roll.toUpperCase()]) return;
-      if (gtIsAbsent_(v)) return;
-      if (!/^\d+(\.\d+)?$/.test(v) || Number(v) > total) bad.push(byRoll[roll.toUpperCase()].name + ' (' + marks[roll] + ')');
+      if (gtMark_(v, total) === null) bad.push(byRoll[roll.toUpperCase()].name + ' (' + marks[roll] + ')');
     });
-    if (bad.length) return { ok: false, error: 'Wrong marks: ' + bad.join(', ') + '. Use a number up to ' + total + ', or A.' };
+    if (bad.length) return { ok: false, error: 'Wrong marks: ' + bad.join(', ') + '. Use a number up to ' + total + ', A for absent or L for leave.' };
+    var empty = x.students.filter(function (s) { return !s.off && gtS_(marks[s.roll]) === ''; });
+    if (empty.length) return { ok: false, error: empty.length + ' student(s) have no marks: ' + empty.slice(0, 5).map(function (s) { return s.name; }).join(', ') + (empty.length > 5 ? '…' : '') + '. Every student needs marks, A or L.' };
 
     // 1) new admissions: add a row at the bottom (same formatting and formulas as the last student row)
     var added = 0, lastRow = L.v.length;
@@ -212,7 +290,7 @@ function gtSave_(user, req) {
     var rows = x.students.filter(function (s) { return s.row && marks[s.roll] !== undefined; });
     var changes = [], when = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy hh:mm a');
     rows.forEach(function (s) {
-      var v = gtS_(marks[s.roll]).toUpperCase(), val = gtIsAbsent_(v) ? 'A' : Number(v);
+      var val = gtMark_(marks[s.roll], total);
       var was = s.missing ? '' : s.mark;
       sh.getRange(s.row, S.total + 1, 1, 2).setValues([[total, val]]);
       if (String(was).toUpperCase() !== String(val).toUpperCase()) changes.push([s, was, val]);
@@ -247,16 +325,18 @@ function gtPdf_(user, cls, sub) {
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   var title = function (s) { return String(s).toLowerCase().replace(/\b\w/g, function (c) { return c.toUpperCase(); }); };
   var list = x.students.filter(function (s) { return !s.missing; });
-  var total = Number(x.total) || 0, hi = 0, pres = 0, abs = 0, nr = 0, pass = 0, fail = 0;
+  var total = gtWindow_().total, hi = 0, pres = 0, abs = 0, nr = 0, pass = 0, fail = 0, lv = 0;
   list.forEach(function (s) {
     if (s.mark === '') nr++;
     else if (gtIsAbsent_(s.mark)) abs++;
+    else if (gtIsLeave_(s.mark)) lv++;
     else if (!isNaN(Number(s.mark))) { pres++; var m = Number(s.mark); if (m > hi) hi = m; if (total && m >= total * GT_CFG.PASS) pass++; else if (total) fail++; }
   });
   var rows = list.map(function (s, i) {
     var m = s.mark, cls2 = '', show = m;
     if (m === '') { show = 'N/R'; cls2 = 'nr'; }
     else if (gtIsAbsent_(m)) { show = 'ABSENT'; cls2 = 'ab'; }
+    else if (gtIsLeave_(m)) { show = 'LEAVE'; cls2 = 'nr'; }
     else if (total && Number(m) < total * GT_CFG.PASS) cls2 = 'low';
     else if (Number(m) === hi && hi) cls2 = 'top';
     return '<tr><td>' + (i + 1) + '</td><td>' + esc(s.roll) + '</td><td class="l">' + esc(title(s.name)) + (s.off ? ' (cancelled)' : '') + '</td><td class="l">' + esc(title(s.father)) +
@@ -268,7 +348,7 @@ function gtPdf_(user, cls, sub) {
     '.top{background:#d4f8d4;font-weight:bold}.low{background:#fff0b3;color:#d9534f;font-weight:bold}.sum{margin-top:10px;font-weight:bold;font-size:12px}.sig{margin-top:28px;text-align:right;font-weight:bold;font-size:11px}</style></head><body>' +
     '<h2>' + esc(GT_CFG.TITLE) + ' AWARD LIST</h2><h4>Section: ' + esc(x.sh.getName()) + ' | Subject: ' + esc(x.S.name) + ' | Teacher: ' + esc(a.teacher) + ' | Session: ' + gtSession_() + '</h4>' +
     '<table><tr><th>S.No</th><th>Enroll#</th><th>Name</th><th>Father Name</th><th>Class-Sec</th><th>Total</th><th>Obtained</th></tr>' + rows + '</table>' +
-    '<div class="sum">Total students: ' + list.length + ' | Present: ' + pres + ' | Absent: ' + abs + ' | N/R: ' + nr + ' | Pass: ' + pass + ' | Fail: ' + fail + (hi ? ' | Highest: ' + hi : '') + '</div>' +
+    '<div class="sum">Total students: ' + list.length + ' | Present: ' + pres + ' | Absent: ' + abs + ' | Leave: ' + lv + ' | N/R: ' + nr + ' | Pass: ' + pass + ' | Fail: ' + fail + (hi ? ' | Highest: ' + hi : '') + '</div>' +
     '<div class="sig">___________________________<br>' + esc(a.teacher) + '</div></body></html>';
   var name = 'G.T_' + x.sh.getName() + '_' + x.S.name + '_' + a.teacher + '_' + gtSession_() + '.pdf';
   var blob = HtmlService.createHtmlOutput(html).getBlob().getAs('application/pdf').setName(name);
