@@ -323,6 +323,7 @@ function render(){
   $('#bar').classList.toggle('hidden', tab !== 'form' || !init);
   const m = $('#main');
   if(!user || !pass){ m.innerHTML = `<div class="card"><h2>Sign in first</h2><div class="sub">Open the attendance app, sign in with your admin login, then come back to this page.</div><p><a class="btn primary" href="./" style="display:inline-flex;align-items:center;text-decoration:none">Open the attendance app</a></p></div>`; return; }
+  if(ls.get('admin', false) !== true){ m.innerHTML = `<div class="card"><h2>Admin only</h2><div class="sub">Admissions are made by the admin. You are signed in as ${esc(user)}, which is not the admin login.</div><p><a class="btn primary" href="./" style="display:inline-flex;align-items:center;text-decoration:none">Back to the attendance app</a></p></div>`; return; }
   if(!init){ m.innerHTML = fatal ? `<div class="err">${esc(fatal)}</div>` : `<div class="card"><h2>Getting ready…</h2><div class="sub">${online() ? 'Downloading programs, sections, seats and the student list. This happens once; after that the page works without internet.' : 'This phone has not downloaded the admission lists yet. Connect to the internet once, then it works offline.'}</div></div>`; return; }
   const top = fatal ? `<div class="err">${esc(fatal)}</div>` : '';
   if(tab === 'form') m.innerHTML = top + formHtml();

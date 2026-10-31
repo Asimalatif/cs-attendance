@@ -106,6 +106,7 @@ section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
     <li><a href="#free">19. Free teachers</a></li>
     <li><a href="#adm">20. Admissions</a></li>
     <li><a href="#gtadmin">21. Grand test / detention settings</a></li>
+    <li><a href="#board">Board results (gazette PDF)</a></li>
     <li><a href="#faq">22. Problems and answers</a></li>
   </ol>
   <div class="grp">For the administrator</div>
@@ -323,14 +324,19 @@ section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
 <li>Answer <b>present</b> (yes, haazir, ji), <b>absent</b> (no, ghair haazir), <b>leave</b> (chutti) or <b>bunk</b>.</li>
 <li>Say <b>next</b> to skip, <b>back</b> for the previous student, <b>repeat</b>, or <b>stop</b>. You can tap P A L B in the window at any time.</li>
 <li>At the end the app tells the totals. Check the list and press <b>Save attendance</b> as usual. Nothing is saved by voice alone.</li></ol>
-<p>Options in the window: <i>Read names aloud</i> (turn off in a quiet room and read the names yourself), <i>Only unmarked</i>, and the answer language.</p>
+<p>The microphone stays on during the whole roll call, so you can answer one after another without waiting. While the app reads a name it ignores the microphone, so answer after the name. Options in the window: <i>Read names aloud</i> (turn it off and read the names yourself for the fastest roll call), <i>Only unmarked</i>, and the answer language.</p>
 <h3>Say the absentees</h3>
 <p>Fastest for a big class: <b>⋯ More → Say the absentees</b>, then say “absent 3, 7 and 12, leave 5” using the row numbers on the left (first names also work). The window lists what it understood; press <b>Apply</b>, and everyone not named becomes P. Then Save.</p>
 <h3>Speak marks (monthly test)</h3>
 <p>On the monthly test screen, enter the total, then tap <b>🎙 Speak marks</b> next to “Fill empty with A”. The app says each name; say the marks or “absent”. Marks above the total are refused and asked again. Press <b>Save test marks</b> when done.</p>
 <h3>Listen to the manual</h3>
 <p>In the app, the <b>?</b> help window has <b>🔊 Listen</b>: it reads the help from where you are. In this manual, every chapter has a <b>🔊</b> button, and the bar at the top has <b>Listen to all</b> and the reading speed.</p>
-<div class="warn">If nothing is heard: allow the microphone for the app (browser settings → Site settings → Microphone), check the internet, and speak after the red dot appears.</div>
+<h3>Voice settings and a natural voice</h3>
+<p><b>⋯ More → Voice settings</b> (also <b>⚙ Voice</b> in the help window and in every voice window): choose the English and the Urdu voice, whether the app speaks English or اردو, and the speed. ★ marks the most natural voice found on the device. <b>Test microphone</b> shows a level bar and what the app heard.</p>
+<ul><li><b>Laptop:</b> Microsoft Edge has the most natural voices (“Online (Natural)”, also Urdu: Uzma and Asad). Chrome has “Google UK English Female”.</li>
+<li><b>Android:</b> Settings → Google → Text-to-speech (or Accessibility → Text-to-speech) → Speech services by Google → install voice data for English (India) and Urdu.</li>
+<li><b>iPhone:</b> Settings → Accessibility → Spoken Content → Voices → download an Enhanced or Premium voice.</li></ul>
+<div class="warn"><b>If it does not listen:</b> use Google Chrome or Microsoft Edge (Firefox, Brave and Opera cannot listen); allow the microphone (lock icon beside the address → Microphone → Allow); on Windows also Settings → Privacy &amp; security → Microphone → allow the browser, and pick the right microphone in Sound settings; check the internet. A headset microphone works best in a noisy class. Voice settings → Test microphone tells you which of these is the problem.</div>
 </section>
 
 <section id="ahome"><h2><span class="n">16</span>Admin home <span class="who">Admin / principal</span></h2>
@@ -381,6 +387,15 @@ section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
 <div><p><b>Progress</b>: which section-subjects are complete and which still have missing marks (students who left are not counted), so you can remind the teachers.</p></div></div>
 </section>
 
+<section id="board"><h2><span class="n">📄</span>Board results: gazette PDF → sheet <span class="who">Admin</span></h2>
+<p class="lead">College screen → <b>Board results</b>. Turns the Peshawar Board result gazette PDF into a sheet of the Provisional Certificates workbook, the same steps as the Colab notebook.</p>
+<ol><li>Choose the gazette PDF, the class (<b>1st year</b> or <b>2nd year</b>) and the year (2026). The sheet name becomes <b>HSSC 1st year 2026</b> (you can change it).</li>
+<li><b>Read the PDF</b>: every page is read on this device (a laptop is best for 2,000 pages; it takes a few minutes). Nothing is sent yet.</li>
+<li><b>Check</b>: number of students and colleges, the Jinnah College top 20, the first rows, and a search box to look up any roll number or name.</li>
+<li><b>Save to the sheet</b>: the sheet <i>HSSC 1st year 2026</i> (Roll No, Name, Father Name, Registration #, Marks, Remarks, College Name, Position) and <i>HSSC 1st year 2026 - JCW Top 20</i>. If the sheet already exists the app asks before replacing it. Other sheets are never changed. <b>Download Excel</b> keeps a copy.</li></ol>
+<p>Position = rank by marks over all colleges (highest = 1; equal marks get the same position); private candidates get no position. Each new gazette gets its own sheet, so 1st year and 2nd year results of every year stay side by side.</p>
+</section>
+
 <section id="faq"><h2><span class="n">22</span>Problems and answers</h2>
 <table><tr><th>Problem</th><th>What to do</th></tr>
 <tr><td>Letters too small</td><td>Status chip → Text size → Large or Extra large.</td></tr>
@@ -415,7 +430,8 @@ document.getElementById('find').addEventListener('input', e => {
   try{ rate.value = localStorage.getItem('jcw_ttsrate') || '1'; }catch(e){}
   rate.onchange = () => { try{ localStorage.setItem('jcw_ttsrate', rate.value); }catch(e){} };
   let voices = []; const lv = () => { voices = speechSynthesis.getVoices() || []; }; lv(); speechSynthesis.onvoiceschanged = lv;
-  const voice = () => { const en = voices.filter(v => /^en/i.test(v.lang)); return en.find(v => /female|zira|samantha|heera|veena/i.test(v.name)) || en.find(v => /en-(in|gb)/i.test(v.lang)) || en[0] || null; };
+  const score = v => { const n = v.name || ''; let s = 0; if(/natural|neural/i.test(n)) s += 60; if(/premium|enhanced|siri/i.test(n)) s += 45; if(/google/i.test(n)) s += 35; if(/online/i.test(n)) s += 15; if(/en-(IN|GB)/i.test(v.lang)) s += 6; if(/female|aria|jenny|sonia|libby|neerja|zira|samantha|heera/i.test(n)) s += 4; if(/espeak|compact/i.test(n)) s -= 80; return s; };
+  const voice = () => { let want = ''; try{ want = JSON.parse(localStorage.getItem('csa2_vVoiceEn') || '""'); }catch(e){} const en = voices.filter(v => /^en/i.test(v.lang)).sort((a, b) => score(b) - score(a)); return (want && en.find(v => v.name === want)) || en[0] || null; };
   const speak = t => new Promise(res => { const u = new SpeechSynthesisUtterance(t), v = voice(); if(v){ u.voice = v; u.lang = v.lang; } u.rate = Number(rate.value) || 1; u.onend = u.onerror = () => res(); speechSynthesis.speak(u); });
   let token = 0;
   const stop = () => { token++; speechSynthesis.cancel(); document.querySelectorAll('.tts1.on,#ttsAll.on').forEach(b => { b.classList.remove('on'); b.textContent = b.id === 'ttsAll' ? '🔊 Listen to all' : '🔊'; }); document.querySelectorAll('section.reading').forEach(s => s.classList.remove('reading')); };

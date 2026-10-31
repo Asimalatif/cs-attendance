@@ -33,6 +33,7 @@ function wrRoute_(user, req) {
       case 'wr_fathers':  return wrFathers_(user, req);
       case 'wr_hundred':  return wrHundred_(user, req);
       case 'wr_rows':     return wrRows_(user, req);
+      case 'wr_eve_set':  return wrEveSet_(user, req);
     }
     return { ok: false, error: 'UNKNOWN_ACTION' };
   } catch (e) {
@@ -453,9 +454,7 @@ function wrMarks_(user, req) {
   var kind = String(req.kind || ''), mon = String(req.mon || '').toUpperCase(), key = 'wr_marks_' + kind + '_' + (kind === 'mt' ? mon : '');
   var data = req.fresh ? null : wrCacheGet_(key);
   if (!data) { data = wrMarksBuild_(kind, mon); wrCachePut_(key, data, 1200); }
-  var ok = {}; wrSectionList_(user).forEach(function (c) { ok[gtK_(c)] = 1; });
-  var list = wrAll_(user) ? data.students : data.students.filter(function (x) { return ok[gtK_(x[2])]; });
-  return { ok: true, kind: kind, mon: mon, book: data.book, at: data.at, students: list };
+  return { ok: true, kind: kind, mon: mon, book: data.book, at: data.at, students: data.students, eve: wrEve_() };   // toppers: whole college for every teacher
 }
 function wrMarksBuild_(kind, mon) {
   var book = wrBookOf_(kind, mon), M = getMaster_(), home = {}, out = {};
@@ -515,9 +514,7 @@ function wrHundred_(user, req) {
   if (!MA_BOOKS[mon]) return { ok: false, error: 'No monthly attendance workbook for ' + mtMonthName_(mon) + '.' };
   var key = 'wr_h_' + mon, data = req.fresh ? null : wrCacheGet_(key);
   if (!data) { data = wrHundredBuild_(mon); wrCachePut_(key, data, 1800); }
-  if (wrAll_(user)) return { ok: true, mon: mon, students: data };
-  var ok = {}; wrSectionList_(user).forEach(function (c) { ok[gtK_(c)] = 1; });
-  return { ok: true, mon: mon, students: data.filter(function (x) { return ok[gtK_(x[2])]; }) };
+  return { ok: true, mon: mon, students: data, eve: wrEve_() };   // 100% attendance: whole college for every teacher
 }
 function wrHundredBuild_(mon) {
   var book = SpreadsheetApp.openById(MA_BOOKS[mon]), home = {}, out = {};
@@ -558,7 +555,7 @@ function wrRows_(user, req) {
   if (!MA_BOOKS[mon]) return { ok: true, mon: mon, rows: [] };
   var key = 'wr_rows_' + mon, data = req.fresh ? null : wrCacheGet_(key);
   if (!data) { data = wrRowsBuild_(mon); wrCachePut_(key, data, 1800); }
-  if (wrAll_(user)) return { ok: true, mon: mon, rows: data };
+  if (wrAll_(user) || req.college) return { ok: true, mon: mon, rows: data, eve: wrEve_() };   // college = toppers / 100% list of the whole college
   var mine = {};
   getAssignments_(user).forEach(function (a) { mine[gtK_(a.cls) + '|' + gtK_(a.subject)] = 1; });
   return { ok: true, mon: mon, rows: data.filter(function (r) { return mine[gtK_(r.cls) + '|' + gtK_(r.sub)]; }) };
@@ -595,3 +592,15 @@ function wrRowsBuild_(mon) {
   return out;
 }
 
+/* ================= evening sections (for toppers / 100% lists of teachers) =================
+   Teachers cannot read the whole timetable, so the admin's app saves the list of evening sections here
+   (Script Properties) whenever it reads the timetable. */
+function wrEve_() {
+  try { return JSON.parse(PropertiesService.getScriptProperties().getProperty('WR_EVE') || '[]'); } catch (e) { return []; }
+}
+function wrEveSet_(user, req) {
+  if (!wrAll_(user)) return { ok: false, error: 'NOT_ALLOWED' };
+  var list = (req.eve || []).map(String).filter(Boolean).slice(0, 300);
+  PropertiesService.getScriptProperties().setProperty('WR_EVE', JSON.stringify(list));
+  return { ok: true, n: list.length };
+}

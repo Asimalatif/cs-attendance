@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#6B3423">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<title>JCW Board Results</title>
+<style>
+:root{--bg:#F7EDEA;--surface:#fff;--surface2:#FBEDEA;--ink:#2B1912;--muted:#7C6159;--line:#E2C0B8;--brown:#6B3423;--brown2:#8A4A35;--tea:#E7B7AE;--good:#0E8A5F;--good-bg:#E3F4EC;--bad:#C0392B;--bad-bg:#FDE3E1;--mid:#B4740E;--mid-bg:#FFF2D6}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1A110F;--surface:#261915;--surface2:#30201B;--ink:#F6E9E5;--muted:#C4A8A0;--line:#4A3029;--tea:#8A5A50;--good-bg:#14302A;--bad-bg:#3A1C1F;--mid-bg:#3A2F14}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;padding-bottom:40px;background:radial-gradient(circle at 10% 0%,rgba(231,183,174,.45),transparent 40%),var(--bg)}
+button,select,input{font:inherit;color:inherit}
+header{background:linear-gradient(120deg,#4A2418,#8A4A35);color:#fff;padding:calc(12px + env(safe-area-inset-top,0px)) 16px 14px;box-shadow:0 8px 20px -12px rgba(74,36,24,.8)}
+header .in{max-width:900px;margin:0 auto;display:flex;align-items:center;gap:12px}
+header img{width:44px;height:44px;border-radius:50%;background:#fff;padding:3px;flex:none}
+header h1{margin:0;font-size:19px;line-height:1.2}
+header small{display:block;opacity:.85;font-size:12.5px;font-weight:400}
+header a{margin-left:auto;color:#fff;text-decoration:none;font-weight:700;font-size:14px;background:rgba(255,255,255,.14);padding:7px 12px;border-radius:999px;white-space:nowrap}
+main{max-width:900px;margin:0 auto;padding:16px}
+.card{background:var(--surface);border:1.5px solid var(--line);border-top:5px solid var(--c,var(--brown));border-radius:20px;padding:16px;margin-bottom:16px;box-shadow:0 10px 24px -18px rgba(107,52,35,.6)}
+.card h2{margin:0 0 4px;font-size:17px;color:var(--brown)}
+@media(prefers-color-scheme:dark){.card h2{color:var(--tea)}}
+.sub{color:var(--muted);font-size:13.5px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:10px;margin-top:12px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:700;color:var(--muted)}
+label.f input,label.f select{height:46px;border:1.5px solid var(--line);border-radius:12px;padding:0 12px;background:var(--surface);font-size:15px;font-weight:600;color:var(--ink);min-width:0;width:100%}
+input[type=file]{padding:9px 10px!important}
+.btn{height:46px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-weight:800;padding:0 16px;cursor:pointer;color:var(--ink)}
+.btn.pri{background:linear-gradient(180deg,#8A4A35,#6B3423);border-color:#6B3423;color:#fff}
+.btn:disabled{opacity:.5;cursor:default}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.bar{height:12px;border-radius:999px;background:var(--surface2);border:1px solid var(--line);overflow:hidden;margin:10px 0 4px}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#C2766A,#6B3423);transition:width .2s}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(130px,100%),1fr));gap:8px;margin-top:10px}
+.stats div{background:var(--surface2);border:1px solid var(--line);border-radius:14px;padding:10px;text-align:center}
+.stats b{display:block;font-size:22px;color:var(--brown)}
+@media(prefers-color-scheme:dark){.stats b{color:var(--tea)}}
+.stats span{font-size:12px;color:var(--muted)}
+.tw{overflow-x:auto;margin-top:10px;border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th{background:#6B3423;color:#fff;text-align:left;padding:7px 8px;white-space:nowrap;position:sticky;top:0}
+td{padding:6px 8px;border-top:1px solid var(--line);white-space:nowrap}
+tr:nth-child(even) td{background:var(--surface2)}
+.note{border-radius:12px;padding:10px 12px;font-size:13.5px;margin-top:10px}
+.note.ok{background:var(--good-bg);color:var(--good)}.note.bad{background:var(--bad-bg);color:var(--bad)}.note.mid{background:var(--mid-bg);color:var(--mid)}
+.list{list-style:none;padding:0;margin:8px 0 0}
+.list li{display:flex;justify-content:space-between;gap:10px;padding:7px 10px;border-radius:10px;background:var(--surface2);margin-bottom:5px;font-size:13.5px}
+.steps{margin:8px 0 0;padding-left:20px;font-size:13.5px;color:var(--muted)}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<header><div class="in"><img src="jcw-logo.png" alt=""><h1>Board results<small>Gazette PDF → sheet in Provisional Certificates</small></h1><a href="./">← App</a></div></header>
+<main id="main"></main>
+<script src="boardparse.js"></script>
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm7d7-UKg0W-OoWAiuRBHe4mjlRgMQXIHuLm6zi--i/exec';
+const PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const XLSX_LIB = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.min.js';
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const ls = { get(k, d){ try{ const v = localStorage.getItem('csa2_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } }, set(k, v){ try{ localStorage.setItem('csa2_' + k, JSON.stringify(v)); }catch(e){} } };
+const user = ls.get('user', ''), pass = ls.get('pass', '');
+let S = { part:ls.get('br_part', '1st year'), year:String(ls.get('br_year', new Date().getFullYear())), name:'', file:null, busy:false, stop:false, res:null, fin:null, saved:null, err:'', list:null, page:0, pages:0 };
+S.name = 'HSSC ' + S.part + ' ' + S.year;
+
+async function api(payload, ms = 300000){
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms);
+  try{
+    const r = await fetch(API, { method:'POST', body:JSON.stringify({ username:user, password:pass, ...payload }), signal:ctl.signal, redirect:'follow' });
+    const txt = await r.text(); let j; try{ j = JSON.parse(txt); }catch(e){ throw new Error('The server sent a web page instead of data. Check the deployment.'); }
+    if(j && j.error === 'UNKNOWN_ACTION') throw new Error('The server does not know board results yet: add BoardResults.gs and its doPost line, then deploy a new version.');
+    if(j && j.error === 'BAD_LOGIN') throw new Error('Your saved login was refused. Open the app, sign out and sign in again.');
+    return j;
+  }catch(e){ if(e.name === 'AbortError') throw new Error('The server took too long. Try again.'); if(e instanceof TypeError) throw new Error('No internet.'); throw e; }
+  finally{ clearTimeout(t); }
+}
+const loadScript = src => new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Could not load ' + src.split('/').pop() + ' (internet needed the first time).')); document.head.appendChild(s); });
+async function pdfLib(){ if(!window.pdfjsLib){ await loadScript(PDFJS); } window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER; return window.pdfjsLib; }
+
+function render(){
+  const m = $('#main');
+  if(!user || !pass){ m.innerHTML = `<div class="card"><h2>Sign in first</h2><div class="sub">Open the attendance app and sign in with the admin login, then come back.</div><div class="acts"><a class="btn pri" href="./" style="display:inline-flex;align-items:center;text-decoration:none">Open the app</a></div></div>`; return; }
+  if(ls.get('admin', false) !== true){ m.innerHTML = `<div class="card"><h2>Admin only</h2><div class="sub">Board results are saved by the admin.</div><div class="acts"><a class="btn pri" href="./" style="display:inline-flex;align-items:center;text-decoration:none">Back to the app</a></div></div>`; return; }
+  const F = S.fin, st = F && F.stats;
+  m.innerHTML = `
+  <section class="card"><h2>1. Choose the gazette</h2>
+    <div class="sub">The Peshawar Board result gazette PDF (HSSC Part I or Part II). The PDF is read on this device, page by page, the same way as the Colab notebook: every student row, the college name of each block, positions (highest marks = 1, private candidates left out) and the Jinnah College top 20. A laptop is best for a 2,000-page gazette.</div>
+    <div class="grid">
+      <label class="f">Result PDF<input type="file" id="bFile" accept="application/pdf,.pdf"></label>
+      <label class="f">Class<select id="bPart">${['1st year', '2nd year'].map(p => `<option ${p === S.part ? 'selected' : ''}>${p}</option>`).join('')}</select></label>
+      <label class="f">Year<input id="bYear" inputmode="numeric" maxlength="4" value="${esc(S.year)}"></label>
+      <label class="f">Sheet name<input id="bName" value="${esc(S.name)}"></label>
+    </div>
+    <div class="acts"><button class="btn pri" id="bRead" ${S.busy || !S.file ? 'disabled' : ''}>Read the PDF</button>${S.busy && !S.saving ? '<button class="btn" id="bStop">Stop</button>' : ''}</div>
+    ${S.busy || S.res ? `<div class="bar"><i style="width:${S.pages ? Math.round(S.page / S.pages * 100) : 0}%"></i></div><div class="sub" id="bProg">${S.pages ? 'Page ' + S.page + ' of ' + S.pages + ' · ' + (S.rowsSoFar || 0).toLocaleString() + ' students' : ''}</div>` : ''}
+    ${S.err ? `<div class="note bad">${esc(S.err)}</div>` : ''}
+  </section>
+  ${F ? `<section class="card" style="--c:#C2766A"><h2>2. Check</h2>
+    <div class="stats"><div><b>${st.total.toLocaleString()}</b><span>students</span></div><div><b>${st.colleges.toLocaleString()}</b><span>colleges</span></div><div><b>${st.ranked.toLocaleString()}</b><span>with a position</span></div><div><b>${st.priv.toLocaleString()}</b><span>private candidates</span></div><div><b>${st.noMarks.toLocaleString()}</b><span>without marks</span></div><div><b>${F.top.rows.length}</b><span>JCW in top 20</span></div></div>
+    ${S.res.warn.map(w => `<div class="note mid">${esc(w)}</div>`).join('')}
+    ${st.noCollege ? `<div class="note mid">${st.noCollege} students have no college name (before the first college heading).</div>` : ''}
+    <div class="sub" style="margin-top:12px"><b>Jinnah College top 20</b></div>
+    <div class="tw" style="max-height:340px"><table><tr>${F.top.header.map(h => `<th>${esc(h)}</th>`).join('')}</tr>${F.top.rows.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('') || '<tr><td colspan="6">None</td></tr>'}</table></div>
+    <div class="sub" style="margin-top:12px"><b>First 30 rows</b> (sorted by marks)</div>
+    <div class="tw" style="max-height:420px"><table><tr>${F.header.map(h => `<th>${esc(h)}</th>`).join('')}</tr>${F.rows.slice(0, 30).map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</table></div>
+    <div class="sub" style="margin-top:12px"><b>Find a student</b> (roll no or name) to check the reading</div>
+    <label class="f"><input id="bFind" placeholder="e.g. 300578 or Fatima Jugnu" autocomplete="off"></label><div id="bHits"></div>
+  </section>
+  <section class="card" style="--c:#0E8A5F"><h2>3. Save</h2>
+    <div class="sub">Sheet <b>${esc(S.name)}</b> (${st.total.toLocaleString()} rows: ${esc(F.header.join(' · '))}) and <b>${esc(S.name)} - JCW Top 20</b> in the Provisional Certificates workbook. Other sheets are not changed.</div>
+    <div class="acts"><button class="btn pri" id="bSave" ${S.busy ? 'disabled' : ''}>${S.saving ? 'Saving…' : 'Save to the sheet'}</button><button class="btn" id="bXlsx" ${S.busy ? 'disabled' : ''}>Download Excel</button></div>
+    ${S.saved ? `<div class="note ok">Saved ${S.saved.rows.toLocaleString()} rows in “${esc(S.saved.sheet)}”${S.saved.top ? ' and ' + S.saved.top.rows + ' in “' + esc(S.saved.top.sheet) + '”' : ''}. <a href="${esc(S.saved.url)}" target="_blank" rel="noopener">Open the sheet</a></div>` : ''}
+  </section>` : ''}
+  <section class="card" style="--c:#B4740E"><h2>Result sheets in the workbook</h2>
+    ${S.list ? `<ul class="list">${S.list.sheets.map(x => `<li><span>${esc(x.name)}</span><b>${x.rows.toLocaleString()}</b></li>`).join('')}</ul><div class="acts"><a class="btn" href="${esc(S.list.url)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Open the workbook</a></div>` : `<div class="sub">${navigator.onLine ? 'Loading…' : 'Needs internet.'}</div>`}
+  </section>`;
+}
+function paintProg(){
+  const b = document.querySelector('.bar i'), p = $('#bProg');
+  if(b) b.style.width = (S.pages ? Math.round(S.page / S.pages * 100) : 0) + '%';
+  if(p) p.textContent = S.pages ? (S.saving ? 'Saving ' + S.page.toLocaleString() + ' of ' + S.pages.toLocaleString() + ' rows' : 'Page ' + S.page + ' of ' + S.pages + ' · ' + (S.rowsSoFar || 0).toLocaleString() + ' students') : '';
+}
+async function readPdf(){
+  S.busy = true; S.stop = false; S.err = ''; S.res = null; S.fin = null; S.saved = null; S.page = 0; S.pages = 0; render();
+  try{
+    const lib = await pdfLib();
+    const pdf = await lib.getDocument({ data:new Uint8Array(await S.file.arrayBuffer()) }).promise;
+    S.pages = pdf.numPages; paintProg();
+    let last = 0;
+    const res = await BoardParse.parse(pdf, { OPS:lib.OPS, cancel:() => S.stop, onProgress:(p, n, rows) => { S.page = p; S.rowsSoFar = rows; if(Date.now() - last > 250){ last = Date.now(); paintProg(); } } });
+    S.res = res; S.fin = BoardParse.finish(res);
+    S.page = S.pages;
+    try{ pdf.destroy(); }catch(e){}
+  }catch(e){ S.err = e.message || String(e); }
+  S.busy = false; render();
+}
+const chunk = 2500;
+async function save(){
+  const F = S.fin; if(!F) return;
+  S.busy = true; S.saving = true; S.err = ''; S.page = 0; S.pages = F.rows.length; render();
+  const asText = F.header.map(h => /^(ROLL ?NO|REGISTRATION.*|REG.*)$/i.test(h.trim()));
+  const rowsOut = F.rows.map(r => r.map((c, k) => asText[k] ? String(c) : c));
+  try{
+    let r = await api({ action:'br_begin', sheet:S.name, header:F.header, total:rowsOut.length });
+    if(!r.ok && r.error === 'EXISTS'){
+      if(!confirm('The sheet “' + S.name + '” already has ' + r.rows + ' rows. Replace it with this gazette?')) throw new Error('Not saved: the sheet already exists. Change the sheet name or choose Replace.');
+      r = await api({ action:'br_begin', sheet:S.name, header:F.header, total:rowsOut.length, replace:true });
+    }
+    if(!r.ok) throw new Error(r.error || 'Could not start');
+    for(let i = 0; i < rowsOut.length; i += chunk){
+      let tries = 0;
+      for(;;){
+        try{ const x = await api({ action:'br_rows', sheet:S.name, start:i + 2, rows:rowsOut.slice(i, i + chunk) }); if(!x.ok) throw new Error(x.error); break; }
+        catch(e){ if(++tries >= 3) throw e; await new Promise(z => setTimeout(z, 2000)); }
+      }
+      S.page = Math.min(rowsOut.length, i + chunk); paintProg();
+    }
+    const f = await api({ action:'br_finish', sheet:S.name, n:rowsOut.length, top:{ sheet:S.name + ' - JCW Top 20', header:F.top.header, rows:F.top.rows.map(r => r.map((c, k) => k === 1 ? String(c) : c)) } });
+    if(!f.ok) throw new Error(f.error || 'Could not finish');
+    S.saved = f; S.list = null; loadList();
+  }catch(e){ S.err = e.message || String(e); }
+  S.busy = false; S.saving = false; render();
+}
+async function xlsx(){
+  const F = S.fin; if(!F) return;
+  try{
+    if(!window.XLSX) await loadScript(XLSX_LIB);
+    const X = window.XLSX, wb = X.utils.book_new();
+    const add = (name, head, rows) => {
+      const ws = X.utils.aoa_to_sheet([head].concat(rows));
+      head.forEach((h, c) => { const a = X.utils.encode_cell({ r:0, c }); if(ws[a]) ws[a].s = { font:{ bold:true, color:{ rgb:'FFFFFF' } }, fill:{ fgColor:{ rgb:'6B3423' } } }; });
+      ws['!cols'] = head.map((h, c) => ({ wch:Math.min(50, Math.max(String(h).length, ...rows.slice(0, 300).map(r => String(r[c] == null ? '' : r[c]).length)) + 2) }));
+      ws['!autofilter'] = { ref:X.utils.encode_range({ s:{ r:0, c:0 }, e:{ r:rows.length, c:head.length - 1 } }) };
+      X.utils.book_append_sheet(wb, ws, name.slice(0, 31));
+    };
+    add('Sheet1', F.header, F.rows); add('Jinnah College Top-20', F.top.header, F.top.rows);
+    X.writeFile(wb, S.name + '.xlsx');
+  }catch(e){ alert(e.message || e); }
+}
+async function loadList(){ if(!navigator.onLine) return; try{ const r = await api({ action:'br_list' }, 60000); if(r.ok){ S.list = r; render(); } else { S.err = r.error; render(); } }catch(e){ S.err = e.message; render(); } }
+
+document.addEventListener('change', e => {
+  const t = e.target;
+  if(t.id === 'bFile'){ S.file = t.files[0] || null; S.res = null; S.fin = null; S.saved = null; S.err = ''; render(); }
+  if(t.id === 'bPart' || t.id === 'bYear'){ S.part = $('#bPart').value; S.year = $('#bYear').value.replace(/\D/g, '').slice(0, 4); ls.set('br_part', S.part); ls.set('br_year', S.year); S.name = 'HSSC ' + S.part + ' ' + S.year; const n = $('#bName'); if(n) n.value = S.name; render(); }
+  if(t.id === 'bName'){ S.name = t.value.trim() || ('HSSC ' + S.part + ' ' + S.year); }
+});
+document.addEventListener('input', e => {
+  if(e.target.id !== 'bFind' || !S.fin) return;
+  const q = e.target.value.trim().toLowerCase(), F = S.fin, box = $('#bHits');
+  if(q.length < 3){ box.innerHTML = ''; return; }
+  const hits = F.rows.filter(r => String(r[0]).includes(q) || r.slice(1, 3).join(' ').toLowerCase().includes(q)).slice(0, 25);
+  box.innerHTML = hits.length ? `<div class="tw"><table><tr>${F.header.map(h => `<th>${esc(h)}</th>`).join('')}</tr>${hits.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</table></div>` : '<div class="sub">Not found.</div>';
+});
+document.addEventListener('click', e => {
+  const t = e.target;
+  if(t.id === 'bRead') readPdf();
+  if(t.id === 'bStop') S.stop = true;
+  if(t.id === 'bSave') save();
+  if(t.id === 'bXlsx') xlsx();
+});
+window.addEventListener('beforeunload', e => { if(S.busy){ e.preventDefault(); e.returnValue = ''; } });
+render(); loadList();
+</script>
+</body>
+</html>

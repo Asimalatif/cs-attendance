@@ -21,7 +21,9 @@ var ST_CFG = {
   // 1st year board result of 2nd year students (Provisional Certificates workbook)
   BOARD_BOOK: '1C2tdr2yXAja0_C5Nk4HIk2m-71Kc4I-FS5VQUhjUtHQ',
   BOARD_BY_ENROLL: 'boardResult1STYEAR',     // has Enroll#, Roll No, Registration, Marks
-  BOARD_LIST: '1styeardata2026',             // the board's list: Roll No, Name, Father Name, Registration #, Marks, Grade
+  BOARD_LIST: '1styeardata2026',             // the board's list: Roll No, Name, Father Name, Registration #, Marks, Grade / Remarks
+                                            // (a sheet made by board.html, e.g. 'HSSC 1st year 2026', also works: only Jinnah College rows are used)
+  BOARD_COLLEGE: /JINNAH COLLEGE FOR WOMEN/i,
   BOARD_LINKS: 'App Board Links',            // choices confirmed in the app (made by itself)
   MATCH_MIN: 0.86, MATCH_GAP: 0.03,
   BOARD_TOTAL: 600,                         // total marks of the 1st year board exam
@@ -100,7 +102,7 @@ function stProfile_(user, roll) {
   });
   fields = stTidy_(fields, roll);
   var out = { ok: true, full: full, roll: gtS_(m[0]), name: gtS_(m[1]), cls: gtS_(m[2]), father: gtS_(m[4]), subjects: subjects, fields: fields };
-  out.photo = stPhoto_(row[col('Pic URL')] || row[col('PHOTO')]);
+  out.photo = full ? stPhoto_(row[col('Pic URL')] || row[col('PHOTO')]) : '';   // photo: admin / principal / Chief Proctor only
   return out;
 }
 /** no repetitions: PCS already says program / class / section, REG# = Enroll#, NULL / 0 are empty; matric marks on one line */
@@ -272,8 +274,8 @@ function stBoardData_() {
   var sh = book.getSheetByName(ST_CFG.BOARD_LIST);
   if (sh) {
     var v = sh.getDataRange().getDisplayValues(), h = v[0];
-    var ir = col(h, ['Roll No']), inm = col(h, ['Name']), ifa = col(h, ['Father Name']), ig = col(h, ['Registration #', 'Registration']), im = col(h, ['Marks']), igr = col(h, ['Grade']), ip = col(h, ['Position']);
-    for (var i = 1; i < v.length; i++) if (gtS_(v[i][ir])) out.list.push([gtS_(v[i][ir]), gtS_(v[i][inm]), gtS_(v[i][ifa]), ig >= 0 ? gtS_(v[i][ig]) : '', im >= 0 ? gtS_(v[i][im]) : '', igr >= 0 ? gtS_(v[i][igr]) : '', ip >= 0 ? gtS_(v[i][ip]) : '']);
+    var ir = col(h, ['Roll No']), inm = col(h, ['Name']), ifa = col(h, ['Father Name']), ig = col(h, ['Registration #', 'Registration']), im = col(h, ['Marks']), igr = col(h, ['Grade', 'Remarks']), ip = col(h, ['Position']), ic = col(h, ['College Name']);
+    for (var i = 1; i < v.length; i++) if (gtS_(v[i][ir]) && (ic < 0 || !gtS_(v[i][ic]) || ST_CFG.BOARD_COLLEGE.test(v[i][ic]))) out.list.push([gtS_(v[i][ir]), gtS_(v[i][inm]), gtS_(v[i][ifa]), ig >= 0 ? gtS_(v[i][ig]) : '', im >= 0 ? gtS_(v[i][im]) : '', igr >= 0 ? gtS_(v[i][igr]) : '', ip >= 0 ? gtS_(v[i][ip]) : '']);
   }
   sh = book.getSheetByName(ST_CFG.BOARD_BY_ENROLL);
   if (sh) {

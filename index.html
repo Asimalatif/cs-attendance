@@ -3987,6 +3987,7 @@ function openMore(){
     <div class="mlist">
       ${mode === 'att' ? item('voice', '🎙', 'Voice roll call', 'The app says each name, you answer present / absent / leave') : ''}
       ${mode === 'att' ? item('vabs', '🗣', 'Say the absentees', '“Absent 3, 7 and 12, leave 5”: everyone else becomes P') : ''}
+      ${item('vset', '⚙', 'Voice settings', 'Natural voice, speed, Urdu / English, microphone test')}
       ${item('note', I.note, note ? 'Edit day note' : 'Add day note', note ? 'Note: ' + esc(note) : 'College closed, class not held, holiday…')}
       ${multiOk ? item('multi', I.plus, 'More than one lecture today', 'Adds a lecture bar (1, 2, 3…) for this day') : ''}
       ${item('guest', I.guest, 'Add guest student', 'A student of another section who attends here')}
@@ -4006,6 +4007,7 @@ function doAct(a){
   const dlg = $q('#dlg'); if(dlg.open) dlg.close();
   if(a === 'voice') return window.JCWVOICE && window.JCWVOICE.rollCall();
   if(a === 'vabs') return window.JCWVOICE && window.JCWVOICE.sayAbsent();
+  if(a === 'vset') return window.JCWVOICE && window.JCWVOICE.settings();
   if(a === 'note') return openNote();
   if(a === 'multi'){ multi[multiKey()] = 2; store.set('multi2', multi); renderMain(); return toast('Lecture bar added for day ' + sel.day + '. Tap 2 for your second lecture.'); }
   if(a === 'guest') return openGuest();
@@ -4028,7 +4030,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-31 v8.2 voice and JCW colour reports';
+const APP_BUILD = '2026-11-01 v8.3 board results, better voice';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4122,14 +4124,15 @@ const dailyRows = q => scope ? serverRows(q) : localRows(q);
 let attSrc = store.get('attSrc', 'both');
 const ATT_SRC = [['both', 'Monthly + daily'], ['monthly', 'Monthly sheets'], ['daily', 'Daily app']];
 const mrCache = {};
-async function monthlyRows(q){
+async function monthlyRows(q, college){
   if(!navigator.onLine) return [];
   const fi = SEAS.indexOf(q.from || 'SEPT'), ti = Math.min(SEAS.indexOf(q.to || SEAS[seasNow()]), seasNow()), mons = SEAS.slice(Math.max(0, fi), ti + 1);
   const parts = await Promise.all(mons.map(async m => {
-    const c = mrCache[m]; if(c && Date.now() - c.at < 30 * 60e3) return c.rows;
-    const r = await api({ action:'wr_rows', mon:m }, 330000);
+    const ck = (college ? 'C' : '') + m, c = mrCache[ck]; if(c && Date.now() - c.at < 30 * 60e3) return c.rows;
+    const r = await api(Object.assign({ action:'wr_rows', mon:m }, college ? { college:1 } : {}), 330000);
     if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'The server is not updated yet (WorkbookReports).' : r.error || 'Could not read the ' + monName(m) + ' monthly attendance');
-    mrCache[m] = { at:Date.now(), rows:r.rows || [] }; return mrCache[m].rows;
+    if(Array.isArray(r.eve) && r.eve.length) store.set('tpEve', r.eve);
+    mrCache[ck] = { at:Date.now(), rows:r.rows || [] }; return mrCache[ck].rows;
   }));
   let rows = [].concat(...parts);
   if(q.cls) rows = rows.filter(r => normC(r.cls) === normC(q.cls));
@@ -4151,12 +4154,12 @@ function mergeRows(daily, monthly){
   daily.forEach(r => { if(!used[rowKey(r)]) out.push(r); });
   return out;
 }
-async function getRows(q){
+async function getRows(q, college){
   if(attSrc === 'daily') return dailyRows(q);
   let mErr = null, dErr = null;
   const [d, m] = await Promise.all([
     attSrc === 'monthly' ? Promise.resolve([]) : dailyRows(q).catch(e => { dErr = e; return []; }),
-    monthlyRows(q).catch(e => { mErr = e; return []; })]);
+    monthlyRows(q, college).catch(e => { mErr = e; return []; })]);
   if(!d.length && !m.length && (mErr || dErr)) throw (mErr || dErr);
   return attSrc === 'monthly' ? m : mergeRows(d, m);
 }
@@ -4719,7 +4722,7 @@ const clsU = c => String(c || '').toUpperCase().replace(/\s+/g, '');
 const clsProg = c => { const u = clsU(c); return /^FCS/.test(u) ? 'FCS' : /^PRE-?ENG/.test(u) ? 'Pre-Engineering' : /^F\.?A-?\d/.test(u) ? 'F.A' : /^[A-Z]\d$/.test(u) ? 'Pre-Medical' : 'Other'; };
 const clsYear = c => { const m = clsU(c).match(/^(?:FCS|PRE-?ENG|F\.?A)-?(\d)/) || clsU(c).match(/^[A-Z](\d)$/); return m ? (m[1] === '1' ? '1st Year' : '2nd Year') : 'Other'; };
 const SHIFTS = [['M', 'Morning'], ['E', 'Evening']];
-function shiftMap(){ const m = {}; [].concat((ttAll && ttAll.rows) || [], (tt && tt.rows) || []).forEach(r => { if(r && r.cls && shR(r) === 'E') m[normC(r.cls)] = 'E'; }); return m; }
+function shiftMap(){ const m = {}; (store.get('tpEve', []) || []).forEach(c => { m[normC(c)] = 'E'; }); [].concat((ttAll && ttAll.rows) || [], (tt && tt.rows) || []).forEach(r => { if(r && r.cls && shR(r) === 'E') m[normC(r.cls)] = 'E'; }); return m; }
 const SUBK_ALIAS = { PASHTO:'PUSHTO', ISLAMIYATELECTIVE:'ISLAMIYATELE' };
 const subK = x => { const k = String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); return SUBK_ALIAS[k] || k; };
 const r2 = v => Math.round(v * 100) / 100;
@@ -4792,8 +4795,16 @@ async function tpData(){
   const q = { action:'wr_marks', kind:tp.exam }; if(tp.exam === 'mt') q.mon = tp.mon;
   const r = await api(q, 330000);
   if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'The server is not updated yet (WorkbookReports).' : r.error || 'Could not read the marks');
-  if(scope && !ttAll) await loadTTAll().catch(() => {});
+  if(Array.isArray(r.eve) && r.eve.length) store.set('tpEve', r.eve);
+  if(scope){ if(!ttAll) await loadTTAll().catch(() => {}); pushEve(); }
   return (tpMarks[key] = { at:Date.now(), list:r.students || [], book:r.book });
+}
+/** admin / principal / HOD: save the evening sections on the server, so teachers' toppers and 100% lists split morning / evening too */
+function pushEve(){
+  if(!ttAll || !ttAll.rows) return;
+  const eve = [...new Set(ttAll.rows.filter(r => r && r.cls && shR(r) === 'E').map(r => r.cls))].sort();
+  if(!eve.length || JSON.stringify(eve) === JSON.stringify(store.get('eveSent', null))) return;
+  api({ action:'wr_eve_set', eve }, 30000).then(r => { if(r && r.ok) store.set('eveSent', eve); }).catch(() => {});
 }
 function tpPdf(D){
   const S = tpModel(D.list), C = P.C, doc = P.newDoc(); let first = true, any = false;
@@ -4802,7 +4813,7 @@ function tpPdf(D){
     const part = S.filter(s => s.sh === k); if(!part.length) return;
     if(!first) doc.addPage(); first = false; any = true;
     let Y = P.TOP;
-    Y = P.heading(doc, Y, 'Toppers · ' + tpExamName(), label + ' · ' + (scope ? allLabel() : 'Your sections') + ' · ' + part.length + ' students · session ' + seasonTxt());
+    Y = P.heading(doc, Y, 'Toppers · ' + tpExamName(), label + ' · ' + (scope ? allLabel() : 'Whole college') + ' · ' + part.length + ' students · session ' + seasonTxt());
     const okN = part.filter(s => s.ok).length;
     Y = P.statBoxes(doc, Y, [{ l:'Students', v:part.length }, { l:'With all marks', v:okN }, { l:'Marks missing', v:part.length - okN, c:part.length - okN ? C.RED : C.GREEN, bg:part.length - okN ? C.REDBG : C.GREENBG }, { l:'Sections', v:new Set(part.map(s => s.cls)).size }]) + 5;
     tpTables(part, tp.n).forEach(t => {
@@ -4859,9 +4870,9 @@ function hundredModel(rows, mons){
 async function hundredData(){
   const q = { from:tp.from, to:tp.to }, mons = SEAS.slice(SEAS.indexOf(tp.from), SEAS.indexOf(tp.to) + 1);
   toast('Reading the attendance of ' + rangeTxt(q) + '… about half a minute per month the first time.');
-  const rows = await getRows(q);
+  const rows = await getRows(q, true);                         // whole college for teachers too (monthly attendance workbooks)
   if(!rows.length) throw new Error('No attendance found for ' + rangeTxt(q) + '.');
-  if(scope && !ttAll && navigator.onLine) await loadTTAll().catch(() => {});
+  if(scope && navigator.onLine){ if(!ttAll) await loadTTAll().catch(() => {}); pushEve(); }
   const { H, empty } = hundredModel(rows, mons), fathers = {};
   const want = H.filter(b => b.some).map(b => b.roll);
   if(want.length && navigator.onLine){ try{ const r = await api({ action:'wr_fathers', rolls:want }, 60000); if(r.ok) Object.assign(fathers, r.fathers || {}); }catch(e){} }
@@ -4872,7 +4883,7 @@ async function hundredData(){
 function hundredPdf(D){
   const C = P.C, { q, H, mons } = D, full = H.filter(b => b.full), some = H.filter(b => b.some && !b.full);
   const doc = P.newDoc(mons.length > 2 ? 'landscape' : 'portrait'); let Y = P.TOP;
-  Y = P.heading(doc, Y, '100% Attendance', (scope ? allLabel() : 'Your subjects') + ' · ' + rangeTxt(q));
+  Y = P.heading(doc, Y, '100% Attendance', (scope ? allLabel() : 'Whole college') + ' · ' + rangeTxt(q));
   Y = P.statBoxes(doc, Y, [{ l:'100% in all months', v:full.length, c:C.GREEN, bg:C.GREENBG }, { l:'100% in some months', v:some.length }, { l:'Students checked', v:H.length },
     { l:'Sections', v:new Set(full.map(b => b.cls)).size }]) + 5;
   const mCell = (b, m) => { const x = b.months[m]; return !x || !x.d ? '-' : x.p >= x.d ? '100%' : pct2(x.p, x.d) + '%'; };
@@ -4893,7 +4904,7 @@ function hundredPdf(D){
   Y = P.smallNote(doc, Y, '100% = every lecture of every subject attended (P). Leave (L), absent (A) and bunk (B) are not attendance. Source: ' + ATT_SRC.find(x => x[0] === attSrc)[1] + '. Held / Attended = lectures of all subjects in ' + rangeTxt(q) + '. Morning sections first, then evening.');
   P.signatures(doc, Y, ['Prepared by', 'Chief Proctor', 'Principal']);
   P.finalize(doc);
-  return { doc, title:'100% attendance', file:'100-percent-attendance_' + P.safe(scope ? allLabel() : 'My-subjects') + '_' + q.from + '-' + q.to + '.pdf' };
+  return { doc, title:'100% attendance', file:'100-percent-attendance_' + P.safe(scope ? allLabel() : 'College') + '_' + q.from + '-' + q.to + '.pdf' };
 }
 function hundredCsv(D){
   const { q, H, mons } = D, L = [['List', 'Shift', 'Section', 'Roll No', 'Student name', 'Father name'].concat(mons.map(monName), ['Held', 'Attended', '%'])];
@@ -4943,7 +4954,7 @@ let ssv = { q:'', list:[], busy:false, roll:'', p:null, months:{}, tests:null, b
 document.addEventListener('input', ev => { if(ev.target && ev.target.id === 'ssQ') ssFind(ev.target.value); });
 document.addEventListener('toggle', ev => { const d = ev.target; if(d && d.classList && d.classList.contains('ssmon')) ssv.open[d.dataset.m] = d.open; }, true);
 function searchCard(){
-  return `<section class="card"><h3>${I.search} Student search</h3><div class="sub">Any student of the college: profile and photo, attendance of every month, day-by-day calendar, monthly tests, grand test, detention and the 1st year board result.</div>
+  return `<section class="card"><h3>${I.search} Student search</h3><div class="sub">Any student of the college: profile${scope === 'all' ? ' and photo' : ''}, attendance of every month, day-by-day calendar, monthly tests, grand test, detention and the 1st year board result.</div>
     <button class="more" type="button" data-view="search">Open student search</button></section>`;
 }
 function ssFind(v){
@@ -5029,7 +5040,7 @@ function renderSearch(){
     <div class="kpi ${tone(avg(gtP))}"><b>${dt600 || (avg(gtP) == null ? '–' : avg(gtP) + '%')}</b><small>${dt600 ? 'Detention (600)' : 'Grand test'}</small></div></div><div class="grid2">`;
   // profile
   h += `<section class="card sswide"><h3>Student profile</h3>${!P0 ? '<div class="empty">Loading…</div>' :
-    `<div class="sspi"><div class="ssbig">${P0.photo ? `<img src="${esc(P0.photo)}" alt="Photo of ${esc(name)}">` : '<span>No photo</span>'}</div><div class="ssgrid">${P0.fields.map(f => `<div><span>${esc(f[0])}</span><b>${esc(f[1] || '–')}</b></div>`).join('')}<div class="wide"><span>Subjects</span><div class="chips2">${P0.subjects.map(x => `<i>${esc(x)}</i>`).join('')}</div></div></div></div>`}</section>${ssBoardHtml()}`;
+    `<div class="sspi">${P0.full === false ? '' : `<div class="ssbig">${P0.photo ? `<img src="${esc(P0.photo)}" alt="Photo of ${esc(name)}">` : '<span>No photo</span>'}</div>`}<div class="ssgrid">${P0.fields.map(f => `<div><span>${esc(f[0])}</span><b>${esc(f[1] || '–')}</b></div>`).join('')}<div class="wide"><span>Subjects</span><div class="chips2">${P0.subjects.map(x => `<i>${esc(x)}</i>`).join('')}</div></div></div></div>`}</section>${ssBoardHtml()}`;
   // attendance table
   const subNames = Object.keys(A.subs).sort(), pend = mons.filter(m => !ssv.months[m]).length;
   h += `<section class="card"><h3>${I.chart} Attendance by subject and month</h3>${pend ? `<div class="sub">Loading ${pend} month${pend > 1 ? 's' : ''}…</div>` : ''}
@@ -5874,9 +5885,11 @@ let hc = null, rinfo = null;
 function adminExtraCards(){
   if(scope !== 'all') return '';
   const page = studentPageUrl();
-  return `<div class="grid2" style="margin-top:12px">${shsCard()}${evCard()}${leftCard()}<section class="card"><h3>${I.doc} Admissions</h3>
+  return `<div class="grid2" style="margin-top:12px">${shsCard()}${evCard()}${leftCard()}${isAdmin ? `<section class="card"><h3>${I.doc} Admissions</h3>
       <div class="sub">Add a new student or change an old admission (program, year, section, quota, roll no, subjects, marks). Saves go straight into Transform-ALL-COLLEGE-STRENGTH, also without internet. Then run <b>Sheets vs strength sheet</b> so the attendance sheets follow.</div>
-      <div class="acts2"><a class="btn primary" href="admission.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Admissions</a></div></section><section class="card"><h3>${I.check} System health check</h3>
+      <div class="acts2"><a class="btn primary" href="admission.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Admissions</a></div></section><section class="card"><h3>${I.doc} Board results</h3>
+      <div class="sub">Peshawar Board gazette PDF (HSSC 1st or 2nd year) → a sheet such as “HSSC 1st year 2026” in Provisional Certificates: every student, college name, board position, Jinnah College top 20.</div>
+      <div class="acts2"><a class="btn primary" href="board.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Board results</a></div></section>` : ''}<section class="card"><h3>${I.check} System health check</h3>
       <div class="sub">Finds problems before they stop the work: duplicate roll numbers, students without subjects or class, timetable teachers without a login, classes with no students, sections with no attendance this month, missing sheets and automatic jobs that are off.</div>
       <div class="acts2"><button class="btn primary" type="button" id="xHc">${I.check}Run health check</button></div></section>
     <section class="card"><h3>${I.doc} Student result page</h3>
@@ -7277,13 +7290,15 @@ loadOpts(false);
 
 <script>
 /* ======================= VOICE: voice typing, voice roll call, marks by voice, read aloud =======================
-   Uses the phone's own speech tools (Chrome / Edge / Safari): speech-to-text needs internet, reading aloud works offline.
-   - A microphone button appears whenever a text box is in use: speak instead of typing (English or Urdu).
-   - Attendance ⋯ More → Voice roll call: the app says each name, the teacher answers present / absent / leave / bunk
-     (or haazir, ghair haazir, chutti). "next", "back", "repeat", "stop" also work.
-   - Attendance ⋯ More → Say the absentees: "absent 3, 7 and 12, leave 5" (row numbers or names); the rest become P.
-   - Monthly test → Speak marks: the app says each name, the teacher says the marks or "absent".
-   - Help (?) → Listen: reads the manual aloud. */
+   Only the browser's own speech tools (nothing goes to the Apps Script server):
+   - listening = SpeechRecognition (Chrome / Edge / Safari; needs internet and microphone permission)
+   - speaking  = speechSynthesis (offline). The most natural installed voice is chosen (Edge "Online (Natural)",
+     Google, Siri / enhanced); Voice settings lets the teacher pick another, set the speed and test the microphone.
+   The microphone stays open (continuous) and every word is checked as it is heard, so a class can be answered
+   quickly: "present … present … absent …". While the app itself speaks, what the microphone hears is ignored.
+   - Text boxes: a mic button appears; speak instead of typing (English or Urdu).
+   - Attendance ⋯ More → Voice roll call / Say the absentees.   - Monthly test → Speak marks.
+   - Help (?) and the manuals → Listen. */
 (() => {
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const canSpeak = 'speechSynthesis' in window;
@@ -7291,6 +7306,7 @@ const st = { get:(k, d) => { try{ const v = localStorage.getItem('csa2_' + k); r
 const LANGS = [['en-IN', 'English'], ['ur-PK', 'اردو']];
 const tLang = () => st.get('vtype', 'en-IN');
 const say = (m) => { try{ toast(m); }catch(e){} };
+const UA = navigator.userAgent || '';
 const css = document.createElement('style');
 css.textContent = `
 #vMic{position:fixed;right:14px;bottom:calc(96px + env(safe-area-inset-bottom,0px));z-index:60;display:none;align-items:center;gap:6px}
@@ -7298,11 +7314,13 @@ css.textContent = `
 #vMic .mic{width:52px;height:52px;background:linear-gradient(180deg,#8A4A35,#6B3423);color:#fff;display:grid;place-items:center}
 #vMic .mic.on{background:#C0392B;animation:vPulse 1s infinite}
 #vMic .lg{height:34px;padding:0 12px;background:#FBEDEA;color:#6B3423;border:1.5px solid #E2C0B8}
+#vLive{position:fixed;left:12px;right:80px;bottom:calc(100px + env(safe-area-inset-bottom,0px));z-index:60;display:none;background:#2B1912;color:#fff;border-radius:14px;padding:8px 12px;font-size:14px;box-shadow:0 10px 22px -10px rgba(0,0,0,.6)}
 @keyframes vPulse{50%{box-shadow:0 0 0 10px rgba(192,57,43,.18)}}
-#vDlg{border:1.5px solid var(--line);border-top:5px solid #6B3423;border-radius:22px;padding:0;width:min(440px,94vw);background:var(--surface);color:var(--ink);box-shadow:0 18px 38px -18px rgba(74,36,24,.6)}
+#vDlg{border:1.5px solid var(--line);border-top:5px solid #6B3423;border-radius:22px;padding:0;width:min(440px,94vw);max-height:92vh;background:var(--surface);color:var(--ink);box-shadow:0 18px 38px -18px rgba(74,36,24,.6)}
 #vDlg::backdrop{background:rgba(26,17,15,.45)}
-#vDlg .vb{padding:16px}
-#vDlg h2{margin:0 0 2px;font-size:18px;color:#6B3423}
+#vDlg .vb{padding:16px;overflow:auto;max-height:90vh}
+#vDlg h2{margin:0 0 2px;font-size:18px;color:#6B3423;display:flex;align-items:center;gap:8px}
+#vDlg h2 .gear{margin-left:auto;border:1.5px solid var(--line);background:var(--surface);border-radius:999px;height:32px;padding:0 10px;font:inherit;font-size:13px;font-weight:700;color:#6B3423}
 #vDlg .meta{font-size:12.5px;color:var(--muted)}
 #vDlg .who2{margin:14px 0 6px;padding:14px;border-radius:16px;background:linear-gradient(135deg,#F4D6D0,#FBEDEA);text-align:center}
 #vDlg .who2 b{display:block;font-size:24px;line-height:1.2;color:#2B1912}
@@ -7322,83 +7340,146 @@ css.textContent = `
 #vDlg .opts label{display:flex;align-items:center;gap:5px;font-size:13px;padding:4px 10px;border-radius:999px;background:#FBEDEA;color:#6B3423;font-weight:700}
 #vDlg .res{max-height:38vh;overflow:auto;margin:8px 0;padding:0;list-style:none}
 #vDlg .res li{display:flex;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:10px;margin-bottom:5px;background:#FBEDEA;font-size:14px}
-#vDlg input.vt{width:100%;height:44px;border:1.5px solid var(--line);border-radius:12px;padding:0 12px;font:inherit;font-size:16px;background:var(--surface);color:var(--ink)}
+#vDlg input.vt,#vDlg select.vs{width:100%;height:44px;border:1.5px solid var(--line);border-radius:12px;padding:0 12px;font:inherit;font-size:15px;background:var(--surface);color:var(--ink)}
+#vDlg .fl{margin:10px 0 4px;font-size:13px;font-weight:800;color:#6B3423}
+#vDlg .meter{height:12px;border-radius:999px;background:#FBEDEA;border:1px solid var(--line);overflow:hidden;margin:6px 0}
+#vDlg .meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,#0E8A5F,#B4740E,#C0392B);transition:width .08s}
+#vDlg .tip{font-size:12.5px;line-height:1.45;padding:9px 11px;border-radius:12px;background:#FBEDEA;color:#4A2418;margin-top:8px}
+#vDlg .tip.bad{background:#FDE3E1;color:#8E1F16}
 .row.vNow{outline:3px solid #E7B7AE;outline-offset:2px}
 .vListen{display:inline-flex;align-items:center;gap:6px}
 `;
 document.head.appendChild(css);
 
-/* ---------- reading aloud ---------- */
+/* ---------- speaking: the most natural voice ---------- */
 let voices = [];
 function loadVoices(){ try{ voices = speechSynthesis.getVoices() || []; }catch(e){} }
-if(canSpeak){ loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
-function pickVoice(lang){
-  const l = String(lang || 'en').toLowerCase().slice(0, 2), v = voices.filter(x => String(x.lang).toLowerCase().startsWith(l));
-  return v.find(x => /female|zira|samantha|google uk english female|veena|heera/i.test(x.name)) || v.find(x => /en-in|en-gb/i.test(x.lang)) || v[0] || null;
+if(canSpeak){ loadVoices(); try{ speechSynthesis.addEventListener('voiceschanged', loadVoices); }catch(e){ speechSynthesis.onvoiceschanged = loadVoices; } }
+function voiceScore(v){
+  const n = v.name || '', l = String(v.lang || '');
+  let s = 0;
+  if(/natural|neural/i.test(n)) s += 60;                          // Edge: "Microsoft Aria Online (Natural)", "Microsoft Uzma Online (Natural)"
+  if(/premium|enhanced|siri/i.test(n)) s += 45;                   // iPhone / Mac downloaded voices
+  if(/google/i.test(n)) s += 35;                                  // Chrome / Android Google voices
+  if(/online/i.test(n)) s += 15;
+  if(v.localService === false) s += 5;
+  if(/en-(IN|GB)|ur-PK/i.test(l)) s += 6;
+  if(/female|aria|jenny|sonia|libby|neerja|uzma|zira|samantha|karen|moira|heera|veena|kalpana|swara/i.test(n)) s += 4;
+  if(/espeak|compact|eloquence|fred|albert|bad news|bells|boing|bubbles|cellos|whisper|zarvox|trinoids|organ|superstar|jester|junior|ralph|wobble/i.test(n)) s -= 80;
+  return s;
 }
+const langOf = v => String(v.lang || '').toLowerCase().replace('_', '-');
+function voicesFor(lang){ const l = lang.slice(0, 2); return voices.filter(v => langOf(v).startsWith(l)).sort((a, b) => voiceScore(b) - voiceScore(a)); }
+function pickVoice(lang){
+  lang = lang === 'ur' ? 'ur' : 'en';
+  const want = st.get(lang === 'ur' ? 'vVoiceUr' : 'vVoiceEn', ''), list = voicesFor(lang);
+  return (want && list.find(v => v.name === want)) || list[0] || null;
+}
+const hasUrdu = () => voicesFor('ur').length > 0;
+/** speaking language for the app's own sentences: English, or Urdu when chosen and an Urdu voice exists */
+const sayUr = () => st.get('vsay', 'en') === 'ur' && hasUrdu();
+let speakingTo = 0;
 function speak(text, lang){
   return new Promise(res => {
     if(!canSpeak || !text) return res();
+    let done = false; const fin = () => { if(done) return; done = true; Ear.mute(false); res(); };
     try{
       const u = new SpeechSynthesisUtterance(String(text));
-      const v = pickVoice(lang || 'en'); if(v){ u.voice = v; u.lang = v.lang; } else u.lang = lang || 'en-IN';
-      u.rate = st.get('vrate', 1); u.onend = () => res(); u.onerror = () => res();
+      const v = pickVoice(lang); if(v){ u.voice = v; u.lang = v.lang; } else u.lang = lang === 'ur' ? 'ur-PK' : 'en-IN';
+      u.rate = Number(st.get('vrate', 1)) || 1; u.pitch = 1;
+      u.onend = fin; u.onerror = fin;
+      Ear.mute(true);
       speechSynthesis.speak(u);
-      setTimeout(res, Math.min(20000, 1500 + String(text).length * 90));          // never hang
-    }catch(e){ res(); }
+      clearTimeout(speakingTo); speakingTo = setTimeout(fin, Math.min(25000, 2000 + String(text).length * 110));   // never hang
+    }catch(e){ fin(); }
   });
 }
-function stopSpeak(){ try{ if(canSpeak) speechSynthesis.cancel(); }catch(e){} }
+function stopSpeak(){ try{ if(canSpeak) speechSynthesis.cancel(); }catch(e){} Ear.mute(false); }
+/** the app's own sentence in English or Urdu */
+const T2 = (en, ur) => sayUr() ? speak(ur, 'ur') : speak(en, 'en');
 
-/* ---------- listening ---------- */
-function needSR(){
-  if(!SR){ say('Voice input is not available in this browser. Use Chrome on Android or a laptop, or Safari on iPhone.'); return false; }
-  if(!navigator.onLine){ say('Voice input needs internet. Reading aloud still works offline.'); return false; }
-  return true;
+/* ---------- listening: one open microphone, words checked as they arrive ---------- */
+const ERRS = {
+  'not-allowed':'The microphone is blocked for this app. Click the lock / ⓘ beside the web address → Microphone → Allow, then try again. On a phone: browser Settings → Site settings → Microphone.',
+  'service-not-allowed':'This browser does not allow speech input here. Use Google Chrome (Android, Windows, Mac) or Safari (iPhone).',
+  'audio-capture':'No microphone was found. On a laptop: plug in / switch on the microphone or headset, and check Windows Settings → Privacy → Microphone → allow apps (and Chrome).',
+  'network':'The speech service could not be reached. Check the internet. Brave, Opera and some Edge versions do not support voice input: use Google Chrome.',
+  'language-not-supported':'This language is not available for voice input on this device. Switch to English.'
+};
+function srProblem(){
+  if(!SR) return /Firefox/i.test(UA) ? 'Firefox cannot listen. Open the app in Google Chrome or Microsoft Edge for voice input.' : 'Voice input is not available in this browser. Use Google Chrome (Android, Windows, Mac) or Safari (iPhone).';
+  if(navigator.brave) return 'Brave blocks voice input. Open the app in Google Chrome for voice input.';
+  if(/OPR\//.test(UA)) return 'Opera cannot listen. Open the app in Google Chrome for voice input.';
+  if(!navigator.onLine) return 'Voice input needs internet. Reading aloud still works offline.';
+  if(!window.isSecureContext) return 'Voice input needs the https:// address of the app.';
+  return '';
 }
-/** one answer: resolves with the alternatives heard ([] on silence) */
-let cur = null;
-function hear(lang, ms){
-  return new Promise(res => {
-    let done = false, alts = [];
-    const r = new SR(); cur = r;
-    r.lang = lang || 'en-IN'; r.interimResults = false; r.continuous = false; r.maxAlternatives = 5;
-    r.onresult = e => { const x = e.results[0]; for(let i = 0; i < x.length; i++) alts.push(String(x[i].transcript || '').trim()); };
-    const fin = () => { if(done) return; done = true; cur = null; res(alts); };
-    r.onerror = e => { if(e && (e.error === 'not-allowed' || e.error === 'service-not-allowed')) say('Allow the microphone for this app (browser settings) to use voice.'); fin(); };
-    r.onend = fin;
-    try{ r.start(); }catch(e){ fin(); }
-    setTimeout(() => { try{ r.stop(); }catch(e){} }, ms || 7000);
-  });
+function needSR(){ const p = srProblem(); if(p){ say(p); return false; } return true; }
+class Listener {
+  constructor(){ this.r = null; this.on = false; this.cb = null; this.used = {}; this.muted = false; this.muteEnd = 0; this.err = ''; this.fails = 0; this.onstate = null; }
+  start(lang, cb, onstate){ this.stop(); this.on = true; this.lang = lang; this.cb = cb; this.onstate = onstate || null; this.fails = 0; this.err = ''; this._go(); }
+  _go(){
+    if(!this.on) return;
+    const r = new SR(); this.r = r; this.used = {};
+    r.lang = this.lang; r.continuous = true; r.interimResults = true; r.maxAlternatives = 3;
+    r.onstart = () => { this.fails = 0; this.state('on'); };
+    r.onresult = e => {
+      for(let i = e.resultIndex; i < e.results.length; i++){
+        const res = e.results[i], all = []; for(let k = 0; k < res.length; k++) all.push(String(res[k].transcript || '').trim());
+        const words = (all[0] || '').split(/\s+/).filter(Boolean), from = this.used[i] || 0;
+        if(this.muted || Date.now() < this.muteEnd){ this.used[i] = words.length; continue; }      // the app's own voice
+        if(words.length <= from && !res.isFinal) continue;
+        const fresh = all.map(a => a.split(/\s+/).filter(Boolean).slice(from).join(' ')).filter(Boolean);
+        if(!fresh.length) continue;
+        let took = false; try{ took = this.cb && this.cb(fresh, res.isFinal); }catch(err){}
+        if(took || res.isFinal) this.used[i] = words.length;
+      }
+    };
+    r.onerror = e => {
+      const c = e && e.error || 'error'; if(c === 'no-speech' || c === 'aborted') return;
+      this.err = c; this.fails++;
+      if(ERRS[c] && c !== 'network'){ this.on = false; this.state('err', ERRS[c]); }
+      else if(this.fails > 3){ this.on = false; this.state('err', ERRS[c] || ('Voice input stopped (' + c + ').')); }
+    };
+    r.onend = () => { if(this.r !== r) return; this.state('off'); if(this.on) setTimeout(() => this._go(), this.fails ? 700 : 120); };   // phones stop after a pause: start again
+    try{ r.start(); }catch(e){ if(this.on) setTimeout(() => this._go(), 500); }
+  }
+  state(s, msg){ try{ this.onstate && this.onstate(s, msg); }catch(e){} }
+  mute(m){ this.muted = m; if(!m) this.muteEnd = Date.now() + 350; }
+  stop(){ this.on = false; const r = this.r; this.r = null; try{ if(r) r.abort(); }catch(e){} }
 }
-function stopHear(){ try{ if(cur) cur.abort(); }catch(e){} cur = null; }
+const Ear = new Listener();
 
 /* ---------- what was said -> P / A / L / B, a number, or a command ---------- */
-const W2N = { zero:0, one:1, two:2, to:2, too:2, three:3, four:4, for:4, five:5, six:6, seven:7, eight:8, ate:8, nine:9, ten:10, eleven:11, twelve:12, thirteen:13, fourteen:14, fifteen:15, sixteen:16, seventeen:17, eighteen:18, nineteen:19, twenty:20, thirty:30, forty:40, fifty:50, sixty:60, seventy:70, eighty:80, ninety:90, hundred:100,
-  'ایک':1, 'دو':2, 'تین':3, 'چار':4, 'پانچ':5, 'چھ':6, 'سات':7, 'آٹھ':8, 'نو':9, 'دس':10, 'گیارہ':11, 'بارہ':12, 'تیرہ':13, 'چودہ':14, 'پندرہ':15, 'سولہ':16, 'سترہ':17, 'اٹھارہ':18, 'انیس':19, 'بیس':20 };
+const W2N = { zero:0, one:1, won:1, two:2, to:2, too:2, three:3, tree:3, four:4, for:4, five:5, six:6, seven:7, eight:8, ate:8, nine:9, ten:10, eleven:11, twelve:12, thirteen:13, fourteen:14, fifteen:15, sixteen:16, seventeen:17, eighteen:18, nineteen:19, twenty:20, thirty:30, forty:40, fifty:50, sixty:60, seventy:70, eighty:80, ninety:90, hundred:100,
+  'ایک':1, 'دو':2, 'تین':3, 'چار':4, 'پانچ':5, 'چھ':6, 'سات':7, 'آٹھ':8, 'نو':9, 'دس':10, 'گیارہ':11, 'بارہ':12, 'تیرہ':13, 'چودہ':14, 'پندرہ':15, 'سولہ':16, 'سترہ':17, 'اٹھارہ':18, 'انیس':19, 'بیس':20,
+  ek:1, do:2, teen:3, char:4, chaar:4, paanch:5, panch:5, chay:6, chhe:6, saat:7, aath:8, nau:9, das:10, gyarah:11, barah:12, terah:13, chaudah:14, pandrah:15, solah:16, satrah:17, atharah:18, unees:19, bees:20 };
 const URDIG = s => String(s).replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
 function wordsToNums(t){
-  t = URDIG(String(t).toLowerCase()).replace(/(\d)\s*(?:point|dot|اعشاریہ)\s*(\d)/g, '$1.$2');
-  const out = []; let acc = null;
+  t = URDIG(String(t).toLowerCase()).replace(/(\d)\s*(?:point|dot|اعشاریہ)\s*(\d)/g, '$1.$2').replace(/(\d+)\s*(?:and a half|and half)/g, '$1.5').replace(/ساڑھے\s+(\S+)/g, '$1 half');
+  const out = []; let acc = null, dec = false;
+  const push = n => { if(dec && out.length && Number.isInteger(n) && n < 10){ out[out.length - 1] = Number(out[out.length - 1] + '.' + n); } else out.push(n); dec = false; };
   t.split(/[\s,;:]+/).forEach(w => {
-    if(/^\d+(\.\d+)?$/.test(w)){ if(acc != null){ out.push(acc); acc = null; } out.push(Number(w)); return; }
-    if(W2N[w] != null){ const n = W2N[w]; if(acc != null && acc >= 20 && acc % 10 === 0 && n < 10) acc += n; else { if(acc != null) out.push(acc); acc = n; } return; }
-    if(acc != null){ out.push(acc); acc = null; }
+    if(/^half$/.test(w)){ if(acc != null){ push(acc); acc = null; } if(out.length) out[out.length - 1] += 0.5; return; }
+    if(/^(point|dot|اعشاریہ)$/.test(w)){ if(acc != null){ out.push(acc); acc = null; } dec = out.length > 0; return; }
+    if(/^\d+(\.\d+)?$/.test(w)){ if(acc != null){ push(acc); acc = null; } push(Number(w)); return; }
+    if(W2N[w] != null){ const n = W2N[w]; if(acc != null && acc >= 20 && acc % 10 === 0 && n < 10 && !dec) acc += n; else { if(acc != null) push(acc); acc = n; } return; }
+    if(acc != null){ push(acc); acc = null; }
   });
-  if(acc != null) out.push(acc);
+  if(acc != null) push(acc);
   return out;
 }
 function markOf(alts){
   for(const raw of alts){
-    const t = ' ' + String(raw).toLowerCase().replace(/[.!?،۔]/g, ' ') + ' ';
+    const t = ' ' + String(raw).toLowerCase().replace(/[.!?،۔,]/g, ' ').replace(/\s+/g, ' ') + ' ';
     if(/ (stop|end|finish|bas|khatam|بس|ختم) /.test(t)) return { cmd:'stop' };
     if(/ (next|skip|agla|اگلا|آگے) /.test(t)) return { cmd:'next' };
     if(/ (back|previous|pichla|پچھلا|واپس) /.test(t)) return { cmd:'back' };
     if(/ (repeat|again|dobara|دوبارہ) /.test(t)) return { cmd:'repeat' };
-    if(/ (absent|not present|no|nahi|nahin|ghair|gair|غیر|غائب|نہیں) /.test(t) || /^ a $/.test(t)) return { v:'A' };
-    if(/ (leave|chutti|chhutti|on leave|رخصت|چھٹی) /.test(t) || /^ (l|el) $/.test(t)) return { v:'L' };
-    if(/ (bunk|bunked|bank|bang) /.test(t) || /^ (b|bee) $/.test(t)) return { v:'B' };
-    if(/ (present|yes|yeah|here|haazir|hazir|hazar|haazar|ji|jee|yes madam|yes maam|حاضر|جی|ہاں) /.test(t) || /^ (p|pee|pea) $/.test(t)) return { v:'P' };
+    if(/ (absent|absence|apsent|not present|no|nope|nahi|nahin|nai|ghair|gair|ghayr|غیر|غائب|نہیں|غیرحاضر) /.test(t) || /^ a $/.test(t)) return { v:'A' };
+    if(/ (leave|leaves|leaf|live|chutti|chhutti|chuti|rukhsat|رخصت|چھٹی) /.test(t) || /^ (l|el) $/.test(t)) return { v:'L' };
+    if(/ (bunk|bunked|bank|bang|bunker) /.test(t) || /^ (b|bee) $/.test(t)) return { v:'B' };
+    if(/ (present|presents|resent|pleasant|yes|yeah|yep|yas|here|hear|haazir|hazir|hazar|haazar|hazira|ji|jee|g|yes madam|yes maam|madam|حاضر|جی|ہاں) /.test(t) || /^ (p|pee|pea) $/.test(t)) return { v:'P' };
   }
   return null;
 }
@@ -7407,16 +7488,23 @@ function markOf(alts){
 function dlg(){
   let d = document.getElementById('vDlg');
   if(!d){ d = document.createElement('dialog'); d.id = 'vDlg'; d.innerHTML = '<div class="vb" id="vBody"></div>'; document.body.appendChild(d);
-    d.addEventListener('close', () => { run.on = false; stopHear(); stopSpeak(); document.querySelectorAll('.row.vNow').forEach(r => r.classList.remove('vNow')); }); }
+    d.addEventListener('close', () => { run.on = false; Ear.stop(); stopSpeak(); stopMeter(); document.querySelectorAll('.row.vNow').forEach(r => r.classList.remove('vNow')); }); }
   return d;
 }
-const run = { on:false, i:0, list:[], kind:'', step:null };
+const run = { on:false, i:0, list:[], kind:'', back:null };
 const rowsNow = (sel) => [...document.querySelectorAll(sel)].filter(r => !r.classList.contains('off'));
 const nameOf = r => { const b = r.querySelector('.who b'); return b ? b.textContent.trim() : ''; };
 const noOf = r => { const n = r.querySelector('.no'); return n ? Number(n.textContent) : 0; };
 const curMark = r => { const b = r.querySelector('button[data-v][aria-pressed="true"]'); return b ? b.dataset.v : ''; };
 function setMark(r, v){ if(curMark(r) === v) return; const b = r.querySelector('button[data-v="' + v + '"]'); if(b) b.click(); }
 const firstName = n => String(n).split(/\s+/)[0];
+const $v = id => document.getElementById(id);
+function lst(state, msg){
+  const l = $v('vLst'); if(!l) return;
+  if(state === 'err'){ l.classList.add('off'); l.querySelector('span').textContent = 'Not listening'; const h = $v('vHeard'); if(h){ h.className = 'heard bad'; h.textContent = msg; } say(msg); return; }
+  l.classList.toggle('off', state !== 'on'); l.querySelector('span').textContent = state === 'on' ? 'Listening… speak now' : 'Starting the microphone…';
+}
+const gearBtn = '<button type="button" class="gear" data-vc="settings">⚙ Voice</button>';
 
 /* ---------- 1) voice roll call ---------- */
 function rollCall(){
@@ -7425,104 +7513,99 @@ function rollCall(){
   if(!all.length) return say('Open a class and day first.');
   const onlyUn = st.get('vOnlyUn', true), names = st.get('vNames', true);
   run.list = onlyUn ? all.filter(r => !curMark(r)) : all; if(!run.list.length) run.list = all;
-  run.kind = 'roll'; run.i = 0; run.on = true;
+  run.kind = 'roll'; run.i = 0; run.on = true; run.back = rollCall;
   const d = dlg();
-  document.getElementById('vBody').innerHTML = `<h2>Voice roll call</h2><div class="meta" id="vMeta"></div>
+  $v('vBody').innerHTML = `<h2>Voice roll call ${gearBtn}</h2><div class="meta" id="vMeta"></div>
     <div class="who2"><b id="vName">…</b><small id="vRoll"></small></div>
-    <div class="lst" id="vLst"><i></i><span>Listening…</span></div><div class="heard" id="vHeard"></div>
+    <div class="lst off" id="vLst"><i></i><span>Starting the microphone…</span></div><div class="heard" id="vHeard"></div>
     <div class="pk">${['P', 'A', 'L', 'B'].map(v => `<button type="button" class="${v}" data-vm="${v}">${v}</button>`).join('')}</div>
     <div class="row2"><button type="button" data-vc="back">◀ Back</button><button type="button" data-vc="repeat">Repeat</button><button type="button" data-vc="next">Skip ▶</button></div>
     <div class="row2"><button type="button" class="pri" data-vc="stop">Finish</button></div>
     <div class="opts"><label><input type="checkbox" id="vOptNames" ${names ? 'checked' : ''}> Read names aloud</label><label><input type="checkbox" id="vOptUn" ${onlyUn ? 'checked' : ''}> Only unmarked</label>
       <label>Answer in <select id="vOptLang">${LANGS.map(l => `<option value="${l[0]}" ${st.get('vroll', 'en-IN') === l[0] ? 'selected' : ''}>${l[1]}</option>`).join('')}</select></label></div>
-    <div class="help2">Say <b>present</b> / <b>haazir</b>, <b>absent</b> / <b>ghair haazir</b>, <b>leave</b> / <b>chutti</b> or <b>bunk</b>. Also <b>next</b>, <b>back</b>, <b>repeat</b>, <b>stop</b>. You can tap P A L B at any time. Press <b>Save</b> on the screen when done.</div>`;
+    <div class="help2">Say <b>present</b> / <b>yes</b> / <b>haazir</b>, <b>absent</b> / <b>no</b> / <b>ghair haazir</b>, <b>leave</b> / <b>chutti</b> or <b>bunk</b>. The microphone stays on, so you can answer quickly one after another. Also <b>next</b>, <b>back</b>, <b>repeat</b>, <b>stop</b>. Tap P A L B at any time. Press <b>Save</b> on the screen when done.</div>`;
   if(!d.open) d.showModal();
-  step();
+  Ear.start(st.get('vroll', 'en-IN'), onRollWords, lst);
+  show();
 }
-async function step(){
+function onRollWords(alts, fin){
+  if(!run.on || run.kind !== 'roll') return false;
+  const h = $v('vHeard'), m = markOf(alts);
+  if(m){ if(h){ h.className = 'heard ok'; h.textContent = '“' + alts[0] + '”'; } act(m); return true; }
+  if(h){ h.className = fin ? 'heard bad' : 'heard'; h.textContent = fin ? 'Not understood: “' + alts[0] + '”. Say present, absent, leave or bunk.' : '… ' + alts[0]; }
+  return false;
+}
+let showTok = 0;
+async function show(){
   if(!run.on || run.kind !== 'roll') return;
   if(run.i < 0) run.i = 0;
   if(run.i >= run.list.length) return finishRoll();
-  const r = run.list[run.i], name = nameOf(r), roll = r.dataset.roll;
+  const r = run.list[run.i], name = nameOf(r), my = ++showTok;
   document.querySelectorAll('.row.vNow').forEach(x => x.classList.remove('vNow')); r.classList.add('vNow');
   try{ r.scrollIntoView({ block:'center', behavior:'smooth' }); }catch(e){}
-  const meta = document.getElementById('vMeta'); if(!meta) return;
-  meta.textContent = 'Student ' + (run.i + 1) + ' of ' + run.list.length + (curMark(r) ? ' · now ' + curMark(r) : '');
-  document.getElementById('vName').textContent = name; document.getElementById('vRoll').textContent = noOf(r) + ' · ' + roll;
-  const heard = document.getElementById('vHeard'); heard.className = 'heard'; heard.textContent = '';
-  const my = run.i;
-  if(st.get('vNames', true)){ document.getElementById('vLst').classList.add('off'); await speak(name, 'en'); }
-  if(!run.on || run.i !== my) return;
-  let tries = 0;
-  while(run.on && run.i === my && tries < 3){
-    document.getElementById('vLst').classList.remove('off');
-    const alts = await hear(st.get('vroll', 'en-IN'), 6000);
-    if(!run.on || run.i !== my) return;
-    document.getElementById('vLst').classList.add('off');
-    const m = markOf(alts);
-    if(!m){ tries++; heard.className = 'heard bad'; heard.textContent = alts.length ? 'Did not understand: "' + alts[0] + '"' : 'Nothing heard'; continue; }
-    heard.className = 'heard ok'; heard.textContent = '“' + (alts[0] || '') + '”';
-    return act(m);
-  }
-  if(run.on && run.i === my){ heard.className = 'heard bad'; heard.textContent = 'Tap P, A, L or B, or Skip.'; }
+  if(!$v('vMeta')) return;
+  $v('vMeta').textContent = 'Student ' + (run.i + 1) + ' of ' + run.list.length + (curMark(r) ? ' · now ' + curMark(r) : '');
+  $v('vName').textContent = name; $v('vRoll').textContent = noOf(r) + ' · ' + r.dataset.roll;
+  if(st.get('vNames', true)){ stopSpeak(); await speak(name, 'en'); }
+  if(my !== showTok) return;
 }
 function act(m){
   if(!run.on) return;
   if(m.cmd === 'stop') return finishRoll();
-  if(m.cmd === 'next'){ run.i++; return step(); }
-  if(m.cmd === 'back'){ run.i = Math.max(0, run.i - 1); return step(); }
-  if(m.cmd === 'repeat') return step();
-  if(m.v){ setMark(run.list[run.i], m.v); if(navigator.vibrate) navigator.vibrate(15); run.i++; setTimeout(step, 250); }
+  if(m.cmd === 'next'){ run.i++; return show(); }
+  if(m.cmd === 'back'){ run.i = Math.max(0, run.i - 1); return show(); }
+  if(m.cmd === 'repeat') return show();
+  if(m.v){ setMark(run.list[run.i], m.v); if(navigator.vibrate) navigator.vibrate(15); run.i++; show(); }
 }
 function finishRoll(){
-  run.on = false; stopHear(); stopSpeak();
+  run.on = false; Ear.stop(); stopSpeak();
   const all = rowsNow('#list .row'), c = { P:0, A:0, L:0, B:0, '':0 }; all.forEach(r => { c[curMark(r)]++; });
-  const msg = 'Roll call finished. ' + c.P + ' present, ' + c.A + ' absent' + (c.L ? ', ' + c.L + ' on leave' : '') + (c.B ? ', ' + c.B + ' bunk' : '') + (c[''] ? ', ' + c[''] + ' not marked' : '') + '.';
-  const d = document.getElementById('vDlg'); if(d && d.open) d.close();
-  say(msg + (c[''] ? '' : ' Press Save attendance.')); if(st.get('vNames', true)) speak(msg, 'en');
+  const en = 'Roll call finished. ' + c.P + ' present, ' + c.A + ' absent' + (c.L ? ', ' + c.L + ' on leave' : '') + (c.B ? ', ' + c.B + ' bunk' : '') + (c[''] ? ', ' + c[''] + ' not marked' : '') + '.';
+  const ur = 'حاضری مکمل ہو گئی۔ ' + c.P + ' حاضر، ' + c.A + ' غیر حاضر' + (c.L ? '، ' + c.L + ' رخصت پر' : '') + (c.B ? '، ' + c.B + ' بنک' : '') + (c[''] ? '، ' + c[''] + ' باقی' : '') + '۔ اب محفوظ کریں۔';
+  const d = $v('vDlg'); if(d && d.open) d.close();
+  say(en + (c[''] ? '' : ' Press Save attendance.')); if(st.get('vNames', true)) T2(en, ur);
 }
 
 /* ---------- 2) say the absentees ---------- */
-async function sayAbsent(){
+let absPlan = {}, absText = [];
+function sayAbsent(){
   if(!needSR()) return;
   const all = rowsNow('#list .row'); if(!all.length) return say('Open a class and day first.');
-  run.kind = 'abs'; run.on = true;
+  run.kind = 'abs'; run.on = true; run.back = sayAbsent; absPlan = {}; absText = [];
   const d = dlg();
-  document.getElementById('vBody').innerHTML = `<h2>Say the absentees</h2><div class="meta">${all.length} students · everyone not named becomes P</div>
-    <div class="lst" id="vLst"><i></i><span>Listening…</span></div><div class="heard" id="vHeard">Say for example: “absent 3, 7 and 12, leave 5”, or names: “absent Ayesha, Sana”.</div>
+  $v('vBody').innerHTML = `<h2>Say the absentees ${gearBtn}</h2><div class="meta">${all.length} students · everyone not named (and not marked yet) becomes P</div>
+    <div class="lst off" id="vLst"><i></i><span>Starting the microphone…</span></div><div class="heard" id="vHeard">Say for example: “absent 3, 7 and 12 … leave 5”, or first names: “absent Ayesha, Sana”. You may pause between numbers.</div>
     <ul class="res" id="vRes"></ul>
-    <div class="row2"><button type="button" data-vc="again">🎙 Listen again</button><button type="button" class="pri" data-vc="apply" disabled id="vApply">Apply</button></div>
+    <div class="row2"><button type="button" data-vc="clear">Start again</button><button type="button" class="pri" data-vc="apply" disabled id="vApply">Apply</button></div>
     <div class="help2">Numbers are the row numbers on the left of the list (1, 2, 3 …). Say <b>absent</b>, <b>leave</b> or <b>bunk</b> before them. Nothing is changed until you press Apply.</div>`;
   if(!d.open) d.showModal();
-  listenAbs();
+  Ear.start(st.get('vroll', 'en-IN'), onAbsWords, lst);
 }
-let absPlan = null;
-async function listenAbs(){
-  const lst = document.getElementById('vLst'), heard = document.getElementById('vHeard'); if(!lst) return;
-  lst.classList.remove('off');
-  const alts = await hear(st.get('vroll', 'en-IN'), 12000);
-  lst.classList.add('off');
-  if(!alts.length){ heard.className = 'heard bad'; heard.textContent = 'Nothing heard. Press Listen again.'; return; }
+function onAbsWords(alts, fin){
+  if(!run.on || run.kind !== 'abs') return false;
+  const h = $v('vHeard');
+  if(!fin){ if(h){ h.className = 'heard'; h.textContent = '… ' + absText.concat(alts[0]).join(' … '); } return false; }
+  absText.push(alts[0]); parseAbs(absText.join(' ')); return true;
+}
+function parseAbs(text){
   const all = rowsNow('#list .row'), byNo = {}; all.forEach(r => { byNo[noOf(r)] = r; });
-  const text = alts[0], plan = {}; let mode = 'A';
-  const toks = URDIG(text.toLowerCase()).replace(/[,.;،۔]/g, ' ').split(/\s+/);
-  for(let i = 0; i < toks.length; i++){
-    const w = toks[i], m = markOf([w]);
-    if(m && m.v && m.v !== 'P'){ mode = m.v; continue; }
-    const nums = wordsToNums(w); if(nums.length){ nums.forEach(n => { if(byNo[n]) plan[byNo[n].dataset.roll] = { r:byNo[n], v:mode }; }); continue; }
-    if(w.length >= 3){ const hit = all.filter(r => firstName(nameOf(r)).toLowerCase() === w || nameOf(r).toLowerCase().split(/\s+/).includes(w)); if(hit.length === 1) plan[hit[0].dataset.roll] = { r:hit[0], v:mode }; }
-  }
+  const plan = {}; let mode = 'A';
+  URDIG(text.toLowerCase()).replace(/[,.;،۔]/g, ' ').split(/\s+/).forEach(w => {
+    if(!w) return; const m = markOf([w]);
+    if(m && m.v && m.v !== 'P'){ mode = m.v; return; }
+    const nums = wordsToNums(w); if(nums.length){ nums.forEach(n => { if(byNo[n]) plan[byNo[n].dataset.roll] = { r:byNo[n], v:mode }; }); return; }
+    if(w.length >= 3){ const hit = all.filter(r => firstName(nameOf(r)).toLowerCase() === w); if(hit.length === 1) plan[hit[0].dataset.roll] = { r:hit[0], v:mode }; }
+  });
   absPlan = plan;
-  heard.className = 'heard ok'; heard.textContent = '“' + text + '”';
+  const h = $v('vHeard'); if(h){ h.className = 'heard ok'; h.textContent = '“' + text + '”'; }
   const items = Object.values(plan);
-  document.getElementById('vRes').innerHTML = items.length ? items.map(x => `<li><span>${noOf(x.r)} · ${nameOf(x.r)}</span><b>${x.v === 'A' ? 'Absent' : x.v === 'L' ? 'Leave' : 'Bunk'}</b></li>`).join('') : '<li>No student recognised. Try again with row numbers.</li>';
-  const ap = document.getElementById('vApply'); if(ap) ap.disabled = !items.length;
+  $v('vRes').innerHTML = items.length ? items.map(x => `<li><span>${noOf(x.r)} · ${esc(nameOf(x.r))}</span><b>${x.v === 'A' ? 'Absent' : x.v === 'L' ? 'Leave' : 'Bunk'}</b></li>`).join('') : '<li>No student recognised yet. Say the row numbers.</li>';
+  const ap = $v('vApply'); if(ap) ap.disabled = !items.length;
 }
 function applyAbs(){
-  const all = rowsNow('#list .row'); if(!absPlan) return;
+  const all = rowsNow('#list .row'), n = Object.keys(absPlan).length; if(!n) return;
   all.forEach(r => { const p = absPlan[r.dataset.roll]; setMark(r, p ? p.v : (curMark(r) || 'P')); });
-  const n = Object.keys(absPlan).length; absPlan = null;
-  const d = document.getElementById('vDlg'); if(d && d.open) d.close();
+  absPlan = {}; const d = $v('vDlg'); if(d && d.open) d.close();
   say(n + ' marked absent / leave / bunk, everyone else P. Check the list and press Save attendance.');
 }
 
@@ -7532,58 +7615,120 @@ function speakMarks(){
   const tot = document.getElementById('mtTotal'); if(tot && !Number(tot.value)) return say('Enter the total marks first.');
   const all = rowsNow('#mtList .row'); if(!all.length) return;
   run.list = all.filter(r => !(r.querySelector('.mk') || {}).value); if(!run.list.length) run.list = all;
-  run.kind = 'mt'; run.i = 0; run.on = true;
+  run.kind = 'mt'; run.i = 0; run.on = true; run.back = speakMarks;
   const d = dlg();
-  document.getElementById('vBody').innerHTML = `<h2>Speak marks</h2><div class="meta" id="vMeta"></div>
+  $v('vBody').innerHTML = `<h2>Speak marks ${gearBtn}</h2><div class="meta" id="vMeta"></div>
     <div class="who2"><b id="vName">…</b><small id="vRoll"></small></div>
-    <div class="lst" id="vLst"><i></i><span>Listening…</span></div><div class="heard" id="vHeard"></div>
-    <input class="vt" id="vMk" inputmode="decimal" placeholder="or type the marks / A">
+    <div class="lst off" id="vLst"><i></i><span>Starting the microphone…</span></div><div class="heard" id="vHeard"></div>
+    <input class="vt" id="vMk" inputmode="decimal" placeholder="or type the marks / A and press Enter">
     <div class="row2"><button type="button" data-vc="back">◀ Back</button><button type="button" data-vc="repeat">Repeat</button><button type="button" data-vc="next">Skip ▶</button></div>
     <div class="row2"><button type="button" class="pri" data-vc="stop">Finish</button></div>
-    <div class="help2">Say the marks (“seven”, “8.5”) or <b>absent</b>. Also <b>next</b>, <b>back</b>, <b>repeat</b>, <b>stop</b>. Out of ${tot ? tot.value : '?'}. Press <b>Save test marks</b> when done.</div>`;
+    <div class="help2">Say the marks (“seven”, “8.5”, “seven and a half”) or <b>absent</b>. Also <b>next</b>, <b>back</b>, <b>repeat</b>, <b>stop</b>. Out of ${tot ? tot.value : '?'}. Press <b>Save test marks</b> when done.</div>`;
   if(!d.open) d.showModal();
-  mtStep();
+  Ear.start(st.get('vroll', 'en-IN'), onMarkWords, lst);
+  mtShow();
 }
-function setMk(r, v){ const i = r.querySelector('.mk'); if(!i) return false; const old = i.value; i.value = v; i.dispatchEvent(new Event('input', { bubbles:true })); return i.value === String(v) || i.value !== old; }
-async function mtStep(){
+function setMk(r, v){ const i = r.querySelector('.mk'); if(!i) return; i.value = v; i.dispatchEvent(new Event('input', { bubbles:true })); }
+async function mtShow(){
   if(!run.on || run.kind !== 'mt') return;
-  if(run.i >= run.list.length){ run.on = false; const d = document.getElementById('vDlg'); if(d && d.open) d.close(); say('All marks entered. Check them and press Save test marks.'); return; }
-  const r = run.list[run.i], name = nameOf(r), my = run.i;
+  if(run.i < 0) run.i = 0;
+  if(run.i >= run.list.length){ run.on = false; Ear.stop(); const d = $v('vDlg'); if(d && d.open) d.close(); say('All marks entered. Check them and press Save test marks.'); T2('All marks entered. Please check and save.', 'تمام نمبر درج ہو گئے۔ چیک کر کے محفوظ کریں۔'); return; }
+  const r = run.list[run.i], my = ++showTok;
   document.querySelectorAll('.row.vNow').forEach(x => x.classList.remove('vNow')); r.classList.add('vNow');
   try{ r.scrollIntoView({ block:'center', behavior:'smooth' }); }catch(e){}
-  document.getElementById('vMeta').textContent = 'Student ' + (run.i + 1) + ' of ' + run.list.length;
-  document.getElementById('vName').textContent = name; document.getElementById('vRoll').textContent = noOf(r) + ' · ' + r.dataset.roll;
-  const heard = document.getElementById('vHeard'), mk = document.getElementById('vMk'); heard.className = 'heard'; heard.textContent = ''; mk.value = (r.querySelector('.mk') || {}).value || '';
-  document.getElementById('vLst').classList.add('off'); await speak(name, 'en');
-  let tries = 0;
-  while(run.on && run.i === my && tries < 3){
-    document.getElementById('vLst').classList.remove('off');
-    const alts = await hear(st.get('vroll', 'en-IN'), 6000);
-    if(!run.on || run.i !== my) return;
-    document.getElementById('vLst').classList.add('off');
-    const m = markOf(alts);
-    if(m && m.cmd){ return mtAct(m.cmd); }
-    let val = null;
-    if(m && m.v === 'A') val = 'A';
-    else for(const a of alts){ const n = wordsToNums(a); if(n.length){ val = String(n[n.length - 1]); break; } }
-    if(val == null){ tries++; heard.className = 'heard bad'; heard.textContent = alts.length ? 'Did not understand: "' + alts[0] + '"' : 'Nothing heard'; continue; }
-    setMk(r, val); const got = (r.querySelector('.mk') || {}).value;
-    if(String(got).toUpperCase() !== String(val).toUpperCase()){ tries++; heard.className = 'heard bad'; heard.textContent = val + ' is not allowed (more than the total?). Say it again.'; continue; }
-    heard.className = 'heard ok'; heard.textContent = (val === 'A' ? 'Absent' : val + ' marks');
-    run.i++; return setTimeout(mtStep, 250);
-  }
+  $v('vMeta').textContent = 'Student ' + (run.i + 1) + ' of ' + run.list.length;
+  $v('vName').textContent = nameOf(r); $v('vRoll').textContent = noOf(r) + ' · ' + r.dataset.roll;
+  $v('vMk').value = (r.querySelector('.mk') || {}).value || '';
+  stopSpeak(); await speak(nameOf(r), 'en');
+  if(my !== showTok) return;
 }
-function mtAct(c){ if(c === 'stop'){ run.on = false; const d = document.getElementById('vDlg'); if(d && d.open) d.close(); return say('Stopped. Press Save test marks when done.'); }
-  if(c === 'next') run.i++; if(c === 'back') run.i = Math.max(0, run.i - 1); mtStep(); }
+function onMarkWords(alts, fin){
+  if(!run.on || run.kind !== 'mt') return false;
+  const h = $v('vHeard'), m = markOf(alts);
+  if(m && m.cmd){ mtAct(m.cmd); return true; }
+  if(!fin){ if(h){ h.className = 'heard'; h.textContent = '… ' + alts[0]; } return false; }   // numbers only when final: "eight" may still become "eighteen"
+  let val = null;
+  if(m && m.v === 'A') val = 'A';
+  else for(const a of alts){ const n = wordsToNums(a); if(n.length){ val = String(n[n.length - 1]); break; } }
+  if(val == null){ if(h){ h.className = 'heard bad'; h.textContent = 'Not understood: “' + alts[0] + '”. Say the marks or absent.'; } return true; }
+  return takeMark(val);
+}
+function takeMark(val){
+  const r = run.list[run.i], h = $v('vHeard'); if(!r) return true;
+  setMk(r, val); const got = String((r.querySelector('.mk') || {}).value || '');
+  if(got.toUpperCase() !== String(val).toUpperCase()){ if(h){ h.className = 'heard bad'; h.textContent = val + ' is not allowed (more than the total?). Say it again.'; } return true; }
+  if(h){ h.className = 'heard ok'; h.textContent = val === 'A' ? 'Absent' : val + ' marks'; }
+  run.i++; mtShow(); return true;
+}
+function mtAct(c){
+  if(c === 'stop'){ run.on = false; Ear.stop(); const d = $v('vDlg'); if(d && d.open) d.close(); return say('Stopped. Press Save test marks when done.'); }
+  if(c === 'next') run.i++; if(c === 'back') run.i = Math.max(0, run.i - 1); mtShow();
+}
+
+/* ---------- 4) voice settings + microphone test ---------- */
+let meter = null;
+function stopMeter(){ if(!meter) return; try{ cancelAnimationFrame(meter.raf); meter.stream.getTracks().forEach(t => t.stop()); meter.ctx.close(); }catch(e){} meter = null; }
+function voiceOpts(lang){
+  const list = voicesFor(lang), cur = pickVoice(lang);
+  if(!list.length) return '<option value="">No ' + (lang === 'ur' ? 'Urdu' : 'English') + ' voice on this device</option>';
+  return list.map((v, i) => `<option value="${esc(v.name)}" ${cur && cur.name === v.name ? 'selected' : ''}>${esc(v.name.replace(/^Microsoft |^Google /, ''))} · ${esc(v.lang)}${i === 0 ? ' ★' : ''}</option>`).join('');
+}
+function settings(){
+  loadVoices();
+  const was = run.on ? run.back : null; run.on = false; Ear.stop(); stopSpeak();
+  run.kind = 'set';
+  const d = dlg(), p = srProblem();
+  $v('vBody').innerHTML = `<h2>Voice settings</h2><div class="meta">Voices are the ones installed on this phone / laptop. ★ = the most natural one found.</div>
+    <div class="fl">English voice</div><select class="vs" id="vSelEn">${voiceOpts('en')}</select>
+    <div class="fl">Urdu voice</div><select class="vs" id="vSelUr">${voiceOpts('ur')}</select>
+    <div class="fl">The app speaks in</div><select class="vs" id="vSay"><option value="en">English</option><option value="ur" ${st.get('vsay', 'en') === 'ur' ? 'selected' : ''}>اردو (Urdu)</option></select>
+    <div class="fl">Speed</div><select class="vs" id="vRate">${[[0.8, 'Slow'], [0.9, 'A little slow'], [1, 'Normal'], [1.15, 'A little fast'], [1.3, 'Fast']].map(x => `<option value="${x[0]}" ${Number(st.get('vrate', 1)) === x[0] ? 'selected' : ''}>${x[1]}</option>`).join('')}</select>
+    <div class="row2"><button type="button" data-vc="testEn">🔊 Test English</button><button type="button" data-vc="testUr">🔊 Test Urdu</button></div>
+    <div class="fl" style="margin-top:14px">Microphone test</div>
+    <div class="meter"><i id="vLvl"></i></div>
+    <div class="lst off" id="vLst"><i></i><span>Not listening</span></div><div class="heard" id="vHeard">${p ? '' : 'Press Test microphone and say “present, absent, seven”.'}</div>
+    <div class="row2"><button type="button" class="pri" data-vc="mictest">🎙 Test microphone</button>${was ? '<button type="button" data-vc="resume">◀ Back</button>' : ''}</div>
+    ${p ? `<div class="tip bad">${esc(p)}</div>` : ''}
+    <div class="tip"><b>Most natural voices:</b> on a laptop open the app in <b>Microsoft Edge</b> (voices named “Online (Natural)”, also Urdu: Uzma / Asad) or Chrome (“Google UK English Female”). On Android: Settings → Google → Text-to-speech (or Settings → Accessibility → Text-to-speech) → Speech services by Google → install voice data → English (India) and Urdu. On iPhone: Settings → Accessibility → Spoken Content → Voices → download an Enhanced / Premium voice.</div>
+    <div class="tip"><b>If listening does not work on a laptop:</b> use Chrome or Edge; allow the microphone (lock icon beside the address → Microphone → Allow); in Windows Settings → Privacy &amp; security → Microphone, allow desktop apps and the browser; choose the right microphone in Windows Sound settings. A headset microphone works best in a noisy class.</div>`;
+  run.back = was;
+  if(!d.open) d.showModal();
+}
+async function micTest(){
+  const p = srProblem(), h = $v('vHeard');
+  stopMeter();
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true } });
+    const ctx = new (window.AudioContext || window.webkitAudioContext)(), src = ctx.createMediaStreamSource(stream), an = ctx.createAnalyser();
+    an.fftSize = 512; src.connect(an); const buf = new Uint8Array(an.fftSize);
+    meter = { stream, ctx, raf:0 };
+    const tick = () => { an.getByteTimeDomainData(buf); let m = 0; for(const b of buf) m = Math.max(m, Math.abs(b - 128)); const el = $v('vLvl'); if(el) el.style.width = Math.min(100, m * 1.6) + '%'; meter.raf = requestAnimationFrame(tick); };
+    tick();
+    setTimeout(stopMeter, 15000);
+  }catch(e){
+    const msg = /NotAllowed|Security/.test(e.name) ? ERRS['not-allowed'] : /NotFound|Overconstrained/.test(e.name) ? ERRS['audio-capture'] : /NotReadable/.test(e.name) ? 'The microphone is being used by another app (Zoom, WhatsApp, Teams…). Close it and try again.' : 'Microphone error: ' + (e.message || e.name);
+    if(h){ h.className = 'heard bad'; h.textContent = msg; } return;
+  }
+  if(p){ if(h){ h.className = 'heard bad'; h.textContent = 'The microphone works (the bar moves), but: ' + p; } return; }
+  if(h){ h.className = 'heard'; h.textContent = 'Speak now… (the bar should move when you talk)'; }
+  run.kind = 'set'; run.on = true;
+  Ear.start(st.get('vroll', 'en-IN'), (alts, fin) => { const x = $v('vHeard'); if(x){ x.className = fin ? 'heard ok' : 'heard'; x.textContent = (fin ? 'Heard: “' : '… ') + alts[0] + (fin ? '”' : ''); } return fin; }, lst);
+  setTimeout(() => { if(run.kind === 'set'){ Ear.stop(); lst('off'); } }, 15000);
+}
 
 /* ---------- dialog buttons ---------- */
 document.addEventListener('click', e => {
   const t = e.target; if(!t.closest) return; let b;
-  if((b = t.closest('#vDlg [data-vm]'))){ if(run.kind === 'roll' && run.on){ stopHear(); stopSpeak(); act({ v:b.dataset.vm }); } return; }
+  if((b = t.closest('#vDlg [data-vm]'))){ if(run.kind === 'roll' && run.on){ stopSpeak(); act({ v:b.dataset.vm }); } return; }
   if((b = t.closest('#vDlg [data-vc]'))){
     const c = b.dataset.vc;
-    if(run.kind === 'abs'){ if(c === 'again') return listenAbs(); if(c === 'apply') return applyAbs(); }
-    stopHear(); stopSpeak();
+    if(c === 'settings') return settings();
+    if(c === 'resume'){ const f = run.back; Ear.stop(); stopMeter(); if(f) f(); return; }
+    if(c === 'testEn') return speak('Good morning. Ayesha Khan, present. Seven out of ten marks.', 'en');
+    if(c === 'testUr') return hasUrdu() ? speak('السلام علیکم۔ حاضری مکمل ہو گئی۔ چالیس طالبات حاضر، تین غیر حاضر۔', 'ur') : say('No Urdu voice on this device. See the tip below to install one.');
+    if(c === 'mictest') return micTest();
+    if(run.kind === 'abs'){ if(c === 'clear'){ absText = []; absPlan = {}; $v('vRes').innerHTML = ''; const ap = $v('vApply'); if(ap) ap.disabled = true; return; } if(c === 'apply') return applyAbs(); }
+    stopSpeak();
     if(run.kind === 'mt') return mtAct(c);
     return act({ cmd:c });
   }
@@ -7593,29 +7738,42 @@ document.addEventListener('change', e => {
   const t = e.target;
   if(t.id === 'vOptNames') st.set('vNames', t.checked);
   if(t.id === 'vOptUn') st.set('vOnlyUn', t.checked);
-  if(t.id === 'vOptLang') st.set('vroll', t.value);
-  if(t.id === 'vMk' && run.kind === 'mt' && run.on){ const r = run.list[run.i]; const v = t.value.trim().toUpperCase(); if(v && r){ stopHear(); stopSpeak(); setMk(r, v); run.i++; mtStep(); } }
+  if(t.id === 'vOptLang'){ st.set('vroll', t.value); if(Ear.on){ Ear.stop(); Ear.start(t.value, Ear.cb, lst); } }
+  if(t.id === 'vSelEn'){ st.set('vVoiceEn', t.value); speak('This is the English voice.', 'en'); }
+  if(t.id === 'vSelUr'){ st.set('vVoiceUr', t.value); speak('یہ اردو آواز ہے۔', 'ur'); }
+  if(t.id === 'vSay') st.set('vsay', t.value);
+  if(t.id === 'vRate') st.set('vrate', Number(t.value));
+});
+document.addEventListener('keydown', e => {
+  if(e.target && e.target.id === 'vMk' && e.key === 'Enter' && run.kind === 'mt' && run.on){ e.preventDefault(); const v = e.target.value.trim().toUpperCase(); if(v){ stopSpeak(); takeMark(v); } }
 });
 /* "Speak marks" next to "Fill empty with A" on the monthly test screen */
 new MutationObserver(() => {
   const f = document.getElementById('mtFillA');
   if(f && !document.getElementById('vSpeakMk')){ const b = document.createElement('button'); b.id = 'vSpeakMk'; b.type = 'button'; b.className = 'fillA'; b.textContent = '🎙 Speak marks'; b.title = 'Say each student\'s marks instead of typing'; f.insertAdjacentElement('afterend', b); }
+  const tools = document.querySelector('#helpDlg .hmTools');
+  if(tools && !document.getElementById('hmListen')){
+    const b = document.createElement('button'); b.type = 'button'; b.id = 'hmListen'; b.className = 'btn small vListen'; b.textContent = '🔊 Listen'; b.title = 'Read this part of the manual aloud'; tools.appendChild(b);
+    const g = document.createElement('button'); g.type = 'button'; g.id = 'hmVoice'; g.className = 'btn small vListen'; g.textContent = '⚙ Voice'; g.title = 'Voice, speed and microphone test'; tools.appendChild(g);
+  }
 }).observe(document.body, { childList:true, subtree:true });
 
-/* ---------- 4) voice typing in any text box ---------- */
+/* ---------- 5) voice typing in any text box ---------- */
 const mic = document.createElement('div'); mic.id = 'vMic';
 mic.innerHTML = '<button type="button" class="lg" id="vLang"></button><button type="button" class="mic" id="vMicBtn" aria-label="Voice typing" title="Speak instead of typing">🎙</button>';
 document.body.appendChild(mic);
+const live = document.createElement('div'); live.id = 'vLive'; document.body.appendChild(live);
 const langBtn = mic.querySelector('#vLang'), micBtn = mic.querySelector('#vMicBtn');
 const paintLang = () => { langBtn.textContent = (LANGS.find(l => l[0] === tLang()) || LANGS[0])[1]; };
 paintLang();
-let field = null, typing = null, hideT = 0;
-const okField = el => el && ((el.tagName === 'TEXTAREA') || (el.tagName === 'INPUT' && /^(text|search|number|tel|)$/.test(el.type || 'text') && el.inputMode !== 'none')) && !el.readOnly && !el.disabled && el.id !== 'user' && el.id !== 'vMk';
-document.addEventListener('focusin', e => { if(!SR) return; if(okField(e.target)){ field = e.target; clearTimeout(hideT); mic.style.display = 'flex'; } });
-document.addEventListener('focusout', () => { hideT = setTimeout(() => { if(!typing) mic.style.display = 'none'; }, 300); });
+const Typer = new Listener();
+let field = null, hideT = 0;
+const okField = el => el && ((el.tagName === 'TEXTAREA') || (el.tagName === 'INPUT' && /^(text|search|number|tel|)$/.test(el.type || 'text') && el.inputMode !== 'none')) && !el.readOnly && !el.disabled && !/^(user|pass|vMk)$/.test(el.id);
+document.addEventListener('focusin', e => { if(okField(e.target) && !e.target.closest('#vDlg')){ field = e.target; clearTimeout(hideT); mic.style.display = 'flex'; } });
+document.addEventListener('focusout', () => { hideT = setTimeout(() => { if(!Typer.on) mic.style.display = 'none'; }, 300); });
 mic.addEventListener('mousedown', e => e.preventDefault());              // keep the text box focused
 mic.addEventListener('touchstart', () => clearTimeout(hideT), { passive:true });
-langBtn.onclick = () => { const i = LANGS.findIndex(l => l[0] === tLang()); st.set('vtype', LANGS[(i + 1) % LANGS.length][0]); paintLang(); if(field) field.focus(); };
+langBtn.onclick = () => { const i = LANGS.findIndex(l => l[0] === tLang()); st.set('vtype', LANGS[(i + 1) % LANGS.length][0]); paintLang(); if(Typer.on){ stopTyping(); startTyping(); } if(field) field.focus(); };
 function insertText(el, txt){
   if(!el || !txt) return;
   if(el.classList.contains('mk') || el.type === 'number' || el.inputMode === 'decimal' || el.inputMode === 'numeric'){
@@ -7628,18 +7786,20 @@ function insertText(el, txt){
   }
   el.dispatchEvent(new Event('input', { bubbles:true }));
 }
+function stopTyping(){ Typer.stop(); micBtn.classList.remove('on'); live.style.display = 'none'; if(document.activeElement !== field) mic.style.display = 'none'; }
+function startTyping(){
+  micBtn.classList.add('on'); live.style.display = 'block'; live.textContent = 'Starting the microphone…';
+  let idle = 0; const bump = () => { clearTimeout(idle); idle = setTimeout(stopTyping, 20000); }; bump();     // stops by itself after 20 s of silence
+  Typer.start(tLang(), (alts, fin) => { bump(); if(fin){ insertText(field, alts[0]); live.textContent = '✓ ' + alts[0]; } else live.textContent = '… ' + alts[0]; return fin; },
+    (s, msg) => { if(s === 'on') live.textContent = 'Listening… speak now (tap 🎙 to stop)'; if(s === 'err'){ say(msg); stopTyping(); } });
+}
 micBtn.onclick = () => {
-  if(typing){ try{ typing.stop(); }catch(e){} return; }
+  if(Typer.on) return stopTyping();
   if(!needSR() || !field) return;
-  const r = new SR(); typing = r; r.lang = tLang(); r.interimResults = false; r.continuous = true;
-  micBtn.classList.add('on'); field.focus();
-  r.onresult = e => { for(let i = e.resultIndex; i < e.results.length; i++) if(e.results[i].isFinal) insertText(field, String(e.results[i][0].transcript || '').trim()); };
-  r.onerror = e => { if(e && /not-allowed/.test(e.error)) say('Allow the microphone for this app to type by voice.'); };
-  r.onend = () => { typing = null; micBtn.classList.remove('on'); if(document.activeElement !== field) mic.style.display = 'none'; };
-  try{ r.start(); }catch(e){ typing = null; micBtn.classList.remove('on'); }
+  field.focus(); startTyping();
 };
 
-/* ---------- 5) Listen to the help / manual ---------- */
+/* ---------- 6) Listen to the help / manual ---------- */
 let reading = false;
 async function readHelp(btn){
   if(reading){ reading = false; stopSpeak(); btn.textContent = '🔊 Listen'; return; }
@@ -7655,14 +7815,11 @@ async function readHelp(btn){
   }
   reading = false; btn.textContent = '🔊 Listen';
 }
-document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('#hmListen'); if(b) readHelp(b); });
-new MutationObserver(() => {
-  const tools = document.querySelector('#helpDlg .hmTools');
-  if(tools && !document.getElementById('hmListen')){ const b = document.createElement('button'); b.type = 'button'; b.id = 'hmListen'; b.className = 'btn small vListen'; b.textContent = '🔊 Listen'; b.title = 'Read this part of the manual aloud'; tools.appendChild(b); }
-}).observe(document.body, { childList:true, subtree:true });
+document.addEventListener('click', e => { const t = e.target; if(!t.closest) return; const b = t.closest('#hmListen'); if(b) readHelp(b); if(t.closest('#hmVoice')) settings(); });
 document.addEventListener('close', e => { if(e.target && e.target.id === 'helpDlg'){ reading = false; stopSpeak(); const b = document.getElementById('hmListen'); if(b) b.textContent = '🔊 Listen'; } }, true);
+document.addEventListener('visibilitychange', () => { if(document.hidden){ stopSpeak(); if(Typer.on) stopTyping(); } });
 
-window.JCWVOICE = { rollCall, sayAbsent, speakMarks, speak, stop:() => { stopHear(); stopSpeak(); } };
+window.JCWVOICE = { rollCall, sayAbsent, speakMarks, settings, speak, markOf, wordsToNums, stop:() => { Ear.stop(); stopSpeak(); } };
 })();
 </script>
 </body>
