@@ -180,6 +180,7 @@ function bkRoute_(user, req) {
     case 'bk_list':  return bkList_();
     case 'bk_check': return bkCheck_(req.book);
     case 'bk_fix':   return bkFix_(user, req.book, req.sheet, req.roll, req.op);
+    case 'bk_batch': return bkBatch_(user, req);
   }
   return { ok: false, error: 'UNKNOWN_ACTION' };
 }
@@ -272,4 +273,18 @@ function bkFix_(user, key, sheetName, roll, op) {
     try { CacheService.getScriptCache().remove('gt_progress_v1'); } catch (e) {}
     return { ok: true, sheet: sheetName, roll: roll, op: op, result: res };
   } finally { lock.releaseLock(); }
+}
+
+/** Many fixes of one sheet in one call. req: { kind: 'daily' | 'book', book, sheet, ops: [[op, roll], ...] }
+ *  daily = a daily attendance sheet (uses rosterFix_ of Code.gs: add / remove / on); book = a section-sheet workbook.
+ *  Stops after about 4 minutes and returns what is left, so the app sends the rest again. */
+function bkBatch_(user, req) {
+  var start = Date.now(), ops = (req.ops || []).slice(), done = [];
+  while (ops.length && Date.now() - start < 240000) {
+    var o = ops.shift(), r;
+    try { r = req.kind === 'daily' ? rosterFix_(user, req.sheet, o[1], o[0]) : bkFix_(user, req.book, req.sheet, o[1], o[0]); }
+    catch (e) { r = { ok: false, error: String(e.message || e) }; }
+    done.push({ op: o[0], roll: o[1], ok: !!(r && r.ok), result: r && (r.result || r.error) });
+  }
+  return { ok: true, done: done, left: ops };
 }
