@@ -25,8 +25,8 @@ var ST_CFG = {
   BOARD_LIST: '1styeardata2026',             // the board's list: Roll No, Name, Father Name, Registration #, Marks, Grade
   BOARD_LINKS: 'App Board Links',            // choices confirmed in the app (made by itself)
   MATCH_MIN: 0.86, MATCH_GAP: 0.03,
-  BOARD_TOTAL: 600,
-  DISTINCTION: 20,                          // college positions 1-20 of the 1st year board result are distinctions                         // total marks of the 1st year board exam
+  BOARD_TOTAL: 600,                         // total marks of the 1st year board exam
+  DISTINCTION: 20,                          // college positions 1-20 of the 1st year board result are distinctions
   // strength-sheet columns that are about MATRIC: shown with a clear name
   LABELS: { PERCENTAGE: 'Matric percentage', OBTAINEDMARKS: 'Matric obtained marks', TOTALMARKS: 'Matric total marks', BOARD: 'Matric board',
             PASSINGYEAR: 'Matric passing year', METRICROLLNO: 'Matric Roll No', MATRICROLLNO: 'Matric Roll No' }
