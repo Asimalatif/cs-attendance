@@ -54,10 +54,13 @@ function mtBook_(tok) {
   var props = PropertiesService.getScriptProperties(), key = 'MT_BOOK_' + tok;
   var ids = [props.getProperty(key), MT_BOOKS[tok]].filter(Boolean);
   for (var i = 0; i < ids.length; i++) { try { return SpreadsheetApp.openById(ids[i]); } catch (e) {} }
+  var cache = CacheService.getScriptCache();
+  if (cache.get('MT_NONE_' + tok)) return null;
   try {
     var it = DriveApp.getFilesByName(mtMonthName_(tok) + MT_BOOK_SUFFIX);
     if (it.hasNext()) { var f = it.next(); props.setProperty(key, f.getId()); return SpreadsheetApp.openById(f.getId()); }
   } catch (e) {}
+  cache.put('MT_NONE_' + tok, '1', 21600);
   return null;
 }
 /** Run once from the editor: shows which workbook each month uses. */
@@ -186,6 +189,13 @@ function bkRoute_(user, req) {
 }
 /** which workbooks can be checked: the Monthly Test months that exist, and the Grand Test */
 function bkList_() {
+  var cache = CacheService.getScriptCache(), hit = cache.get('bk_list_v2');
+  if (hit) return JSON.parse(hit);
+  var res = bkListBuild_();
+  try { cache.put('bk_list_v2', JSON.stringify(res), 1800); } catch (e) {}
+  return res;
+}
+function bkListBuild_() {
   var out = [];
   SEASON.forEach(function (t) { if (!MA_BOOKS[t]) return; try { var b = SpreadsheetApp.openById(MA_BOOKS[t]); out.push({ key: 'MA_' + t, group: 'Monthly attendance', label: mtMonthName_(t) + ' attendance', name: b.getName() }); } catch (e) {} });
   SEASON.forEach(function (t) { var b = mtBook_(t); if (b) out.push({ key: t, group: 'Monthly test', label: mtMonthName_(t) + ' monthly test', name: b.getName() }); });
@@ -282,9 +292,53 @@ function bkBatch_(user, req) {
   var start = Date.now(), ops = (req.ops || []).slice(), done = [];
   while (ops.length && Date.now() - start < 240000) {
     var o = ops.shift(), r;
-    try { r = req.kind === 'daily' ? rosterFix_(user, req.sheet, o[1], o[0]) : bkFix_(user, req.book, req.sheet, o[1], o[0]); }
+    if (req.kind !== 'daily') { ops.unshift(o); var all = bkFixSheet_(req.book, req.sheet, ops); return { ok: true, done: done.concat(all), left: [] }; }
+    try { r = rosterFix_(user, req.sheet, o[1], o[0]); }
     catch (e) { r = { ok: false, error: String(e.message || e) }; }
     done.push({ op: o[0], roll: o[1], ok: !!(r && r.ok), result: r && (r.result || r.error) });
   }
   return { ok: true, done: done, left: ops };
+}
+
+/** All fixes of one section sheet with one read: struck-through / deleted rows first (bottom up), then new rows. */
+function bkFixSheet_(key, sheetName, ops) {
+  var B = bkBook_(key), sh = B.book.getSheetByName(String(sheetName)), out = [];
+  if (!sh) return ops.map(function (o) { return { op: o[0], roll: o[1], ok: false, result: 'Sheet not found' }; });
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    var L = bkSheet_(sh);
+    if (!L) return ops.map(function (o) { return { op: o[0], roll: o[1], ok: false, result: 'No header row' }; });
+    var rowOf = {};
+    for (var i = L.hi + 1; i < L.v.length; i++) { var e = enr_(L.v[i][L.enroll]); if (e && !rowOf[e]) rowOf[e] = i + 1; }
+    var F = null, del = [], strike = [];
+    ops.filter(function (o) { return o[0] === 'remove'; }).forEach(function (o) {
+      var row = rowOf[enr_(o[1])];
+      if (!row) { out.push({ op: 'remove', roll: o[1], ok: true, result: 'already gone' }); return; }
+      F = F || sh.getRange(1, 1, L.v.length, L.lc).getFormulas();
+      if (bkHasData_(L, row - 1, F)) { strike.push(row); out.push({ op: 'remove', roll: o[1], ok: true, result: 'struck through (she has marks or attendance)' }); }
+      else { del.push(row); out.push({ op: 'remove', roll: o[1], ok: true, result: 'removed' }); }
+    });
+    del.sort(function (a, b) { return b - a; }).forEach(function (row) { sh.deleteRow(row); });
+    strike.forEach(function (row) {
+      var r2 = row - del.filter(function (d) { return d < row; }).length;          // rows above it were deleted
+      sh.getRange(r2, 1, 1, Math.max(5, L.cs + 1, L.name + 1)).setFontLine('line-through').setFontColor('#999999');
+    });
+    var adds = ops.filter(function (o) { return o[0] === 'add'; });
+    if (adds.length) {
+      if (del.length) L = bkSheet_(sh);
+      var RM = rosterModel_(), have = {};
+      for (var j = L.hi + 1; j < L.v.length; j++) { var k = enr_(L.v[j][L.enroll]); if (k) have[k] = true; }
+      adds.forEach(function (o) {
+        var e2 = enr_(o[1]);
+        if (have[e2]) { out.push({ op: 'add', roll: o[1], ok: true, result: 'already there' }); return; }
+        var m = RM.byRoll[e2];
+        if (!m) { out.push({ op: 'add', roll: o[1], ok: false, result: 'not in the strength sheet' }); return; }
+        bkAppend_(sh, L, m); have[e2] = true; out.push({ op: 'add', roll: o[1], ok: true, result: 'added' });
+      });
+    }
+    ops.filter(function (o) { return o[0] !== 'add' && o[0] !== 'remove'; }).forEach(function (o) { out.push({ op: o[0], roll: o[1], ok: false, result: 'Unknown action' }); });
+    SpreadsheetApp.flush();
+    try { CacheService.getScriptCache().remove('gt_progress_v1'); CacheService.getScriptCache().remove('dt_progress_v1'); } catch (e) {}
+    return out;
+  } finally { lock.releaseLock(); }
 }
