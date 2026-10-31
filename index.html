@@ -2613,7 +2613,7 @@ function build(){
   if(built) return; built = true;
   const S = sections(), dlg = document.createElement('dialog'); dlg.id = 'helpDlg';
   dlg.innerHTML = '<div class="hmHead"><h2>Help and manual<button type="button" class="btn small" id="hmClose">Close</button></h2>' +
-    '<div class="hmTools"><button type="button" class="btn small primary" id="hmHint">Turn on hint mode</button>' + (canHover ? '<button type="button" class="btn small" id="hmHover"></button>' : '') + '</div>' +
+    '<div class="hmTools"><button type="button" class="btn small primary" id="hmHint">Turn on hint mode</button>' + (canHover ? '<button type="button" class="btn small" id="hmHover"></button>' : '') + '<a class="btn small" href="manual.html" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Illustrated manual</a></div>' +
     '<input class="hmSearch" id="hmSearch" type="search" placeholder="Search the manual, e.g. delete, guest, offline" autocomplete="off">' +
     '<div class="hmNav" id="hmNav">' + S.map(s => '<button type="button" class="chip" data-go="' + s.id + '">' + s.nav + '</button>').join('') + '</div></div>' +
     '<div class="hmBody" id="hmBody">' + S.map(s => '<section id="hm-' + s.id + '"><h3>' + s.title + '</h3>' + s.html + '</section>').join('') + '<div class="none" id="hmNone">Nothing found. Try another word.</div></div>';
@@ -3970,14 +3970,14 @@ const baseOpenSync = window.openSync;
 window.openSync = function(){
   baseOpenSync.apply(this, arguments);
   const a = $q('#dlgBody .acts'); if(a && !$q('#dlgBody .tsz')) a.insertAdjacentHTML('beforebegin', '<div class="lb2">Text size</div>' + tsHtml());
-  const m = $q('#dlgBody .meta'); if(m && !$q('#dlgBody .appver')) m.insertAdjacentHTML('beforeend', '<br><span class="appver">App version: ' + APP_BUILD + '</span> · <button class="lnk" type="button" id="xUpd">Check for update</button>');
+  const m = $q('#dlgBody .meta'); if(m && !$q('#dlgBody .appver')) m.insertAdjacentHTML('beforeend', '<br><span class="appver">App version: ' + APP_BUILD + '</span> · <button class="lnk" type="button" id="xUpd">Check for update</button><br><a class="lnk" href="manual.html" target="_blank" rel="noopener">Illustrated manual</a>' + (scope || isCP || isAdmin ? ' · <a class="lnk" href="admin-manual.html" target="_blank" rel="noopener">Admin &amp; developer manual</a>' : ''));
 };
 
 /* ======================= self-update =======================
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-31 v8.0 JCW colours';
+const APP_BUILD = '2026-10-31 v8.1 manuals';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{

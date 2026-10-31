@@ -1,0 +1,9 @@
+flowchart TD
+  H["Home - Tests & exams card"] --> MT["Monthly test"] & GT["Grand test page"] & DT["Detention page"]
+  MT --> MTs["action save (mt)<br/>saveMt_"] --> MT1["Daily sheet M.T column"] & MT2["mtToBook_<br/>Monthly Test workbook<br/>Obtained Marks column"]
+  GT --> GW{"gt_window<br/>opens / deadline<br/>(App Settings, Settings B2)"}
+  GW -- "open" --> GS["gt_save<br/>number / A / L, all rows required"]
+  GS --> G1["Grand Test workbook<br/>section sheet, subject column"] & G2["WebApp Logs<br/>before / after"]
+  DT --> DW{"dt_window<br/>opens 1 Feb / deadline"}
+  DW -- "open" --> DS["dt_save<br/>theory + practical,<br/>total computed"]
+  DS --> D1["Detention workbook<br/>THEORY / PRACTICAL / TOTAL"] & D2["WebApp Logs"]

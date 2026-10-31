@@ -1,0 +1,27 @@
+flowchart LR
+  subgraph PH["Teacher / admin phone or laptop"]
+    APP["JCW app (index.html)<br/>+ admission, grandtest,<br/>detention, student pages"]
+    SW["Service worker (sw.js)<br/>keeps the app offline"]
+    LS[("Phone storage<br/>localStorage csa2_*<br/>queue of unsaved work<br/>IndexedDB: PDFs, admissions")]
+    APP --- SW
+    APP --- LS
+  end
+  subgraph GAS["Google Apps Script web app (one project)"]
+    DP{"doPost(e)<br/>login check<br/>then router"}
+    CODE["Code.gs<br/>attendance, reports,<br/>timetable, CP reports"]
+    MOD["Module files by prefix<br/>adm_ Admissions.gs<br/>gt_ GrandTest.gs<br/>bk_ MonthlyBooks.gs<br/>dt_ Detention.gs<br/>wr_ WorkbookReports.gs<br/>st_ StudentSearch.gs"]
+    DP --> CODE
+    DP --> MOD
+  end
+  subgraph GS["Google Sheets (data)"]
+    U[("Users workbook<br/>Users, Timetable,<br/>Transform strength,<br/>Attendance Index ...")]
+    D[("Daily attendance<br/>workbooks Sep-Jan")]
+    M[("Monthly attendance<br/>workbooks Sep-Jan")]
+    T[("Monthly Test<br/>workbooks")]
+    G[("Grand Test<br/>workbook")]
+    DT[("Detention<br/>workbook")]
+    PC[("Provisional<br/>Certificates")]
+  end
+  APP -- "HTTPS POST JSON<br/>{action, username, token}" --> DP
+  CODE --> U & D
+  MOD --> U & M & T & G & DT & PC

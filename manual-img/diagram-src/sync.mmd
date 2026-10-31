@@ -1,0 +1,12 @@
+flowchart TD
+  A["Teacher taps P / A / L / B"] --> B["Marks kept on the phone (draft)"]
+  B --> C{"Save tapped"}
+  C --> Q["Added to the phone queue<br/>(csa2_queue)"]
+  Q --> N{"Internet?"}
+  N -- "No" --> W["Status chip: N to sync<br/>work stays safe on the phone"]
+  W -->|"internet returns /<br/>app opened"| N
+  N -- "Yes" --> S["POST action: save"]
+  S --> R{"Server answer"}
+  R -- "ok" --> OK["Removed from queue<br/>Status: Synced"]
+  R -- "BAD_LOGIN" --> L["Sign in again<br/>(queue kept)"]
+  R -- "error" --> E["Kept in queue,<br/>tried again later"]
