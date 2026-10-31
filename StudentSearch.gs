@@ -25,7 +25,8 @@ var ST_CFG = {
   BOARD_LIST: '1styeardata2026',             // the board's list: Roll No, Name, Father Name, Registration #, Marks, Grade
   BOARD_LINKS: 'App Board Links',            // choices confirmed in the app (made by itself)
   MATCH_MIN: 0.86, MATCH_GAP: 0.03,
-  BOARD_TOTAL: 600,                         // total marks of the 1st year board exam
+  BOARD_TOTAL: 600,
+  DISTINCTION: 20,                          // college positions 1-20 of the 1st year board result are distinctions                         // total marks of the 1st year board exam
   // strength-sheet columns that are about MATRIC: shown with a clear name
   LABELS: { PERCENTAGE: 'Matric percentage', OBTAINEDMARKS: 'Matric obtained marks', TOTALMARKS: 'Matric total marks', BOARD: 'Matric board',
             PASSINGYEAR: 'Matric passing year', METRICROLLNO: 'Matric Roll No', MATRICROLLNO: 'Matric Roll No' }
@@ -103,8 +104,28 @@ function stProfile_(user, roll) {
   } else {
     ST_CFG.TEACHER.forEach(function (f) { var c = col(f[0]); fields.push([f[1], c >= 0 ? gtS_(row[c]) : (f[0] === 'PCS' ? gtS_(m[2]) : '')]); });
   }
+  if (full) fields = stTidy_(fields, roll);
   var out = { ok: true, full: full, roll: gtS_(m[0]), name: gtS_(m[1]), cls: gtS_(m[2]), father: gtS_(m[4]), subjects: subjects, fields: fields };
   if (full) out.photo = stPhoto_(row[col('Pic URL')] || row[col('PHOTO')]);
+  return out;
+}
+/** no repetitions: PCS already says program / class / section, REG# = Enroll#, NULL / 0 are empty; matric marks on one line */
+function stTidy_(fields, roll) {
+  var get = function (lab) { var f = fields.filter(function (x) { return x[0] === lab; })[0]; return f ? f[1] : ''; };
+  var empty = function (v) { return /^(NULL|N\/?A|-|0+(\.0+)?|FALSE)$/i.test(gtS_(v)); };
+  var drop = { PROGRAMCLASSSECTION: 1, SECTION: 1, GROUPONLY: 1 };
+  var ob = get('Matric obtained marks'), tt = get('Matric total marks'), pc = get('Matric percentage'), out = [];
+  fields.forEach(function (f) {
+    var k = gtK_(f[0]);
+    if (drop[k] || empty(f[1])) return;
+    if ((k === 'REG' || k === 'REGNO') && gtK_(f[1]) === gtK_(roll)) return;
+    if (k === 'MATRICTOTALMARKS' || k === 'MATRICPERCENTAGE') return;
+    if (k === 'MATRICOBTAINEDMARKS') {
+      var o = Number(ob), t = Number(tt), p = Number(pc) || (o && t ? Math.round(o / t * 1000) / 10 : 0);
+      out.push(['Matric marks', String(o || ob) + (t ? ' / ' + t : '') + (p ? ' (' + p + '%)' : '')]); return;
+    }
+    out.push(f);
+  });
   return out;
 }
 /** a Drive link -> a small picture the app can show (data URL); anything else is returned as it is */
@@ -251,14 +272,14 @@ function stTests_(user, roll) {
 function stBoardPct_(m) { var n = Number(gtS_(m)); return n > 0 ? String(Math.round(n / ST_CFG.BOARD_TOTAL * 1000) / 10) : ''; }
 function stIsSecond_(cls) { var u = gtS_(cls).toUpperCase().replace(/\s+/g, ''); return /^(FCS|PRE-?ENG|F\.?A)-?2/.test(u) || /^[A-Z]2$/.test(u); }
 function stBoardData_() {
-  var c = wrCacheGet_('st_board_v1'); if (c) return c;
+  var c = wrCacheGet_('st_board_v2'); if (c) return c;
   var book = SpreadsheetApp.openById(ST_CFG.BOARD_BOOK), out = { enr: {}, list: [], links: {} };
   var col = function (head, names) { var h = head.map(gtK_); for (var i = 0; i < names.length; i++) { var x = h.indexOf(gtK_(names[i])); if (x >= 0) return x; } return -1; };
   var sh = book.getSheetByName(ST_CFG.BOARD_LIST);
   if (sh) {
     var v = sh.getDataRange().getDisplayValues(), h = v[0];
-    var ir = col(h, ['Roll No']), inm = col(h, ['Name']), ifa = col(h, ['Father Name']), ig = col(h, ['Registration #', 'Registration']), im = col(h, ['Marks']), igr = col(h, ['Grade']);
-    for (var i = 1; i < v.length; i++) if (gtS_(v[i][ir])) out.list.push([gtS_(v[i][ir]), gtS_(v[i][inm]), gtS_(v[i][ifa]), ig >= 0 ? gtS_(v[i][ig]) : '', im >= 0 ? gtS_(v[i][im]) : '', igr >= 0 ? gtS_(v[i][igr]) : '']);
+    var ir = col(h, ['Roll No']), inm = col(h, ['Name']), ifa = col(h, ['Father Name']), ig = col(h, ['Registration #', 'Registration']), im = col(h, ['Marks']), igr = col(h, ['Grade']), ip = col(h, ['Position']);
+    for (var i = 1; i < v.length; i++) if (gtS_(v[i][ir])) out.list.push([gtS_(v[i][ir]), gtS_(v[i][inm]), gtS_(v[i][ifa]), ig >= 0 ? gtS_(v[i][ig]) : '', im >= 0 ? gtS_(v[i][im]) : '', igr >= 0 ? gtS_(v[i][igr]) : '', ip >= 0 ? gtS_(v[i][ip]) : '']);
   }
   sh = book.getSheetByName(ST_CFG.BOARD_BY_ENROLL);
   if (sh) {
@@ -268,7 +289,7 @@ function stBoardData_() {
   }
   sh = book.getSheetByName(ST_CFG.BOARD_LINKS);
   if (sh && sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 2).getDisplayValues().forEach(function (r) { if (r[0] && r[1]) out.links[gtK_(r[0])] = gtS_(r[1]); });
-  wrCachePut_('st_board_v1', out, 21600);
+  wrCachePut_('st_board_v2', out, 21600);
   return out;
 }
 /* ---- spelling-tolerant name comparison ---- */
@@ -311,10 +332,10 @@ function stBoard_(user, roll) {
   var D = stBoardData_(), k = gtK_(roll), byRoll = {};
   D.list.forEach(function (x) { byRoll[x[0]] = x; });
   var out = function (rn, how, extra) {
-    var x = byRoll[rn] || [rn, '', '', '', '', ''];
+    var x = byRoll[rn] || [rn, '', '', '', '', '', ''];
     var e = D.enr[k] && D.enr[k][0] === rn ? D.enr[k] : null;
     return Object.assign({ ok: true, show: true, found: true, how: how, rollNo: rn, reg: x[3] || (e ? e[1] : ''), marks: x[4] || (e ? e[2] : ''),
-                           grade: x[5] || (e ? e[3] : ''), pct: stBoardPct_(x[4] || (e ? e[2] : '')), total: ST_CFG.BOARD_TOTAL, boardName: x[1], boardFather: x[2] }, extra || {});
+                           grade: x[5] || (e ? e[3] : ''), pct: stBoardPct_(x[4] || (e ? e[2] : '')), total: ST_CFG.BOARD_TOTAL, position: x[6] || '', distinction: Number(x[6]) > 0 && Number(x[6]) <= ST_CFG.DISTINCTION, boardName: x[1], boardFather: x[2] }, extra || {});
   };
   if (D.links[k] && D.links[k] !== '-') return out(D.links[k], 'confirmed');
   if (D.enr[k] && D.links[k] !== '-') return out(D.enr[k][0], 'enroll');
@@ -335,7 +356,7 @@ function stBoardLink_(user, roll, board) {
   if (lr > 1) sh.getRange(2, 1, lr - 1, 1).getDisplayValues().forEach(function (r, i) { if (!row && gtK_(r[0]) === gtK_(roll)) row = i + 2; });
   var vals = [[gtS_(m[0]), gtS_(board), gtS_(m[1]), user.username || '', new Date()]];
   if (row) sh.getRange(row, 1, 1, 5).setValues(vals); else sh.getRange(lr + 1, 1, 1, 5).setValues(vals);
-  CacheService.getScriptCache().remove('st_board_v1_n');
+  CacheService.getScriptCache().remove('st_board_v2_n');
   return stBoard_(user, roll);
 }
 
