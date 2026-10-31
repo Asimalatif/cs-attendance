@@ -197,7 +197,7 @@ function deadlineState(){
   const h = Math.floor(left / 3600000), dd = Math.floor(h / 24);
   return { open:true, text:'Closes ' + fmt(info.deadline) + ' · ' + (dd ? dd + 'd ' + (h % 24) + 'h' : h ? h + 'h ' + Math.floor(left / 60000) % 60 + 'm' : Math.floor(left / 60000) + 'm') + ' left', cls:h < 24 ? 'soon' : '' };
 }
-const lim = d => { const st = Number(info.subjectTotal) || 100, pm = Number(info.practicalMax) || 0; return d && d.practical ? { th:st - pm, pr:pm, st } : { th:st, pr:0, st }; };
+const lim = d => d && d.thMax ? { th:d.thMax, pr:d.prMax || 0, st:d.subjectTotal || (d.thMax + (d.prMax || 0)) } : { th:100, pr:0, st:100 };   // marks of this subject, from the server
 function totalOf(t, p, practical){
   const abs = x => x.k === 'abs' || x.k === 'leave';
   if(t.k === 'empty' && (!practical || p.k === 'empty')) return '';
@@ -398,25 +398,22 @@ function setHtml(){
   return `<section class="card"><h2>Detention exam settings</h2><div class="sub">For the whole college. Teachers see the Detention button on the Home screen only between the opening date and the deadline.</div>
     <div class="note ${ds.open ? 'good' : 'mid'}" style="margin:12px 0">${ds.open ? 'Open now for teachers' : 'Closed for teachers'}${ds.text ? ' · ' + esc(ds.text) : ''}</div>
     <div class="setg">
-      <div><label for="sTotal">Total marks of one subject</label><input id="sTotal" inputmode="numeric" value="${esc(info.subjectTotal || '')}" autocomplete="off"></div>
-      <div><label for="sPrac">Practical marks (practical subjects)</label><input id="sPrac" inputmode="numeric" value="${esc(info.practicalMax == null ? '' : info.practicalMax)}" autocomplete="off"></div>
       <div><label for="sOpens">Opens on</label><input id="sOpens" type="datetime-local" value="${esc(toLocal(info.opens))}"></div>
       <div><label for="sDead">Deadline</label><input id="sDead" type="datetime-local" value="${esc(toLocal(info.deadline))}"></div>
     </div>
-    <div class="sub" style="margin-top:8px">Practical subjects get theory = total − practical (e.g. 100 − 15 = 85). Leave "Opens on" empty to open on 1 February. Leave the deadline empty for no deadline. The deadline is also written to Settings!B2 of the Detention workbook.</div>
+    <div class="sub" style="margin-top:8px">Leave "Opens on" empty to open on 1 February. Leave the deadline empty for no deadline. The deadline is also written to Settings!B2 of the Detention workbook.</div>
+    ${info.scheme ? `<h3 style="margin:16px 0 6px;font-size:15px">Marks of each subject</h3><table><thead><tr><th>Subject</th><th class="n">Theory</th><th class="n">Practical</th><th class="n">Total</th></tr></thead><tbody>${Object.keys(info.scheme).map(k => `<tr><td>${esc(titleCase(k))}</td><td class="n">${info.scheme[k][0]}</td><td class="n">${info.scheme[k][1] || '–'}</td><td class="n">${info.scheme[k][0] + info.scheme[k][1]}</td></tr>`).join('')}</tbody></table><div class="sub" style="margin-top:6px">Set in Detention.gs (DT_CFG.SCHEME).</div>` : ''}
     <div class="acts"><button class="btn primary" type="button" id="xSet" ${online() && !setBusy ? '' : 'disabled'}>${setBusy ? 'Saving…' : online() ? 'Save settings' : 'Needs internet'}</button></div></section>`;
 }
 async function saveSettings(){
-  const subjectTotal = Number($('#sTotal').value), practicalMax = Number($('#sPrac').value), o = $('#sOpens').value, d = $('#sDead').value;
-  if(!(subjectTotal > 0)) return toast('Type the total marks of one subject, for example 100.');
-  if(!(practicalMax >= 0) || practicalMax >= subjectTotal) return toast('Practical marks must be less than the subject total.');
+  const o = $('#sOpens').value, d = $('#sDead').value;
   const opens = o ? new Date(o).getTime() : '', deadline = d ? new Date(d).getTime() : '';
   if(opens && deadline && deadline <= opens) return toast('The deadline must be after the opening date.');
   setBusy = true; render();
   try{
-    const r = await api({ action:'dt_settings', subjectTotal, practicalMax, opens, deadline });
+    const r = await api({ action:'dt_settings', opens, deadline });
     if(!r.ok) throw new Error(r.error || 'Not saved');
-    Object.assign(info, { subjectTotal:r.subjectTotal, practicalMax:r.practicalMax, opens:r.opens, deadline:r.deadline }); ls.set('dt_info', info);
+    Object.assign(info, { scheme:r.scheme, opens:r.opens, deadline:r.deadline }); ls.set('dt_info', info);
     toast('Settings saved.');
   } catch(e){ toast(e.message, 5000); }
   finally { setBusy = false; render(); }
@@ -449,7 +446,7 @@ async function openClass(k){
     const r = await api({ action:'dt_get', cls, sub });
     if(!r.ok) throw new Error(r.error || 'Could not load');
     cache[k] = r; ls.set('dt_data', cache);
-    if(info){ if(r.deadline !== undefined) info.deadline = r.deadline; if(r.opens) info.opens = r.opens; if(r.subjectTotal) info.subjectTotal = r.subjectTotal; if(r.practicalMax !== undefined) info.practicalMax = r.practicalMax; ls.set('dt_info', info); }
+    if(info){ if(r.deadline !== undefined) info.deadline = r.deadline; if(r.opens) info.opens = r.opens; ls.set('dt_info', info); }
     const dr = drafts[k];
     if(dr && dr.clean) delete drafts[k];      // nothing typed yet: show the latest marks from the sheet
     if(cur === k) render();

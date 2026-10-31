@@ -25,10 +25,14 @@ var DT_CFG = {
   LOG_SHEET: 'WebApp Logs',
   TITLE: 'JCW DETENTION AWARDLIST',
   PASS: 0.33,
-  SUBJECT_TOTAL: 100,         // theory + practical of one subject (admin can change)
-  PRACTICAL_MAX: 15,          // practical marks of a practical subject (admin can change)
+  // Marks of each subject: [theory, practical]. Every subject not listed: theory 100, no practical.
+  SCHEME: {
+    'BOTANY': [85, 15], 'CHEMISTRY': [85, 15], 'PHYSICS': [85, 15], 'ZOOLOGY': [85, 15],
+    'COMPUTER SCIENCE': [75, 25], 'STATISTICS': [75, 25], 'PSYCHOLOGY': [75, 25], 'GEOGRAPHY': [75, 25],
+    'PAK-STUDIES': [50, 0], 'ISLAMIYAT': [50, 0], 'MUTALIA QURAN': [50, 0]
+  },
+  DEFAULT_SCHEME: [100, 0],
   OPENS_MONTH: 1,             // February (0 = January)
-  PRACTICAL: ['BOTANY', 'CHEMISTRY', 'COMPUTER SCIENCE', 'PHYSICS', 'ZOOLOGY', 'STATISTICS', 'PSYCHOLOGY', 'GEOGRAPHY'],
   ALIASES: { PASHTO: 'PUSHTO', ISLAMIYATELECTIVE: 'ISLAMIYATELE' },
   SKIP: /combine|report|log|settings|missing|summary|topper|top3|contacts|dashboard|rooms|courses|timetable|link sheet|attendance|ethics|names|unassigned|backup|copy of/i
 };
@@ -48,7 +52,14 @@ function dtRoute_(user, req) {
 
 /* ================= helpers ================= */
 function dtBook_() { return SpreadsheetApp.openById(DT_CFG.BOOK_ID); }
-function dtIsPractical_(sub) { var k = gtK_(sub); return DT_CFG.PRACTICAL.some(function (p) { return gtK_(p) === k; }); }
+/** { th, pr, st } marks of a subject (exact name: ISLAMIYAT ELECTIVE is not ISLAMIYAT) */
+function dtLimits_(sub) {
+  var k = gtK_(sub), hit = DT_CFG.DEFAULT_SCHEME;
+  Object.keys(DT_CFG.SCHEME).forEach(function (n) { if (gtK_(n) === k) hit = DT_CFG.SCHEME[n]; });
+  return { th: hit[0], pr: hit[1], st: hit[0] + hit[1] };
+}
+function dtIsPractical_(sub) { return dtLimits_(sub).pr > 0; }
+function dtScheme_() { var o = {}; Object.keys(DT_CFG.SCHEME).forEach(function (n) { o[n] = DT_CFG.SCHEME[n]; }); o['Other subjects'] = DT_CFG.DEFAULT_SCHEME; return o; }
 /** 'A' / 'L' / number / '' ; null when not valid */
 function dtVal_(v, max) {
   var s = gtS_(v).toUpperCase();
@@ -68,14 +79,12 @@ function dtTotal_(th, pr, practical) {
   return (abs(th) || th === '' ? 0 : th) + (abs(pr) || pr === '' ? 0 : pr);
 }
 function dtApp_() {
-  var out = { opens: null, subjectTotal: DT_CFG.SUBJECT_TOTAL, practicalMax: DT_CFG.PRACTICAL_MAX };
+  var out = { opens: null };
   try {
     var sh = dtBook_().getSheetByName(DT_CFG.APP_SETTINGS);
     if (sh && sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues().forEach(function (r) {
       var k = gtK_(r[0]), v = r[1];
       if (k === 'OPENS' && v) { var d = Object.prototype.toString.call(v) === '[object Date]' ? v : new Date(String(v)); if (!isNaN(d.getTime())) out.opens = d.getTime(); }
-      if (k === 'SUBJECTTOTAL' && Number(v) > 0) out.subjectTotal = Number(v);
-      if (k === 'PRACTICALMARKS' && Number(v) >= 0 && v !== '') out.practicalMax = Number(v);
     });
   } catch (e) {}
   if (!out.opens) {                                       // default: 1 February of this session
@@ -94,14 +103,11 @@ function dtDeadline_() {
 }
 function dtWindow_() {
   var a = dtApp_(), dl = dtDeadline_(), now = Date.now();
-  return { opens: a.opens, defaultOpens: !!a.defaultOpens, deadline: dl, subjectTotal: a.subjectTotal, practicalMax: a.practicalMax,
+  return { opens: a.opens, defaultOpens: !!a.defaultOpens, deadline: dl, scheme: dtScheme_(),
            now: now, open: now >= a.opens && (!dl || now <= dl) };
 }
 function dtSetSettings_(user, req) {
   if (!gtAll_(user)) return { ok: false, error: 'ADMIN_ONLY' };
-  var st = Number(req.subjectTotal), pm = Number(req.practicalMax);
-  if (!(st > 0) || st > 1000) return { ok: false, error: 'Subject total must be a number, for example 100.' };
-  if (!(pm >= 0) || pm >= st) return { ok: false, error: 'Practical marks must be less than the subject total.' };
   var opens = req.opens ? new Date(Number(req.opens)) : null, dl = req.deadline ? new Date(Number(req.deadline)) : null;
   if (opens && dl && dl.getTime() <= opens.getTime()) return { ok: false, error: 'The deadline must be after the opening date.' };
   var book = dtBook_(), sh = book.getSheetByName(DT_CFG.APP_SETTINGS);
@@ -113,8 +119,6 @@ function dtSetSettings_(user, req) {
     sh.getRange(row, 2).setValue(val);
   };
   put('OPENS', 'Opens', opens || '', 'Detention button opens for teachers (empty = 1 February)');
-  put('SUBJECTTOTAL', 'Subject total', st, 'Theory + practical of one subject');
-  put('PRACTICALMARKS', 'Practical marks', pm, 'Practical part of a practical subject');
   var s2 = book.getSheetByName(DT_CFG.SETTINGS_SHEET) || book.insertSheet(DT_CFG.SETTINGS_SHEET);
   s2.getRange(DT_CFG.DEADLINE_CELL).setValue(dl || '');
   SpreadsheetApp.flush();
@@ -177,15 +181,16 @@ function dtList_(user) {
   items.sort(function (x, y) { return x.cls.localeCompare(y.cls, undefined, { numeric: true }) || x.sub.localeCompare(y.sub); });
   var w = dtWindow_();
   return { ok: true, user: String(user.username).toLowerCase(), items: items, all: gtAll_(user), opens: w.opens, deadline: w.deadline,
-           subjectTotal: w.subjectTotal, practicalMax: w.practicalMax, now: w.now, session: gtSession_(), title: DT_CFG.TITLE, pass: DT_CFG.PASS };
+           scheme: w.scheme, now: w.now, session: gtSession_(), title: DT_CFG.TITLE, pass: DT_CFG.PASS };
 }
 function dtGet_(user, cls, sub) {
   var a = gtAssignment_(user, cls, sub);
   if (!a) return { ok: false, error: 'NOT_ALLOWED: ' + cls + ' ' + sub };
   var x = dtLoad_(cls, sub); if (x.error) return { ok: false, error: x.error };
   var w = dtWindow_();
-  return { ok: true, cls: cls, sub: a.subject, teacher: a.teacher, sheet: x.sh.getName(), practical: dtIsPractical_(a.subject),
-           subjectTotal: w.subjectTotal, practicalMax: w.practicalMax, opens: w.opens, deadline: w.deadline, now: w.now,
+  var lm = dtLimits_(a.subject);
+  return { ok: true, cls: cls, sub: a.subject, teacher: a.teacher, sheet: x.sh.getName(), practical: lm.pr > 0,
+           thMax: lm.th, prMax: lm.pr, subjectTotal: lm.st, opens: w.opens, deadline: w.deadline, now: w.now,
            students: x.students.map(function (s) { return { roll: s.roll, name: s.name, father: s.father, cs: s.cs, th: s.th, pr: s.pr, tot: s.tot, off: !!s.off, missing: !!s.missing }; }) };
 }
 /** req: { cls, sub, marks: { roll: { th, pr } }, ts } */
@@ -196,7 +201,7 @@ function dtSave_(user, req) {
   var fmt = function (t) { return Utilities.formatDate(new Date(t), Session.getScriptTimeZone(), 'dd MMM yyyy, hh:mm a'); };
   if (!all && w.deadline && ts > w.deadline) return { ok: false, closed: true, error: 'The detention exam closed on ' + fmt(w.deadline) + '. Ask the admin to extend the deadline.' };
   if (!all && ts < w.opens) return { ok: false, closed: true, error: 'The detention exam opens on ' + fmt(w.opens) + '.' };
-  var practical = dtIsPractical_(a.subject), thMax = practical ? w.subjectTotal - w.practicalMax : w.subjectTotal, prMax = w.practicalMax;
+  var lm = dtLimits_(a.subject), practical = lm.pr > 0, thMax = lm.th, prMax = lm.pr;
   var marks = req.marks || {};
   var lock = LockService.getScriptLock(); lock.waitLock(30000);
   try {
@@ -237,7 +242,7 @@ function dtPdf_(user, cls, sub) {
   var a = gtAssignment_(user, cls, sub);
   if (!a) return { ok: false, error: 'NOT_ALLOWED: ' + cls + ' ' + sub };
   var x = dtLoad_(cls, sub); if (x.error) return { ok: false, error: x.error };
-  var w = dtWindow_(), practical = dtIsPractical_(a.subject), max = w.subjectTotal;
+  var lm = dtLimits_(a.subject), practical = lm.pr > 0, max = lm.st;
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   var title = function (s) { return String(s).toLowerCase().replace(/\b\w/g, function (c) { return c.toUpperCase(); }); };
   var list = x.students.filter(function (s) { return !s.missing; }), hi = 0, pres = 0, abs = 0, nr = 0, pass = 0, fail = 0;
