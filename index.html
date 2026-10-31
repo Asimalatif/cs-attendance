@@ -445,6 +445,17 @@ details.fold[open]>#aBody{margin-bottom:12px}
 .cal .d.l{background:var(--leave-bg)}.cal .d.l b{color:var(--leave)}
 .cal .d.b{background:var(--bb-bg)}.cal .d.b b{color:var(--bb)}
 .cal .d.sun{opacity:.35}
+.ssgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.ssgrid>div{padding:8px 12px;border-bottom:1px solid var(--line);min-width:0}.ssgrid>div:nth-child(odd){border-right:1px solid var(--line)}
+.ssgrid span{display:block;font-size:11.5px;color:var(--muted)}.ssgrid b{font-weight:650;word-break:break-word}
+.ssgrid .wide{grid-column:1/-1;border-right:0!important;border-bottom:0}
+.chips2{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}.chips2 i{font-style:normal;font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;background:var(--surface2);color:var(--ink)}
+.sswrap{overflow-x:auto}.ssph{width:58px;height:58px;border-radius:50%;object-fit:cover;flex:none;border:2px solid rgba(255,255,255,.5);position:relative;z-index:1}
+.ssmon{border-top:1px solid var(--line);padding:6px 0}.ssmon summary{cursor:pointer;font-weight:800;padding:6px 0}.ssmon summary small{color:var(--muted);font-weight:600;margin-left:6px}
+.sscals{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-top:6px}
+.sscal .sch{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline}.sscal .sch small{color:var(--muted);font-size:11.5px}
+@media (max-width:520px){.ssgrid{grid-template-columns:1fr}.ssgrid>div:nth-child(odd){border-right:0}}
+
 .cmt{padding:9px 0;border-top:1px solid var(--line);font-size:13.5px}.cmt:first-of-type{border-top:0}
 .cmt small{display:block;color:var(--muted);font-size:11.5px}
 @media(prefers-color-scheme:dark){.hero{background:radial-gradient(120% 140% at 0% 0%,#24396F 0%,#131D33 55%,#0D1424 100%)}.ring::before{background:#131D33}}
@@ -3415,6 +3426,7 @@ function renderHome(){
     ${offs.length && !sun ? `<div class="offt"><span>No class today:</span> ${offs.map(x => `<button type="button" data-xopen="${esc(x.e.name)}" data-xday="${day}">${esc(x.e.cls)} · ${esc(abbr(x.e.sub))}</button>`).join('')}</div>` : ''}</section>`;
 
   if(cur.length || scope) h += examsCard(cur);
+  h += searchCard();
 
   if(cur.length){
     const aggs = cur.map(e => secAgg(e)).filter(Boolean), nLow = lowList('week', cur).length;
@@ -3904,7 +3916,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-31 v7.6 monthly + daily attendance';
+const APP_BUILD = '2026-10-31 v7.7 student search';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4808,6 +4820,175 @@ async function tpGo(kind){
     else await P.deliver(tp.kind === 'tp' ? tpPdf(D) : hundredPdf(D));
   }catch(e){ toast('Not made: ' + (e && e.name === 'AbortError' ? 'the server took too long. Try again in a minute.' : errText(e))); }
   finally{ tpBusy = false; ['#tpPdf', '#tpCsv'].forEach(s => { const b = $q(s); if(b) b.disabled = false; }); }
+}
+
+/* ======================= STUDENT SEARCH: the whole record of any student =======================
+   Admin, principal, Chief Proctor: every student, every personal detail and the photo.
+   Teachers: students of their sections; personal details limited (the server sends nothing more).
+   Attendance per subject and month (monthly attendance workbooks + approved leaves), day by day as a calendar
+   (daily attendance workbooks), monthly tests, grand test and detention. */
+let ssv = { q:'', list:[], busy:false, roll:'', p:null, months:{}, tests:null, err:'', t:0, full:false, open:{} };
+document.addEventListener('input', ev => { if(ev.target && ev.target.id === 'ssQ') ssFind(ev.target.value); });
+document.addEventListener('toggle', ev => { const d = ev.target; if(d && d.classList && d.classList.contains('ssmon')) ssv.open[d.dataset.m] = d.open; }, true);
+function searchCard(){
+  return `<section class="card"><h3>${I.search} Student search</h3><div class="sub">${scope || isCP ? 'Any student of the college: profile, photo, attendance of every month, day-by-day calendar, monthly tests, grand test and detention.' : 'Students of your sections: profile, attendance of every month, day-by-day calendar and all test results.'}</div>
+    <button class="more" type="button" data-view="search">Open student search</button></section>`;
+}
+function ssFind(v){
+  ssv.q = v; clearTimeout(ssv.t);
+  const q = v.trim(); if(q.length < 2){ ssv.list = []; ssPaintList(); return; }
+  if(!navigator.onLine){ ssv.err = 'Student search needs internet.'; ssPaintList(); return; }
+  ssv.busy = true; ssPaintList();
+  ssv.t = setTimeout(async () => {
+    try{
+      const r = await api({ action:'st_find', q }, 45000);
+      if(ssv.q.trim() !== q) return;
+      if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'The server is not updated yet (StudentSearch).' : r.error);
+      ssv.list = r.list || []; ssv.full = !!r.full; ssv.err = '';
+    }catch(e){ ssv.err = errText(e); }
+    finally{ ssv.busy = false; ssPaintList(); }
+  }, 400);
+}
+function ssListHtml(){
+  if(ssv.err) return `<div class="empty">${esc(ssv.err)}</div>`;
+  if(ssv.q.trim().length < 2) return `<div class="empty">Type at least 2 letters of the name, father name or roll no.</div>`;
+  const rows = ssv.list.map(s => `<button class="li" type="button" data-xss="${esc(s.roll)}"><span class="av">${esc(initials(s.name))}</span><span class="tx"><b>${esc(s.name)}</b><small>${esc(s.roll)} · ${esc(s.cls)}${s.father ? ' · D/O ' + esc(s.father) : ''}</small></span><span class="chev">${I.chev}</span></button>`).join('');
+  return rows + (ssv.busy ? '<div class="empty">Searching…</div>' : rows ? '' : '<div class="empty">No student found.</div>');
+}
+function ssPaintList(){ const b = $q('#ssRes'); if(b) b.innerHTML = ssListHtml(); }
+function ssOpen(roll){
+  Object.assign(ssv, { roll, p:null, months:{}, tests:null, err:'', open:{} });
+  rerender(); window.scrollTo(0, 0);
+  const same = f => r => { if(ssv.roll === roll){ f(r); if(appView === 'search') rerender(); } };
+  const fail = k => e => { if(ssv.roll === roll){ ssv[k] = { error:errText(e) }; if(appView === 'search') rerender(); } };
+  const call = (q, ms) => api(q, ms).then(r => { if(!r.ok) throw new Error(String(r.error || 'Failed').replace(/^NOT_ALLOWED: /, '')); return r; });
+  call({ action:'st_profile', roll }, 60000).then(same(r => { ssv.p = r; })).catch(fail('p'));
+  call({ action:'st_tests', roll }, 120000).then(same(r => { ssv.tests = r; })).catch(fail('tests'));
+  SEAS.slice(0, seasNow() + 1).forEach(m => call({ action:'st_month', roll, mon:m }, 120000).then(same(r => { ssv.months[m] = r; })).catch(e => { if(ssv.roll === roll){ ssv.months[m] = { error:errText(e) }; if(appView === 'search') rerender(); } }));
+}
+const ssMons = () => SEAS.slice(0, seasNow() + 1);
+const numOf = v => { const n = parseFloat(String(v == null ? '' : v)); return isNaN(n) ? null : n; };
+/** subject -> { mon -> { p, d } }, leaves per month, totals */
+function ssAtt(){
+  const subs = {}, leaves = {}; let p = 0, d = 0, lv = 0;
+  ssMons().forEach(m => { const r = ssv.months[m]; if(!r || r.error) return;
+    (r.subs || []).forEach(x => { (subs[x.sub] = subs[x.sub] || {})[m] = x; p += x.p; d += x.d; });
+    if(r.leaves){ leaves[m] = r.leaves; const n = numOf((String(r.leaves).match(/\d+(\.\d+)?/) || [])[0]); if(n) lv += n; } });
+  return { subs, leaves, p, d, lv, pct:d ? pct2(Math.min(d, p + lv), d) : null, pctNo:d ? pct2(p, d) : null };
+}
+function ssTestPct(arr){ const x = numOf(arr[0]), mx = numOf(arr[1]); return /^A/i.test(String(arr[0])) ? 0 : x != null && mx ? Math.round(x / mx * 1000) / 10 : null; }
+function ssCal(m, x, my){
+  const n = new Date(my.y, my.m + 1, 0).getDate(), off = (new Date(my.y, my.m, 1).getDay() + 6) % 7, dm = {};
+  x.days.forEach(([d, v]) => { dm[d] = v; });
+  const pres = x.days.filter(([, v]) => /P$/.test(v)).length;
+  let h = `<div class="sscal"><div class="sch"><b>${esc(titleCase(x.sub))}</b><small>${esc(x.teacher || '')}${x.teacher ? ' · ' : ''}Present ${pres} of ${x.days.length} lecture days</small></div><div class="cal">` +
+    ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(d => `<div class="h">${d}</div>`).join('') + '<div></div>'.repeat(off);
+  for(let d = 1; d <= n; d++){
+    const v = dm[d] || '', sun = new Date(my.y, my.m, d).getDay() === 0;
+    const k = /P$/.test(v) ? 'p' : /A$/.test(v) ? 'a' : /L$/.test(v) ? 'l' : /B$/.test(v) ? 'b' : '';
+    h += `<div class="d ${k} ${sun ? 'sun' : ''}"><span>${d}</span><b>${esc(v || ' ')}</b></div>`;
+  }
+  return h + '</div></div>';
+}
+function renderSearch(){
+  let h = header('Student search', ssv.roll ? 'Student record' : (scope || isCP ? 'Whole college' : 'Your sections'), true) + '<main class="wrap2">';
+  if(!ssv.roll){
+    h += `<section class="card"><h3>${I.search} Find a student</h3>
+      <input id="ssQ" class="sq" type="search" placeholder="Name, father name or roll no." autocomplete="off" autocapitalize="none" spellcheck="false" value="${esc(ssv.q)}">
+      <div id="ssRes" class="rpres">${ssListHtml()}</div></section></main>`;
+    $q('#app').innerHTML = h; const q = $q('#ssQ'); if(q && !('ontouchstart' in window)) q.focus(); return;
+  }
+  const P0 = ssv.p, A = ssAtt(), T = ssv.tests, mons = ssMons();
+  const name = P0 && !P0.error ? P0.name : ssv.roll, cls = P0 && !P0.error ? P0.cls : '';
+  h += `<div class="acts2" style="margin:0 0 10px"><button class="btn" type="button" id="ssBack">${I.back}Results</button><button class="btn primary" type="button" id="ssPdf" ${P0 && !P0.error ? '' : 'disabled'}>${I.share}Share PDF</button></div>`;
+  h += `<section class="hero"><div class="phead grow">${P0 && P0.photo ? `<img class="ssph" src="${esc(P0.photo)}" alt="Photo of ${esc(name)}">` : `<div class="big">${esc(initials(name))}</div>`}<div style="min-width:0;position:relative;z-index:1">
+    <div class="eyebrow">${esc(ssv.roll)}${cls ? ' · ' + esc(cls) : ''}</div><h2>${esc(name)}</h2></div></div>
+    ${A.pct != null ? `<div class="ring" style="--p:${Math.min(100, A.pct)};--c:${A.pct < LOW ? '#FF8A80' : '#5FD3A2'}"><div><b>${Math.round(A.pct)}%</b><small>Session</small></div></div>` : ''}</section>`;
+  if(P0 && P0.error){ $q('#app').innerHTML = h + `<section class="card"><div class="empty">${esc(P0.error)}</div></section></main>`; return; }
+  const mtAll = T && T.mt ? Object.values(T.mt).flatMap(o => Object.values(o).map(ssTestPct)).filter(x => x != null) : [];
+  const gtP = T && T.gt ? Object.values(T.gt).map(ssTestPct).filter(x => x != null) : [];
+  const dt600 = T && T.dt ? T.dt['#TOTAL (600)'] : '';
+  const avg = a => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length * 10) / 10 : null;
+  h += `<div class="kpis"><div class="kpi ${tone(A.pct)}"><b>${A.pct == null ? '–' : A.pct + '%'}</b><small>Attendance (with ${A.lv} leaves)</small></div>
+    <div class="kpi"><b>${A.p}/${A.d}</b><small>Lectures attended</small></div>
+    <div class="kpi ${tone(avg(mtAll))}"><b>${avg(mtAll) == null ? '–' : avg(mtAll) + '%'}</b><small>Monthly tests</small></div>
+    <div class="kpi ${tone(avg(gtP))}"><b>${dt600 || (avg(gtP) == null ? '–' : avg(gtP) + '%')}</b><small>${dt600 ? 'Detention (600)' : 'Grand test'}</small></div></div><div class="grid2">`;
+  // profile
+  h += `<section class="card"><h3>Student profile${P0 && !P0.full ? '' : ''}</h3>${!P0 ? '<div class="empty">Loading…</div>' :
+    `<div class="ssgrid">${P0.fields.map(f => `<div><span>${esc(f[0])}</span><b>${esc(f[1] || '–')}</b></div>`).join('')}<div class="wide"><span>Subjects</span><div class="chips2">${P0.subjects.map(x => `<i>${esc(x)}</i>`).join('')}</div></div></div>`}</section>`;
+  // attendance table
+  const subNames = Object.keys(A.subs).sort(), pend = mons.filter(m => !ssv.months[m]).length;
+  h += `<section class="card"><h3>${I.chart} Attendance by subject and month</h3>${pend ? `<div class="sub">Loading ${pend} month${pend > 1 ? 's' : ''}…</div>` : ''}
+    ${subNames.length ? `<div class="sswrap"><table class="mtab"><thead><tr><th>Subject</th>${mons.map(m => `<th class="c">${MONTHS[monIdx(m)].slice(0, 3)}</th>`).join('')}<th class="c">Total</th></tr></thead><tbody>
+    ${subNames.map(sub => { let p = 0, d = 0; return `<tr><td>${esc(titleCase(sub))}</td>${mons.map(m => { const x = A.subs[sub][m]; if(!x) return '<td class="c">–</td>'; p += x.p; d += x.d; const pc = pct2(x.p, x.d); return `<td class="c"><span class="pill ${tone(pc)}">${x.p}/${x.d}</span></td>`; }).join('')}<td class="c"><b>${d ? pct2(p, d) + '%' : '–'}</b></td></tr>`; }).join('')}
+    ${Object.keys(A.leaves).length ? `<tr><td>Approved leaves</td>${mons.map(m => `<td class="c">${esc(A.leaves[m] || '–')}</td>`).join('')}<td class="c"><b>${A.lv}</b></td></tr>` : ''}
+    </tbody></table></div><div class="rnote">From the monthly attendance workbooks. The session % adds approved leaves (${A.pctNo == null ? '–' : A.pctNo + '%'} without leaves).</div>` : (pend ? '' : '<div class="empty">No monthly attendance found.</div>')}</section>`;
+  h += '</div>';
+  // day-by-day calendars
+  h += `<section class="card" style="margin-top:12px"><h3>${I.cal} Daily attendance (day by day)</h3>`;
+  let anyDaily = false;
+  mons.slice().reverse().forEach(m => {
+    const r = ssv.months[m]; if(!r) return;
+    if(r.error){ h += `<div class="sub">${MONTHS[monIdx(m)]}: ${esc(r.error)}</div>`; return; }
+    if(!(r.daily || []).length) return;
+    const op = ssv.open[m] != null ? ssv.open[m] : !anyDaily;      // the latest month with data opens by itself
+    anyDaily = true;
+    h += `<details class="ssmon" data-m="${m}" ${op ? 'open' : ''}><summary>${MONTHS[r.m]} ${r.y} <small>${r.daily.length} subject${r.daily.length > 1 ? 's' : ''}</small></summary><div class="sscals">${r.daily.map(x => ssCal(m, x, r)).join('')}</div></details>`;
+  });
+  if(!anyDaily) h += `<div class="empty">${pend ? 'Loading…' : 'No day-by-day attendance marked in the daily attendance sheets for this student.'}</div>`;
+  h += '</section><div class="grid2" style="margin-top:12px">';
+  // tests
+  const mtMons = T && T.mt ? Object.keys(T.mt).sort((a, b) => SEAS.indexOf(a) - SEAS.indexOf(b)) : [];
+  const mtSubs = [...new Set(mtMons.flatMap(m => Object.keys(T.mt[m])))].sort();
+  const mk = a => { const pc = ssTestPct(a); return `<span class="pill ${/^A/i.test(String(a[0])) ? 'bad' : tone(pc)}">${esc(a[0])}${a[1] ? ' / ' + a[1] : ''}</span>`; };
+  h += `<section class="card"><h3>${I.doc} Monthly tests</h3>${!T ? '<div class="empty">Loading…</div>' : mtSubs.length ? `<div class="sswrap"><table class="mtab"><thead><tr><th>Subject</th>${mtMons.map(m => `<th class="c">${MONTHS[monIdx(m)].slice(0, 3)}</th>`).join('')}</tr></thead><tbody>
+    ${mtSubs.map(sub => `<tr><td>${esc(titleCase(sub))}</td>${mtMons.map(m => `<td class="c">${T.mt[m][sub] ? mk(T.mt[m][sub]) : '–'}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">No monthly test marks found.</div>'}</section>`;
+  const gtS = T && T.gt ? Object.keys(T.gt).sort() : [];
+  h += `<section class="card"><h3>${I.doc} Grand test</h3>${!T ? '<div class="empty">Loading…</div>' : gtS.length ? `<table class="mtab"><thead><tr><th>Subject</th><th class="c">Marks</th><th class="c">%</th></tr></thead><tbody>${gtS.map(sub => { const pc = ssTestPct(T.gt[sub]); return `<tr><td>${esc(titleCase(sub))}</td><td class="c">${mk(T.gt[sub])}</td><td class="c">${pc == null ? '–' : pc + '%'}</td></tr>`; }).join('')}</tbody></table>` : '<div class="empty">No grand test marks found.</div>'}</section>`;
+  const dtS = T && T.dt ? Object.keys(T.dt).filter(k => k[0] !== '#').sort() : [];
+  h += `<section class="card"><h3>${I.doc} Detention exam</h3>${!T ? '<div class="empty">Loading…</div>' : dtS.length ? `<table class="mtab"><thead><tr><th>Subject</th><th class="c">Theory</th><th class="c">Practical</th><th class="c">Total</th></tr></thead><tbody>${dtS.map(sub => { const x = T.dt[sub], pc = /^A/i.test(x.tot) ? 0 : numOf(x.tot) != null ? numOf(x.tot) / x.max * 100 : null;
+      return `<tr><td>${esc(titleCase(sub))}</td><td class="c">${esc(x.th || '–')}${x.th ? ' / ' + x.thMax : ''}</td><td class="c">${x.prMax ? esc(x.pr || '–') + (x.pr ? ' / ' + x.prMax : '') : '–'}</td><td class="c"><span class="pill ${/^A/i.test(x.tot) ? 'bad' : pc == null ? '' : pc < 40 ? 'bad' : pc < 60 ? 'mid' : 'good'}">${esc(x.tot || 'N/R')} / ${x.max}</span></td></tr>`; }).join('')}</tbody></table>
+      <div class="rnote">${['#TOTAL (600)', '#PERCENTAGE', '#POSITION'].filter(k => T.dt[k]).map(k => esc(k.slice(1)) + ': <b>' + esc(T.dt[k]) + '</b>').join(' · ')}</div>` : '<div class="empty">No detention marks found.</div>'}</section>`;
+  h += '</div></main>';
+  $q('#app').innerHTML = h;
+}
+function ssPdf(){
+  const C = P.C, P0 = ssv.p, A = ssAtt(), T = ssv.tests || { mt:{}, gt:{}, dt:{} }, mons = ssMons();
+  const doc = P.newDoc(); let Y = P.TOP;
+  Y = P.heading(doc, Y, 'Student Record', P0.name + ' · ' + P0.roll + ' · ' + P0.cls);
+  Y = P.infoGrid(doc, Y, P0.fields.map(f => [f[0], f[1] || '-']), 3) + 2;
+  Y = P.smallNote(doc, Y, 'Subjects: ' + P0.subjects.map(titleCase).join(', ')) + 2;
+  Y = P.statBoxes(doc, Y, [{ l:'Attendance (with leaves)', v:A.pct == null ? '-' : A.pct + '%', c:A.pct != null && A.pct < LOW ? C.RED : C.GREEN, bg:A.pct != null && A.pct < LOW ? C.REDBG : C.GREENBG },
+    { l:'Lectures attended', v:A.p + ' / ' + A.d }, { l:'Approved leaves', v:A.lv }, { l:'Detention (600)', v:T.dt['#TOTAL (600)'] || '-' }]) + 5;
+  const subNames = Object.keys(A.subs).sort();
+  if(subNames.length){
+    Y = P.sectionTitle(doc, Y, 'Attendance by subject and month (monthly attendance sheets)');
+    P.table(doc, { startY:Y, head:[['Subject'].concat(mons.map(m => MONTHS[monIdx(m)].slice(0, 3)), ['Total'])],
+      body:subNames.map(sub => { let p = 0, d = 0; return [titleCase(sub)].concat(mons.map(m => { const x = A.subs[sub][m]; if(!x) return '-'; p += x.p; d += x.d; return x.p + '/' + x.d; }), [d ? pct2(p, d) + '%' : '-']); })
+        .concat(Object.keys(A.leaves).length ? [['Approved leaves'].concat(mons.map(m => A.leaves[m] || '-'), [A.lv])] : []) });
+    Y = doc.lastAutoTable.finalY + 6;
+  }
+  const daily = [];
+  mons.forEach(m => { const r = ssv.months[m]; if(r && r.daily) r.daily.forEach(x => daily.push([MONTHS[r.m].slice(0, 3), titleCase(x.sub), x.days.map(([d, v]) => d + v).join(' '), x.days.filter(([, v]) => /P$/.test(v)).length + '/' + x.days.length])); });
+  if(daily.length){
+    Y = P.sectionTitle(doc, Y, 'Daily attendance (day + mark)');
+    P.table(doc, { startY:Y, head:[['Month', 'Subject', 'Days', 'Present']], body:daily, styles:{ font:'helvetica', fontSize:7.5, cellPadding:1.5, lineColor:C.LINE, lineWidth:0.2, textColor:C.INK }, columnStyles:{ 0:{ cellWidth:13 }, 1:{ cellWidth:32 }, 3:{ cellWidth:16, halign:'center' } } });
+    Y = doc.lastAutoTable.finalY + 6;
+  }
+  const mtMons = Object.keys(T.mt || {}).sort((a, b) => SEAS.indexOf(a) - SEAS.indexOf(b)), mtSubs = [...new Set(mtMons.flatMap(m => Object.keys(T.mt[m])))].sort();
+  if(mtSubs.length){
+    Y = P.sectionTitle(doc, Y, 'Monthly tests');
+    P.table(doc, { startY:Y, head:[['Subject'].concat(mtMons.map(m => MONTHS[monIdx(m)]))], body:mtSubs.map(sub => [titleCase(sub)].concat(mtMons.map(m => { const a = T.mt[m][sub]; return a ? a[0] + (a[1] ? ' / ' + a[1] : '') : '-'; }))) });
+    Y = doc.lastAutoTable.finalY + 6;
+  }
+  const gtS = Object.keys(T.gt || {}).sort();
+  if(gtS.length){ Y = P.sectionTitle(doc, Y, 'Grand test'); P.table(doc, { startY:Y, head:[['Subject', 'Marks', '%']], body:gtS.map(sub => [titleCase(sub), T.gt[sub][0] + (T.gt[sub][1] ? ' / ' + T.gt[sub][1] : ''), (ssTestPct(T.gt[sub]) == null ? '-' : ssTestPct(T.gt[sub]) + '%')]) }); Y = doc.lastAutoTable.finalY + 6; }
+  const dtS = Object.keys(T.dt || {}).filter(k => k[0] !== '#').sort();
+  if(dtS.length){ Y = P.sectionTitle(doc, Y, 'Detention exam'); P.table(doc, { startY:Y, head:[['Subject', 'Theory', 'Practical', 'Total']], body:dtS.map(sub => { const x = T.dt[sub]; return [titleCase(sub), (x.th || '-') + ' / ' + x.thMax, x.prMax ? (x.pr || '-') + ' / ' + x.prMax : '-', (x.tot || 'N/R') + ' / ' + x.max]; }) }); Y = doc.lastAutoTable.finalY + 4;
+    const ex = ['#TOTAL (600)', '#PERCENTAGE', '#POSITION'].filter(k => T.dt[k]).map(k => k.slice(1) + ': ' + T.dt[k]).join('   ');
+    if(ex) Y = P.smallNote(doc, Y, ex); }
+  P.finalize(doc);
+  return { doc, title:'Student record ' + P0.name, file:'Student-record_' + P.safe(P0.name) + '_' + P.safe(P0.roll) + '.pdf' };
 }
 
 /* ======================= TIMETABLE: periods, days, timings, workload ======================= */
@@ -6114,7 +6295,7 @@ window.renderMain = function(){
     if(!enter && !force && ae && /^(hq|aq|rpQ|fq|cq)$/.test(ae.id)){ heldRender = true; return; }
     const sy = window.scrollY;
     app.classList.remove('compact', 'phid');
-    try{ appView === 'admin' ? renderAdmin() : appView === 'profile' ? renderProfile() : appView === 'reports' ? renderReports() : appView === 'mytt' ? renderMyTT() : appView === 'free' ? renderFree() : appView === 'contacts' ? renderContacts() : renderHome(); }
+    try{ appView === 'admin' ? renderAdmin() : appView === 'profile' ? renderProfile() : appView === 'reports' ? renderReports() : appView === 'mytt' ? renderMyTT() : appView === 'free' ? renderFree() : appView === 'contacts' ? renderContacts() : appView === 'search' ? renderSearch() : renderHome(); }
     catch(err){
       console.error(err);
       app.innerHTML = header('JCW Daily Attendance', '') + `<main class="wrap2"><div class="err2">This screen could not be shown: ${esc(err.message || err)}</div><button class="btn primary" data-view="att">Open attendance</button></main>`;
@@ -6156,6 +6337,9 @@ document.addEventListener('click', ev => {
   if(t.closest('#rpClr')){ rp.roll = ''; rp.name = ''; rp.scls = ''; return rerender(); }
   if((b = t.closest('[data-xwk]'))){ wr.kind = b.dataset.xwk; store.set('wr', wr); return rerender(); }
   if(t.closest('#wrGo')) return wrGo();
+  if((b = t.closest('[data-xss]'))) return ssOpen(b.dataset.xss);
+  if(t.closest('#ssBack')){ ssv.roll = ''; return rerender(); }
+  if(t.closest('#ssPdf')) return P.run(ssPdf);
   if((b = t.closest('[data-xas]'))){ attSrc = b.dataset.xas; store.set('attSrc', attSrc); for(const k in rpCache) delete rpCache[k]; return rerender(); }
   if((b = t.closest('[data-xtk]'))){ tp.kind = b.dataset.xtk; store.set('tp', tp); return rerender(); }
   if((b = t.closest('[data-xte]'))){ tp.exam = b.dataset.xte; store.set('tp', tp); return rerender(); }
