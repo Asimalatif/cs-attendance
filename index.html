@@ -3925,7 +3925,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-31 v7.8.6 teachers search whole college';
+const APP_BUILD = '2026-10-31 v7.8.7 only top 20 positions';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4970,9 +4970,9 @@ function ssBoardResult(B){
   const m = Number(B.marks), g = String(B.grade || '').trim(), abs = /ABSENT/i.test(g), comp = !abs && g && !(m > 0);
   const marks = abs ? 'Absent' : comp ? 'Compartment' : B.marks ? B.marks + ' / ' + B.total + (B.pct ? ' (' + B.pct + '%)' : '') : '–';
   const result = abs ? 'Absent' : comp ? 'Compartment in ' + g.split(/[,;]/).map(boardCode).join(', ') : m > 0 ? 'Pass' : '–';
-  const pos = !comp && !abs && Number(B.position) > 0 ? ordN(Number(B.position)) + (B.distinction ? ' · Distinction' : '') : '–';
+  const dist = !comp && !abs && B.distinction && Number(B.position) > 0;           // only the top 20 (distinctions) are shown
   return `<div><span>Marks</span><b>${esc(marks)}</b></div><div><span>Result</span><b class="${comp || abs ? 'ssbad' : ''}">${esc(result)}</b></div>
-    <div class="${B.distinction && !comp ? 'ssdist' : ''}"><span>Peshawar Board position</span><b>${esc(pos)}</b></div>`;
+    ${dist ? `<div class="ssdist"><span>Peshawar Board position</span><b>${esc(ordN(Number(B.position)))} · Distinction</b></div>` : ''}`;
 }
 function ssBoardHtml(){
   const B = ssv.board; if(!B || B.show === false) return '';
