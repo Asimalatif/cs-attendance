@@ -3904,7 +3904,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-31 v7.5.3 100% from monthly workbooks';
+const APP_BUILD = '2026-10-31 v7.6 monthly + daily attendance';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -3991,7 +3991,53 @@ async function localRows(q){
   if(missing) toast(missing + ' month sheet(s) are not on this phone yet, so the report leaves them out. Connect to the internet for a full report.');
   return rows;
 }
-const getRows = q => scope ? serverRows(q) : localRows(q);
+const dailyRows = q => scope ? serverRows(q) : localRows(q);
+/* Attendance source for the reports. Teachers still fill the MONTHLY attendance workbooks; a few mark DAILY in the app.
+   'both' (default): per section + subject + month the monthly workbook is used when it has lectures, else the daily
+   app record (monthly test marks always from the daily sheets). 'monthly' / 'daily' = only that one. */
+let attSrc = store.get('attSrc', 'both');
+const ATT_SRC = [['both', 'Monthly + daily'], ['monthly', 'Monthly sheets'], ['daily', 'Daily app']];
+const mrCache = {};
+async function monthlyRows(q){
+  if(!navigator.onLine) return [];
+  const fi = SEAS.indexOf(q.from || 'SEPT'), ti = Math.min(SEAS.indexOf(q.to || SEAS[seasNow()]), seasNow()), mons = SEAS.slice(Math.max(0, fi), ti + 1);
+  const parts = await Promise.all(mons.map(async m => {
+    const c = mrCache[m]; if(c && Date.now() - c.at < 30 * 60e3) return c.rows;
+    const r = await api({ action:'wr_rows', mon:m }, 330000);
+    if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'The server is not updated yet (WorkbookReports).' : r.error || 'Could not read the ' + monName(m) + ' monthly attendance');
+    mrCache[m] = { at:Date.now(), rows:r.rows || [] }; return mrCache[m].rows;
+  }));
+  let rows = [].concat(...parts);
+  if(q.cls) rows = rows.filter(r => normC(r.cls) === normC(q.cls));
+  if(q.sub) rows = rows.filter(r => subK(r.sub) === subK(q.sub));
+  if(q.roll) rows = rows.map(r => Object.assign({}, r, { st:r.st.filter(x => x[0] === q.roll) })).filter(r => r.st.length);
+  return rows;
+}
+const rowKey = r => normC(r.cls) + '|' + subK(r.sub) + '|' + r.mon;
+function mergeRows(daily, monthly){
+  const D = {}; daily.forEach(r => { D[rowKey(r)] = r; });
+  const out = [], used = {};
+  monthly.forEach(m => {
+    if(!m.st.some(x => Number(x[3]) > 0)) return;
+    const k = rowKey(m), d = D[k]; used[k] = 1;
+    if(!d){ out.push(m); return; }
+    const dm = {}; d.st.forEach(x => { dm[x[0]] = x; });            // keep the monthly test marks and guests of the daily sheet
+    out.push(Object.assign({}, m, { teacher:m.teacher || d.teacher, mt:d.mt, st:m.st.map(x => { const y = dm[x[0]]; return y ? [x[0], x[1], x[2], x[3], y[4], y[5], y[6]] : x; }) }));
+  });
+  daily.forEach(r => { if(!used[rowKey(r)]) out.push(r); });
+  return out;
+}
+async function getRows(q){
+  if(attSrc === 'daily') return dailyRows(q);
+  let mErr = null, dErr = null;
+  const [d, m] = await Promise.all([
+    attSrc === 'monthly' ? Promise.resolve([]) : dailyRows(q).catch(e => { dErr = e; return []; }),
+    monthlyRows(q).catch(e => { mErr = e; return []; })]);
+  if(!d.length && !m.length && (mErr || dErr)) throw (mErr || dErr);
+  return attSrc === 'monthly' ? m : mergeRows(d, m);
+}
+const attSrcHtml = () => `<div class="rpstep">Attendance from</div><div class="seg2" role="tablist" aria-label="Attendance from">${ATT_SRC.map(x => `<button type="button" data-xas="${x[0]}" class="${attSrc === x[0] ? 'on' : ''}">${x[1]}</button>`).join('')}</div>
+  <div class="sub">${attSrc === 'both' ? 'Monthly attendance sheets first; where a subject has no monthly sheet entry, the daily app attendance is used.' : attSrc === 'monthly' ? 'Only the monthly attendance workbooks (what the teachers fill each month).' : 'Only attendance marked day by day in the app.'}</div>`;
 /** rows -> students: [{ roll, name, cls, guest, subs:{ SUB:{ sub, teacher, months:{ MON:{p,d,mt,mtT,off} }, p, d, ms, mtT, pct, tp, off } } }] */
 function aggregate(rows){
   const S = {};
@@ -4360,6 +4406,7 @@ function renderReports(){
 
   let h = header('Reports', scope ? (scope === 'all' ? 'College' : 'Department') + ' reports' : 'Your subjects') + '<main class="wrap2"><div class="grid2">';
   h += `<section class="card rpmain" id="rpCard"><h3>${I.doc} Create a report</h3>
+    ${['att', 'short'].includes(rp.kind) ? attSrcHtml() : ''}
     <div class="rpstep">1 · What do you need?</div>
     <div class="rpkinds" role="tablist">${RP_KINDS().map(k => `<button type="button" role="tab" data-xrk="${k[0]}" class="${rp.kind === k[0] ? 'on' : ''}" aria-selected="${rp.kind === k[0]}">${k[1]}<b>${k[2]}</b><small>${esc(k[3])}</small></button>`).join('')}</div>
     <div class="rpstep">2 · For whom?</div>
@@ -4669,29 +4716,33 @@ function tpCsv(D){
 }
 const seasonTxt = () => { const y = new Date().getMonth() >= 7 ? new Date().getFullYear() : new Date().getFullYear() - 1; return y + '-' + String(y + 1).slice(-2); };
 /* ----- 100% attendance ----- */
-const hdCache = {};
-/** 100% attendance from the monthly attendance workbooks (the sheets every teacher fills), one month per call */
-async function hundredData(){
-  const mons = SEAS.slice(SEAS.indexOf(tp.from), SEAS.indexOf(tp.to) + 1), q = { from:tp.from, to:tp.to };
-  if(!navigator.onLine) throw new Error('This needs internet.');
-  if(scope && !ttAll) await loadTTAll().catch(() => {});
-  const by = {}, empty = [];
-  for(const m of mons){
-    let r = hdCache[m] && Date.now() - hdCache[m].at < 30 * 60e3 ? hdCache[m].r : null;
-    if(!r){ toast('Reading the ' + monName(m) + ' monthly attendance workbook…'); r = await api({ action:'wr_hundred', mon:m }, 330000); if(r.ok) hdCache[m] = { at:Date.now(), r }; }
-    if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'The server is not updated yet (WorkbookReports).' : r.error || 'Could not read ' + monName(m));
-    if(!(r.students || []).length) empty.push(m);
-    (r.students || []).forEach(x => {
-      const b = by[x[0]] = by[x[0]] || { roll:x[0], name:x[1], cls:x[2], father:x[5] || '', p:0, d:0, months:{} };
-      b.months[m] = { p:Number(x[3]) || 0, d:Number(x[4]) || 0 }; b.p += b.months[m].p; b.d += b.months[m].d;
-    });
-  }
-  const sm = shiftMap(), live = mons.filter(m => !empty.includes(m));
-  const H = Object.values(by).filter(b => b.d > 0).map(b => Object.assign(b, { sh:sm[normC(b.cls)] || 'M',
+function hundredModel(rows, mons){
+  const by = {};
+  aggregate(rows).forEach(s => {
+    const b = by[s.roll] = by[s.roll] || { roll:s.roll, name:s.name, cls:'', p:0, d:0, months:{} };
+    if(!b.cls || (!s.guest && !/optional/i.test(s.cls) && b.weak)){ b.cls = s.cls; b.weak = !!s.guest || /optional/i.test(s.cls); }
+    Object.values(s.subs).forEach(g => { if(g.off) return; b.p += g.p; b.d += g.d;
+      Object.keys(g.months).forEach(m => { const x = g.months[m]; if(x.off) return; const mm = b.months[m] = b.months[m] || { p:0, d:0 }; mm.p += x.p; mm.d += x.d; }); });
+  });
+  const sm = shiftMap(), H = Object.values(by).filter(b => b.d > 0);
+  const empty = mons.filter(m => !H.some(b => b.months[m] && b.months[m].d > 0)), live = mons.filter(m => !empty.includes(m));
+  H.forEach(b => Object.assign(b, { sh:sm[normC(b.cls)] || 'M',
     full:live.length > 0 && live.every(m => b.months[m] && b.months[m].d > 0 && b.months[m].p >= b.months[m].d),
-    some:Object.values(b.months).some(m => m.d > 0 && m.p >= m.d) }))
-    .sort((a, b) => (a.sh === 'E') - (b.sh === 'E') || byNum(a.cls, b.cls) || enrollN(a.roll) - enrollN(b.roll));
-  if(empty.length) toast('No attendance in the ' + empty.map(monName).join(', ') + ' workbook yet.');
+    some:Object.values(b.months).some(m => m.d > 0 && m.p >= m.d) }));
+  H.sort((a, b) => (a.sh === 'E') - (b.sh === 'E') || byNum(a.cls, b.cls) || enrollN(a.roll) - enrollN(b.roll));
+  return { H, empty };
+}
+async function hundredData(){
+  const q = { from:tp.from, to:tp.to }, mons = SEAS.slice(SEAS.indexOf(tp.from), SEAS.indexOf(tp.to) + 1);
+  toast('Reading the attendance of ' + rangeTxt(q) + '… about half a minute per month the first time.');
+  const rows = await getRows(q);
+  if(!rows.length) throw new Error('No attendance found for ' + rangeTxt(q) + '.');
+  if(scope && !ttAll && navigator.onLine) await loadTTAll().catch(() => {});
+  const { H, empty } = hundredModel(rows, mons), fathers = {};
+  const want = H.filter(b => b.some).map(b => b.roll);
+  if(want.length && navigator.onLine){ try{ const r = await api({ action:'wr_fathers', rolls:want }, 60000); if(r.ok) Object.assign(fathers, r.fathers || {}); }catch(e){} }
+  H.forEach(b => { b.father = fathers[b.roll] || ''; });
+  if(empty.length) toast('No attendance for ' + empty.map(monName).join(', ') + ' yet.');
   return { q, H, mons, empty };
 }
 function hundredPdf(D){
@@ -4712,10 +4763,10 @@ function hundredPdf(D){
       didParseCell:h => { if(h.section === 'body' && h.column.index >= 5 && h.cell.raw === '100%'){ h.cell.styles.textColor = C.GREEN; h.cell.styles.fontStyle = 'bold'; } if(h.section === 'body' && h.column.index >= 5) h.cell.styles.halign = 'center'; } });
     Y = doc.lastAutoTable.finalY + 6;
   };
-  if(D.empty && D.empty.length) Y = P.notice(doc, Y, 'No attendance in the ' + D.empty.map(monName).join(', ') + ' monthly attendance workbook yet. ' + (D.empty.length > 1 ? 'These months are' : 'This month is') + ' not checked.', 'warn');
+  if(D.empty && D.empty.length) Y = P.notice(doc, Y, 'No attendance for ' + D.empty.map(monName).join(', ') + ' yet. ' + (D.empty.length > 1 ? 'These months are' : 'This month is') + ' not checked.', 'warn');
   part('100% attendance in every month (' + rangeTxt(q) + ')', full);
   if(mons.length > 1) part('100% attendance in some months', some);
-  Y = P.smallNote(doc, Y, '100% = every lecture of every subject attended (P). Leave (L), absent (A) and bunk (B) are not attendance. From the monthly attendance workbooks (T.L / A.L of every subject). Held / Attended = lectures of all subjects in ' + rangeTxt(q) + '. Morning sections first, then evening.');
+  Y = P.smallNote(doc, Y, '100% = every lecture of every subject attended (P). Leave (L), absent (A) and bunk (B) are not attendance. Source: ' + ATT_SRC.find(x => x[0] === attSrc)[1] + '. Held / Attended = lectures of all subjects in ' + rangeTxt(q) + '. Morning sections first, then evening.');
   P.signatures(doc, Y, ['Prepared by', 'Chief Proctor', 'Principal']);
   P.finalize(doc);
   return { doc, title:'100% attendance', file:'100-percent-attendance_' + P.safe(scope ? allLabel() : 'My-subjects') + '_' + q.from + '-' + q.to + '.pdf' };
@@ -4740,10 +4791,10 @@ function tpCard(){
       <div class="form"><div class="frow">${tp.exam === 'mt' ? sel2('tpMon', tp.mon, 'Month') : ''}${fld('Positions', `<select id="tpN" aria-label="Positions">${[1, 2, 3, 5, 10].map(n => `<option value="${n}" ${n === tp.n ? 'selected' : ''}>Top ${n}</option>`).join('')}</select>`)}</div></div>`;
   } else {
     h += `<div class="sub">Students who attended every lecture of every subject: in all the chosen months, and month by month. With father names, morning and evening.</div>
-      <div class="form"><div class="frow">${sel2('tpFrom', tp.from, 'From')}${sel2('tpTo', tp.to, 'To')}</div></div>`;
+      ${attSrcHtml()}<div class="form"><div class="frow">${sel2('tpFrom', tp.from, 'From')}${sel2('tpTo', tp.to, 'To')}</div></div>`;
   }
   h += `<div class="acts2"><button class="btn primary" type="button" id="tpPdf" ${tpBusy ? 'disabled' : ''}>${I.doc}${tpBusy ? 'Working…' : 'Create PDF'}</button><button class="btn" type="button" id="tpCsv" ${tpBusy ? 'disabled' : ''}>Excel (CSV)</button></div>
-    <div class="rnote">${tp.kind === 'tp' ? 'Needs internet. The first time it reads every section sheet of the workbook (up to a minute or two); then it is quick for 20 minutes.' : 'From the monthly attendance workbooks' + (scope ? ' (all sections).' : ' (your sections).') + ' Needs internet; about half a minute per month the first time.'}</div></section>`;
+    <div class="rnote">${tp.kind === 'tp' ? 'Needs internet. The first time it reads every section sheet of the workbook (up to a minute or two); then it is quick for 20 minutes.' : 'Needs internet for the monthly sheets: about half a minute per month the first time, then quick for 30 minutes.'}</div></section>`;
   return h;
 }
 async function tpGo(kind){
@@ -6105,6 +6156,7 @@ document.addEventListener('click', ev => {
   if(t.closest('#rpClr')){ rp.roll = ''; rp.name = ''; rp.scls = ''; return rerender(); }
   if((b = t.closest('[data-xwk]'))){ wr.kind = b.dataset.xwk; store.set('wr', wr); return rerender(); }
   if(t.closest('#wrGo')) return wrGo();
+  if((b = t.closest('[data-xas]'))){ attSrc = b.dataset.xas; store.set('attSrc', attSrc); for(const k in rpCache) delete rpCache[k]; return rerender(); }
   if((b = t.closest('[data-xtk]'))){ tp.kind = b.dataset.xtk; store.set('tp', tp); return rerender(); }
   if((b = t.closest('[data-xte]'))){ tp.exam = b.dataset.xte; store.set('tp', tp); return rerender(); }
   if(t.closest('#tpPdf')) return tpGo('pdf');
