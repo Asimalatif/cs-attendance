@@ -3903,7 +3903,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-30 v7.3 sheets vs strength';
+const APP_BUILD = '2026-10-31 v7.4 official sheet PDFs';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4377,6 +4377,7 @@ function renderReports(){
   h += `<div class="acts2"><button class="btn primary" type="button" id="rpPdf" ${rpBusy ? 'disabled' : ''}>${I.doc}Create PDF</button>${second ? `<button class="btn" type="button" id="rpCards" ${rpBusy ? 'disabled' : ''}>${second}</button>` : ''}${csv ? `<button class="btn" type="button" id="rpCsv" ${rpBusy ? 'disabled' : ''}>Excel (CSV)</button>` : ''}</div>
     <div id="rpProg"></div>
     <div class="rnote">${scope ? 'Taken from the college sheets, updated every time a teacher saves.' : 'Only your own subjects are included.'}${rp.kind === 'att' || rp.kind === 'short' ? '' : ' Needs internet.'} Held = lectures delivered, Present = lectures attended.</div></section>`;
+  h += wrCard();
   const cur = mine();
   if(cur.length) h += lowCard(cur);
   h += ewCard();
@@ -4387,6 +4388,7 @@ function renderReports(){
     <button class="li" type="button" data-xq="csv"><span class="tx"><b>All data · Excel (CSV)</b><small>Every student, subject and month</small></span><span class="chev">${I.chev}</span></button>
   </section></div></main>`;
   $q('#app').innerHTML = h;
+  wrAfter();
 }
 /* ----- student search: own sections on the phone at once, then the server (all sections, father name) ----- */
 function rpLocalFind(v){
@@ -4457,6 +4459,78 @@ function quickReport(k){
   if(k === 'shortm') return rpCreate('pdf', { type:'shortage', cls:'*', sub:'', from:cur, to:cur, below:LOW });
   if(k === 'all') return rpCreate('pdf', { type:'college', cls:'', sub:'', from:'SEPT', to:cur, title:allLabel() });
   if(k === 'csv') return rpCreate('csv', { type:'college', cls:'', sub:'', from:'SEPT', to:cur });
+}
+
+/* ======================= OFFICIAL SHEET PDFs: the section lists of the college workbooks =======================
+   Attendance shortage (any month), Monthly test (any month), Grand test and Detention award lists, made on the
+   server from the real workbooks, then Share / Download / Open-Print. The last 8 stay on the phone (offline too). */
+const WR_KINDS = [['att', I.alert, 'Attendance shortage', 'Month-wise, with leaves'], ['mt', I.doc, 'Monthly test', 'All subjects, top 3'],
+  ['gt', I.chart, 'Grand test', 'Award list'], ['dt', I.cal, 'Detention', 'Theory + practical']];
+let wr = Object.assign({ kind:'att', mon:SEAS[seasNow()], cls:'' }, store.get('wr', {})), wrBusy = false, wrSecBusy = false, wrRecent = [];
+let wrS = (o => o && o.owner === user ? o : null)(store.get('wrSecs', null));
+const wrNeedsMon = () => wr.kind === 'att' || wr.kind === 'mt';
+function wrMonths(){ const now = SEAS.slice(0, seasNow() + 1); return wr.kind === 'att' && wrS && wrS.att ? now.filter(t => wrS.att.includes(t)) : now; }
+function wrSecList(){ return wrS ? wrS.sections : rpSections().filter(c => !/optional/i.test(c)); }
+function wrTitle(){ const k = WR_KINDS.find(x => x[0] === wr.kind); return (wrNeedsMon() ? monName(wr.mon) + ' ' : '') + k[2] + ' · ' + wr.cls; }
+async function wrLoadSecs(){
+  if(wrSecBusy || !navigator.onLine || (wrS && Date.now() - wrS.at < 6 * 3600e3)) return;
+  wrSecBusy = true;
+  try{
+    const r = await api({ action:'wr_sections' }, 60000);
+    if(r.ok){ wrS = { owner:user, sections:r.sections || [], att:r.att || SEAS, at:Date.now() }; store.set('wrSecs', wrS); if(appView === 'reports' && !wrBusy) rerender(); }
+  }catch(e){} finally{ wrSecBusy = false; }
+}
+/* saved PDFs: IndexedDB (the app's caches are cleared on every update) */
+const wrDb = () => new Promise((ok, no) => { const q = indexedDB.open('jcw-wr', 1); q.onupgradeneeded = () => q.result.createObjectStore('pdf', { keyPath:'id' }); q.onsuccess = () => ok(q.result); q.onerror = () => no(q.error); });
+async function wrIdb(mode, fn){ const db = await wrDb(); return new Promise((ok, no) => { const tx = db.transaction('pdf', mode), rq = fn(tx.objectStore('pdf')); tx.oncomplete = () => ok(rq ? rq.result : undefined); tx.onerror = () => no(tx.error); }); }
+async function wrAll(){ try{ return ((await wrIdb('readonly', st => st.getAll())) || []).filter(x => x.owner === user).sort((a, b) => b.at - a.at); }catch(e){ return []; } }
+async function wrSave(rec){
+  try{ await wrIdb('readwrite', st => st.put(rec)); for(const x of (await wrAll()).slice(8)) await wrIdb('readwrite', st => st.delete(x.id)); }catch(e){}
+}
+async function wrList(){ wrRecent = (await wrAll()).map(x => ({ id:x.id, name:x.name, title:x.title, at:x.at, kb:Math.max(1, Math.round(x.blob.size / 1024)) })); wrRecentPaint(); }
+function wrRecentHtml(){
+  if(!wrRecent.length) return '';
+  return `<div class="rpstep">Recently made · open even offline</div>` + wrRecent.map(x => `<button class="li" type="button" data-xwr="${esc(x.id)}"><span class="tx"><b>${esc(x.title)}</b><small>${esc(new Date(x.at).toLocaleString([], { day:'numeric', month:'short', hour:'numeric', minute:'2-digit' }))} · ${x.kb} KB</small></span><span class="chev">${I.chev}</span></button>`).join('');
+}
+function wrRecentPaint(){ const b = $q('#wrRecent'); if(b) b.innerHTML = wrRecentHtml(); }
+function wrCard(){
+  const secs = wrSecList(), mons = wrMonths();
+  if(!secs.includes(wr.cls)) wr.cls = secs.includes(rp.cls) ? rp.cls : (secs[0] || '');
+  if(!mons.includes(wr.mon)) wr.mon = mons[mons.length - 1] || SEAS[0];
+  return `<section class="card" id="wrCard"><h3>${I.doc} Official sheet PDFs</h3>
+    <div class="sub">Section lists from the college workbooks, in the same layout as the old portals. Share them on WhatsApp, download them, or print them.</div>
+    <div class="rpkinds" role="tablist">${WR_KINDS.map(k => `<button type="button" role="tab" data-xwk="${k[0]}" class="${wr.kind === k[0] ? 'on' : ''}" aria-selected="${wr.kind === k[0]}">${k[1]}<b>${k[2]}</b><small>${esc(k[3])}</small></button>`).join('')}</div>
+    <div class="form"><div class="frow">${wrNeedsMon() ? fld('Month', `<select id="wrMon" aria-label="Month">${mons.map(t => `<option value="${t}" ${t === wr.mon ? 'selected' : ''}>${monName(t)}</option>`).join('')}</select>`) : ''}
+      ${fld('Section', secs.length ? `<select id="wrCls" aria-label="Section">${secs.map(c => `<option ${c === wr.cls ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>` : `<div class="empty">${wrSecBusy || !wrS ? 'Loading your sections…' : 'No sections'}</div>`)}</div></div>
+    <div class="acts2"><button class="btn primary" type="button" id="wrGo" ${wrBusy || !wr.cls ? 'disabled' : ''}>${I.share}${wrBusy ? 'Making the PDF…' : 'Create PDF'}</button></div>
+    <div class="rnote">Needs internet; takes 10 to 30 seconds. ${wr.kind === 'att' ? 'Below ' + LOW + '% is yellow; approved leaves are added to the overall %.' : wr.kind === 'dt' ? 'Fail (below 33%) is red, absent is pink.' : 'Highest in each subject is grey, absent is pink.'} Students who left (struck through) are not listed.</div>
+    <div id="wrRecent">${wrRecentHtml()}</div></section>`;
+}
+function wrAfter(){ wrLoadSecs(); wrList(); }
+async function wrGo(){
+  if(wrBusy) return;
+  if(!wr.cls) return toast('Choose a section first.');
+  if(!navigator.onLine) return toast('You are offline. PDFs made before are under "Recently made".');
+  wrBusy = true; const b = $q('#wrGo'); if(b){ b.disabled = true; b.innerHTML = I.share + 'Making the PDF…'; }
+  try{
+    const q = { action:'wr_pdf', kind:wr.kind, cls:wr.cls, below:LOW }; if(wrNeedsMon()) q.mon = wr.mon;
+    const r = await api(q, 150000);
+    if(!r.ok){
+      if(r.error === 'BAD_LOGIN'){ signOut('Your username or password was changed. Sign in again.'); return; }
+      throw new Error(String(r.error || 'Could not make the PDF').replace(/^NOT_ALLOWED: /, 'Not one of your sections: ').replace(/^UNKNOWN_ACTION$/, 'The server is not updated yet (WorkbookReports).'));
+    }
+    const bin = atob(r.pdf), arr = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    const blob = new Blob([arr], { type:'application/pdf' }), title = wrTitle();
+    await wrSave({ id:user + '|' + r.name, owner:user, name:r.name, title, at:Date.now(), blob });
+    P.offerFile(blob, r.name, title);
+    wrList();
+  }catch(e){ toast('PDF not made: ' + (e && e.name === 'AbortError' ? 'the server took too long. Try again.' : errText(e))); }
+  finally{ wrBusy = false; const b2 = $q('#wrGo'); if(b2){ b2.disabled = !wr.cls; b2.innerHTML = I.share + 'Create PDF'; } }
+}
+async function wrOpen(id){
+  const x = (await wrAll()).find(r => r.id === id);
+  if(!x) return toast('That PDF is no longer on this phone. Make it again.');
+  P.offerFile(x.blob, x.name, x.title);
 }
 
 /* ======================= TIMETABLE: periods, days, timings, workload ======================= */
@@ -5803,6 +5877,9 @@ document.addEventListener('click', ev => {
   if((b = t.closest('[data-xrw]'))){ rp.who = b.dataset.xrw; return rerender(); }
   if((b = t.closest('[data-xrps]'))){ rp.roll = b.dataset.xrps; rp.name = b.dataset.xrpn; rp.scls = b.dataset.xrpc || ''; rpFound = []; return rerender(); }
   if(t.closest('#rpClr')){ rp.roll = ''; rp.name = ''; rp.scls = ''; return rerender(); }
+  if((b = t.closest('[data-xwk]'))){ wr.kind = b.dataset.xwk; store.set('wr', wr); return rerender(); }
+  if(t.closest('#wrGo')) return wrGo();
+  if((b = t.closest('[data-xwr]'))) return wrOpen(b.dataset.xwr);
   if(t.closest('#rpPdf')) return rpGo('pdf');
   if(t.closest('#rpCsv')) return rpGo('csv');
   if(t.closest('#rpCards')) return rpGo('cards');
@@ -5919,6 +5996,8 @@ document.addEventListener('change', ev => {
   if(t.dataset && t.dataset.xlr != null){ if(t.checked) delete leftSel.off[t.dataset.xlr]; else leftSel.off[t.dataset.xlr] = 1; const n = leftSel.list.filter(x => !leftSel.off[x.roll]).length, b = $q('#xLmGo'); if(b){ b.textContent = 'Move ' + n + ' student' + (n === 1 ? '' : 's'); b.disabled = !n || leftSel.formula; } return; }
   if(t.id === 'adept'){ aF.dept = t.value; return refreshABody(); }
   if(t.id === 'fdept'){ fr.dept = t.value; return refreshFree(); }
+  if(t.id === 'wrMon'){ wr.mon = t.value; store.set('wr', wr); return; }
+  if(t.id === 'wrCls'){ wr.cls = t.value; store.set('wr', wr); return; }
   if(t.id === 'rpCls'){ rp.cls = t.value; rp.sub = ''; return rerender(); }
   if(t.id === 'rpSub'){ rp.sub = t.value; return rerender(); }
   if(t.id === 'rpFrom'){ rp.from = t.value; if(rpOneMonthOnly() || SEAS.indexOf(rp.to) < SEAS.indexOf(rp.from)) rp.to = rp.from; return rerender(); }
