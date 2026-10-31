@@ -1,0 +1,10 @@
+flowchart TD
+  RQ["Reports screen"] --> SRC{"Attendance from<br/>(switch)"}
+  SRC -- "Monthly + daily" --> MRG["mergeRows<br/>monthly first,<br/>daily fills gaps"]
+  SRC -- "Monthly sheets" --> WM
+  SRC -- "Daily app" --> RD
+  MRG --> WM["wr_rows<br/>monthly attendance workbook<br/>T.L / A.L per subject"] & RD["report_data<br/>Attendance Index<br/>(daily app)"]
+  WM & RD --> AG["aggregate() on the phone"]
+  AG --> PDF["PDF made on the phone<br/>(jsPDF)"] --> FD["Share / Download / Open-Print"]
+  RQ --> OFF["Official sheet PDFs<br/>wr_pdf - made on the server<br/>from the real workbook layout"] --> FD
+  RQ --> TOP["Toppers<br/>wr_marks - every section sheet<br/>ranked on the phone"] --> FD

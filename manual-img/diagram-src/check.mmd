@@ -1,0 +1,8 @@
+flowchart LR
+  TR[("Transform<br/>strength sheet")] --> MOD["rosterModel_<br/>who should be in<br/>each section"]
+  MOD --> C1["Daily attendance<br/>rosterCheck_ / rosterFix_"]
+  MOD --> C2["Monthly attendance,<br/>Monthly test, Grand test,<br/>Detention: bk_check / bk_fix"]
+  C1 & C2 --> R["Result per section:<br/>missing students, extra students"]
+  R --> FX{"Fix all"}
+  FX --> F1["Add missing rows<br/>(format + formulas copied)"]
+  FX --> F2["Extra students:<br/>struck through (left) or deleted<br/>if the row is empty"]

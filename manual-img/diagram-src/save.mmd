@@ -1,0 +1,12 @@
+flowchart TD
+  S["action: save<br/>records: sheet, day, period, marks, note"] --> A["Login check<br/>(token / Users sheet)"]
+  A --> P{"Sheet allowed for<br/>this teacher?<br/>(Timetable)"}
+  P -- "no" --> X["Not allowed (record fails)"]
+  P -- "yes" --> C["Month sheet missing?<br/>create SECTION MON SUBJECT<br/>with the students (ensureSheet_)"]
+  C --> L["LockService<br/>(one save at a time)"]
+  L --> W2["Period Data (hidden sheet)<br/>mark of every period"]
+  W2 --> W1["Day column of the month sheet<br/>P / A / L / B"]
+  W1 --> W3["Day note on the date header<br/>(college closed, trip ...)"]
+  W1 --> W5["Change History<br/>only when a mark was changed"]
+  W1 --> W4["Attendance Index row<br/>(Users workbook)"]
+  W4 --> OK["ok + confirmed marks<br/>(phone shows Synced)"]

@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#6B3423">
+<title>JCW App Manual</title>
+<style>
+:root{--brown:#6B3423;--brown2:#8A4A35;--tea:#E7B7AE;--tea2:#F4D6D0;--tea3:#FBEDEA;--bg:#FBF3F1;--surface:#fff;--ink:#2B1912;--muted:#7C6159;--line:#E2C0B8;--good:#0E8A5F;--bad:#C0392B}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#1A110F;--surface:#271915;--ink:#F7E9E5;--muted:#C9A99F;--line:#4B3029;--tea3:#33211C;--tea2:#4A2E27;--brown:#E7B7AE;--brown2:#E7B7AE}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+  background-image:radial-gradient(900px 460px at 105% -8%,rgba(231,183,174,.55),transparent 62%),radial-gradient(760px 420px at -12% 108%,rgba(168,106,82,.14),transparent 60%)}
+a{color:var(--brown2)}
+header.top{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:12px;padding:10px 16px;background:linear-gradient(120deg,#4A2418,#8A4A35);color:#fff;box-shadow:0 6px 18px -10px rgba(74,36,24,.8)}
+header.top img{width:40px;height:40px;border-radius:50%;background:#fff;padding:3px;flex:none}
+header.top h1{margin:0;font-size:18px;line-height:1.2}
+header.top small{display:block;opacity:.85;font-weight:400;font-size:12.5px}
+header.top .sp{flex:1}
+header.top a{color:#fff;font-size:13.5px;font-weight:700;text-decoration:none;border:1px solid rgba(255,255,255,.5);border-radius:999px;padding:6px 12px;white-space:nowrap}
+.wrap{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:270px minmax(0,1fr);gap:22px;padding:18px 16px 60px}
+nav.toc{position:sticky;top:76px;align-self:start;max-height:calc(100vh - 92px);overflow:auto;background:var(--surface);border:1.5px solid var(--line);border-top:5px solid var(--brown);border-radius:18px;padding:12px}
+nav.toc input{width:100%;padding:9px 11px;border:1.5px solid var(--line);border-radius:10px;font:inherit;font-size:14px;background:var(--bg);color:var(--ink)}
+nav.toc ol{list-style:none;margin:10px 0 0;padding:0;counter-reset:t}
+nav.toc li a{display:block;padding:6px 8px;border-radius:8px;text-decoration:none;color:var(--ink);font-size:14px}
+nav.toc li a:hover{background:var(--tea3)}
+nav.toc .grp{margin:12px 0 4px;font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+main section{background:var(--surface);border:1.5px solid var(--line);border-top:5px solid var(--c,var(--brown));border-radius:20px;padding:20px 22px;margin-bottom:22px;box-shadow:0 10px 24px -16px rgba(107,52,35,.45);scroll-margin-top:80px}
+main section:nth-of-type(6n+2){--c:#C2766A}main section:nth-of-type(6n+3){--c:#A86A52}main section:nth-of-type(6n+4){--c:#9C4F5E}main section:nth-of-type(6n+5){--c:#B88645}main section:nth-of-type(6n){--c:#7D5A4F}
+h2{margin:0 0 6px;font-size:22px;color:var(--brown)}
+h2 .n{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:50%;background:var(--c,var(--brown));color:#fff;font-size:15px;margin-right:8px;vertical-align:2px}
+h3{margin:18px 0 6px;font-size:17px}
+.who{display:inline-block;font-size:12px;font-weight:800;padding:2px 10px;border-radius:999px;background:var(--tea2);color:var(--brown);margin-left:6px;vertical-align:3px}
+.lead{color:var(--muted);margin-top:0}
+.row{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:22px;align-items:start;margin:16px 0}
+.row.rev{grid-template-columns:minmax(0,1fr) minmax(0,300px)}
+.row.rev figure{order:2}
+figure{margin:0;text-align:center}
+figure img{width:100%;max-width:300px;border-radius:22px;border:6px solid #2B1912;box-shadow:0 14px 30px -14px rgba(43,25,18,.6);background:#fff;cursor:zoom-in}
+figure.wide img{max-width:100%;border-width:2px;border-radius:14px}
+figcaption{font-size:13px;color:var(--muted);margin-top:6px}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:8px 0}
+ol.steps>li{position:relative;padding:6px 0 6px 40px}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:0;top:6px;width:28px;height:28px;border-radius:50%;background:var(--tea2);color:var(--brown);font-weight:800;display:grid;place-items:center;font-size:14px}
+.tip,.warn,.note{border-radius:12px;padding:10px 14px;margin:12px 0;font-size:14.5px}
+.tip{background:#E8F5EE;border-left:5px solid var(--good)}
+.warn{background:#FCEBE8;border-left:5px solid var(--bad)}
+.note{background:var(--tea3);border-left:5px solid var(--brown2)}
+@media(prefers-color-scheme:dark){.tip{background:#12302A}.warn{background:#3A1C1F}}
+table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14.5px}
+th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
+th{background:var(--tea3)}
+kbd,.k{display:inline-block;padding:0 7px;border-radius:6px;border:1px solid var(--line);background:var(--tea3);font-weight:700;font-size:13.5px}
+.chip{display:inline-block;padding:1px 9px;border-radius:999px;font-weight:800;font-size:13px}
+.P{background:#E5F5EE;color:#0E8A5F}.A{background:#FDECEB;color:#D4352B}.L{background:#FFF3D9;color:#B4740E}.B{background:#EFEBFF;color:#5B45D6}
+#zoom{position:fixed;inset:0;background:rgba(20,10,8,.85);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
+#zoom img{max-width:100%;max-height:100%;border-radius:16px}
+@media(max-width:860px){.wrap{grid-template-columns:minmax(0,1fr)}main,nav.toc{min-width:0}table{display:block;overflow-x:auto}nav.toc{position:static;max-height:none}.row,.row.rev{grid-template-columns:1fr}.row.rev figure{order:0}}
+@media print{header.top,nav.toc{display:none}.wrap{display:block;padding:0}main section{box-shadow:none;break-inside:avoid-page}figure img{max-width:220px}}
+</style>
+</head>
+<body>
+<header class="top">
+  <img src="jcw-logo.png" alt="">
+  <h1>JCW App Manual<small>Jinnah College for Women · attendance, tests, reports, student search, admissions</small></h1>
+  <span class="sp"></span>
+  <a href="./">Open the app</a>
+</header>
+<div class="wrap">
+<nav class="toc" aria-label="Contents">
+  <input id="find" type="search" placeholder="Search the manual…" aria-label="Search the manual">
+  <div class="grp">Everyone</div>
+  <ol id="tocList">
+    <li><a href="#start">1. Sign in and install</a></li>
+    <li><a href="#home">2. Home screen</a></li>
+    <li><a href="#mark">3. Mark attendance</a></li>
+    <li><a href="#tools">4. Calendar, summary, ⋯ More</a></li>
+    <li><a href="#student">5. Student window and profile</a></li>
+    <li><a href="#mt">6. Monthly test</a></li>
+    <li><a href="#gt">7. Grand test</a></li>
+    <li><a href="#dt">8. Detention exam</a></li>
+    <li><a href="#search">9. Student search</a></li>
+    <li><a href="#reports">10. Reports</a></li>
+    <li><a href="#official">11. Official sheet PDFs</a></li>
+    <li><a href="#toppers">12. Toppers and 100% attendance</a></li>
+    <li><a href="#share">13. Share, download, print</a></li>
+    <li><a href="#account">14. Account, sync, text size</a></li>
+    <li><a href="#offline">15. Working offline</a></li>
+  </ol>
+  <div class="grp">Admin, principal, HOD, Chief Proctor</div>
+  <ol>
+    <li><a href="#ahome">16. Admin home</a></li>
+    <li><a href="#college">17. College overview</a></li>
+    <li><a href="#check">18. Check everything</a></li>
+    <li><a href="#free">19. Free teachers</a></li>
+    <li><a href="#adm">20. Admissions</a></li>
+    <li><a href="#gtadmin">21. Grand test / detention settings</a></li>
+    <li><a href="#faq">22. Problems and answers</a></li>
+  </ol>
+  <div class="grp">For the administrator</div>
+  <ol><li><a href="admin-manual.html">Admin &amp; developer manual →</a></li></ol>
+</nav>
+<main id="manual">
+
+<section id="start"><h2><span class="n">1</span>Sign in and install</h2>
+<p class="lead">Use the same username and password as the college portal. Sign in once with internet; after that the app works without internet too.</p>
+<div class="row"><figure><img src="manual-img/01-login.jpg" alt="Sign in screen"><figcaption>Sign in screen</figcaption></figure>
+<div><ol class="steps">
+<li>Open the app link on your phone (Chrome on Android, Safari on iPhone) or laptop.</li>
+<li>Type your <b>Username</b> and <b>Password</b> and tap <b>Sign in</b>.</li>
+<li>Install it like an app so it opens from the home screen:
+<ul><li><b>Android (Chrome):</b> menu ⋮ → <i>Install app</i> or <i>Add to Home screen</i>.</li>
+<li><b>iPhone (Safari):</b> Share → <i>Add to Home Screen</i>.</li>
+<li><b>Laptop (Chrome / Edge):</b> the install icon at the right of the address bar.</li></ul></li>
+<li>Keep the internet on for a minute the first time: your classes and months download to the phone.</li>
+</ol>
+<div class="tip">Not sure what a button does? Tap the <span class="k">?</span> at the top and press <b>Turn on hint mode</b>, then tap any button to read what it does.</div>
+</div></div></section>
+
+<section id="home"><h2><span class="n">2</span>Home screen <span class="who">Teacher</span></h2>
+<p class="lead">Home shows today's classes, test entry, student search and your sections at a glance. The three tabs at the top move between <b>Home</b>, <b>Attendance</b> and <b>Reports</b>.</p>
+<div class="row"><figure><img src="manual-img/02-home-teacher.jpg" alt="Teacher home"><figcaption>Home (teacher)</figcaption></figure>
+<div>
+<h3>Today</h3>
+<figure class="wide"><img src="manual-img/03-home-today.jpg" alt="Today card"></figure>
+<p>Your classes of today in period order, with the period, time and room from the college timetable. <b>Mark</b> opens the attendance of that class; a tick means today is already marked. The class going on now is marked <b>Now</b>, the next one <b>Next</b>.</p>
+<h3>Tests &amp; exams</h3>
+<figure class="wide"><img src="manual-img/04-home-tests.jpg" alt="Tests and exams card"></figure>
+<p>One card with three tabs: <b>Monthly test</b> (choose the month chip, then tap a class), <b>Grand test</b> and <b>Detention</b>. Grand test and Detention stay locked until the admin opens them (Grand test from 1 January, Detention from 1 February) and close at the deadline. A dot on a tab means it is open now.</p>
+<h3>My sections this month</h3>
+<figure class="wide"><img src="manual-img/05-home-sections.jpg" alt="My sections"></figure>
+<p>Attendance of each class you teach this month, with a bar and the number of students below 73%. Tap a class for its summary.</p>
+<p>Below these: <b>Student search</b> (see 9), <b>Students reported to Chief Proctor</b>, <b>My timetable</b> and, for admin/HOD/Chief Proctor, <b>Free teachers</b>.</p>
+</div></div>
+<div class="row rev"><figure><img src="manual-img/40-home-dark.jpg" alt="Dark mode"><figcaption>Dark mode (follows the phone)</figcaption></figure>
+<div><p>The app follows your phone's light or dark setting automatically. The colours are the Jinnah uniform colours: brown, tea pink and white. Each card has its own colour on top, so you can find it quickly.</p></div></div>
+</section>
+
+<section id="mark"><h2><span class="n">3</span>Mark attendance <span class="who">Teacher</span></h2>
+<p class="lead">The screen you use every day.</p>
+<div class="row"><figure><img src="manual-img/07-attendance.jpg" alt="Attendance screen"><figcaption>Attendance screen</figcaption></figure>
+<div><ol class="steps">
+<li>Choose <b>class</b>, <b>subject</b> and <b>month</b> in the brown card at the top. The line under it shows that day's period, time, theory/practical and room.</li>
+<li>Tap the <b>day</b> in the day strip (today is already selected). A green dot = saved, orange dot = a past day not marked, yellow dot = the day has a note, <b>×2</b> = two lectures.</li>
+<li>Mark each student: <span class="chip P">P</span> present, <span class="chip A">A</span> absent, <span class="chip L">L</span> approved leave, <span class="chip B">B</span> bunk (in college but missed the lecture). Tap the same letter again to clear it.</li>
+<li>Tip: tick <b>Mark all P</b> first, then change only the absentees.</li>
+<li>Press <b>Save attendance</b> at the bottom. The button shows how many students are still unmarked; everyone must be marked before you can save.</li>
+</ol>
+<div class="note">Only <b>P</b> counts as attended. A lecture counts as held when at least one student is P or A. Students on approved leave (from the leave in-charge's sheet) are already marked <b>L</b> with a pink label; you can still change it.</div>
+</div></div>
+<div class="row rev"><figure><img src="manual-img/08-marking.jpg" alt="Marking"><figcaption>Marking: the row colour shows the mark</figcaption></figure>
+<div>
+<p><b>Search box and filters:</b> type a name or roll no.; <b>Unmarked</b> shows only students you have not marked, <b>Absent</b> and <b>Low</b> (below 73%) the others.</p>
+<p><b>Grey, struck-through students</b> have left the subject or the college. They cannot be marked and are not counted.</p>
+<p><b>Guest students</b> (from another section) have a purple <i>Guest</i> tag. A guest is counted only against the lectures she was marked in.</p>
+<p><b>Absentees PDF</b> (bottom right) makes a list of today's absent, leave and bunk students with their attendance so far, ready to share on WhatsApp.</p>
+</div></div>
+<div class="row"><figure><img src="manual-img/12-saved.jpg" alt="Saved"><figcaption>After saving</figcaption></figure>
+<div><p>After saving, the status chip at the top right shows <b>Synced</b> when the marks have reached the sheet. Without internet it shows <b>Offline</b> or <b>3 to sync</b>; the marks wait safely on the phone and go to the sheet by themselves later.</p>
+<p>Saved a wrong mark? Open the same day (and lecture), correct it and save again. It overwrites.</p></div></div>
+</section>
+
+<section id="tools"><h2><span class="n">4</span>Calendar, summary and ⋯ More <span class="who">Teacher</span></h2>
+<p class="lead">Three small buttons sit in the brown card: <b>Calendar</b>, <b>Summary</b> and <b>⋯ More</b>.</p>
+<div class="row"><figure><img src="manual-img/09-calendar.jpg" alt="Calendar"><figcaption>Calendar: the whole month</figcaption></figure>
+<div><p><b>Calendar</b> shows the whole month. Tap any date to open it and mark or correct it. If you have unsaved marks, the app asks before changing the day.</p>
+<p><b>Summary</b> shows the month for every student: lectures attended, held, percentage and the monthly test. Filter <i>low attendance</i> or <i>low test</i>, and <b>Share list</b> as text.</p></div></div>
+<div class="row rev"><figure><img src="manual-img/10-summary.jpg" alt="Summary"><figcaption>Monthly summary</figcaption></figure>
+<div><h3>⋯ More menu</h3>
+<table><tr><th>Item</th><th>What it does</th></tr>
+<tr><td>Add / Edit day note</td><td>College closed, class not held, holiday. The date gets a yellow dot.</td></tr>
+<tr><td>More than one lecture today</td><td>Adds a lecture bar 1, 2, 3… Each lecture is saved separately; the sheet shows 2P, 3P… in the day cell.</td></tr>
+<tr><td>Add guest student</td><td>A student of another section who attends your class. Type 2+ letters of her name or roll no.</td></tr>
+<tr><td>Print register</td><td>A designed monthly register PDF (every day colour-coded, %, test, signatures). Works offline.</td></tr>
+<tr><td>Delete attendance</td><td>Removes the marks of the selected lecture/day. Type the day number to confirm. Needs internet; cannot be undone.</td></tr>
+<tr><td>Text size</td><td>Normal, Large or Extra large.</td></tr></table></div></div>
+<div class="row"><figure><img src="manual-img/11-att-more.jpg" alt="More menu"><figcaption>⋯ More</figcaption></figure><div></div></div>
+</section>
+
+<section id="student"><h2><span class="n">5</span>Student window and profile <span class="who">Teacher</span></h2>
+<div class="row"><figure><img src="manual-img/13-student-window.jpg" alt="Student window"><figcaption>Tap a student's name</figcaption></figure>
+<div><p>Tap a student's <b>name</b> on the attendance screen:</p>
+<ul><li>This month: attendance, present, absent and the test mark.</li>
+<li><b>Tags</b> (Bunking, Often late, Weak in studies, Needs counselling, Parent informed, Excellent) and <b>comments</b>. These are private to you and saved on the server.</li>
+<li><b>Report to Chief Proctor</b>: choose the Chief Proctor, reason, Normal/Serious and write a statement; WhatsApp opens with the message ready. The report is also saved on the server.</li>
+<li><b>Full profile</b> opens her page (below).</li></ul></div></div>
+<div class="row rev"><figure><img src="manual-img/13b-profile.jpg" alt="Student profile"><figcaption>Student profile (your subject)</figcaption></figure>
+<div><p>The profile shows this month and the whole session for your subject: a bar for every month, a table of attended / held / % / test, and the <b>day-by-day calendar</b>. <b>Share PDF</b> makes a profile PDF; <b>Report to Chief Proctor</b> and <b>Tags &amp; comments</b> are here too.</p>
+<p>For the full record of a student in <b>all</b> subjects, use <b>Student search</b> (section 9).</p></div></div>
+</section>
+
+<section id="mt"><h2><span class="n">6</span>Monthly test <span class="who">Teacher</span></h2>
+<div class="row"><figure><img src="manual-img/14-monthly-test.jpg" alt="Monthly test"><figcaption>Monthly test entry</figcaption></figure>
+<div><ol class="steps">
+<li>On Home, open <b>Tests &amp; exams → Monthly test</b>, choose the month chip (previous months can be opened and corrected) and tap the class.</li>
+<li>Enter the <b>Total marks</b> first (for example 10 or 20).</li>
+<li>Type each student's marks, or <b>A</b> for absent. Marks above the total are refused. <b>Fill empty with A</b> marks all empty rows absent (Undo is offered).</li>
+<li><b>Save test marks</b>. Every student must have marks or A.</li>
+</ol>
+<div class="note">Marks go to the <b>M.T column</b> of the attendance sheet and into the real <b>"&lt;Month&gt; - MONTHLY TEST"</b> workbook (Obtained Marks of your subject). Marks entered in the old portal also show here.</div></div></div>
+</section>
+
+<section id="gt"><h2><span class="n">7</span>Grand test <span class="who">Teacher</span></h2>
+<div class="row"><figure><img src="manual-img/26-grandtest-list.jpg" alt="Grand test list"><figcaption>Your sections and subjects</figcaption></figure>
+<div><p>Open <b>Tests &amp; exams → Grand test → Open Grand test</b>. The button is locked until the admin opens the grand test (1 January by default) and locks again after the deadline.</p>
+<ol class="steps"><li>Tap one of <b>your</b> sections/subjects (only yours are listed).</li>
+<li>The <b>total marks</b> are fixed by the admin for the whole college (for example 40); teachers cannot change them.</li>
+<li>Enter marks, <b>A</b> (absent) or <b>L</b> (leave) for every student. <b>Save</b> stays disabled until every entry is filled.</li>
+<li><b>Award list PDF</b> makes the award list of that subject.</li></ol>
+<div class="tip">You can work offline: entries wait on the phone and are sent when internet returns.</div></div></div>
+<div class="row rev"><figure><img src="manual-img/27-grandtest-entry.jpg" alt="Grand test entry"><figcaption>Grand test entry</figcaption></figure><div></div></div>
+</section>
+
+<section id="dt"><h2><span class="n">8</span>Detention exam <span class="who">Teacher</span></h2>
+<div class="row"><figure><img src="manual-img/29-detention-entry.jpg" alt="Detention entry"><figcaption>Theory + practical, total worked out</figcaption></figure>
+<div><p>Opens from 1 February (or the date the admin sets) until the deadline, like the grand test.</p>
+<table><tr><th>Subject</th><th>Theory</th><th>Practical</th><th>Total</th></tr>
+<tr><td>Botany, Chemistry, Physics, Zoology</td><td>85</td><td>15</td><td>100</td></tr>
+<tr><td>Computer Science, Geography</td><td>75</td><td>25</td><td>100</td></tr>
+<tr><td>Pak-Studies, Islamiyat, Mutalia Quran</td><td>50</td><td>–</td><td>50</td></tr>
+<tr><td>All other subjects (incl. Psychology, Statistics)</td><td>100</td><td>–</td><td>100</td></tr></table>
+<p>Enter theory and practical (or <b>A</b> / <b>L</b>); the total is worked out by itself. Save works only when every entry is done.</p></div></div>
+<div class="row rev"><figure><img src="manual-img/28-detention-list.jpg" alt="Detention list"><figcaption>Your detention subjects</figcaption></figure><div></div></div>
+</section>
+
+<section id="search"><h2><span class="n">9</span>Student search <span class="who">Everyone</span></h2>
+<p class="lead">The complete record of any student of the college in one place. Home → <b>Student search</b>.</p>
+<div class="row"><figure><img src="manual-img/20-search-list.jpg" alt="Search"><figcaption>Type a name, father name or roll no.</figcaption></figure>
+<div><ol class="steps"><li>Type at least 2 letters of the <b>name, father name or roll no.</b></li><li>Tap the student.</li></ol>
+<table><tr><th>Who</th><th>Sees</th></tr>
+<tr><td>Teachers, HOD</td><td>Any student: photo, every profile detail, attendance, calendar, tests, board result — <b>except</b> contact number, email and address</td></tr>
+<tr><td>Admin, principal, Chief Proctor</td><td>Everything, including contact number, email and address</td></tr></table></div></div>
+<div class="row rev"><figure><img src="manual-img/21-search-top.jpg" alt="Record top"><figcaption>Record: JCW logo, distinction tag, photo and profile</figcaption></figure>
+<div><p>The record shows the college logo, her roll no. and section, a gold tag for a 1st-year board <b>distinction</b> (Peshawar Board position 1–20), the session attendance ring and four boxes: attendance (with approved leaves), lectures attended, monthly test %, detention total.</p>
+<p>The <b>profile</b> has her photo and details from the strength sheet. Matric marks are shown on one line, e.g. <i>1176 / 1200 (98%)</i>.</p></div></div>
+<div class="row"><figure><img src="manual-img/22-search-attendance.jpg" alt="Attendance by month"><figcaption>Attendance by subject and month</figcaption></figure>
+<div><p><b>Attendance by subject and month</b> comes from the monthly attendance workbooks: attended/held for every subject and month, approved leaves, and the total. The session % adds approved leaves (the % without leaves is shown below the table).</p></div></div>
+<div class="row rev"><figure><img src="manual-img/23-search-calendar.jpg" alt="Day by day"><figcaption>Day-by-day calendar for each subject</figcaption></figure>
+<div><p><b>Daily attendance</b> shows a month calendar for each subject marked day by day in the daily sheets: green P, red A, amber L, purple B. The latest month is open; tap other months to open them.</p></div></div>
+<div class="row"><figure><img src="manual-img/24-search-board.jpg" alt="Board result"><figcaption>1st year board result (2nd year students)</figcaption></figure>
+<div><p>For 2nd year students: board <b>Roll No</b>, <b>Registration #</b>, <b>Marks</b> out of 600 with %, <b>Result</b> (Pass or Compartment with the subject codes) and, for the top 20 only, the <b>Peshawar Board position · Distinction</b>.</p>
+<p>The record is found by Enroll # first. If the name is spelled differently, the app matches name and father name carefully; when it is not sure, admin / Chief Proctor choose the right one (<b>Yes, this is her</b> / <b>Not her</b> / <b>This is her</b>), and the choice is remembered.</p></div></div>
+<div class="row rev"><figure><img src="manual-img/25-search-tests.jpg" alt="Tests"><figcaption>Detention result</figcaption></figure>
+<div><p>Below: <b>Monthly tests</b> (each month and subject), <b>Grand test</b> and <b>Detention exam</b> (theory, practical, total, TOTAL (600), percentage).</p>
+<p><b>Share PDF</b> at the top makes an exact copy of the record (all months open) to share, download or print.</p></div></div>
+</section>
+
+<section id="reports"><h2><span class="n">10</span>Reports</h2>
+<p class="lead">The <b>Reports</b> tab makes PDFs and Excel (CSV) files. Teachers get their own subjects; admin, principal and HOD the whole college or department.</p>
+<div class="row"><figure><img src="manual-img/15-reports-create.jpg" alt="Create a report"><figcaption>Create a report</figcaption></figure>
+<div><ol class="steps">
+<li><b>What do you need?</b> Attendance (month-wise % and tests), Daily register (P/A/L/B every date), Test results, or Shortage (below 73%).</li>
+<li><b>For whom?</b> One student, one section or all your sections / the college.</li>
+<li><b>Choose</b> the student or section, subject and months.</li>
+<li><b>Create PDF</b> or <b>Excel (CSV)</b>.</li></ol>
+<div class="note"><b>Attendance from</b> (for Attendance and Shortage): <b>Monthly + daily</b> uses the monthly attendance sheets first and the daily app where a subject has no monthly entry; or choose <b>Monthly sheets</b> or <b>Daily app</b> only.</div>
+<p>Further down: <b>Low attendance</b> this week/month, <b>Early warning</b> (students below 73% and at risk), and <b>Shortcuts</b> (shortage of the session or month, all data as Excel).</p></div></div>
+<div class="row rev"><figure><img src="manual-img/15b-reports-section.jpg" alt="One section"><figcaption>One section: choose section, subject, months</figcaption></figure><div></div></div>
+</section>
+
+<section id="official"><h2><span class="n">11</span>Official sheet PDFs</h2>
+<div class="row"><figure><img src="manual-img/16-reports-official.jpg" alt="Official sheet PDFs"><figcaption>Section lists from the college workbooks</figcaption></figure>
+<div><p>The same section lists as the old portals, made from the real workbooks:</p>
+<table><tr><th>Report</th><th>From</th><th>Shows</th></tr>
+<tr><td>Attendance shortage</td><td>Monthly attendance workbook of the month</td><td>T.L / A.L / % of every subject, approved leaves, overall %; below 73% yellow/red</td></tr>
+<tr><td>Monthly test</td><td>"Month - MONTHLY TEST" workbook</td><td>All subjects; highest grey, top 3 gold/silver/bronze, absent pink</td></tr>
+<tr><td>Grand test</td><td>Grand Test workbook</td><td>Award list with teacher names</td></tr>
+<tr><td>Detention</td><td>Detention workbook</td><td>Theory / practical / total, N/R green, absent red, below 40% dark red, TOTAL (600) top 3</td></tr></table>
+<p>Choose the report, month and section, tap <b>Create PDF</b> (10–30 seconds). The last 8 PDFs stay under <b>Recently made</b> and open even offline.</p></div></div>
+</section>
+
+<section id="toppers"><h2><span class="n">12</span>Toppers and 100% attendance</h2>
+<div class="row"><figure><img src="manual-img/17-reports-toppers.jpg" alt="Toppers"><figcaption>Toppers</figcaption></figure>
+<div><p><b>Toppers</b>: choose Monthly test (and month), Grand test or Detention, and how many positions. The PDF has positions in the <b>whole college</b>, each <b>class</b>, each <b>program</b>, program + class, each <b>section</b>, each <b>subject</b> (class-wise) and the subject topper of every section — <b>morning and evening separately</b>. Equal marks share a position.</p></div></div>
+<div class="row rev"><figure><img src="manual-img/18-reports-hundred.jpg" alt="100% attendance"><figcaption>100% attendance</figcaption></figure>
+<div><p><b>100% attendance</b>: choose From and To months. List 1 = 100% in every chosen month; list 2 = 100% in some months (with each month's %). With father names, morning first then evening. Leave, absent and bunk break 100%.</p></div></div>
+</section>
+
+<section id="share"><h2><span class="n">13</span>Share, download, print</h2>
+<div class="row"><figure><img src="manual-img/19-file-dialog.jpg" alt="File ready"><figcaption>Every PDF / Excel file opens this window</figcaption></figure>
+<div><ul><li><b>Share</b> (phone): WhatsApp, Gmail, Drive and other apps.</li>
+<li><b>Download</b>: saved in the Downloads folder (Files / My Files on a phone).</li>
+<li><b>Open / Print</b>: view the PDF and print it, or view an Excel file as a table.</li></ul></div></div>
+</section>
+
+<section id="account"><h2><span class="n">14</span>Account, sync and text size</h2>
+<div class="row"><figure><img src="manual-img/06-account-menu.jpg" alt="Account menu"><figcaption>Tap the status chip (top right)</figcaption></figure>
+<div><table><tr><th>Status chip</th><th>Meaning</th></tr>
+<tr><td>Synced</td><td>Everything is in the sheets.</td></tr><tr><td>Saving… / Updating…</td><td>Sending or refreshing.</td></tr>
+<tr><td>3 to sync</td><td>3 records wait on the phone.</td></tr><tr><td>Offline</td><td>No internet; keep working.</td></tr>
+<tr><td>Red outline</td><td>A record could not be saved; open the chip to read why.</td></tr></table>
+<p>The menu also has <b>Sync now</b>, <b>Text size</b> (Normal, Large, Extra large), <b>My reports</b> (Chief Proctor reports), <b>Change password</b>, <b>Sign out</b>, the <b>App version</b> and <b>Check for update</b>.</p>
+<div class="warn">Do not sign out or clear the browser data while the chip shows "to sync" — the waiting marks would be lost.</div></div></div>
+</section>
+
+<section id="offline"><h2><span class="n">15</span>Working offline</h2>
+<p>After the first sign-in the app opens without internet. You can mark attendance, enter monthly test, grand test and detention marks, look at your sections and make most PDFs. Everything you save waits on the phone and is sent automatically when internet returns. Student search, official sheet PDFs, toppers and admissions search need internet.</p>
+<p>The app updates itself a few seconds after it opens with internet. To force it: status chip → <b>Check for update</b>.</p>
+</section>
+
+<section id="ahome"><h2><span class="n">16</span>Admin home <span class="who">Admin / principal</span></h2>
+<div class="row"><figure><img src="manual-img/30-home-admin.jpg" alt="Admin home"><figcaption>Home for admin</figcaption></figure>
+<div><p>Admin and principal see a fourth tab, <b>College</b> (HOD: <b>Department</b>). Home shows the <b>College overview</b> (sections marked today, attendance this month), <b>Tests &amp; exams</b> (with Grand test / Detention progress and settings), <b>Student search</b>, <b>Free teachers</b> and <b>Teacher contacts</b>, and the <b>Admissions</b> card (admin).</p></div></div>
+</section>
+
+<section id="college"><h2><span class="n">17</span>College overview <span class="who">Admin / principal / HOD</span></h2>
+<div class="row"><figure><img src="manual-img/31-college.jpg" alt="College"><figcaption>College tab</figcaption></figure>
+<div><p>Top: sections pending today, college attendance this month, teachers fully marked today, students below 73% and the number of sections.</p>
+<p><b>Teachers, sections &amp; free periods</b> is folded into one line; tap it to open the lists:</p></div></div>
+<div class="row rev"><figure><img src="manual-img/32-college-teachers.jpg" alt="Teachers"><figcaption>Teachers, sections &amp; free periods (opened)</figcaption></figure>
+<div><ul><li><b>Today</b>: who has marked and who has not, with a <b>Remind</b> button (WhatsApp).</li>
+<li><b>Sections</b>: every section-subject with its %.</li><li><b>Low %</b>: students below 73%.</li><li><b>Workload</b>: periods per teacher and free periods.</li></ul>
+<p>Below: <b>Month sheets</b> (every teacher's sheet of this and next month exists), <b>Check everything</b>, <b>Health check</b>, <b>Left students</b> and <b>Admissions</b>.</p></div></div>
+</section>
+
+<section id="check"><h2><span class="n">18</span>Check everything <span class="who">Admin</span></h2>
+<div class="row"><figure><img src="manual-img/33-check-everything.jpg" alt="Check everything"><figcaption>Check everything</figcaption></figure>
+<div><p>Compares every workbook with the strength sheet (Transform-ALL-COLLEGE-STRENGTH): daily attendance (Sep–Jan), monthly attendance, monthly test, grand test and detention.</p>
+<ol class="steps"><li>Tick the workbooks (months) to check.</li><li><b>Check selected</b>: three workbooks are checked at a time.</li>
+<li>Each line shows missing and extra students. <b>Show</b> lists them with Add / Remove; <b>Fix all</b> fixes one workbook; <b>Fix everything</b> fixes all.</li></ol>
+<div class="note">Missing students are added with the sheet's format and formulas. Extra students who already have marks are <b>struck through</b> (kept); empty extra rows are removed.</div></div></div>
+</section>
+
+<section id="free"><h2><span class="n">19</span>Free teachers <span class="who">Admin / principal / HOD / CP</span></h2>
+<div class="row"><figure><img src="manual-img/34-free-teachers.jpg" alt="Free teachers"><figcaption>Free teachers</figcaption></figure>
+<div><p>Choose the <b>day</b>, <b>shift</b> (morning / evening) and <b>period</b> (it opens on today and the period going on now) to see which teachers are free, for substitutions and duties. <b>All week</b> shows every day and period. Share as PDF or text.</p></div></div>
+</section>
+
+<section id="adm"><h2><span class="n">20</span>Admissions <span class="who">Admin</span></h2>
+<div class="row"><figure><img src="manual-img/35-admission-new.jpg" alt="New admission"><figcaption>New admission</figcaption></figure>
+<div><p>New students and changes go <b>straight into Transform-ALL-COLLEGE-STRENGTH</b>. Works without internet (the <b>Waiting</b> tab sends them later).</p>
+<ol class="steps"><li><b>New</b>: choose program, year, section (room is filled from the timetable), quota (the seats left are shown).</li>
+<li><b>Search the portal by name</b> to fill the student's details from the UOP portal data.</li>
+<li>The <b>roll no. / Enroll #</b> is the next free number of the program's range (given when you save).</li>
+<li>Subjects are filled for the group; choose electives where needed. <b>Save</b> shows a check of everything before writing.</li></ol></div></div>
+<div class="row rev"><figure><img src="manual-img/36-admission-find.jpg" alt="Find and edit"><figcaption>Find &amp; edit</figcaption></figure>
+<div><p><b>Find &amp; edit</b>: search any student by name, father name or roll no., change any column and save (only changed cells are written; every change goes to the Admission Log).</p></div></div>
+<div class="row"><figure><img src="manual-img/37-admission-seats.jpg" alt="Seats"><figcaption>Seats</figcaption></figure>
+<div><p><b>Seats</b>: seats, filled and left for every program and quota. Afterwards run <b>Check everything</b> so the new students appear in the attendance and test sheets.</p></div></div>
+</section>
+
+<section id="gtadmin"><h2><span class="n">21</span>Grand test / detention settings <span class="who">Admin</span></h2>
+<div class="row"><figure><img src="manual-img/38-grandtest-settings.jpg" alt="Settings"><figcaption>Grand test settings</figcaption></figure>
+<div><p><b>Settings</b> tab (admin only): <b>Opens</b> (date and time teachers can start), <b>Total marks</b> (whole college, e.g. 40) and <b>Deadline</b> (after it the button locks again). Detention has the same Opens/Deadline settings and shows the marks scheme.</p></div></div>
+<div class="row rev"><figure><img src="manual-img/39-grandtest-progress.jpg" alt="Progress"><figcaption>Progress</figcaption></figure>
+<div><p><b>Progress</b>: which section-subjects are complete and which still have missing marks (students who left are not counted), so you can remind the teachers.</p></div></div>
+</section>
+
+<section id="faq"><h2><span class="n">22</span>Problems and answers</h2>
+<table><tr><th>Problem</th><th>What to do</th></tr>
+<tr><td>Letters too small</td><td>Status chip → Text size → Large or Extra large.</td></tr>
+<tr><td>"N to sync" does not go away</td><td>Status chip → Sync now. If it says the login changed, sign in again (the waiting marks are kept).</td></tr>
+<tr><td>A student is missing from my list</td><td>She may have left the subject (grey row) or the strength sheet has another section/subject. Tell the admin; Check everything adds her.</td></tr>
+<tr><td>"Could not reach the server"</td><td>No internet or the internet is blocked. Try again; your work is kept.</td></tr>
+<tr><td>"App error: …"</td><td>Send a screenshot to the admin.</td></tr>
+<tr><td>Grand test / Detention button is locked</td><td>It opens on the date set by the admin and locks after the deadline.</td></tr>
+<tr><td>A new feature is not on my phone</td><td>Status chip → Check for update (the app version is shown there).</td></tr>
+<tr><td>Wrong mark saved</td><td>Open the same day and lecture, correct it and save again.</td></tr></table>
+</section>
+</main></div>
+<div id="zoom" role="dialog" aria-label="Picture"><img alt=""></div>
+<script>
+// tap a picture to see it big
+const z = document.getElementById('zoom');
+document.addEventListener('click', e => {
+  const im = e.target.closest('figure img');
+  if(im){ z.querySelector('img').src = im.src; z.style.display = 'flex'; return; }
+  if(e.target.closest('#zoom')) z.style.display = 'none';
+});
+// search: show only sections that contain the words
+document.getElementById('find').addEventListener('input', e => {
+  const q = e.target.value.trim().toLowerCase();
+  document.querySelectorAll('main section').forEach(s => { s.style.display = !q || s.textContent.toLowerCase().includes(q) ? '' : 'none'; });
+});
+</script>
+</body>
+</html>

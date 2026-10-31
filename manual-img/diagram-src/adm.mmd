@@ -1,0 +1,10 @@
+flowchart TD
+  F["Admissions page - New"] --> PS["Portal search by name<br/>adm_portal - Portal Data sheet"]
+  PS --> FF["Form filled<br/>program, section, subjects,<br/>roll no (next free in range)"]
+  FF --> CK["adm_check<br/>duplicates, seats, roll range"]
+  CK --> SV["adm_save"]
+  SV -->|"new"| A1["Append full row to<br/>Transform-ALL-COLLEGE-STRENGTH"]
+  SV -->|"edit"| A2["Write only changed cells"]
+  A1 & A2 --> LG["Admission Log<br/>(Users workbook)"]
+  FF -. "offline" .-> Q["Waiting tab (phone queue)<br/>sent when online"] --> SV
+  A1 --> CH["Check everything adds the<br/>new student to section sheets"]

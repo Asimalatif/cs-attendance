@@ -1,0 +1,10 @@
+flowchart TD
+  S["2nd year student opened<br/>st_board"] --> L{"Link saved in<br/>App Board Links?"}
+  L -- "yes" --> R1["Use that board Roll No"]
+  L -- "no" --> E{"Enroll# in<br/>boardResult1STYEAR?"}
+  E -- "yes" --> R2["Use its Roll No<br/>(marks / position from<br/>1styeardata2026)"]
+  E -- "no" --> N["Compare name + father name<br/>with 1styeardata2026<br/>(spelling tolerant)"]
+  N --> Q{"Score at least 86%,<br/>clear winner, own name<br/>and father really match?"}
+  Q -- "yes" --> R3["Found by name<br/>(Yes, this is her / Not her)"]
+  Q -- "no" --> R4["Show 5 closest records<br/>admin / CP choose"]
+  R3 & R4 -->|"choice"| SAVE["Saved in App Board Links"]

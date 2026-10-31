@@ -1,0 +1,30 @@
+flowchart LR
+  subgraph U["Users workbook (USERS_SS_ID)"]
+    u1["Users<br/>logins, roles, dept, CP"]
+    u2["Timetable<br/>who teaches what, periods"]
+    u3["NTT Settings<br/>timings, evening sections"]
+    u4["Transform-ALL-COLLEGE-STRENGTH<br/>every student (master list)"]
+    u5["Attendance Index<br/>summary of every daily sheet"]
+    u6["Portal Data / Admission Log /<br/>Left Students / Guests /<br/>Change History / Substitutions /<br/>Chief Proctor Reports /<br/>Student Codes / Student Results"]
+  end
+  subgraph D["Daily attendance workbooks (BOOK_IDS SEPT..JAN)"]
+    d1["SECTION MON SUBJECT sheets<br/>days G..AK, T.A, M.T"]
+    d2["Period Data (hidden)<br/>Deleted Attendance Log<br/>Student Remarks (Sept book only)"]
+  end
+  subgraph M["Monthly attendance workbooks (MA_BOOKS)"]
+    m1["section sheets<br/>T.L / A.L / % per subject"]
+    m2["ApprovedLeavesStore<br/>approved leaves"]
+  end
+  subgraph T["Monthly Test workbooks (MT_BOOKS)"]
+    t1["section sheets<br/>Total / Obtained Marks"]
+  end
+  subgraph G["Grand Test workbook (GT_CFG.BOOK_ID)"]
+    g1["section sheets"] --- g2["App Settings, Settings,<br/>WebApp Logs"]
+  end
+  subgraph X["Detention workbook (DT_CFG.BOOK_ID)"]
+    x1["section sheets<br/>THEORY / PRACTICAL / TOTAL"] --- x2["App Settings, Settings,<br/>WebApp Logs"]
+  end
+  subgraph P["Provisional Certificates (ST_CFG.BOARD_BOOK)"]
+    p1["boardResult1STYEAR<br/>1styeardata2026<br/>App Board Links"]
+  end
+  u4 ==> d1 & m1 & t1 & g1 & x1

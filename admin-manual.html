@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#6B3423">
+<title>JCW Admin Manual</title>
+<style>
+:root{--brown:#6B3423;--brown2:#8A4A35;--tea:#E7B7AE;--tea2:#F4D6D0;--tea3:#FBEDEA;--bg:#FBF3F1;--surface:#fff;--ink:#2B1912;--muted:#7C6159;--line:#E2C0B8;--code:#F7EDEA}
+@media(prefers-color-scheme:dark){:root{--bg:#1A110F;--surface:#271915;--ink:#F7E9E5;--muted:#C9A99F;--line:#4B3029;--tea3:#33211C;--tea2:#4A2E27;--brown:#E7B7AE;--brown2:#E7B7AE;--code:#33211C}}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:15.5px/1.6 "Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+  background-image:radial-gradient(900px 460px at 105% -8%,rgba(231,183,174,.55),transparent 62%)}
+a{color:var(--brown2)}
+header.top{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:12px;padding:10px 16px;background:linear-gradient(120deg,#4A2418,#8A4A35);color:#fff;box-shadow:0 6px 18px -10px rgba(74,36,24,.8)}
+header.top img{width:40px;height:40px;border-radius:50%;background:#fff;padding:3px;flex:none}
+header.top h1{margin:0;font-size:18px;line-height:1.2}header.top small{display:block;opacity:.85;font-weight:400;font-size:12.5px}
+header.top .sp{flex:1}header.top a{color:#fff;font-size:13.5px;font-weight:700;text-decoration:none;border:1px solid rgba(255,255,255,.5);border-radius:999px;padding:6px 12px;white-space:nowrap}
+.wrap{max-width:1240px;margin:0 auto;display:grid;grid-template-columns:260px minmax(0,1fr);gap:22px;padding:18px 16px 60px}
+nav.toc{position:sticky;top:76px;align-self:start;max-height:calc(100vh - 92px);overflow:auto;background:var(--surface);border:1.5px solid var(--line);border-top:5px solid var(--brown);border-radius:18px;padding:12px}
+nav.toc a{display:block;padding:5px 8px;border-radius:8px;text-decoration:none;color:var(--ink);font-size:14px}nav.toc a:hover{background:var(--tea3)}
+nav.toc .grp{margin:10px 0 4px;font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+main section{background:var(--surface);border:1.5px solid var(--line);border-top:5px solid var(--c,var(--brown));border-radius:20px;padding:20px 22px;margin-bottom:22px;box-shadow:0 10px 24px -16px rgba(107,52,35,.45);scroll-margin-top:80px}
+main section:nth-of-type(6n+2){--c:#C2766A}main section:nth-of-type(6n+3){--c:#A86A52}main section:nth-of-type(6n+4){--c:#9C4F5E}main section:nth-of-type(6n+5){--c:#B88645}main section:nth-of-type(6n){--c:#7D5A4F}
+h2{margin:0 0 8px;font-size:22px;color:var(--brown)}h3{margin:18px 0 6px;font-size:17px}
+.dg{background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:12px;margin:12px 0;text-align:center;overflow:auto}
+.dg img{max-width:100%;height:auto}
+.dg figcaption{font-size:13px;color:#7C6159;margin-top:6px}
+table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}th{background:var(--tea3)}
+td code,p code,li code{background:var(--code);padding:1px 6px;border-radius:5px;font-size:13px;word-break:break-word}
+pre{background:#2B1912;color:#F7E9E5;padding:12px 14px;border-radius:12px;overflow:auto;font-size:13px;line-height:1.5}
+.note,.warn,.tip{border-radius:12px;padding:10px 14px;margin:12px 0;font-size:14.5px}
+.note{background:var(--tea3);border-left:5px solid var(--brown2)}.warn{background:#FCEBE8;border-left:5px solid #C0392B}.tip{background:#E8F5EE;border-left:5px solid #0E8A5F}
+@media(prefers-color-scheme:dark){.warn{background:#3A1C1F}.tip{background:#12302A}}
+ol.check{list-style:none;padding:0}ol.check li{padding:5px 0 5px 32px;position:relative}ol.check li::before{content:"☐";position:absolute;left:4px;top:3px;font-size:18px;color:var(--brown2)}
+.tag{display:inline-block;font-size:11.5px;font-weight:800;padding:1px 8px;border-radius:999px;background:var(--tea2);color:var(--brown)}
+@media(max-width:900px){.wrap{grid-template-columns:minmax(0,1fr)}main,nav.toc{min-width:0}table{display:block;overflow-x:auto}nav.toc{position:static;max-height:none}}
+@media print{header.top,nav.toc{display:none}.wrap{display:block;padding:0}main section{box-shadow:none}}
+</style>
+</head>
+<body>
+<header class="top"><img src="jcw-logo.png" alt=""><h1>JCW Admin &amp; Developer Manual<small>How the system works inside: modules, data flow, where every piece of data is saved, how to change it</small></h1><span class="sp"></span><a href="manual.html">User manual</a><a href="./">App</a></header>
+<div class="wrap">
+<nav class="toc" aria-label="Contents">
+<div class="grp">Understand</div>
+<a href="#big">1. The big picture</a><a href="#data">2. Where data is saved</a><a href="#roles">3. Users and roles</a><a href="#server">4. Server files and actions</a>
+<div class="grp">Module flows</div>
+<a href="#flow-sync">5. Sign in and sync</a><a href="#flow-save">6. Saving attendance</a><a href="#flow-exams">7. Tests and exams</a><a href="#flow-adm">8. Admissions</a><a href="#flow-check">9. Check everything</a><a href="#flow-reports">10. Reports</a><a href="#flow-search">11. Student search and board result</a><a href="#leaves">12. Approved leaves</a>
+<div class="grp">Change and extend</div>
+<a href="#app">13. The app (phone side)</a><a href="#settings">14. Settings reference</a><a href="#session">15. New session / month checklist</a><a href="#deploy">16. Deploying a change</a><a href="#extend">17. Adding a new feature</a><a href="#trouble">18. Troubleshooting</a>
+</nav>
+<main>
+
+<section id="big"><h2>1. The big picture</h2>
+<p>The system has three parts. Teachers use an <b>app</b> (a web page that installs on the phone and works offline). The app sends every request to <b>one Google Apps Script web app</b>. The web app reads and writes <b>Google Sheets workbooks</b>, which are the real records.</p>
+<figure class="dg"><img src="manual-img/dg-arch.svg" alt="Architecture diagram"><figcaption>Phone → Apps Script web app → workbooks</figcaption></figure>
+<table><tr><th>Part</th><th>Where it lives</th><th>What it does</th></tr>
+<tr><td>App (front end)</td><td>GitHub repository <code>Asimalatif/cs-attendance</code>, published by GitHub Pages at <code>asimalatif.github.io/cs-attendance</code></td><td><code>index.html</code> (main app), <code>admission.html</code>, <code>grandtest.html</code>, <code>detention.html</code>, <code>student.html</code>, <code>sw.js</code> (offline), <code>manifest.json</code>, these manuals.</td></tr>
+<tr><td>Server (back end)</td><td>One Apps Script project, deployed as a <b>Web app</b> (Execute as: me, Who has access: Anyone). Its URL is <code>API</code> in <code>index.html</code>.</td><td>Checks the login, then runs the action asked for: read a sheet, save marks, make a PDF, check rosters …</td></tr>
+<tr><td>Data</td><td>Google Sheets workbooks in the college Drive</td><td>Everything permanent: students, timetable, attendance, marks, logs.</td></tr></table>
+<div class="note">Every request is a JSON <code>POST</code>: <code>{ action, username, token, … }</code>. The answer is JSON: <code>{ ok:true, … }</code> or <code>{ ok:false, error:'…' }</code>. Nothing is stored on the server itself except a short cache (CacheService) and a few Script Properties.</div>
+</section>
+
+<section id="data"><h2>2. Where data is saved</h2>
+<figure class="dg"><img src="manual-img/dg-datamap.svg" alt="Data map"><figcaption>Workbooks and their sheets. Transform-ALL-COLLEGE-STRENGTH is the master list every other workbook is checked against.</figcaption></figure>
+<table>
+<tr><th>Workbook (setting in the code)</th><th>Sheet</th><th>What is in it</th><th>Written by</th></tr>
+<tr><td rowspan="12"><b>Users workbook</b><br><code>USERS_SS_ID</code> = 1ARU8zMO2daJUfU_SIIo4baeSOG7qBPuni5TYRIRLBNY</td><td>Users</td><td>Name, username (col E), password, role (ADMIN / PRINCIPAL / HOD), department, Chief Proctor column (CP, CP1 …), phone</td><td>You, by hand. Password change from the app.</td></tr>
+<tr><td>Timetable</td><td>Class / program / section, subject, teacher, period, theory days, practical days, room. Decides which sheets a teacher may mark.</td><td>Timetable editor web app</td></tr>
+<tr><td>NTT Settings</td><td>Period timings, evening sections</td><td>Timetable editor → Settings</td></tr>
+<tr><td>Transform-ALL-COLLEGE-STRENGTH</td><td><b>Master student list</b>: Enroll#, name, father, PCS (section), Sub1–Sub7, quota, DOB, matric, photo, status …</td><td>Admissions page (<code>adm_save</code>), you</td></tr>
+<tr><td>Attendance Index</td><td>One row per daily attendance sheet: held, attended, %, low students, student data (JSON). Feeds the College overview and daily-app reports.</td><td><code>indexUpdate_</code> after every save; <code>rebuildAttendanceIndex()</code></td></tr>
+<tr><td>Portal Data</td><td>UOP portal student data, for the admissions name search</td><td>Portal sync script</td></tr>
+<tr><td>Admission Log</td><td>Every admission and change: who, when, before, after</td><td><code>adm_save</code></td></tr>
+<tr><td>Left Students</td><td>Students moved out (left college)</td><td>College → Left students</td></tr>
+<tr><td>Guests</td><td>Guest students (student of section X attending in Y)</td><td>Guest add / remove</td></tr>
+<tr><td>Change History</td><td>Every changed attendance mark: who, sheet, day, before, after</td><td><code>auditAdd_</code> on save</td></tr>
+<tr><td>Chief Proctor Reports</td><td>Discipline reports from teachers, status</td><td>Report to Chief Proctor</td></tr>
+<tr><td>Substitutions, Student Codes, Student Results</td><td>Substitution duties; student result codes</td><td>Free teachers / results tools</td></tr>
+<tr><td rowspan="4"><b>Daily attendance</b> (one per month)<br><code>BOOK_IDS</code> SEPT … JAN in Code.gs</td><td><code>SECTION MON SUBJECT</code><br>e.g. <i>FCS-1 D2 OCT COMPUTER SCIENCE</i></td><td>Row 3 headers, students from row 4; Roll No, name; day columns G…AK (1–31), T.A (attended, col AL), M.T (monthly test, col AM). Notes on the Roll No cell: <code>LEFT SUBJECT</code>, <code>LEFT COLLEGE</code>, <code>GUEST|home</code>. Day notes on the date header.</td><td>Attendance save (<code>saveRecords_</code>); sheet created by itself if missing (<code>ensureSheet_</code>)</td></tr>
+<tr><td>Period Data (hidden)</td><td>The mark of every lecture when a day has more than one</td><td>Save</td></tr>
+<tr><td>Deleted Attendance Log</td><td>Deleted days / lectures</td><td>Delete attendance</td></tr>
+<tr><td>Student Remarks (September book only)</td><td>Teachers' private tags and comments</td><td>Tags &amp; comments</td></tr>
+<tr><td rowspan="2"><b>Monthly attendance</b> (one per month)<br><code>MA_BOOKS</code> in MonthlyBooks.gs (and <code>LL_STORES</code> in Leavelink.gs)</td><td>Section sheets</td><td>Per subject: Total Lectures (T.L), Attended (A.L), %. Filled by the teachers (current system).</td><td>Teachers by hand; Check everything adds/strikes students</td></tr>
+<tr><td>ApprovedLeavesStore</td><td>Enroll#, Approved Leaves (number), leave dates (col K)</td><td>Leave in-charge</td></tr>
+<tr><td><b>Monthly Test</b><br><code>MT_BOOKS</code> in MonthlyBooks.gs; if an ID is empty, the file named <i>"September - MONTHLY TEST"</i> is found in Drive</td><td>Section sheets</td><td>Per subject: Total Marks, Obtained Marks</td><td>App monthly test (<code>mtToBook_</code>), old portal, WebApp Logs</td></tr>
+<tr><td><b>Grand Test</b><br><code>GT_CFG.BOOK_ID</code> in GrandTest.gs</td><td>Section sheets · App Settings · Settings · WebApp Logs</td><td>Marks per subject · Opens and Total marks · deadline (cell B2) · every change (before/after)</td><td><code>gt_save</code>, <code>gt_settings</code></td></tr>
+<tr><td><b>Detention</b><br><code>DT_CFG.BOOK_ID</code> in Detention.gs</td><td>Section sheets · App Settings · Settings · WebApp Logs · Pak culture Ethics</td><td>THEORY / PRACTICAL / TOTAL per subject, TOTAL (600), %, position · settings · log</td><td><code>dt_save</code>, <code>dt_settings</code></td></tr>
+<tr><td><b>Provisional Certificates</b><br><code>ST_CFG.BOARD_BOOK</code> in StudentSearch.gs</td><td>boardResult1STYEAR · 1styeardata2026 · App Board Links</td><td>Board result by Enroll# · board's 1st-year list (Roll No, Name, Father, Registration #, Marks, Grade, Position) · links confirmed in the app</td><td>You · board · <code>st_board_link</code></td></tr>
+<tr><td><b>Admissions settings</b><br><code>ADM_CFG.SETTINGS_BOOK_ID</code></td><td>Quota Settings · Program Sections</td><td>Seats per program/quota, sections — read only</td><td>You</td></tr>
+</table>
+<div class="warn">Do not rename sheets or move header rows. The code finds sheets by name (e.g. <i>Transform-ALL-COLLEGE-STRENGTH</i>, <i>App Settings</i>) and finds columns by header text (Enroll#, Total Marks, THEORY …). Adding columns at the end is safe.</div>
+</section>
+
+<section id="roles"><h2>3. Users and roles</h2>
+<table><tr><th>Who</th><th>Decided by</th><th>Can</th></tr>
+<tr><td>Teacher</td><td>A row in <i>Users</i> + her classes in <i>Timetable</i></td><td>Mark / change her own sheets, tests, grand test, detention of her subjects; reports of her subjects; student search (any student, without contact/email/address)</td></tr>
+<tr><td>HOD</td><td>Role <code>HOD</code> + department</td><td>As teacher + department overview and reports, free teachers</td></tr>
+<tr><td>Principal</td><td>Role <code>PRINCIPAL</code> (or ADMIN)</td><td>Whole college overview and reports, full student search</td></tr>
+<tr><td>Chief Proctor</td><td><i>Chief Proctor</i> column CP / CP1 / CP2 …</td><td>Receives discipline reports, free teachers, full student search, confirm board links</td></tr>
+<tr><td>Admin</td><td><code>ADMIN_USER</code> = jcw@uop.edu.pk in Code.gs</td><td>Everything: Check everything, admissions, grand test / detention settings, left students, month sheets</td></tr></table>
+<p>Login: the app sends username + password once and receives a <b>token</b> (valid 120 days). Changing a user's password in the Users sheet ends her token at once — use this if a phone is lost.</p>
+</section>
+
+<section id="server"><h2>4. Server files and actions</h2>
+<p>All files are in <b>one</b> Apps Script project and share one global namespace. <code>doPost</code> in Code.gs checks the login and sends module actions to their file by <b>prefix</b>:</p>
+<pre>if (!user) return json_({ ok: false, error: 'BAD_LOGIN' });
+if (/^adm_/.test(String(req.action || ''))) return json_(admRoute_(user, req));
+if (/^gt_/.test(String(req.action || '')))  return json_(gtRoute_(user, req));
+if (/^bk_/.test(String(req.action || '')))  return json_(bkRoute_(user, req));
+if (/^dt_/.test(String(req.action || '')))  return json_(dtRoute_(user, req));
+if (/^wr_/.test(String(req.action || '')))  return json_(wrRoute_(user, req));
+if (/^st_/.test(String(req.action || '')))  return json_(stRoute_(user, req));</pre>
+<table><tr><th>File</th><th>Purpose</th><th>Actions</th></tr>
+<tr><td>Code.gs</td><td>Login, attendance sheets, save, delete, guests, remarks, Chief Proctor reports, overview, reports data, registers, timetable, contacts, substitutions, health, left students, roster check/fix</td><td>login, sheets, whoami, sheet, save, delete_day, pdf, password, overview, overview_low, report_data, reg_opts, reg_find, reg_plan, reg_days, tt_all, contacts, report_save, reports_mine, report_delete, guest_search, guest_add, guest_remove, remarks_get, remarks_save, history, sub_list, sub_save, sub_delete, health, health_fix, sheets_status, left_preview, left_move, left_list, left_restore, roster_check, roster_fix, codes, results_info, portal_import, portal_key, portal_info, student_days, student_report …</td></tr>
+<tr><td>Admissions.gs <span class="tag">adm_</span></td><td>New admissions and edits straight into the strength sheet</td><td>adm_init, adm_index, adm_next_roll, adm_portal, adm_check, adm_save</td></tr>
+<tr><td>GrandTest.gs <span class="tag">gt_</span></td><td>Grand test entry, window, settings, award list, progress</td><td>gt_list, gt_get, gt_save, gt_pdf, gt_progress, gt_window, gt_settings</td></tr>
+<tr><td>MonthlyBooks.gs <span class="tag">bk_</span></td><td>Monthly test workbook link (read/write), Check everything for monthly attendance, monthly test, grand test, detention</td><td>bk_list, bk_check, bk_fix, bk_batch · helpers <code>mtFromBook_</code>, <code>mtToBook_</code>, <code>mtCheckBooks()</code></td></tr>
+<tr><td>Detention.gs <span class="tag">dt_</span></td><td>Detention entry with theory/practical scheme, window, settings</td><td>dt_list, dt_get, dt_save, dt_pdf, dt_progress, dt_window, dt_settings</td></tr>
+<tr><td>WorkbookReports.gs <span class="tag">wr_</span></td><td>Official sheet PDFs, toppers marks, 100% attendance, monthly attendance as report rows</td><td>wr_sections, wr_pdf, wr_marks, wr_fathers, wr_hundred, wr_rows</td></tr>
+<tr><td>StudentSearch.gs <span class="tag">st_</span></td><td>Student search, full record, board result matching</td><td>st_find, st_profile, st_month, st_tests, st_board, st_board_link</td></tr>
+<tr><td>Leavelink.gs</td><td>Approved leaves with dates → students marked L on those days</td><td>(used inside the <code>sheet</code> answer: <code>lv</code>)</td></tr></table>
+<div class="note">Functions you run by hand from the editor: <code>rebuildAttendanceIndex()</code> (fills the Attendance Index; continues by itself), <code>mtCheckBooks()</code> (logs which Monthly Test workbook each month uses).</div>
+</section>
+
+<section id="flow-sync"><h2>5. Sign in and sync</h2>
+<figure class="dg"><img src="manual-img/dg-sync.svg" alt="Sync flow"><figcaption>Work is never lost: it waits in the phone queue until the server confirms it.</figcaption></figure>
+<p>The phone keeps the teacher's sheets (<code>csa2_data</code>) and a queue of unsent records (<code>csa2_queue</code>). The queue is sent when the app opens, every time internet returns and after each save. A record leaves the queue only when the server answers with its id in <code>saved</code>.</p>
+</section>
+
+<section id="flow-save"><h2>6. Saving attendance</h2>
+<figure class="dg"><img src="manual-img/dg-save.svg" alt="Save flow"><figcaption>What happens on the server when a teacher presses Save</figcaption></figure>
+<ul><li>A teacher can only write sheets of her own classes (from the Timetable). Admin writes any.</li>
+<li>If the month's sheet does not exist yet, it is created with the students of that section and subject.</li>
+<li><b>LockService</b> makes saves wait for each other, so two teachers never overwrite each other.</li>
+<li>Only P counts as attended; a lecture counts as held when at least one student is P or A.</li></ul>
+</section>
+
+<section id="flow-exams"><h2>7. Tests and exams</h2>
+<figure class="dg"><img src="manual-img/dg-exams.svg" alt="Exams flow"><figcaption>Monthly test, grand test and detention</figcaption></figure>
+<table><tr><th></th><th>Monthly test</th><th>Grand test</th><th>Detention</th></tr>
+<tr><td>Opens</td><td>Always</td><td>App Settings → Opens (default 1 Jan)</td><td>App Settings → Opens (default 1 Feb)</td></tr>
+<tr><td>Closes</td><td>—</td><td>Settings!B2 deadline</td><td>Settings deadline</td></tr>
+<tr><td>Total</td><td>Teacher enters</td><td>Admin, whole college (default 40)</td><td>Scheme in <code>DT_CFG.SCHEME</code></td></tr>
+<tr><td>Entries</td><td>number or A</td><td>number, A or L; all required</td><td>theory + practical, A or L; total computed</td></tr>
+<tr><td>Written to</td><td>Daily sheet M.T column + Monthly Test workbook</td><td>Grand Test workbook + WebApp Logs</td><td>Detention workbook + WebApp Logs</td></tr></table>
+</section>
+
+<section id="flow-adm"><h2>8. Admissions</h2>
+<figure class="dg"><img src="manual-img/dg-adm.svg" alt="Admissions flow"><figcaption>Admissions write straight into the strength sheet</figcaption></figure>
+<p>Roll numbers come from <code>ADM_CFG.ROLL_RANGES</code> per program (next free number); 2nd-year migrations use <code>ADM_CFG.MIGRATION</code>. Seats come from the read-only admissions workbook. Each save is checked again on the server (<code>adm_check</code>) and has a client id, so a save repeated after a lost connection is not added twice.</p>
+</section>
+
+<section id="flow-check"><h2>9. Check everything (sheets vs strength)</h2>
+<figure class="dg"><img src="manual-img/dg-check.svg" alt="Check flow"><figcaption>Every workbook compared with Transform-ALL-COLLEGE-STRENGTH</figcaption></figure>
+<p>A section sheet should contain every student whose PCS is that section ("F.A-1 Optional Subjects" = everyone of F.A-1). <b>Missing</b> students are appended with the format and formulas of the row above. <b>Extra</b> students are struck through if they have any marks, else their row is deleted. Daily books use <code>rosterCheck_ / rosterFix_</code> (Code.gs), the others <code>bk_check / bk_fix / bk_batch</code> (MonthlyBooks.gs). The workbook list is cached 30 minutes.</p>
+</section>
+
+<section id="flow-reports"><h2>10. Reports</h2>
+<figure class="dg"><img src="manual-img/dg-reports.svg" alt="Reports flow"><figcaption>Attendance source switch, official PDFs and toppers</figcaption></figure>
+<ul><li><b>Attendance reports</b> (attendance, shortage, early warning, 100%) are built on the phone from rows <code>{cls, sub, teacher, mon, mt, st:[[roll, name, attended, held, test, off, guest]]}</code>. Rows come from the monthly workbooks (<code>wr_rows</code>, cached 30 min) and/or the daily Attendance Index (<code>report_data</code>). With <i>Monthly + daily</i>, for each section + subject + month the monthly row wins when it has lectures.</li>
+<li><b>Official sheet PDFs</b> are made on the server (<code>wr_pdf</code>) with HtmlService → PDF, in the old portals' layout.</li>
+<li><b>Toppers</b>: <code>wr_marks</code> reads every section sheet of the exam once (cached 20 min); ranking, shifts and the PDF are done on the phone. Evening sections come from NTT Settings.</li></ul>
+</section>
+
+<section id="flow-search"><h2>11. Student search and board result</h2>
+<p><code>st_find</code> searches the strength sheet. <code>st_profile</code> returns the strength-sheet row (columns matching <code>ST_CFG.PRIVATE</code> — contact, mobile, phone, email, address — only for admin, principal and Chief Proctor). <code>st_month</code> reads her section sheet (+ optional sheet) in the monthly attendance workbook, her approved leaves, and her rows in the daily sheets for the calendar. <code>st_tests</code> reads the monthly test, grand test and detention workbooks.</p>
+<figure class="dg"><img src="manual-img/dg-board.svg" alt="Board matching"><figcaption>How the 1st-year board record is found (2nd-year students)</figcaption></figure>
+<p>Name matching smooths spellings (Muhammad/Mohd, double letters, ee/i, oo/u, titles), compares every word with Jaro-Winkler similarity, weighs student name 60% and father 40%, and accepts only a clear match whose own (non-family, non-common) name words and father's words really match. Positions 1–20 of the Position column are shown as Distinction (<code>ST_CFG.DISTINCTION</code>).</p>
+</section>
+
+<section id="leaves"><h2>12. Approved leaves</h2>
+<p>The leave in-charge enters approved leaves in <b>ApprovedLeavesStore</b> of each monthly workbook. Leavelink.gs reads the leave dates (column K, e.g. <i>10-Oct-2026 to 12-Oct-2026</i>) and sends them with each sheet (<code>lv</code>), so the app pre-marks those students <b>L</b> (cached 5 minutes). The number of approved leaves is added to the overall % in shortage reports and the student record.</p>
+</section>
+
+<section id="app"><h2>13. The app (phone side)</h2>
+<table><tr><th>File</th><th>Contents</th></tr>
+<tr><td>index.html</td><td>The whole main app in one file: styles (the JCW theme block is last), the API address <code>API</code>, <code>APP_BUILD</code> (version text), screens (Home, Attendance, Reports, College, Profile, Search, Free teachers, Contacts), the PDF tools (<code>window.JCWPDF</code>, jsPDF from cdnjs), the in-app help, the registers add-on.</td></tr>
+<tr><td>admission.html, grandtest.html, detention.html, student.html</td><td>Separate pages sharing the login (<code>csa2_user</code>, <code>csa2_pass</code> in localStorage).</td></tr>
+<tr><td>sw.js</td><td>Service worker: keeps the pages offline. <code>VERSION</code> must change on every release so phones update.</td></tr>
+<tr><td>manifest.json, icon-*.png, jcw-logo.png</td><td>Install name, colours, icons, logo.</td></tr>
+<tr><td>manual.html, admin-manual.html, manual-img/</td><td>These manuals and their screenshots and diagrams.</td></tr></table>
+<h3>What the phone stores</h3>
+<table><tr><th>Key (localStorage, prefix <code>csa2_</code>)</th><th>Meaning</th></tr>
+<tr><td>user, pass (token), teacher, admin, scope, isCP</td><td>Who is signed in and her rights</td></tr>
+<tr><td>sheets, data</td><td>Her sheet list and the downloaded sheets (offline)</td></tr>
+<tr><td>queue</td><td><b>Unsent records</b> — never clear while not empty</td></tr>
+<tr><td>tt2, ttAll, ov</td><td>Timetable, college timetable, college overview (cached)</td></tr>
+<tr><td>remarks, rq, myrep</td><td>Tags/comments, reports waiting, my reports</td></tr>
+<tr><td>attSrc, tp, wr, exTab, tsize, aFold …</td><td>Screen choices (attendance source, report choices, tab, text size, folded list)</td></tr></table>
+<p>IndexedDB: <code>jcw-wr</code> (last 8 official PDFs), admission index. Caches: the service worker's <code>csa-vNN</code> and <code>jcw-pdf-tools-v1</code>.</p>
+</section>
+
+<section id="settings"><h2>14. Settings reference</h2>
+<table><tr><th>Setting</th><th>File</th><th>Meaning</th></tr>
+<tr><td><code>BOOK_IDS</code></td><td>Code.gs</td><td>Daily attendance workbook of each month</td></tr>
+<tr><td><code>USERS_SS_ID</code>, <code>ADMIN_USER</code></td><td>Code.gs</td><td>Users workbook; the admin login</td></tr>
+<tr><td><code>HEADER_ROW</code> 3, <code>FIRST_ROW</code> 4, <code>DAY_COL1</code> 7 (G), T.A = AL, M.T = AM</td><td>Code.gs</td><td>Daily sheet layout</td></tr>
+<tr><td><code>LOW_PCT</code> 73</td><td>Code.gs (and <code>LOW</code> in index.html)</td><td>Shortage limit</td></tr>
+<tr><td><code>MA_BOOKS</code>, <code>MT_BOOKS</code></td><td>MonthlyBooks.gs</td><td>Monthly attendance and Monthly Test workbooks</td></tr>
+<tr><td><code>LL_STORES</code></td><td>Leavelink.gs</td><td>Workbooks with ApprovedLeavesStore (same as MA_BOOKS)</td></tr>
+<tr><td><code>GT_CFG</code> (BOOK_ID, DEFAULT_TOTAL 40)</td><td>GrandTest.gs</td><td>Grand Test workbook and default total</td></tr>
+<tr><td><code>DT_CFG</code> (BOOK_ID, SCHEME, DEFAULT_SCHEME, PASS, OPENS_MONTH, ALIASES)</td><td>Detention.gs</td><td>Detention workbook, marks per subject [theory, practical]</td></tr>
+<tr><td><code>ADM_CFG</code> (BOOK_ID, SETTINGS_BOOK_ID, PROGRAMS, ROLL_RANGES, MIGRATION, POOLS)</td><td>Admissions.gs</td><td>Admissions rules and roll number ranges</td></tr>
+<tr><td><code>WR_CFG</code> (THRESHOLD, DT_FAIL 0.4)</td><td>WorkbookReports.gs</td><td>Shortage limit of official PDFs (0 = app's 73), detention red line</td></tr>
+<tr><td><code>ST_CFG</code> (PRIVATE, BOARD_BOOK, BOARD_BY_ENROLL, BOARD_LIST, BOARD_TOTAL 600, DISTINCTION 20, MATCH_MIN, LABELS)</td><td>StudentSearch.gs</td><td>Hidden fields for teachers, board workbook and sheets, matching strictness</td></tr>
+<tr><td><code>API</code>, <code>APP_BUILD</code>, <code>LOW</code></td><td>index.html</td><td>Server address, version text, shortage limit</td></tr>
+<tr><td><code>VERSION</code></td><td>sw.js</td><td>Offline cache version — change on every release</td></tr></table>
+</section>
+
+<section id="session"><h2>15. New session / month checklist</h2>
+<h3>Before a new session (August)</h3>
+<ol class="check">
+<li>Make the new daily attendance workbooks (Sep–Jan) and put their IDs in <code>BOOK_IDS</code> (Code.gs).</li>
+<li>Monthly attendance workbooks → <code>MA_BOOKS</code> (MonthlyBooks.gs) and <code>LL_STORES</code> (Leavelink.gs).</li>
+<li>Monthly Test workbooks → <code>MT_BOOKS</code>, or leave empty and name them "<i>September - MONTHLY TEST</i>" …; then run <code>mtCheckBooks()</code>.</li>
+<li>New Grand Test and Detention workbooks → <code>GT_CFG.BOOK_ID</code>, <code>DT_CFG.BOOK_ID</code>.</li>
+<li>Board results: new sheet names in <code>ST_CFG.BOARD_LIST</code> (e.g. 1styeardata2027) and the workbook in <code>ST_CFG.BOARD_BOOK</code>.</li>
+<li>Admissions: <code>ADM_CFG.ROLL_RANGES</code>, <code>MIGRATION</code> and the session/batch.</li>
+<li>Update the Timetable and NTT Settings; check the Users sheet (new teachers, roles, CP).</li>
+<li>Deploy a new version (section 16). Run <code>rebuildAttendanceIndex()</code> once if the daily books already have data.</li></ol>
+<h3>Every month</h3>
+<ol class="check"><li>College → <b>Month sheets</b>: check next month's sheets exist.</li><li>After admissions or section changes: <b>Check everything</b> → Fix.</li><li>Grand test (January) and detention (February): set Opens, Total and Deadline in their Settings tab.</li></ol>
+</section>
+
+<section id="deploy"><h2>16. Deploying a change</h2>
+<h3>Server (Apps Script)</h3>
+<ol class="check"><li>Edit or paste the file in the Apps Script editor and <b>Save</b>.</li><li><b>Deploy → Manage deployments → Edit (pencil) → Version: New version → Deploy</b>. Keep the same deployment so the URL does not change.</li><li>If Google asks for new permissions (e.g. Drive), allow them.</li><li>Test once from the app (sign in as admin).</li></ol>
+<div class="warn">"New deployment" makes a <b>new URL</b>; the app would keep calling the old one. Always edit the existing deployment.</div>
+<h3>App (GitHub)</h3>
+<ol class="check"><li>Change the file in the repository (a pull request into <code>main</code>).</li><li>Change <code>APP_BUILD</code> in index.html and <code>VERSION</code> in sw.js.</li><li>GitHub Pages publishes in about a minute; phones update themselves the next time the app opens with internet (or ⋯ → Check for update).</li></ol>
+</section>
+
+<section id="extend"><h2>17. Adding a new feature</h2>
+<p>Follow the same pattern as the modules: one new server file with its own prefix, one router line, and a card or page in the app.</p>
+<pre>/* NewThing.gs — server */
+var NT_CFG = { BOOK_ID: '...' };
+function ntRoute_(user, req) {
+  try {
+    switch (String(req.action || '')) {
+      case 'nt_list': return ntList_(user, req);
+      case 'nt_save': return ntSave_(user, req);
+    }
+    return { ok: false, error: 'UNKNOWN_ACTION' };
+  } catch (e) { return { ok: false, error: String(e.message || e) }; }
+}
+// doPost, under the other module lines:
+// if (/^nt_/.test(String(req.action || ''))) return json_(ntRoute_(user, req));</pre>
+<pre>// index.html — app
+const r = await api({ action:'nt_list' }, 60000);
+if(!r.ok) throw new Error(r.error);</pre>
+<ul><li>Check rights with the existing helpers: <code>isAdmin_(user)</code>, <code>scopeOf_(user)</code>, <code>getAssignments_(user)</code>, <code>isCP_(user)</code>.</li>
+<li>Read students with <code>getMaster_()</code> (rows: Enroll#, name, section, subjects, father). Find a section sheet with <code>gtFindSheet_(book, cls)</code>.</li>
+<li>Use <code>LockService</code> when writing, write whole ranges with <code>setValues</code>, and log changes like WebApp Logs.</li>
+<li>Cache heavy reads with <code>wrCachePut_ / wrCacheGet_</code> (chunked, up to ~6 h).</li>
+<li>Use names not used by another file: every file shares one namespace.</li></ul>
+</section>
+
+<section id="trouble"><h2>18. Troubleshooting</h2>
+<table><tr><th>Symptom</th><th>Cause and fix</th></tr>
+<tr><td>App says "The server is not updated yet (X)" / UNKNOWN_ACTION</td><td>The module file or its router line is missing, or a new version was not deployed.</td></tr>
+<tr><td>"Server sent a web page instead of data"</td><td>Deployment access is not "Anyone", or <code>API</code> points to an old deployment.</td></tr>
+<tr><td>Reports show only a few sections / no September</td><td>Attendance source: daily app data is sparse; use <i>Monthly + daily</i>. For daily data run <code>rebuildAttendanceIndex()</code>.</td></tr>
+<tr><td>A student is not in a teacher's list</td><td>PCS / Sub1–7 in the strength sheet, or the section sheet is not updated → Check everything.</td></tr>
+<tr><td>Monthly test marks not shown</td><td>Wrong Monthly Test workbook → run <code>mtCheckBooks()</code>, fix <code>MT_BOOKS</code>.</td></tr>
+<tr><td>Board result position missing</td><td>Old cache: the key in <code>stBoardData_</code> changes when its layout changes; or the sheet names differ from <code>ST_CFG</code>.</td></tr>
+<tr><td>"Exceeded maximum execution time"</td><td>Apps Script stops after 6 minutes; checks and fixes work in rounds — run again.</td></tr>
+<tr><td>Phones show an old version</td><td><code>VERSION</code> in sw.js was not changed; or the phone has been offline.</td></tr></table>
+</section>
+</main></div>
+</body>
+</html>
