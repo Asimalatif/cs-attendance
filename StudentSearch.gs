@@ -26,7 +26,7 @@ var ST_CFG = {
   BOARD_LINKS: 'App Board Links',            // choices confirmed in the app (made by itself)
   MATCH_MIN: 0.86, MATCH_GAP: 0.03,
   BOARD_TOTAL: 600,                         // total marks of the 1st year board exam
-  DISTINCTION: 20,                          // college positions 1-20 of the 1st year board result are distinctions
+  DISTINCTION: 20,                          // Peshawar Board positions 1-20 of the 1st year result (Position column) are distinctions
   // strength-sheet columns that are about MATRIC: shown with a clear name
   LABELS: { PERCENTAGE: 'Matric percentage', OBTAINEDMARKS: 'Matric obtained marks', TOTALMARKS: 'Matric total marks', BOARD: 'Matric board',
             PASSINGYEAR: 'Matric passing year', METRICROLLNO: 'Matric Roll No', MATRICROLLNO: 'Matric Roll No' }
@@ -272,7 +272,7 @@ function stTests_(user, roll) {
 function stBoardPct_(m) { var n = Number(gtS_(m)); return n > 0 ? String(Math.round(n / ST_CFG.BOARD_TOTAL * 1000) / 10) : ''; }
 function stIsSecond_(cls) { var u = gtS_(cls).toUpperCase().replace(/\s+/g, ''); return /^(FCS|PRE-?ENG|F\.?A)-?2/.test(u) || /^[A-Z]2$/.test(u); }
 function stBoardData_() {
-  var c = wrCacheGet_('st_board_v2'); if (c) return c;
+  var c = wrCacheGet_('st_board_v3'); if (c && (!c.list.length || c.list[0].length >= 7)) return c;   // an old copy without Position is read again
   var book = SpreadsheetApp.openById(ST_CFG.BOARD_BOOK), out = { enr: {}, list: [], links: {} };
   var col = function (head, names) { var h = head.map(gtK_); for (var i = 0; i < names.length; i++) { var x = h.indexOf(gtK_(names[i])); if (x >= 0) return x; } return -1; };
   var sh = book.getSheetByName(ST_CFG.BOARD_LIST);
@@ -289,7 +289,7 @@ function stBoardData_() {
   }
   sh = book.getSheetByName(ST_CFG.BOARD_LINKS);
   if (sh && sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 2).getDisplayValues().forEach(function (r) { if (r[0] && r[1]) out.links[gtK_(r[0])] = gtS_(r[1]); });
-  wrCachePut_('st_board_v2', out, 21600);
+  wrCachePut_('st_board_v3', out, 21600);
   return out;
 }
 /* ---- spelling-tolerant name comparison ---- */
@@ -356,7 +356,7 @@ function stBoardLink_(user, roll, board) {
   if (lr > 1) sh.getRange(2, 1, lr - 1, 1).getDisplayValues().forEach(function (r, i) { if (!row && gtK_(r[0]) === gtK_(roll)) row = i + 2; });
   var vals = [[gtS_(m[0]), gtS_(board), gtS_(m[1]), user.username || '', new Date()]];
   if (row) sh.getRange(row, 1, 1, 5).setValues(vals); else sh.getRange(lr + 1, 1, 1, 5).setValues(vals);
-  CacheService.getScriptCache().remove('st_board_v2_n');
+  CacheService.getScriptCache().remove('st_board_v3_n');
   return stBoard_(user, roll);
 }
 

@@ -3925,7 +3925,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-31 v7.8.3 college logo on student record';
+const APP_BUILD = '2026-10-31 v7.8.4 board position';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4913,7 +4913,7 @@ function renderSearch(){
   h += `<div class="acts2" style="margin:0 0 10px"><button class="btn" type="button" id="ssBack">${I.back}Results</button><button class="btn primary" type="button" id="ssPdf" ${P0 && !P0.error ? '' : 'disabled'}>${I.share}Share PDF</button></div>`;
   h += '<div id="ssRec">';
   h += `<section class="hero"><div class="phead grow"><img class="ssph sslogo" src="jcw-logo.png" alt="Jinnah College for Women" onerror="this.outerHTML='<div class=&quot;big&quot;>${esc(initials(name))}</div>'"><div style="min-width:0;position:relative;z-index:1">
-    <div class="eyebrow">${esc(ssv.roll)}${cls ? ' · ' + esc(cls) : ''}</div><h2>${esc(name)}</h2>${ssv.board && ssv.board.found && ssv.board.distinction && Number(ssv.board.marks) > 0 ? `<div class="ptags"><span class="gold">1st year distinction · ${ordN(Number(ssv.board.position))} position</span></div>` : ''}</div></div>
+    <div class="eyebrow">${esc(ssv.roll)}${cls ? ' · ' + esc(cls) : ''}</div><h2>${esc(name)}</h2>${ssv.board && ssv.board.found && ssv.board.distinction && Number(ssv.board.marks) > 0 ? `<div class="ptags"><span class="gold">1st year distinction · ${ordN(Number(ssv.board.position))} in Peshawar Board</span></div>` : ''}</div></div>
     ${A.pct != null ? `<div class="ring" style="--p:${Math.min(100, A.pct)};--c:${A.pct < LOW ? '#FF8A80' : '#5FD3A2'}"><div><b>${Math.round(A.pct)}%</b><small>Session</small></div></div>` : ''}</section>`;
   if(P0 && P0.error){ $q('#app').innerHTML = h + `<section class="card"><div class="empty">${esc(P0.error)}</div></section></div></main>`; return; }
   const mtAll = T && T.mt ? Object.values(T.mt).flatMap(o => Object.values(o).map(ssTestPct)).filter(x => x != null) : [];
@@ -4970,9 +4970,9 @@ function ssBoardResult(B){
   const m = Number(B.marks), g = String(B.grade || '').trim(), abs = /ABSENT/i.test(g), comp = !abs && g && !(m > 0);
   const marks = abs ? 'Absent' : comp ? 'Compartment' : B.marks ? B.marks + ' / ' + B.total + (B.pct ? ' (' + B.pct + '%)' : '') : '–';
   const result = abs ? 'Absent' : comp ? 'Compartment in ' + g.split(/[,;]/).map(boardCode).join(', ') : m > 0 ? 'Pass' : '–';
-  const pos = !comp && !abs && Number(B.position) > 0 ? ordN(Number(B.position)) + ' in college' + (B.distinction ? ' · Distinction' : '') : '–';
+  const pos = !comp && !abs && Number(B.position) > 0 ? ordN(Number(B.position)) + (B.distinction ? ' · Distinction' : '') : '–';
   return `<div><span>Marks</span><b>${esc(marks)}</b></div><div><span>Result</span><b class="${comp || abs ? 'ssbad' : ''}">${esc(result)}</b></div>
-    <div class="${B.distinction && !comp ? 'ssdist' : ''}"><span>College position</span><b>${esc(pos)}</b></div>`;
+    <div class="${B.distinction && !comp ? 'ssdist' : ''}"><span>Peshawar Board position</span><b>${esc(pos)}</b></div>`;
 }
 function ssBoardHtml(){
   const B = ssv.board; if(!B || B.show === false) return '';
