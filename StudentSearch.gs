@@ -24,7 +24,11 @@ var ST_CFG = {
   BOARD_BY_ENROLL: 'boardResult1STYEAR',     // has Enroll#, Roll No, Registration, Marks
   BOARD_LIST: '1styeardata2026',             // the board's list: Roll No, Name, Father Name, Registration #, Marks, Grade
   BOARD_LINKS: 'App Board Links',            // choices confirmed in the app (made by itself)
-  MATCH_MIN: 0.86, MATCH_GAP: 0.03
+  MATCH_MIN: 0.86, MATCH_GAP: 0.03,
+  BOARD_TOTAL: 600,                         // total marks of the 1st year board exam
+  // strength-sheet columns that are about MATRIC: shown with a clear name
+  LABELS: { PERCENTAGE: 'Matric percentage', OBTAINEDMARKS: 'Matric obtained marks', TOTALMARKS: 'Matric total marks', BOARD: 'Matric board',
+            PASSINGYEAR: 'Matric passing year', METRICROLLNO: 'Matric Roll No', MATRICROLLNO: 'Matric Roll No' }
 };
 
 function stRoute_(user, req) {
@@ -94,7 +98,7 @@ function stProfile_(user, roll) {
     head.forEach(function (h, c) {
       var val = gtS_(row[c]);
       if (!val || !gtS_(h) || ST_CFG.HIDE.test(gtS_(h)) || /^(STUDENTNAME|ENROLL)$/.test(gtK_(h))) return;
-      fields.push([gtS_(h), val]);
+      fields.push([ST_CFG.LABELS[gtK_(h)] || gtS_(h), val]);
     });
   } else {
     ST_CFG.TEACHER.forEach(function (f) { var c = col(f[0]); fields.push([f[1], c >= 0 ? gtS_(row[c]) : (f[0] === 'PCS' ? gtS_(m[2]) : '')]); });
@@ -244,6 +248,7 @@ function stTests_(user, roll) {
    1) a link confirmed in the app ("App Board Links" sheet)  2) boardResult1STYEAR by Enroll#
    3) name + father name matched in 1styeardata2026, spelling tolerant (Muhammad / Mohd, double letters, ee / i,
       word order, an extra Khan ...). Only a clear best match is taken; otherwise admin / CP choose from the closest 5. */
+function stBoardPct_(m) { var n = Number(gtS_(m)); return n > 0 ? String(Math.round(n / ST_CFG.BOARD_TOTAL * 1000) / 10) : ''; }
 function stIsSecond_(cls) { var u = gtS_(cls).toUpperCase().replace(/\s+/g, ''); return /^(FCS|PRE-?ENG|F\.?A)-?2/.test(u) || /^[A-Z]2$/.test(u); }
 function stBoardData_() {
   var c = wrCacheGet_('st_board_v1'); if (c) return c;
@@ -309,7 +314,7 @@ function stBoard_(user, roll) {
     var x = byRoll[rn] || [rn, '', '', '', '', ''];
     var e = D.enr[k] && D.enr[k][0] === rn ? D.enr[k] : null;
     return Object.assign({ ok: true, show: true, found: true, how: how, rollNo: rn, reg: x[3] || (e ? e[1] : ''), marks: x[4] || (e ? e[2] : ''),
-                           grade: x[5] || (e ? e[3] : ''), pct: e ? e[4] : '', boardName: x[1], boardFather: x[2] }, extra || {});
+                           grade: x[5] || (e ? e[3] : ''), pct: stBoardPct_(x[4] || (e ? e[2] : '')), total: ST_CFG.BOARD_TOTAL, boardName: x[1], boardFather: x[2] }, extra || {});
   };
   if (D.links[k] && D.links[k] !== '-') return out(D.links[k], 'confirmed');
   if (D.enr[k] && D.links[k] !== '-') return out(D.enr[k][0], 'enroll');
