@@ -32,6 +32,7 @@ function wrRoute_(user, req) {
       case 'wr_marks':    return wrMarks_(user, req);
       case 'wr_fathers':  return wrFathers_(user, req);
       case 'wr_hundred':  return wrHundred_(user, req);
+      case 'wr_rows':     return wrRows_(user, req);
     }
     return { ok: false, error: 'UNKNOWN_ACTION' };
   } catch (e) {
@@ -545,5 +546,52 @@ function wrHundredBuild_(mon) {
     });
   });
   return Object.keys(out).map(function (k) { return out[k]; });
+}
+
+/* ================= MONTHLY ATTENDANCE as app report rows =================
+   wr_rows { mon } -> { rows:[{ cls, sub, teacher, mon, mt:0, st:[[roll, name, attended, held, '', 0, '']] }] }
+   The same shape as report_data (the daily app's records), so every attendance report of the app can use the
+   monthly attendance workbooks: one row per section sheet and subject (T.L / A.L). Kept 30 minutes.
+   Teachers get their own sections + subjects only; admin / principal / HOD everything. */
+function wrRows_(user, req) {
+  var mon = String(req.mon || '').toUpperCase();
+  if (!MA_BOOKS[mon]) return { ok: true, mon: mon, rows: [] };
+  var key = 'wr_rows_' + mon, data = req.fresh ? null : wrCacheGet_(key);
+  if (!data) { data = wrRowsBuild_(mon); wrCachePut_(key, data, 1800); }
+  if (wrAll_(user)) return { ok: true, mon: mon, rows: data };
+  var mine = {};
+  getAssignments_(user).forEach(function (a) { mine[gtK_(a.cls) + '|' + gtK_(a.subject)] = 1; });
+  return { ok: true, mon: mon, rows: data.filter(function (r) { return mine[gtK_(r.cls) + '|' + gtK_(r.sub)]; }) };
+}
+function wrRowsBuild_(mon) {
+  var book = SpreadsheetApp.openById(MA_BOOKS[mon]), home = {}, teach = {}, out = [];
+  getMaster_().rows.forEach(function (r) { home[gtK_(r[0])] = r; });
+  try { getAssignments_({ teacher: '', username: ADMIN_USER }).forEach(function (a) { teach[gtK_(a.cls) + '|' + gtK_(a.subject)] = a.teacher; }); } catch (e) {}
+  book.getSheets().forEach(function (sh) {
+    var nm = sh.getName();
+    if (/report|combine|log|settings|missing|summary|backup|copy of|leave|shortage|100/i.test(nm)) return;
+    var T = wrRead_(sh); if (!T) return;
+    wrGroupRows_(T, [], {});
+    var subs = {};
+    for (var c = T.idc; c < T.lc; c++) {
+      var g = T['g' + c] || {}, h = gtK_(T.head[c]);
+      if (!g.label || typeof g.id !== 'number' || /total|overall/i.test(g.label)) continue;
+      var S = subs[g.label] = subs[g.label] || {};
+      if (h === 'TL' || h === 'TOTALLECTURES') S.tl = c;
+      else if (h === 'AL' || h === 'ATTENDEDLECTURE' || h === 'ATTENDEDLECTURES') S.al = c;
+    }
+    var cls = nm.trim();
+    Object.keys(subs).forEach(function (lab) {
+      var S = subs[lab]; if (S.tl == null || S.al == null) return;
+      var st = [];
+      T.rows.forEach(function (row) {
+        var held = Number(gtS_(row[S.tl])) || 0; if (held <= 0) return;
+        var k = gtK_(row[T.en]), m = home[k]; if (!m) return;          // left / not in the strength sheet
+        st.push([gtS_(m[0]), gtS_(m[1]), Math.min(held, Number(gtS_(row[S.al])) || 0), held, '', 0, '']);
+      });
+      if (st.length) out.push({ cls: cls, sub: lab.toUpperCase(), teacher: teach[gtK_(cls) + '|' + gtK_(lab)] || '', mon: mon, mt: 0, st: st, src: 'M' });
+    });
+  });
+  return out;
 }
 
