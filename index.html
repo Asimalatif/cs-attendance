@@ -829,7 +829,8 @@ function counts(){
 function errText(e){
   if(!e) return 'Unknown error';
   if(e.name === 'AbortError') return 'The server took too long to answer. It will retry.';
-  if(e instanceof TypeError) return 'Could not reach the server (network blocked or wrong API_URL).';
+  if(e instanceof TypeError && /fetch|network|load failed|internet/i.test(e.message || '')) return 'Could not reach the server (network blocked or wrong API_URL).';
+  if(e instanceof TypeError){ try{ console.error(e); }catch(x){} return 'App error: ' + (e.message || e) + '. Please send a screenshot of this message.'; }
   return e.message || String(e);
 }
 async function api(payload, ms = 45000){
@@ -2666,7 +2667,7 @@ function statBoxes(doc, Y, items){
   return Y + h;
 }
 function notice(doc, Y, text, kind){
-  const col = { warn:[AMB, AMBBG], ok:[GREEN, GREENBG], bad:[RED, REDBG] }[kind || 'warn'], w = W(doc) - 28;
+  const col = ({ warn:[AMB, AMBBG], ok:[GREEN, GREENBG], bad:[RED, REDBG] })[kind] || [AMB, AMBBG], w = W(doc) - 28;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
   const lines = doc.splitTextToSize(text, w - 8), h = lines.length * 4.4 + 5;
   Y = need(doc, Y, h);
@@ -3903,7 +3904,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-31 v7.5 toppers and 100% attendance';
+const APP_BUILD = '2026-10-31 v7.5.1 100% attendance fix';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4699,7 +4700,7 @@ function hundredPdf(D){
   const mCell = (b, m) => { const x = b.months[m]; return !x || !x.d ? '-' : x.p === x.d ? '100%' : pct2(x.p, x.d) + '%'; };
   const part = (title, list) => {
     Y = P.sectionTitle(doc, Y, title);
-    if(!list.length){ Y = P.notice(doc, Y, 'No student in this list.', 'info'); return; }
+    if(!list.length){ Y = P.notice(doc, Y, 'No student in this list.', 'warn'); return; }
     let last = '';
     const body = list.map((b, i) => { const g = (b.sh === 'E' ? 'Evening' : 'Morning'); const row = [i + 1, b.roll, b.name, b.father, b.cls + (b.sh === 'E' ? ' (Eve)' : '')].concat(mons.map(m => mCell(b, m)), [b.d, b.p]); last = g; return row; });
     P.table(doc, { startY:Y, head:[['#', 'Roll No', 'Student name', 'Father name', 'Section'].concat(mons.map(m => monName(m).slice(0, 3)), ['Held', 'Attended'])], body,
