@@ -20,7 +20,8 @@
 var WR_CFG = {
   THRESHOLD: 0,                 // attendance shortage limit in %; 0 = the app's limit (73)
   LEAVES_SHEET: 'approvedleavesstore',
-  PRINT_WIDTH: 1060             // A4 landscape, px
+  PRINT_WIDTH: 1060,            // A4 landscape, px
+  DT_FAIL: 0.4                  // detention award list: marks below 40% of the column's maximum in dark red
 };
 
 function wrRoute_(user, req) {
@@ -116,9 +117,11 @@ function wrTable_(book, cls) {
   });
   var keep = []; groups.forEach(function (gr) { if (gr.used) keep = keep.concat(gr.cols); });
   if (!keep.length) return B;
-  var add = function (a, b) { return a.slice(0, B.lc).concat(keep.map(function (c) { return b[c]; })); };
+  var at = B.lc;                                              // optional subjects go before TOTAL (600) / % / position
+  for (var c2 = B.idc; c2 < B.lc; c2++) if (WR_SUMMARY.test(gtK_(B.head[c2]))) { at = c2; break; }
+  var add = function (a, b) { return a.slice(0, at).concat(keep.map(function (c) { return b[c]; }), a.slice(at, B.lc)); };
   return { teach: add(B.teach, O.teach), subj: add(B.subj, O.subj), head: add(B.head, O.head), idc: B.idc, en: B.en, lc: B.lc + keep.length, name: B.name,
-           rows: B.rows.map(function (r, i) { var o = mine[i]; return r.slice(0, B.lc).concat(keep.map(function (c) { return o ? o[c] : ''; })); }), optCls: opt.getName() };
+           rows: B.rows.map(function (r, i) { var o = mine[i]; return add(r, o || []); }), optCls: opt.getName() };
 }
 
 /* ================= helpers ================= */
@@ -163,7 +166,7 @@ function wrPdf_(user, req) {
   else return { ok: false, error: 'Unknown report.' };
   var T = wrTable_(book, cls);
   if (!T.rows.length) return { ok: false, error: 'Sheet "' + T.name + '" has no students yet.' };
-  return kind === 'att' ? wrAttPdf_(book, T, label, req) : wrMarksPdf_(T, kind, label, cls);
+  return kind === 'att' ? wrAttPdf_(book, T, label, req) : kind === 'dt' ? wrDtPdf_(T, cls) : wrMarksPdf_(T, kind, label, cls);
 }
 
 /** header cells of the teacher / subject rows, one per subject group of the kept columns */
@@ -332,3 +335,89 @@ function wrMarksPdf_(T, kind, label, cls) {
     : kind === 'gt' ? T.name + '_GrandTest_AwardList_' + gtSession_() : T.name + '_Detention_AwardList_' + gtSession_();
   return wrPdfOut_(h, file.replace(/\s+/g, ' ') + '.pdf');
 }
+
+/* ---------- detention award list (same rules as the old detention portal) ----------
+   Practical subjects: THEORY / PRACTICAL / TOTAL; other subjects: TOTAL only; then TOTAL (600) and PERCENTAGE.
+   Subjects a student does not take (Sub1-Sub7 of the strength sheet) stay empty; an empty mark of a subject she
+   takes shows N/R in green. Absent in red, below 40% in dark red, highest TOTAL of each subject grey,
+   TOTAL (600) 1st / 2nd / 3rd gold / silver / bronze (zero is never ranked). */
+function wrDtPdf_(T, cls) {
+  var ty = function (c) { return gtK_(T.head[c]); };
+  var isSum = function (c) { var g = T['g' + c] || {}; return /^(TOTAL\d+|PERCENT)/.test(ty(c)) || /^(TOTAL\d+|PERCENT)/.test(gtK_(g.label)); };
+  wrGroupRows_(T, [], {});                                         // labels every column with its subject
+  var cols = [], subCols = [];
+  for (var c = 0; c < T.lc; c++) {
+    if (c < T.idc) { cols.push(c); continue; }
+    var g = T['g' + c], t = ty(c);
+    if (isSum(c)) { if (!/POSITION|RANK/.test(t)) { cols.push(c); subCols.push(c); } continue; }
+    if (!g.label) continue;
+    var pr = dtLimits_(g.label).pr > 0;
+    if (pr ? (t === 'THEORY' || t === 'PRACTICAL' || t === 'TOTAL') : t === 'TOTAL') { cols.push(c); subCols.push(c); }
+  }
+  var subjOf = function (c) { return isSum(c) ? '' : (T['g' + c] || {}).label || ''; };
+  // subjects of every student (strength sheet Sub1-Sub7)
+  var takes = {};
+  getMaster_().rows.forEach(function (r) { takes[gtK_(r[0])] = (r[3] || []).map(gtK_); });
+  var al = DT_CFG.ALIASES || {};
+  var takesSub = function (list, subj) {
+    var k = gtK_(subj), ks = [k];
+    Object.keys(al).forEach(function (x) { if (x === k) ks.push(al[x]); if (al[x] === k) ks.push(x); });
+    return list.some(function (x) { return ks.indexOf(x) >= 0; });
+  };
+  var num = function (v) { v = gtS_(v); return v === '' || isNaN(Number(v)) ? null : Number(v); };
+  // highest TOTAL of each subject, ranking of TOTAL (600)
+  var top = {}, grand = -1;
+  subCols.forEach(function (c2) {
+    if (/^TOTAL\d+/.test(ty(c2)) || (isSum(c2) && /^TOTAL\d+/.test(gtK_((T['g' + c2] || {}).label)))) { if (grand < 0) grand = c2; return; }
+    if (ty(c2) !== 'TOTAL' || isSum(c2)) return;
+    var m = 0; T.rows.forEach(function (r) { var x = num(r[c2]); if (x !== null && x > m) m = x; });
+    if (m > 0) top[c2] = m;
+  });
+  var medal = {};
+  if (grand >= 0) {
+    var list = []; T.rows.forEach(function (r, i) { var x = num(r[grand]); if (x !== null && x > 0) list.push({ i: i, v: x }); });
+    list.sort(function (a, b) { return b.v - a.v; });
+    var rank = 0, last = null;
+    list.forEach(function (o) { if (o.v !== last) rank++; last = o.v; if (rank <= 3) medal[o.i] = 'g' + rank; });
+  }
+  // widths like the old portal: 30 / 90 / 140 / 140 / 70, then equal
+  var idw = [30, 90, 140, 140, 70].slice(0, T.idc), used = idw.reduce(function (a, b) { return a + b; }, 0);
+  var rest = 40, scale = WR_CFG.PRINT_WIDTH / (used + rest * (cols.length - T.idc));
+  var cg = '<colgroup>' + cols.map(function (c2, i) { return '<col style="width:' + ((i < T.idc ? idw[i] : rest) * scale).toFixed(1) + 'px">'; }).join('') + '</colgroup>';
+  var G = wrGroupRows_(T, subCols, wrTeachers_(T, cls)), n = cols.length;
+  var h = '<html><head><meta charset="UTF-8">' + wrCss_(n) +
+    '<style>td.hd,td.tch,td.sub{background:#d3d3d3;font-weight:bold}.abt{color:#f00;font-weight:bold}.nrt{color:#008000;font-weight:bold}.flt{color:#b30000;font-weight:bold}</style></head><body><table>' + cg +
+    '<thead><tr><td class="gen" colspan="' + n + '"><b>Generated on:</b> ' + wrNow_() + '</td></tr>' +
+    '<tr><td class="ttl" colspan="' + n + '">JCW DETENTION AWARDLIST - SESSION ' + gtSession_() + '<br>SECTION: ' + wrEsc_(T.name) + '</td></tr>' +
+    '<tr><td class="hd" colspan="' + T.idc + '" rowspan="2"></td>' + G.t + '</tr><tr>' + G.s + '</tr><tr>';
+  cols.forEach(function (c2) { h += '<td class="hd">' + wrEsc_(T.head[c2]) + '</td>'; });
+  h += '</tr></thead><tbody>';
+  var nr = 0;
+  T.rows.forEach(function (row, ri) {
+    var mine = takes[gtK_(row[T.en])];                              // unknown student: show her marks as they are
+    h += '<tr>';
+    cols.forEach(function (c2) {
+      var val = gtS_(row[c2]), cl = c2 === 2 || c2 === 3 ? 'l' : '';
+      if (c2 >= T.idc) {
+        var subj = subjOf(c2), t = ty(c2);
+        if (subj && mine && !takesSub(mine, subj)) { h += '<td></td>'; return; }
+        var x = num(val), L = subj ? dtLimits_(subj) : null;
+        var max = !L ? null : t === 'THEORY' ? L.th : t === 'PRACTICAL' ? (L.pr || L.th) : t === 'TOTAL' ? L.st : null;
+        var fail = max !== null ? Math.ceil(max * WR_CFG.DT_FAIL) : null;
+        if (c2 === grand && medal[ri]) cl = medal[ri];
+        else if (t === 'TOTAL' && top[c2] && x !== null && x > 0 && x === top[c2]) cl = 'hi';
+        else if (wrAbsent_(val)) cl = 'abt';
+        else if (subj && (val === '' || val.toUpperCase() === 'N/R')) { val = 'N/R'; cl = 'nrt'; nr++; }
+        else if (fail !== null && x !== null && x > 0 && x < fail) cl = 'flt';
+      }
+      h += '<td' + (cl ? ' class="' + cl + '"' : '') + '>' + wrEsc_(val) + '</td>';
+    });
+    h += '</tr>';
+  });
+  h += '</tbody></table><div class="sum">Students: ' + T.rows.length + (nr ? ' | Marks not received (N/R): ' + nr : '') + '</div>' +
+    '<div class="note">Grey = highest in the subject · Gold / silver / bronze = 1st, 2nd, 3rd in TOTAL (600) · ' +
+    '<span class="abt">Red</span> = absent · <span class="flt">Dark red</span> = below ' + Math.round(WR_CFG.DT_FAIL * 100) + '% · ' +
+    '<span class="nrt">N/R</span> = marks not received · Empty = subject not taken</div></body></html>';
+  return wrPdfOut_(h, T.name + '_Detention_AwardList_' + gtSession_() + '.pdf');
+}
+
