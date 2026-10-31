@@ -3904,7 +3904,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-31 v7.5.1 100% attendance fix';
+const APP_BUILD = '2026-10-31 v7.5.2 100% attendance months';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4689,7 +4689,12 @@ async function hundredData(){
   const want = H.filter(b => b.some).map(b => b.roll);
   if(want.length && navigator.onLine){ try{ const r = await api({ action:'wr_fathers', rolls:want }, 60000); if(r.ok) Object.assign(fathers, r.fathers || {}); }catch(e){} }
   H.forEach(b => { b.father = fathers[b.roll] || ''; });
-  return { q, H, mons:SEAS.slice(SEAS.indexOf(tp.from), SEAS.indexOf(tp.to) + 1) };
+  const mons = SEAS.slice(SEAS.indexOf(tp.from), SEAS.indexOf(tp.to) + 1);
+  const empty = mons.filter(m => !H.some(b => b.months[m] && b.months[m].d > 0));          // months the records do not have at all
+  const live = mons.filter(m => !empty.includes(m));
+  H.forEach(b => { b.full = live.length > 0 && live.every(m => b.months[m] && b.months[m].d > 0 && b.months[m].p === b.months[m].d); });   // 100% in EVERY month with records
+  if(empty.length) toast('No attendance records for ' + empty.map(monName).join(', ') + (scope ? '. The admin must run rebuildAttendanceIndex once in Apps Script.' : '.'));
+  return { q, H, mons, empty };
 }
 function hundredPdf(D){
   const C = P.C, { q, H, mons } = D, full = H.filter(b => b.full), some = H.filter(b => b.some && !b.full);
@@ -4709,6 +4714,7 @@ function hundredPdf(D){
       didParseCell:h => { if(h.section === 'body' && h.column.index >= 5 && h.cell.raw === '100%'){ h.cell.styles.textColor = C.GREEN; h.cell.styles.fontStyle = 'bold'; } if(h.section === 'body' && h.column.index >= 5) h.cell.styles.halign = 'center'; } });
     Y = doc.lastAutoTable.finalY + 6;
   };
+  if(D.empty && D.empty.length) Y = P.notice(doc, Y, 'No attendance records found for ' + D.empty.map(monName).join(', ') + '. These months are not checked' + (scope ? ': the administrator must run rebuildAttendanceIndex once in Apps Script, then make this report again.' : '.'), 'bad');
   part('100% attendance in every month (' + rangeTxt(q) + ')', full);
   if(mons.length > 1) part('100% attendance in some months', some);
   Y = P.smallNote(doc, Y, '100% = every lecture of every subject attended (P). Leave (L), absent (A) and bunk (B) are not attendance. Held / Attended = lectures of all subjects in ' + rangeTxt(q) + '. Morning sections first, then evening.');
