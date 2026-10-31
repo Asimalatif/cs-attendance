@@ -5,7 +5,7 @@
  *   profile (strength sheet), attendance of every month (monthly attendance workbooks + approved leaves),
  *   day-by-day attendance as a calendar (daily attendance workbooks), monthly tests, grand test, detention.
  * Admin, principal and Chief Proctor: every student, every personal detail and the photo.
- * Teachers (and HOD): students of the sections they teach; everything (photo, board result too) except the
+ * Teachers (and HOD): any student of the college; everything (photo, board result too) except the
  *   student's contact number, email and address (these are never sent to their phones).
  *
  * Install (attendance Apps Script project):
@@ -53,11 +53,9 @@ function stFull_(user) {
   try { return !!isCP_(user); } catch (e) { return false; }
 }
 /** function(classSec) -> true when this user may open students of that section */
+/** every signed-in teacher may open any student of the college (contact, email and address stay hidden: see PRIVATE) */
 function stSecOk_(user) {
-  if (stFull_(user)) return function () { return true; };
-  var list = wrSectionList_(user).map(gtK_);
-  try { if (scopeOf_(user)) return function () { return true; }; } catch (e) {}      // HOD: all students, limited details
-  return function (cls) { return list.indexOf(gtK_(cls)) >= 0; };
+  return function () { return true; };
 }
 function stMaster_(roll) {
   var k = gtK_(roll), hit = null;

@@ -3925,7 +3925,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-31 v7.8.5 teachers see full record';
+const APP_BUILD = '2026-10-31 v7.8.6 teachers search whole college';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4840,7 +4840,7 @@ let ssv = { q:'', list:[], busy:false, roll:'', p:null, months:{}, tests:null, b
 document.addEventListener('input', ev => { if(ev.target && ev.target.id === 'ssQ') ssFind(ev.target.value); });
 document.addEventListener('toggle', ev => { const d = ev.target; if(d && d.classList && d.classList.contains('ssmon')) ssv.open[d.dataset.m] = d.open; }, true);
 function searchCard(){
-  return `<section class="card"><h3>${I.search} Student search</h3><div class="sub">${scope || isCP ? 'Any student of the college: profile, photo, attendance of every month, day-by-day calendar, monthly tests, grand test and detention.' : 'Students of your sections: profile and photo, attendance of every month, day-by-day calendar, all test results and the 1st year board result.'}</div>
+  return `<section class="card"><h3>${I.search} Student search</h3><div class="sub">Any student of the college: profile and photo, attendance of every month, day-by-day calendar, monthly tests, grand test, detention and the 1st year board result.</div>
     <button class="more" type="button" data-view="search">Open student search</button></section>`;
 }
 function ssFind(v){
@@ -4901,7 +4901,7 @@ function ssCal(m, x, my){
   return h + '</div></div>';
 }
 function renderSearch(){
-  let h = header('Student search', ssv.roll ? 'Student record' : (scope || isCP ? 'Whole college' : 'Your sections'), true) + '<main class="wrap2">';
+  let h = header('Student search', ssv.roll ? 'Student record' : 'Whole college', true) + '<main class="wrap2">';
   if(!ssv.roll){
     h += `<section class="card"><h3>${I.search} Find a student</h3>
       <input id="ssQ" class="sq" type="search" placeholder="Name, father name or roll no." autocomplete="off" autocapitalize="none" spellcheck="false" value="${esc(ssv.q)}">
