@@ -3299,13 +3299,19 @@ function withSel(e, fn){
 
 /* ======================= HOME ======================= */
 /* ---------- Home: monthly test card (monthly test is entered from Home, not from the attendance screen) ---------- */
+let mtMon = '';   // month chosen on the Home monthly test card ('' = current month)
 function mtCard(cur){
-  const rows = cur.map(e => {
+  const mons = uniq(sheets.map(s => s.mon)).sort((a, b) => ((monIdx(a) + 4) % 12) - ((monIdx(b) + 4) % 12));   // session order: Sep, Oct ... Jan
+  const curTok = (cur[0] && cur[0].mon) || '';
+  if(!mtMon || !mons.includes(mtMon)) mtMon = curTok || mons[mons.length - 1] || '';
+  const list = sheets.filter(s => s.mon === mtMon);
+  const rows = list.map(e => {
     const d = data[e.name], q = queue.find(x => x.sheet === e.name && x.kind === 'mt');
-    const st = q ? 'wait' : d && d.mt && Number(d.mt.total) > 0 ? 'done' : '';
-    return `<button class="li" type="button" data-xmt="${esc(e.name)}"><span class="tx"><b>${esc(e.cls)} · ${esc(titleCase(e.sub))}</b><small>${st === 'done' ? 'Marks in the sheet, out of ' + esc(d.mt.total) : st === 'wait' ? 'Saved on the phone, sending' : 'Not entered yet'}</small></span><span class="pill ${st === 'done' ? 'good' : st ? 'mid' : 'solid'}">${st === 'done' ? '\u2713 Entered' : st ? '\u21bb Waiting' : 'Enter'}</span></button>`;
+    const st = q ? 'wait' : d && d.mt && Number(d.mt.total) > 0 ? 'done' : d ? '' : 'unk';
+    return `<button class="li" type="button" data-xmt="${esc(e.name)}"><span class="tx"><b>${esc(e.cls)} · ${esc(titleCase(e.sub))}</b><small>${st === 'done' ? 'Marks in the sheet, out of ' + esc(d.mt.total) + ' · tap to view or change' : st === 'wait' ? 'Saved on the phone, sending' : st === 'unk' ? 'Tap to open' : 'Not entered yet'}</small></span><span class="pill ${st === 'done' ? 'good' : st === 'wait' ? 'mid' : st === 'unk' ? '' : 'solid'}">${st === 'done' ? '\u2713 Entered' : st === 'wait' ? '\u21bb Waiting' : st === 'unk' ? 'Open' : 'Enter'}</span></button>`;
   }).join('');
-  return `<section class="card"><h3>${I.doc} Monthly test <span class="tdate">${MONTHS[new Date().getMonth()]}</span></h3><div class="sub">Tap a class to enter this month's test marks.</div>${rows}</section>`;
+  const chips = mons.length > 1 ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 4px">${mons.map(m => `<button type="button" class="pill ${m === mtMon ? 'solid' : ''}" data-mtmon="${esc(m)}" aria-pressed="${m === mtMon}" style="border:0;cursor:pointer;font-size:13px;padding:6px 12px">${esc(MONTHS[monIdx(m)] || m)}</button>`).join('')}</div>` : '';
+  return `<section class="card"><h3>${I.doc} Monthly test <span class="tdate">${esc(MONTHS[monIdx(mtMon)] || '')}</span></h3><div class="sub">Pick the month, then tap a class to enter or change its test marks.</div>${chips}${rows || '<div class="empty">No classes in this month.</div>'}</section>`;
 }
 function goTest(e){
   goAttend(e, 0);
@@ -5664,6 +5670,7 @@ document.addEventListener('click', ev => {
   if((b = t.closest('[data-xhx]'))) return hc && hcCsv(b.dataset.xhx);
   if(t.closest('#xWkTxt')) return shareText(workText(), 'Teacher workload');
   if(t.closest('#xWkPdf')) return P.run(workPdf, () => shareText(workText()));
+  if((b = t.closest('[data-mtmon]'))){ mtMon = b.dataset.mtmon; rerender(); return; }
   if((b = t.closest('[data-xmt]'))){ const e = sheets.find(s => s.name === b.dataset.xmt); if(e) goTest(e); return; }
   if((b = t.closest('[data-xopen]'))){ const e = sheets.find(s => s.name === b.dataset.xopen); if(e) goAttend(e, Number(b.dataset.xday) || 0); return; }
   if((b = t.closest('[data-xprofd]'))){ $q('#dlg').close(); return openProfile(b.dataset.xprofd, b.dataset.xcls, ''); }
