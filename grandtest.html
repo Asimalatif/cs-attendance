@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0F1B2D">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>JCW Grand Test</title>
+<style>
+:root{--bg:#F2F5FA;--surface:#fff;--surface2:#F7F8FB;--ink:#0F1B2D;--muted:#667085;--line:#E3E7EE;--accent:#0F1B2D;--on-accent:#fff;--ring:#2F5BEA;
+--good:#12805C;--good-bg:#E6F4EE;--bad:#D92D20;--bad-bg:#FDECEA;--mid:#B7791F;--mid-bg:#FFF4DB;--info:#1C4A7E;--info-bg:#E4EEFA;--hero:#0F1B2D;--hero2:#1C3158;
+--shadow:0 1px 2px rgba(15,27,45,.06),0 2px 8px rgba(15,27,45,.05);--r:14px;--sab:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0B1220;--surface:#141E31;--surface2:#18233A;--ink:#EAF0FA;--muted:#9AA9C0;--line:#25324A;--accent:#EAF0FA;--on-accent:#0B1220;--ring:#7AA2FF;
+--good:#3CC38A;--good-bg:#12302A;--bad:#F26B60;--bad-bg:#3A1C1F;--mid:#E8B04A;--mid-bg:#3A2F14;--info:#8EB4F0;--info-bg:#17294A;--hero:#16233D;--hero2:#233B68;--shadow:0 1px 2px rgba(0,0,0,.4)}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:calc(90px + var(--sab))}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer;touch-action:manipulation}
+:focus-visible{outline:3px solid var(--ring);outline-offset:2px}
+header{background:linear-gradient(160deg,var(--hero),var(--hero2));color:#fff;padding:calc(12px + env(safe-area-inset-top,0px)) 16px 0}
+.hin{max-width:820px;margin:0 auto}
+.top{display:flex;align-items:center;gap:10px}
+.back{color:#BFD2FF;text-decoration:none;font-weight:700;font-size:14px;white-space:nowrap;background:none;border:0;padding:0}
+h1{margin:6px 0 2px;font-size:21px;line-height:1.2}
+.hsub{color:rgba(255,255,255,.8);font-size:13px}
+.dl{display:inline-block;margin-top:6px;font-size:12.5px;font-weight:700;border-radius:999px;padding:4px 10px;background:rgba(255,255,255,.14)}
+.dl.closed{background:#7A2E2A}.dl.soon{background:#7A5A12}
+.net{margin-left:auto;font-size:12px;font-weight:700;border-radius:999px;padding:4px 10px;background:rgba(255,255,255,.14);white-space:nowrap}
+.net.off{background:#7A2E2A}
+nav{display:flex;gap:4px;margin-top:12px;overflow-x:auto;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav button{flex:0 0 auto;background:transparent;border:0;color:rgba(255,255,255,.75);font-weight:700;padding:10px 14px;border-radius:12px 12px 0 0;font-size:14px}
+nav button[aria-selected="true"]{background:var(--bg);color:var(--ink)}
+.badge{display:inline-block;min-width:20px;padding:0 6px;border-radius:999px;background:var(--bad);color:#fff;font-size:11.5px;line-height:18px;margin-left:4px;text-align:center}
+main{max-width:820px;margin:0 auto;padding:14px 16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px;box-shadow:var(--shadow)}
+.card h2{margin:0 0 6px;font-size:16px}
+.sub{color:var(--muted);font-size:13px}
+.list{display:flex;flex-direction:column;gap:8px}
+.it{display:flex;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;text-align:left;width:100%}
+.it .tx{flex:1;min-width:0}
+.it b{display:block;font-size:16px}
+.it small{display:block;color:var(--muted);font-size:13px}
+.bar{height:6px;border-radius:3px;background:var(--surface2);overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--good)}
+.bar i.mid{background:var(--mid)}
+.pill{display:inline-block;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;white-space:nowrap;background:var(--surface2);color:var(--muted)}
+.pill.good{background:var(--good-bg);color:var(--good)}.pill.mid{background:var(--mid-bg);color:var(--mid)}.pill.bad{background:var(--bad-bg);color:var(--bad)}.pill.info{background:var(--info-bg);color:var(--info)}
+input{min-height:48px;border:1.5px solid var(--line);border-radius:12px;padding:0 12px;font-size:17px;background:var(--surface2);width:100%}
+input:focus{outline:none;border-color:var(--ring)}
+input:disabled{opacity:.55}
+.btn{min-height:46px;border:1.5px solid var(--line);border-radius:12px;background:var(--surface);font-weight:750;font-size:15px;padding:0 16px;white-space:nowrap}
+.btn.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.btn.small{min-height:38px;font-size:13.5px;padding:0 12px;border-radius:10px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.warn{background:var(--mid-bg);color:var(--mid);border-color:transparent}
+.ehead{display:flex;flex-direction:column;gap:10px}
+.tot{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.tot label{font-weight:750;font-size:14px}
+.tot input{width:110px;text-align:center;font-weight:800}
+.count{font-size:13.5px;color:var(--muted);font-weight:650}
+.rows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.row{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 10px 10px 12px}
+.row .no{color:var(--muted);font-weight:700;font-variant-numeric:tabular-nums;font-size:13px}
+.row .who{min-width:0}
+.row .who b{display:block;font-size:17px;line-height:1.25;overflow-wrap:anywhere}
+.row .who small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
+.row .mk{display:flex;gap:6px;align-items:center}
+.row .mk input{width:78px;text-align:center;font-weight:800;font-size:19px;font-variant-numeric:tabular-nums}
+.row .mk button{min-height:48px;min-width:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface2);font-weight:800;font-size:14px;color:var(--bad)}
+.row.low{border-color:var(--mid);background:var(--mid-bg)}
+.row.abs{border-color:var(--bad);background:var(--bad-bg)}
+.row.err input{border-color:var(--bad);color:var(--bad)}
+.row.off{opacity:.5}.row.off .who b{text-decoration:line-through}
+.chip{display:inline-block;font-size:11.5px;font-weight:750;border-radius:999px;padding:1px 7px;margin-left:4px;background:var(--info-bg);color:var(--info)}
+.chip.p{background:transparent;color:var(--muted);padding:0;margin:0}
+.sbar{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding:10px 16px calc(10px + var(--sab));z-index:10}
+.sbar .in{max-width:820px;margin:0 auto;display:flex;gap:10px}
+.sbar .btn{flex:1}.sbar .btn.primary{flex:2}
+.note{border-radius:12px;padding:10px 12px;font-size:14px;font-weight:650;margin-bottom:12px}
+.note.bad{background:var(--bad-bg);color:var(--bad)}.note.mid{background:var(--mid-bg);color:var(--mid)}.note.good{background:var(--good-bg);color:var(--good)}.note.info{background:var(--info-bg);color:var(--info)}
+.search{margin-bottom:10px}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);font-size:13.5px;vertical-align:middle}
+th{color:var(--muted);font-weight:700;font-size:12px}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.chips button{border:1.5px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-weight:700;font-size:13px}
+.chips button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+dialog{border:0;border-radius:18px;padding:0;max-width:min(520px,calc(100vw - 24px));width:100%;background:var(--surface);color:var(--ink);box-shadow:0 20px 50px rgba(0,0,0,.35)}
+dialog::backdrop{background:rgba(10,15,25,.55)}
+.dlg{padding:18px}.dlg h2{margin:0 0 6px;font-size:18px}
+.acts{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}.acts .btn{flex:1}
+.toast{position:fixed;left:50%;bottom:calc(90px + var(--sab));transform:translateX(-50%) translateY(20px);background:#101828;color:#fff;padding:10px 16px;border-radius:12px;font-weight:650;font-size:14px;opacity:0;pointer-events:none;transition:.2s;max-width:calc(100vw - 32px);z-index:20}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.empty{color:var(--muted);text-align:center;padding:24px 8px}
+.hidden{display:none!important}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header><div class="hin">
+  <div class="top"><a class="back" href="./" id="backLink">&#8249; Attendance</a><span class="net" id="net">…</span></div>
+  <h1 id="title">Grand Test</h1>
+  <div class="hsub" id="hsub">Enter marks for your classes. Works without internet.</div>
+  <span class="dl hidden" id="dl"></span>
+  <nav role="tablist" id="nav">
+    <button role="tab" data-tab="mine" aria-selected="true">My classes</button>
+    <button role="tab" data-tab="prog" aria-selected="false" class="hidden" id="tabProg">Progress</button>
+    <button role="tab" data-tab="wait" aria-selected="false">Waiting<span class="badge hidden" id="qb">0</span></button>
+  </nav>
+</div></header>
+<main id="main"></main>
+<div class="sbar hidden" id="sbar"><div class="in">
+  <button class="btn" type="button" id="bPdf">Award list PDF</button>
+  <button class="btn primary" type="button" id="bSave">Save marks</button>
+</div></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<dialog id="dlg"><div class="dlg" id="dlgBody"></div></dialog>
+<script>
+'use strict';
+/* Same server as the attendance app (index.html). Change both together. */
+const API = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm7d7-UKg0W-OoWAiuRBHe4mjlRgMQXIHuLm6zi--i/exec';
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ls = {
+  get(k, d){ try{ const v = localStorage.getItem('csa2_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem('csa2_' + k, JSON.stringify(v)); }catch(e){} }
+};
+const user = ls.get('user', ''), pass = ls.get('pass', '');
+let info = ls.get('gt_info', null);        // { items, all, deadline, session, title, pass, defTotal }
+let cache = ls.get('gt_data', {});         // key -> server data of one class + subject
+let drafts = ls.get('gt_drafts', {});      // key -> { total, marks } being typed
+let queue = ls.get('gt_q', []);            // saves waiting for the server
+let tab = 'mine', cur = null, progress = null, findQ = '', progFilter = 'open', syncing = false, fatal = '';
+const keyOf = (cls, sub) => cls + '|' + sub;
+const saveQ = () => { ls.set('gt_q', queue); paint(); };
+const online = () => navigator.onLine !== false;
+
+async function api(payload, ms = 60000){
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms);
+  try{
+    const r = await fetch(API, { method:'POST', body:JSON.stringify({ username:user, password:pass, ...payload }), signal:ctl.signal, redirect:'follow' });
+    const txt = await r.text(); let j;
+    try{ j = JSON.parse(txt); }catch(e){ throw new Error('The server sent a web page instead of data. Check the deployment.'); }
+    if(j && j.error === 'UNKNOWN_ACTION') throw Object.assign(new Error('The server does not know the Grand Test yet: add GrandTest.gs and the doPost line, then deploy a new version.'), { fatal:true });
+    if(j && j.error === 'BAD_LOGIN') throw Object.assign(new Error('Your saved login was refused. Open the attendance app, log out and sign in again.'), { fatal:true });
+    return j;
+  } catch(e){
+    if(e.name === 'AbortError') throw new Error('The server took too long. Try again.');
+    if(e instanceof TypeError) throw Object.assign(new Error('No internet'), { net:true });
+    throw e;
+  } finally { clearTimeout(t); }
+}
+let toastT;
+function toast(msg, ms = 3200){ const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms); }
+function dlgOpen(html){ $('#toast').classList.remove('show'); $('#dlgBody').innerHTML = html; const d = $('#dlg'); if(!d.open) d.showModal(); }
+function dlgClose(){ const d = $('#dlg'); if(d.open) d.close(); }
+const titleCase = s => String(s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+
+/* ---------- marks ---------- */
+const PASS = () => (info && info.pass) || 0.4;
+function parse(raw, total){
+  const s = String(raw == null ? '' : raw).trim().toUpperCase().replace(',', '.');
+  if(s === '') return { k:'empty' };
+  if(['A','AB','ABS','ABSENT'].includes(s)) return { k:'abs' };
+  if(/^\d+(\.\d+)?$/.test(s)){ const v = Number(s); return total > 0 && v > total ? { k:'over', v } : { k:'num', v }; }
+  return { k:'bad' };
+}
+function deadlineState(){
+  if(!info || !info.deadline) return { open:true, text:'' };
+  const left = info.deadline - Date.now(), d = new Date(info.deadline);
+  const when = d.toLocaleString([], { day:'numeric', month:'short', hour:'numeric', minute:'2-digit' });
+  if(left <= 0) return { open:false, text:'Closed ' + when + (info.all ? ' · admin can still edit' : ''), cls:'closed' };
+  const h = Math.floor(left / 3600000), dd = Math.floor(h / 24);
+  return { open:true, text:'Closes ' + when + ' · ' + (dd ? dd + 'd ' + (h % 24) + 'h' : h ? h + 'h ' + Math.floor(left / 60000) % 60 + 'm' : Math.floor(left / 60000) + 'm') + ' left', cls:h < 24 ? 'soon' : '' };
+}
+const canEdit = () => deadlineState().open || (info && info.all);
+
+/* ---------- paint ---------- */
+function paint(){
+  const n = $('#net'), w = queue.length;
+  n.textContent = (online() ? 'Online' : 'Offline') + (w ? ' · ' + w + ' waiting' : ''); n.classList.toggle('off', !online());
+  const b = $('#qb'); b.textContent = w; b.classList.toggle('hidden', !w);
+  const ds = deadlineState(), dl = $('#dl'); dl.textContent = ds.text; dl.className = 'dl ' + (ds.cls || ''); dl.classList.toggle('hidden', !ds.text);
+  $('#tabProg').classList.toggle('hidden', !(info && info.all));
+  if(info){ $('#title').textContent = 'Grand Test ' + (info.session || ''); }
+}
+function setTab(t){ tab = t; cur = null; document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t ? 'true' : 'false')); render(); if(t === 'prog') loadProgress(false); }
+function render(){
+  paint();
+  const m = $('#main');
+  $('#sbar').classList.toggle('hidden', !cur);
+  $('#nav').classList.toggle('hidden', !!cur);
+  const bl = $('#backLink'); bl.innerHTML = cur ? '&#8249; My classes' : '&#8249; Attendance'; bl.href = cur ? '#' : './';
+  if(!user || !pass){ m.innerHTML = `<div class="card"><h2>Sign in first</h2><div class="sub">Open the attendance app and sign in, then come back to this page.</div><p><a class="btn primary" href="./" style="display:inline-flex;align-items:center;text-decoration:none">Open the attendance app</a></p></div>`; return; }
+  const top = fatal ? `<div class="note bad">${esc(fatal)}</div>` : '';
+  if(!info){ m.innerHTML = top + `<div class="card"><h2>Getting ready…</h2><div class="sub">${online() ? 'Downloading your classes.' : 'Connect to the internet once; after that this page works offline.'}</div></div>`; return; }
+  if(cur) { m.innerHTML = top + entryHtml(); wireEntry(); return; }
+  if(tab === 'mine') m.innerHTML = top + mineHtml();
+  else if(tab === 'prog') m.innerHTML = top + progHtml();
+  else m.innerHTML = top + waitHtml();
+  wireLists();
+}
+
+/* ---------- my classes ---------- */
+function statusOf(it){
+  const k = keyOf(it.cls, it.sub), d = cache[k], q = queue.find(x => x.id === k), dr = drafts[k];
+  if(q) return { cls:q.state === 'wait' ? 'info' : 'bad', text:q.state === 'wait' ? 'waiting to send' : 'not saved, see Waiting', pct:null };
+  if(!d) return { cls:'', text:'tap to open', pct:null };
+  const list = d.students.filter(s => !s.off), done = list.filter(s => String(s.mark || '').trim() !== '').length;
+  const pct = list.length ? Math.round(done / list.length * 100) : 0;
+  if(dr && !dr.clean) return { cls:'mid', text:'draft on phone', pct };
+  return { cls: done && done >= list.length ? 'good' : done ? 'mid' : '', text: done >= list.length && list.length ? '✓ all ' + done + ' entered' : done + ' of ' + list.length + ' entered', pct };
+}
+function mineHtml(){
+  const items = info.items.filter(it => !findQ || (it.cls + ' ' + it.sub + ' ' + it.teacher).toLowerCase().includes(findQ.toLowerCase()));
+  if(!info.items.length) return `<div class="card"><h2>No classes</h2><div class="sub">The Timetable has no class for you. Ask the admin.</div></div>`;
+  const ds = deadlineState();
+  return `${!ds.open ? `<div class="note ${info.all ? 'mid' : 'bad'}">The grand test portal is closed. ${info.all ? 'As admin you can still enter and correct marks.' : 'You can view marks and download award lists, but not change them.'}</div>` : ''}
+  ${info.items.length > 8 ? `<input class="search" id="fq" value="${esc(findQ)}" placeholder="Search class, subject or teacher" autocomplete="off">` : ''}
+  <div class="list">${items.map(it => { const s = statusOf(it);
+    return `<button class="it" type="button" data-open="${esc(keyOf(it.cls, it.sub))}"><span class="tx"><b>${esc(it.cls)} · ${esc(titleCase(it.sub))}</b><small>${esc(it.teacher)}</small>${s.pct != null ? `<span class="bar"><i class="${s.pct < 100 ? 'mid' : ''}" style="width:${s.pct}%"></i></span>` : ''}</span><span class="pill ${s.cls}">${esc(s.text)}</span></button>`; }).join('') || '<div class="empty">Nothing found.</div>'}</div>`;
+}
+
+/* ---------- entry ---------- */
+function curData(){ return cache[cur]; }
+function curDraft(){
+  const d = curData(); if(!d) return null;
+  if(!drafts[cur]){
+    const q = queue.find(x => x.id === cur), marks = {};
+    if(q) Object.assign(marks, q.marks); else d.students.forEach(s => { if(s.mark !== '') marks[s.roll] = s.mark; });
+    drafts[cur] = { total: q ? String(q.total) : String(d.total || info.defTotal || ''), marks, clean:true };
+  }
+  return drafts[cur];
+}
+function saveDraft(){ const dr = drafts[cur]; if(dr) dr.clean = false; ls.set('gt_drafts', drafts); }
+function entryHtml(){
+  const d = curData(), [cls, sub] = cur.split('|');
+  if(!d) return `<div class="card"><h2>${esc(cls)} · ${esc(titleCase(sub))}</h2><div class="sub">${online() ? 'Loading the students…' : 'This class has not been opened on this phone yet. Connect to the internet once.'}</div></div>`;
+  const dr = curDraft(), total = Number(dr.total) || 0, edit = canEdit(), q = queue.find(x => x.id === cur);
+  const missing = d.students.filter(s => s.missing).length;
+  return `<section class="card ehead">
+      <div><h2 style="margin:0">${esc(cls)} · ${esc(titleCase(d.sub))}</h2><div class="sub">${esc(d.teacher)} · Grand Test workbook sheet "${esc(d.sheet)}"</div></div>
+      ${q ? `<div class="note ${q.state === 'wait' ? 'info' : 'bad'}" style="margin:0">${q.state === 'wait' ? 'Saved on this phone, waiting to be sent.' : esc((q.error || 'Not saved.') + ' See the Waiting tab.')}</div>` : ''}
+      ${!edit ? '<div class="note bad" style="margin:0">The portal is closed. Marks can only be viewed.</div>' : ''}
+      ${missing ? `<div class="note info" style="margin:0">${missing} new admission${missing > 1 ? 's are' : ' is'} not in the grand test sheet yet. ${missing > 1 ? 'They are' : 'She is'} added when you save.</div>` : ''}
+      <div class="tot"><label for="gTotal">Total marks</label><input id="gTotal" inputmode="decimal" value="${esc(dr.total)}" ${edit ? '' : 'disabled'} autocomplete="off">
+        ${edit ? '<button class="btn small warn" type="button" id="xFillA">Empty rows = A</button>' : ''}</div>
+      <div class="count" id="count"></div>
+    </section>
+    <ul class="rows" id="rows">${d.students.map((s, i) => `<li class="row ${s.off ? 'off' : ''}" data-roll="${esc(s.roll)}"><span class="no">${i + 1}</span>
+      <span class="who"><b>${esc(titleCase(s.name))}</b><small>${esc(s.roll)}${s.father ? ' · d/o ' + esc(titleCase(s.father)) : ''}${s.missing ? '<span class="chip">new</span>' : ''}${s.off ? '<span class="chip">cancelled</span>' : ''} <span class="chip p" data-pc></span></small></span>
+      <span class="mk"><input data-m value="${esc(dr.marks[s.roll] || '')}" inputmode="decimal" autocomplete="off" aria-label="Marks for ${esc(s.name)}" ${edit && !s.off ? '' : 'disabled'}>${edit && !s.off ? '<button type="button" data-a aria-label="Absent">A</button>' : ''}</span></li>`).join('')}</ul>`;
+}
+function tally(){
+  const d = curData(), dr = curDraft(); if(!d || !dr) return;
+  const total = Number(dr.total) || 0; let done = 0, left = 0, low = 0, abs = 0, bad = 0;
+  document.querySelectorAll('#rows .row').forEach(row => {
+    const s = d.students.find(x => x.roll === row.dataset.roll); if(!s || s.off) return;
+    const p = parse(dr.marks[s.roll], total), pc = row.querySelector('[data-pc]');
+    row.classList.toggle('err', p.k === 'over' || p.k === 'bad');
+    row.classList.toggle('abs', p.k === 'abs');
+    row.classList.toggle('low', p.k === 'num' && total > 0 && p.v < total * PASS());
+    pc.textContent = p.k === 'num' && total ? '· ' + Math.round(p.v / total * 100) + '%' : p.k === 'over' ? '· more than ' + total : p.k === 'bad' ? '· type a number or A' : '';
+    if(p.k === 'empty') left++; else done++;
+    if(p.k === 'abs') abs++; if(p.k === 'over' || p.k === 'bad') bad++; if(p.k === 'num' && total && p.v < total * PASS()) low++;
+  });
+  $('#count').textContent = done + ' entered' + (left ? ' · ' + left + ' left' : ' · all done') + (abs ? ' · ' + abs + ' absent' : '') + (low ? ' · ' + low + ' below ' + Math.round(PASS() * 100) + '%' : '') + (bad ? ' · ' + bad + ' wrong' : '');
+  const sb = $('#bSave'); sb.textContent = !canEdit() ? 'Portal closed' : left ? 'Save marks (' + left + ' left)' : 'Save marks'; sb.disabled = !canEdit();
+}
+function wireEntry(){
+  const d = curData(); if(!d) return;
+  const dr = curDraft(), t = $('#gTotal');
+  if(t) t.oninput = () => { dr.total = t.value.trim().replace(',', '.'); saveDraft(); tally(); };
+  const fa = $('#xFillA'); if(fa) fa.onclick = () => {
+    const empty = d.students.filter(s => !s.off && parse(dr.marks[s.roll], 0).k === 'empty');
+    if(!empty.length) return toast('No empty rows.');
+    dlgOpen(`<h2>Mark ${empty.length} empty row${empty.length > 1 ? 's' : ''} absent?</h2><div class="sub">${empty.slice(0, 8).map(s => esc(titleCase(s.name))).join(', ')}${empty.length > 8 ? '…' : ''}</div><div class="acts"><button class="btn" id="dNo">Back</button><button class="btn primary" id="dYes">Mark A</button></div>`);
+    $('#dNo').onclick = dlgClose; $('#dYes').onclick = () => { empty.forEach(s => dr.marks[s.roll] = 'A'); saveDraft(); dlgClose(); render(); };
+  };
+  const inputs = [...document.querySelectorAll('#rows input[data-m]')];
+  inputs.forEach((inp, i) => {
+    const roll = inp.closest('.row').dataset.roll;
+    inp.oninput = () => { dr.marks[roll] = inp.value.trim(); saveDraft(); tally(); };
+    inp.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); const n = inputs[i + 1]; if(n){ n.focus(); n.select(); } else inp.blur(); } };
+  });
+  document.querySelectorAll('#rows [data-a]').forEach(b => b.onclick = () => {
+    const row = b.closest('.row'), roll = row.dataset.roll, inp = row.querySelector('input');
+    dr.marks[roll] = dr.marks[roll] === 'A' ? '' : 'A'; inp.value = dr.marks[roll]; saveDraft(); tally();
+  });
+  tally();
+}
+function onSave(){
+  const d = curData(), dr = curDraft(); if(!d || !dr) return;
+  if(!canEdit()) return toast('The portal is closed.');
+  const total = Number(dr.total);
+  if(!(total > 0)) return toast('Enter the total marks first.');
+  const marks = {}, empty = [], wrong = [];
+  d.students.forEach(s => {
+    if(s.off) return;
+    const p = parse(dr.marks[s.roll], total);
+    if(p.k === 'empty') empty.push(s); else if(p.k === 'over' || p.k === 'bad') wrong.push(s);
+    else marks[s.roll] = p.k === 'abs' ? 'A' : String(p.v);
+  });
+  if(wrong.length) return dlgOpen(`<h2>Please correct</h2><div class="sub">${wrong.map(s => esc(titleCase(s.name)) + ': ' + esc(dr.marks[s.roll])).join('<br>')}<br><br>Marks must be a number up to ${total}, or A for absent.</div><div class="acts"><button class="btn primary" id="dNo">OK</button></div>`), ($('#dNo').onclick = dlgClose);
+  if(empty.length) return dlgOpen(`<h2>${empty.length} student${empty.length > 1 ? 's have' : ' has'} no marks</h2><div class="sub">${empty.slice(0, 10).map(s => esc(titleCase(s.name))).join(', ')}${empty.length > 10 ? '…' : ''}<br><br>Enter marks, or A for absent. You can also tap <b>Empty rows = A</b>.</div><div class="acts"><button class="btn primary" id="dNo">OK</button></div>`), ($('#dNo').onclick = dlgClose);
+  const [cls, sub] = cur.split('|');
+  queue = queue.filter(x => x.id !== cur);
+  queue.push({ id:cur, cls, sub, total, marks, ts:Date.now(), state:'wait' }); saveQ();
+  delete drafts[cur]; ls.set('gt_drafts', drafts);
+  toast(online() ? 'Saving…' : 'Saved on this phone. It is sent when internet returns.', 4000);
+  render(); sync();
+}
+async function onPdf(){
+  const [cls, sub] = cur.split('|');
+  if(queue.some(x => x.id === cur)){ await sync(); if(queue.some(x => x.id === cur)) return toast('Your latest marks are not in the sheet yet. Wait for them to be sent.', 4500); }
+  if(!online()) return toast('The award list needs internet.');
+  const b = $('#bPdf'); b.disabled = true; b.textContent = 'Preparing…';
+  try{
+    const r = await api({ action:'gt_pdf', cls, sub }, 90000);
+    if(!r.ok) throw new Error(r.error || 'Could not make the PDF');
+    const bin = atob(r.pdf), arr = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    const blob = new Blob([arr], { type:'application/pdf' }), file = new File([blob], r.name, { type:'application/pdf' });
+    const canShare = !!(navigator.canShare && navigator.canShare({ files:[file] }));
+    dlgOpen(`<h2>Award list ready</h2><div class="sub">${esc(r.name)}</div><div class="acts">${canShare ? '<button class="btn primary" id="pShare">Share (WhatsApp, email…)</button>' : ''}<button class="btn ${canShare ? '' : 'primary'}" id="pDown">Download</button><button class="btn" id="pOpen">Open</button></div><div class="acts"><button class="btn small" id="pClose">Close</button></div>`);
+    const url = URL.createObjectURL(blob);
+    $('#pClose').onclick = dlgClose;
+    $('#pDown').onclick = () => { const a = document.createElement('a'); a.href = url; a.download = r.name; document.body.appendChild(a); a.click(); a.remove(); dlgClose(); toast('Downloaded: ' + r.name); };
+    $('#pOpen').onclick = () => { window.open(url, '_blank'); dlgClose(); };
+    const sh = $('#pShare'); if(sh) sh.onclick = () => navigator.share({ files:[file], title:r.name }).then(dlgClose).catch(e => { if(!e || e.name !== 'AbortError') toast('Could not share. Use Download, then attach the file.'); });
+  } catch(e){ toast(e.message, 5000); if(e.fatal){ fatal = e.message; render(); } }
+  finally { b.disabled = false; b.textContent = 'Award list PDF'; }
+}
+
+/* ---------- waiting ---------- */
+function waitHtml(){
+  if(!queue.length) return `<div class="card"><h2>Nothing waiting</h2><div class="sub">All grand test marks saved on this phone have reached the Grand Test workbook.</div></div>`;
+  return `<div class="acts" style="margin:0 0 12px"><button class="btn primary" type="button" id="xSend" ${online() ? '' : 'disabled'}>${online() ? 'Send now' : 'Offline: sends when internet returns'}</button></div>
+  ${queue.map(q => `<section class="card"><h2>${esc(q.cls)} · ${esc(titleCase(q.sub))} <span class="pill ${q.state === 'wait' ? 'info' : 'bad'}">${q.state === 'wait' ? 'waiting' : 'not saved'}</span></h2>
+    <div class="sub">${Object.keys(q.marks).length} students · out of ${esc(q.total)} · kept ${esc(new Date(q.ts).toLocaleString())}</div>
+    ${q.error ? `<div class="note bad" style="margin:8px 0 0">${esc(q.error)}</div>` : ''}
+    <div class="acts"><button class="btn small" type="button" data-open="${esc(q.id)}">Open</button>${q.state !== 'wait' ? `<button class="btn small" type="button" data-retry="${esc(q.id)}">Try again</button>` : ''}<button class="btn small" type="button" data-del="${esc(q.id)}">Delete</button></div></section>`).join('')}`;
+}
+
+/* ---------- progress (admin / principal) ---------- */
+function progHtml(){
+  if(!progress) return `<div class="card"><h2>Progress</h2><div class="sub">${online() ? 'Reading the Grand Test workbook…' : 'Needs internet.'}</div></div>`;
+  const all = progress.items, f = progFilter;
+  const list = all.filter(x => f === 'all' || (f === 'open' ? x.status !== 'done' : x.status === f)).filter(x => !findQ || (x.cls + ' ' + x.sub + ' ' + x.teacher).toLowerCase().includes(findQ.toLowerCase()));
+  const n = k => all.filter(x => x.status === k).length;
+  const lab = { done:['good','done'], partial:['mid','partly'], none:['bad','not started'], nosheet:['bad','no sheet'], nocol:['bad','no column'] };
+  return `<div class="card"><h2>${n('done')} of ${all.length} subjects complete</h2><div class="sub">Read ${esc(progress.at)} · ${n('partial')} partly entered · ${n('none')} not started${n('nosheet') + n('nocol') ? ' · ' + (n('nosheet') + n('nocol')) + ' missing in the workbook' : ''}</div></div>
+  <div class="chips">${[['open','Still open'],['none','Not started'],['partial','Partly'],['done','Done'],['all','All']].map(([k, t]) => `<button type="button" data-pf="${k}" aria-pressed="${f === k}">${t}</button>`).join('')}<button type="button" id="xProgRef">Refresh</button><button type="button" id="xProgShare">Share list</button></div>
+  <input class="search" id="fq" value="${esc(findQ)}" placeholder="Search class, subject or teacher" autocomplete="off">
+  <div class="card" style="padding:6px 10px;overflow-x:auto"><table><thead><tr><th>Class · subject</th><th>Teacher</th><th class="n">Entered</th><th>Status</th></tr></thead><tbody>
+  ${list.map(x => `<tr><td><b>${esc(x.cls)}</b> · ${esc(titleCase(x.sub))}</td><td>${esc(x.teacher)}</td><td class="n">${x.students ? x.entered + ' / ' + x.students : '–'}</td><td><span class="pill ${lab[x.status][0]}">${lab[x.status][1]}</span></td></tr>`).join('') || '<tr><td colspan="4" class="empty">Nothing here.</td></tr>'}</tbody></table></div>`;
+}
+async function loadProgress(force){
+  if(!online()) return render();
+  if(progress && !force) return render();
+  try{ const r = await api({ action:'gt_progress' }, 120000); if(r.ok){ progress = r; } else toast(r.error || 'Could not read progress'); }
+  catch(e){ toast(e.message); }
+  if(tab === 'prog') render();
+}
+
+/* ---------- lists wiring ---------- */
+function wireLists(){
+  const f = $('#fq'); if(f){ f.oninput = () => { findQ = f.value; const p = f.selectionStart; render(); const g = $('#fq'); g.focus(); try{ g.setSelectionRange(p, p); }catch(e){} }; }
+  document.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openClass(b.dataset.open));
+  document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    dlgOpen(`<h2>Delete these marks?</h2><div class="sub">They are only on this phone and will not reach the sheet.</div><div class="acts"><button class="btn" id="dNo">Keep</button><button class="btn primary" id="dYes">Delete</button></div>`);
+    $('#dNo').onclick = dlgClose; $('#dYes').onclick = () => { queue = queue.filter(x => x.id !== b.dataset.del); saveQ(); dlgClose(); render(); };
+  });
+  document.querySelectorAll('[data-retry]').forEach(b => b.onclick = () => { const q = queue.find(x => x.id === b.dataset.retry); if(q){ q.state = 'wait'; q.error = ''; q.ts = Date.now(); saveQ(); sync(); } });
+  const s = $('#xSend'); if(s) s.onclick = () => { queue.forEach(q => { if(q.state !== 'wait' && !q.closed){ q.state = 'wait'; q.error = ''; } }); saveQ(); sync(); };
+  document.querySelectorAll('[data-pf]').forEach(b => b.onclick = () => { progFilter = b.dataset.pf; render(); });
+  const pr = $('#xProgRef'); if(pr) pr.onclick = () => loadProgress(true);
+  const ps = $('#xProgShare'); if(ps) ps.onclick = () => {
+    const open = progress.items.filter(x => x.status !== 'done');
+    const txt = 'Grand test marks still missing (' + open.length + '):\n' + open.map(x => '- ' + x.cls + ' · ' + titleCase(x.sub) + ' · ' + x.teacher + (x.students ? ' (' + x.entered + '/' + x.students + ')' : ' (' + x.status + ')')).join('\n');
+    Promise.resolve(navigator.share ? navigator.share({ text:txt }) : navigator.clipboard.writeText(txt).then(() => toast('List copied'))).catch(() => {});
+  };
+}
+async function openClass(k){
+  cur = k; render(); window.scrollTo({ top:0 });
+  const [cls, sub] = k.split('|');
+  if(!online()) return;
+  try{
+    const r = await api({ action:'gt_get', cls, sub });
+    if(!r.ok) throw new Error(r.error || 'Could not load');
+    cache[k] = r; ls.set('gt_data', cache);
+    if(r.deadline !== undefined && info){ info.deadline = r.deadline; ls.set('gt_info', info); }
+    const dr = drafts[k];
+    if(dr && dr.clean) delete drafts[k];      // nothing typed yet: show the latest marks from the sheet
+    if(cur === k) render();
+  } catch(e){ if(cur === k){ if(!cache[k]) $('#main').innerHTML = `<div class="note bad">${esc(e.message)}</div>`; else toast(e.message, 5000); } if(e.fatal){ fatal = e.message; } }
+}
+
+/* ---------- send ---------- */
+async function sync(){
+  if(syncing || !online() || !queue.length) return;
+  syncing = true;
+  try{
+    for(const q of queue.slice()){
+      if(q.state !== 'wait') continue;
+      let r;
+      try{ r = await api({ action:'gt_save', cls:q.cls, sub:q.sub, total:q.total, marks:q.marks, ts:q.ts }, 90000); }
+      catch(e){ if(e.fatal) fatal = e.message; else if(!e.net){ q.state = 'error'; q.error = e.message; saveQ(); } break; }
+      if(r.ok){
+        queue = queue.filter(x => x !== q); saveQ();
+        const d = cache[q.id];
+        if(d){ d.total = q.total; d.students.forEach(s => { if(q.marks[s.roll] !== undefined){ s.mark = q.marks[s.roll]; s.missing = false; } }); ls.set('gt_data', cache); }
+        toast('✓ ' + q.cls + ' · ' + titleCase(q.sub) + ': marks in the sheet' + (r.added ? ' (' + r.added + ' new student' + (r.added > 1 ? 's' : '') + ' added)' : ''), 4500);
+      } else {
+        q.state = 'error'; q.closed = !!r.closed; q.error = r.error || 'Not saved'; saveQ();
+        toast('Not saved: ' + q.cls + ' · ' + titleCase(q.sub) + '. See Waiting.', 5000);
+      }
+    }
+  } finally { syncing = false; render(); }
+}
+
+/* ---------- start ---------- */
+async function loadInfo(){
+  if(!online() || !user) return;
+  try{ const r = await api({ action:'gt_list' }); if(r.ok){ info = r; ls.set('gt_info', info); fatal = ''; } else fatal = r.error || 'Could not load'; }
+  catch(e){ if(e.fatal || !info) fatal = e.message; }
+  render();
+}
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+$('#backLink').onclick = e => { if(cur){ e.preventDefault(); cur = null; render(); } };
+$('#bSave').onclick = onSave;
+$('#bPdf').onclick = onPdf;
+$('#dlg').addEventListener('click', e => { if(e.target.id === 'dlg') dlgClose(); });
+window.addEventListener('online', () => { sync(); loadInfo(); });
+window.addEventListener('offline', () => render());
+setInterval(() => { paint(); if(queue.some(q => q.state === 'wait')) sync(); }, 60000);
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+render();
+loadInfo().then(sync);
+</script>
+</body>
+</html>

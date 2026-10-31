@@ -3336,6 +3336,9 @@ function renderHome(){
     }).join('') || `<div class="empty">${sun ? 'Sunday: no classes.' : 'You have no class in today\'s timetable.'}</div>`}
     ${offs.length && !sun ? `<div class="offt"><span>No class today:</span> ${offs.map(x => `<button type="button" data-xopen="${esc(x.e.name)}" data-xday="${day}">${esc(x.e.cls)} · ${esc(abbr(x.e.sub))}</button>`).join('')}</div>` : ''}</section>`;
 
+  if(cur.length || scope) h += `<section class="card"><h3>${I.doc} Grand test</h3><div class="sub">Enter grand test marks for your classes (also without internet) and get the award list PDF.${scope === 'all' ? ' Admin: see which subjects are still missing.' : ''}</div>
+    <div class="acts2"><a class="btn primary" href="grandtest.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Grand test</a></div></section>`;
+
   if(cur.length){
     const aggs = cur.map(e => secAgg(e)).filter(Boolean), nLow = lowList('week', cur).length;
     if(aggs.length) h += `<section class="card"><h3>${I.chart} My sections this month</h3><div class="sub">${MONTHS[now.getMonth()]} attendance by class. Tap for the summary.</div>${aggs.map(g =>
