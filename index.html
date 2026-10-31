@@ -459,7 +459,7 @@ details.fold[open]>#aBody{margin-bottom:12px}
 .ssbig img{width:100%;height:100%;object-fit:cover;display:block}
 .sstop{display:flex;justify-content:space-between;align-items:baseline;margin:0 2px 10px;color:var(--ink)}.sstop b{font-size:17px}.sstop span{color:var(--muted);font-size:12.5px}
 @media (max-width:520px){.sspi{flex-direction:column;align-items:center}.sspi .ssgrid{width:100%}.ssbig{width:170px;height:210px}}
-.sswrap{overflow-x:auto}.ssph{width:58px;height:58px;border-radius:50%;object-fit:cover;flex:none;border:2px solid rgba(255,255,255,.5);position:relative;z-index:1}
+.sswrap{overflow-x:auto}.ssph.sslogo{object-fit:contain;background:#fff;padding:4px}.ssph{width:58px;height:58px;border-radius:50%;object-fit:cover;flex:none;border:2px solid rgba(255,255,255,.5);position:relative;z-index:1}
 .ssmon{border-top:1px solid var(--line);padding:6px 0}.ssmon summary{cursor:pointer;font-weight:800;padding:6px 0}.ssmon summary small{color:var(--muted);font-weight:600;margin-left:6px}
 .sscals{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-top:6px}
 .sscal .sch{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline}.sscal .sch small{color:var(--muted);font-size:11.5px}
@@ -3925,7 +3925,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-31 v7.8.2 distinctions and compartments';
+const APP_BUILD = '2026-10-31 v7.8.3 college logo on student record';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4912,7 +4912,7 @@ function renderSearch(){
   const name = P0 && !P0.error ? P0.name : ssv.roll, cls = P0 && !P0.error ? P0.cls : '';
   h += `<div class="acts2" style="margin:0 0 10px"><button class="btn" type="button" id="ssBack">${I.back}Results</button><button class="btn primary" type="button" id="ssPdf" ${P0 && !P0.error ? '' : 'disabled'}>${I.share}Share PDF</button></div>`;
   h += '<div id="ssRec">';
-  h += `<section class="hero"><div class="phead grow">${P0 && P0.photo ? `<img class="ssph" src="${esc(P0.photo)}" alt="Photo of ${esc(name)}">` : `<div class="big">${esc(initials(name))}</div>`}<div style="min-width:0;position:relative;z-index:1">
+  h += `<section class="hero"><div class="phead grow"><img class="ssph sslogo" src="jcw-logo.png" alt="Jinnah College for Women" onerror="this.outerHTML='<div class=&quot;big&quot;>${esc(initials(name))}</div>'"><div style="min-width:0;position:relative;z-index:1">
     <div class="eyebrow">${esc(ssv.roll)}${cls ? ' · ' + esc(cls) : ''}</div><h2>${esc(name)}</h2>${ssv.board && ssv.board.found && ssv.board.distinction && Number(ssv.board.marks) > 0 ? `<div class="ptags"><span class="gold">1st year distinction · ${ordN(Number(ssv.board.position))} position</span></div>` : ''}</div></div>
     ${A.pct != null ? `<div class="ring" style="--p:${Math.min(100, A.pct)};--c:${A.pct < LOW ? '#FF8A80' : '#5FD3A2'}"><div><b>${Math.round(A.pct)}%</b><small>Session</small></div></div>` : ''}</section>`;
   if(P0 && P0.error){ $q('#app').innerHTML = h + `<section class="card"><div class="empty">${esc(P0.error)}</div></section></div></main>`; return; }
