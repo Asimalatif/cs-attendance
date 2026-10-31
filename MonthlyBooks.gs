@@ -189,11 +189,13 @@ function bkList_() {
   SEASON.forEach(function (t) { if (!MA_BOOKS[t]) return; try { var b = SpreadsheetApp.openById(MA_BOOKS[t]); out.push({ key: 'MA_' + t, group: 'Monthly attendance', label: mtMonthName_(t) + ' attendance', name: b.getName() }); } catch (e) {} });
   SEASON.forEach(function (t) { var b = mtBook_(t); if (b) out.push({ key: t, group: 'Monthly test', label: mtMonthName_(t) + ' monthly test', name: b.getName() }); });
   try { var g = gtBook_(); out.push({ key: 'GT', group: 'Grand test', label: 'Grand test', name: g.getName() }); } catch (e) {}
+  try { if (typeof dtBook_ === 'function') { var dt = dtBook_(); out.push({ key: 'DT', group: 'Detention exam', label: 'Detention exam', name: dt.getName() }); } } catch (e) {}
   return { ok: true, books: out };
 }
 function bkBook_(key) {
   key = String(key || '').toUpperCase();
   if (key === 'GT') return { book: gtBook_(), label: 'Grand test' };
+  if (key === 'DT') return { book: dtBook_(), label: 'Detention exam' };
   if (key.indexOf('MA_') === 0) {
     var t = key.slice(3);
     if (!MA_BOOKS[t]) throw new Error('No monthly attendance workbook for ' + mtMonthName_(t) + '.');
