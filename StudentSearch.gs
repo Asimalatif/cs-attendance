@@ -317,7 +317,8 @@ var ST_COMMON_ = null;
 function stOwnOk_(a, b, notIn) {
   if (!ST_COMMON_) { ST_COMMON_ = {}; stNmKey_('MUHAMMAD SYED KHAN ALI SHAH GUL BEGUM NOOR ZADA JAN ULLAH UDDIN UR REHMAN').forEach(function (w) { ST_COMMON_[w] = 1; }); }
   var fam = {}; stNmKey_(notIn || '').forEach(function (w) { fam[w] = 1; });               // a family name from the father does not count
-  var A = stNmKey_(a).filter(function (w) { return !ST_COMMON_[w] && !fam[w]; }), B = stNmKey_(b);
+  var A = stNmKey_(a).filter(function (w) { return !ST_COMMON_[w] && !fam[w]; }), B0 = stNmKey_(b);
+  var B = B0.filter(function (w) { return !ST_COMMON_[w]; }); if (!B.length) B = B0;          // 'Alam' must not match the common 'Ali'
   if (!A.length) return true;
   return Math.max.apply(null, A.map(function (w) { return Math.max.apply(null, B.map(function (v) { return stJw_(w, v); })); })) >= 0.9;
 }
