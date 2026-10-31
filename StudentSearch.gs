@@ -5,8 +5,8 @@
  *   profile (strength sheet), attendance of every month (monthly attendance workbooks + approved leaves),
  *   day-by-day attendance as a calendar (daily attendance workbooks), monthly tests, grand test, detention.
  * Admin, principal and Chief Proctor: every student, every personal detail and the photo.
- * Teachers (and HOD): students of the sections they teach; personal details limited to Father name, Enroll#,
- *   Program/Class/Section, DOB, Appeared in, Quota and Subjects (nothing else is sent to their phones).
+ * Teachers (and HOD): students of the sections they teach; everything (photo, board result too) except the
+ *   student's contact number, email and address (these are never sent to their phones).
  *
  * Install (attendance Apps Script project):
  *   a) + > Script > name it "StudentSearch" > paste this file.
@@ -17,8 +17,7 @@
 var ST_CFG = {
   STRENGTH_SHEET: 'Transform-ALL-COLLEGE-STRENGTH',
   HIDE: /^(S\.?NO|PIC ?URL|PHOTO|CHALLAN.*|PORTAL ?ID|SUB\d)$/i,          // never listed as a detail (photo is shown as a picture)
-  TEACHER: [['Father Name', 'Father Name'], ['Enroll#', 'Enroll #'], ['PCS', 'Program/Class/Section (PCS)'],
-            ['DOB', 'DOB'], ['Appeared in', 'Appeared In'], ['Quota', 'Quota']],
+  PRIVATE: /CONTACT|MOBILE|PHONE|WHATSAPP|EMAIL|ADDRESS/i,          // shown to admin, principal and Chief Proctor only
   // 1st year board result of 2nd year students (Provisional Certificates workbook)
   BOARD_BOOK: '1C2tdr2yXAja0_C5Nk4HIk2m-71Kc4I-FS5VQUhjUtHQ',
   BOARD_BY_ENROLL: 'boardResult1STYEAR',     // has Enroll#, Roll No, Registration, Marks
@@ -95,18 +94,15 @@ function stProfile_(user, roll) {
   var col = function (name) { var k = gtK_(name); return head.map(gtK_).indexOf(k); };
   var subjects = (m[3] || []).map(function (x) { return gtS_(x).toUpperCase(); }).filter(Boolean);
   var fields = [];
-  if (full) {
-    head.forEach(function (h, c) {
-      var val = gtS_(row[c]);
-      if (!val || !gtS_(h) || ST_CFG.HIDE.test(gtS_(h)) || /^(STUDENTNAME|ENROLL)$/.test(gtK_(h))) return;
-      fields.push([ST_CFG.LABELS[gtK_(h)] || gtS_(h), val]);
-    });
-  } else {
-    ST_CFG.TEACHER.forEach(function (f) { var c = col(f[0]); fields.push([f[1], c >= 0 ? gtS_(row[c]) : (f[0] === 'PCS' ? gtS_(m[2]) : '')]); });
-  }
-  if (full) fields = stTidy_(fields, roll);
+  head.forEach(function (h, c) {
+    var val = gtS_(row[c]);
+    if (!val || !gtS_(h) || ST_CFG.HIDE.test(gtS_(h)) || /^(STUDENTNAME|ENROLL)$/.test(gtK_(h))) return;
+    if (!full && ST_CFG.PRIVATE.test(gtS_(h))) return;                // contact, email, address: admin / principal / CP only
+    fields.push([ST_CFG.LABELS[gtK_(h)] || gtS_(h), val]);
+  });
+  fields = stTidy_(fields, roll);
   var out = { ok: true, full: full, roll: gtS_(m[0]), name: gtS_(m[1]), cls: gtS_(m[2]), father: gtS_(m[4]), subjects: subjects, fields: fields };
-  if (full) out.photo = stPhoto_(row[col('Pic URL')] || row[col('PHOTO')]);
+  out.photo = stPhoto_(row[col('Pic URL')] || row[col('PHOTO')]);
   return out;
 }
 /** no repetitions: PCS already says program / class / section, REG# = Enroll#, NULL / 0 are empty; matric marks on one line */
@@ -327,7 +323,6 @@ function stOwnOk_(a, b, notIn) {
 }
 function stBoard_(user, roll) {
   var m = stCheck_(user, roll);
-  if (!stFull_(user)) return { ok: true, show: false };
   if (!stIsSecond_(m[2])) return { ok: true, show: false };
   var D = stBoardData_(), k = gtK_(roll), byRoll = {};
   D.list.forEach(function (x) { byRoll[x[0]] = x; });
