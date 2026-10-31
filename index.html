@@ -5381,11 +5381,11 @@ const csvBlob = L => new Blob(['﻿' + L.map(r => r.map(csvQ).join(',')).join('\
 let ros = { mon:'', busy:false, res:null, pct:0, err:'' };
 function rosCard(){
   if(scope !== 'all') return '';
-  const cur = SEAS[seasNow()], nxt = SEAS[seasNow() + 1], R = ros.res;
+  const R = ros.res;
   const n = R ? R.diffs.reduce((a, d) => a + d.missing.length + d.extra.length + d.off.length, 0) : 0;
-  return `<section class="card" id="rosCard"><h3>${I.check} Sheets vs strength sheet <span class="tdate">daily attendance</span></h3>
-    <div class="sub">Checks that every daily attendance sheet has exactly the students of Transform-ALL-COLLEGE-STRENGTH: nobody missing, nobody extra. Nothing changes until you press a button.</div>
-    <div class="acts2"><button class="btn ${ros.mon === cur ? 'primary' : ''}" type="button" data-xros="${cur}" ${ros.busy ? 'disabled' : ''}>Check ${esc(monName(cur))}</button>${nxt ? `<button class="btn ${ros.mon === nxt ? 'primary' : ''}" type="button" data-xros="${nxt}" ${ros.busy ? 'disabled' : ''}>Check ${esc(monName(nxt))}</button>` : ''}</div>
+  return `<section class="card" id="rosCard"><h3>${I.check} Daily attendance sheets vs strength sheet</h3>
+    <div class="sub">Checks the <b>daily attendance workbooks</b> (one per month, the workbooks this app marks in; one sheet per class and subject, e.g. "FCS-1 OCT COMPUTER SCIENCE") against Transform-ALL-COLLEGE-STRENGTH: nobody missing, nobody extra. Nothing changes until you press a button. The monthly attendance, monthly test, grand test and detention workbooks are in the next card.</div>
+    <div class="acts2">${SEAS.map(m => `<button class="btn ${ros.mon === m ? 'primary' : ''}" type="button" data-xros="${m}" ${ros.busy ? 'disabled' : ''}>Check ${esc(monName(m))}</button>`).join('')}</div>
     ${ros.busy ? `<div class="sub" style="margin-top:8px">Checking ${esc(monName(ros.mon))}… ${ros.pct}%</div><span class="mbar" style="height:10px;margin-top:4px"><i style="width:${ros.pct}%"></i></span>` : ''}
     ${ros.err ? `<div class="err2">${esc(ros.err)}</div>` : ''}
     ${R && !ros.busy ? `<div class="sub" style="margin-top:8px"><b>${esc(R.label)}:</b> ${R.checked} sheets checked · ${n ? `<b style="color:var(--absent)">${n} difference${n === 1 ? '' : 's'} in ${R.diffs.length} sheet${R.diffs.length === 1 ? '' : 's'}</b>` : '<b style="color:var(--present)">✓ all sheets match the strength sheet</b>'}</div>
@@ -5441,9 +5441,9 @@ function bkCard(){
   if(!bk.list && !bk.loading && navigator.onLine){ bk.loading = true; srv({ action:'bk_list' }, 60000).then(r => { bk.list = r.books || []; }).catch(e => { bk.list = []; bk.err = e.message; }).finally(() => { bk.loading = false; refreshBk(); }); }
   const R = bk.res, n = R ? R.diffs.reduce((a, d) => a + d.missing.length + d.extra.length, 0) : 0;
   const groups = bk.list ? [...new Set(bk.list.map(b => b.group || ''))] : [];
-  return `<section class="card" id="bkCard"><h3>${I.check} Monthly attendance, test &amp; detention sheets vs strength sheet</h3>
-    <div class="sub">Checks that every section sheet of the monthly attendance, monthly test, grand test and detention workbooks has exactly the students of Transform-ALL-COLLEGE-STRENGTH. (Daily attendance sheets: the card <b>Sheets vs strength sheet</b>.) Nothing changes until you press a button.</div>
-    ${bk.list ? (groups.map(g => `<div class="sub" style="margin-top:10px;font-weight:700">${esc(g)}</div><div class="acts2" style="margin-top:4px">${bk.list.filter(b => (b.group || '') === g).map(b => `<button class="btn ${bk.key === b.key ? 'primary' : ''}" type="button" data-xbk="${esc(b.key)}" ${bk.busy ? 'disabled' : ''} title="${esc(b.name)}">Check ${esc(b.label)}</button>`).join('')}</div>`).join('') || '<div class="sub">No workbook found.</div>') : '<div class="acts2"><span class="sub">Looking for the workbooks…</span></div>'}
+  return `<section class="card" id="bkCard"><h3>${I.check} Monthly attendance, test, grand test &amp; detention workbooks vs strength sheet</h3>
+    <div class="sub">Checks the workbooks that have <b>one sheet per section</b> (e.g. "FCS-1 D3"): the <b>monthly attendance</b> workbooks (lectures per subject for the month), the <b>monthly test</b> workbooks, the <b>grand test</b> and the <b>detention</b> workbook, against Transform-ALL-COLLEGE-STRENGTH. Every section sheet in the chosen workbook is checked. Nothing changes until you press a button.</div>
+    ${bk.list ? (groups.map(g => `<div class="sub" style="margin-top:10px"><b>${esc(g)}</b> <small>${esc(bk.list.filter(b => (b.group || '') === g).map(b => b.name).join(' · '))}</small></div><div class="acts2" style="margin-top:4px">${bk.list.filter(b => (b.group || '') === g).map(b => `<button class="btn ${bk.key === b.key ? 'primary' : ''}" type="button" data-xbk="${esc(b.key)}" ${bk.busy ? 'disabled' : ''} title="${esc(b.name)}">Check ${esc(b.label)}</button>`).join('')}</div>`).join('') || '<div class="sub">No workbook found.</div>') : '<div class="acts2"><span class="sub">Looking for the workbooks…</span></div>'}
     ${bk.busy ? `<div class="sub" style="margin-top:8px">Checking… this can take a minute.</div><span class="mbar" style="height:10px;margin-top:4px"><i style="width:60%"></i></span>` : ''}
     ${bk.err ? `<div class="err2">${esc(bk.err)}</div>` : ''}
     ${R && !bk.busy ? `<div class="sub" style="margin-top:8px"><b>${esc(R.label)}:</b> ${R.checked} sheets checked · ${n ? `<b style="color:var(--absent)">${n} difference${n === 1 ? '' : 's'} in ${R.diffs.length} sheet${R.diffs.length === 1 ? '' : 's'}</b>` : '<b style="color:var(--present)">✓ all sheets match the strength sheet</b>'}${R.noSheet && R.noSheet.length ? `<br>No sheet for: ${R.noSheet.map(esc).join(', ')}` : ''}</div>
