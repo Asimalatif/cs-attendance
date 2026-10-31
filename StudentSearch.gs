@@ -18,7 +18,13 @@ var ST_CFG = {
   STRENGTH_SHEET: 'Transform-ALL-COLLEGE-STRENGTH',
   HIDE: /^(S\.?NO|PIC ?URL|PHOTO|CHALLAN.*|PORTAL ?ID|SUB\d)$/i,          // never listed as a detail (photo is shown as a picture)
   TEACHER: [['Father Name', 'Father Name'], ['Enroll#', 'Enroll #'], ['PCS', 'Program/Class/Section (PCS)'],
-            ['DOB', 'DOB'], ['Appeared in', 'Appeared In'], ['Quota', 'Quota']]
+            ['DOB', 'DOB'], ['Appeared in', 'Appeared In'], ['Quota', 'Quota']],
+  // 1st year board result of 2nd year students (Provisional Certificates workbook)
+  BOARD_BOOK: '1C2tdr2yXAja0_C5Nk4HIk2m-71Kc4I-FS5VQUhjUtHQ',
+  BOARD_BY_ENROLL: 'boardResult1STYEAR',     // has Enroll#, Roll No, Registration, Marks
+  BOARD_LIST: '1styeardata2026',             // the board's list: Roll No, Name, Father Name, Registration #, Marks, Grade
+  BOARD_LINKS: 'App Board Links',            // choices confirmed in the app (made by itself)
+  MATCH_MIN: 0.86, MATCH_GAP: 0.03
 };
 
 function stRoute_(user, req) {
@@ -28,6 +34,8 @@ function stRoute_(user, req) {
       case 'st_profile': return stProfile_(user, req.roll);
       case 'st_month':   return stMonth_(user, req.roll, req.mon);
       case 'st_tests':   return stTests_(user, req.roll);
+      case 'st_board':   return stBoard_(user, req.roll);
+      case 'st_board_link': return stBoardLink_(user, req.roll, req.board);
     }
     return { ok: false, error: 'UNKNOWN_ACTION' };
   } catch (e) {
@@ -231,3 +239,98 @@ function stTests_(user, roll) {
   try { res.dt = stMarks_(dtBook_(), cls, roll, 'dt'); } catch (e) { res.dtError = String(e.message || e); }
   return res;
 }
+
+/* ================= 1st YEAR BOARD RESULT of 2nd year students =================
+   1) a link confirmed in the app ("App Board Links" sheet)  2) boardResult1STYEAR by Enroll#
+   3) name + father name matched in 1styeardata2026, spelling tolerant (Muhammad / Mohd, double letters, ee / i,
+      word order, an extra Khan ...). Only a clear best match is taken; otherwise admin / CP choose from the closest 5. */
+function stIsSecond_(cls) { var u = gtS_(cls).toUpperCase().replace(/\s+/g, ''); return /^(FCS|PRE-?ENG|F\.?A)-?2/.test(u) || /^[A-Z]2$/.test(u); }
+function stBoardData_() {
+  var c = wrCacheGet_('st_board_v1'); if (c) return c;
+  var book = SpreadsheetApp.openById(ST_CFG.BOARD_BOOK), out = { enr: {}, list: [], links: {} };
+  var col = function (head, names) { var h = head.map(gtK_); for (var i = 0; i < names.length; i++) { var x = h.indexOf(gtK_(names[i])); if (x >= 0) return x; } return -1; };
+  var sh = book.getSheetByName(ST_CFG.BOARD_LIST);
+  if (sh) {
+    var v = sh.getDataRange().getDisplayValues(), h = v[0];
+    var ir = col(h, ['Roll No']), inm = col(h, ['Name']), ifa = col(h, ['Father Name']), ig = col(h, ['Registration #', 'Registration']), im = col(h, ['Marks']), igr = col(h, ['Grade']);
+    for (var i = 1; i < v.length; i++) if (gtS_(v[i][ir])) out.list.push([gtS_(v[i][ir]), gtS_(v[i][inm]), gtS_(v[i][ifa]), ig >= 0 ? gtS_(v[i][ig]) : '', im >= 0 ? gtS_(v[i][im]) : '', igr >= 0 ? gtS_(v[i][igr]) : '']);
+  }
+  sh = book.getSheetByName(ST_CFG.BOARD_BY_ENROLL);
+  if (sh) {
+    var w = sh.getDataRange().getDisplayValues(), hh = w[0];
+    var e = col(hh, ['Enroll#']), r2 = col(hh, ['Roll No']), g2 = col(hh, ['Registration']), m2 = col(hh, ['Marks']), gr2 = col(hh, ['Grade']), pc = col(hh, ['percentage']);
+    for (var j = 1; j < w.length; j++) if (gtS_(w[j][e]) && gtS_(w[j][r2])) out.enr[gtK_(w[j][e])] = [gtS_(w[j][r2]), gtS_(w[j][g2]), gtS_(w[j][m2]), gr2 >= 0 ? gtS_(w[j][gr2]) : '', pc >= 0 ? gtS_(w[j][pc]) : ''];
+  }
+  sh = book.getSheetByName(ST_CFG.BOARD_LINKS);
+  if (sh && sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 2).getDisplayValues().forEach(function (r) { if (r[0] && r[1]) out.links[gtK_(r[0])] = gtS_(r[1]); });
+  wrCachePut_('st_board_v1', out, 21600);
+  return out;
+}
+/* ---- spelling-tolerant name comparison ---- */
+function stNmKey_(s) {
+  s = String(s || '').toUpperCase().replace(/[^A-Z ]/g, ' ');
+  s = s.replace(/\b(MOHAMMAD|MOHAMMED|MUHAMMED|MUHAMAD|MOHAMAD|MOHD|MUHD|MHD|MUHAMMAD|MUHAMMMAD|M)\b/g, 'MUHAMMAD');
+  s = s.replace(/\b(SYEDA|SAYEDA|SAYYEDA|SYED|SAYED|SAYYED|SAYYAD|SYYED)\b/g, 'SYED').replace(/\b(BIBI|BB|MISS|MS|MR|DR|HAJI|ENGR|MALIK|MIAN|SAHIBZADA|SAHIBZADI|QAZI|HAFIZ)\b/g, ' ');
+  return s.split(/\s+/).filter(Boolean).map(function (w) {
+    return w.replace(/(.)\1+/g, '$1').replace(/EE/g, 'I').replace(/OO/g, 'U').replace(/Y/g, 'I').replace(/^KH/, 'K').replace(/H(?=[^AEIOU]|$)/g, '').replace(/[AEIOU]+$/, 'A');
+  });
+}
+function stJw_(a, b) {
+  if (a === b) return 1; var la = a.length, lb = b.length; if (!la || !lb) return 0;
+  var md = Math.max(0, Math.floor(Math.max(la, lb) / 2) - 1), am = [], bm = [], m = 0, i, j;
+  for (i = 0; i < la; i++) for (j = Math.max(0, i - md); j < Math.min(lb, i + md + 1); j++) if (!bm[j] && a[i] === b[j]) { am[i] = bm[j] = true; m++; break; }
+  if (!m) return 0; var t = 0, k = 0;
+  for (i = 0; i < la; i++) if (am[i]) { while (!bm[k]) k++; if (a[i] !== b[k]) t++; k++; }
+  var jj = (m / la + m / lb + (m - t / 2) / m) / 3, p = 0; while (p < 4 && a[p] === b[p]) p++;
+  return jj + p * 0.1 * (1 - jj);
+}
+function stNmSim_(x, y) {
+  var A = stNmKey_(x), B = stNmKey_(y); if (!A.length || !B.length) return 0;
+  var side = function (P, Q) { return P.reduce(function (s, w) { return s + Math.max.apply(null, Q.map(function (v) { return stJw_(w, v); })); }, 0) / P.length; };
+  var s1 = side(A, B), s2 = side(B, A); return Math.max(Math.min(s1, s2), (s1 + s2) / 2 - 0.04);
+}
+var ST_COMMON_ = null;
+/** the own (not common) words of a name must really match: stops sisters with the same father, or two girls
+ *  with the same common name (Alishba Khan, Eman) but different fathers, being mixed up */
+function stOwnOk_(a, b, notIn) {
+  if (!ST_COMMON_) { ST_COMMON_ = {}; stNmKey_('MUHAMMAD SYED KHAN ALI SHAH GUL BEGUM NOOR ZADA JAN ULLAH UDDIN UR REHMAN').forEach(function (w) { ST_COMMON_[w] = 1; }); }
+  var fam = {}; stNmKey_(notIn || '').forEach(function (w) { fam[w] = 1; });               // a family name from the father does not count
+  var A = stNmKey_(a).filter(function (w) { return !ST_COMMON_[w] && !fam[w]; }), B = stNmKey_(b);
+  if (!A.length) return true;
+  return Math.max.apply(null, A.map(function (w) { return Math.max.apply(null, B.map(function (v) { return stJw_(w, v); })); })) >= 0.9;
+}
+function stBoard_(user, roll) {
+  var m = stCheck_(user, roll);
+  if (!stFull_(user)) return { ok: true, show: false };
+  if (!stIsSecond_(m[2])) return { ok: true, show: false };
+  var D = stBoardData_(), k = gtK_(roll), byRoll = {};
+  D.list.forEach(function (x) { byRoll[x[0]] = x; });
+  var out = function (rn, how, extra) {
+    var x = byRoll[rn] || [rn, '', '', '', '', ''];
+    var e = D.enr[k] && D.enr[k][0] === rn ? D.enr[k] : null;
+    return Object.assign({ ok: true, show: true, found: true, how: how, rollNo: rn, reg: x[3] || (e ? e[1] : ''), marks: x[4] || (e ? e[2] : ''),
+                           grade: x[5] || (e ? e[3] : ''), pct: e ? e[4] : '', boardName: x[1], boardFather: x[2] }, extra || {});
+  };
+  if (D.links[k] && D.links[k] !== '-') return out(D.links[k], 'confirmed');
+  if (D.enr[k] && D.links[k] !== '-') return out(D.enr[k][0], 'enroll');
+  var used = {};                                                   // board records that already belong to another student
+  Object.keys(D.enr).forEach(function (e) { if (e !== k) used[D.enr[e][0]] = 1; });
+  Object.keys(D.links).forEach(function (e) { if (e !== k) used[D.links[e]] = 1; });
+  var sc = D.list.filter(function (x) { return !used[x[0]]; }).map(function (x) { return { x: x, s: stNmSim_(m[1], x[1]) * 0.6 + stNmSim_(m[4], x[2]) * 0.4 }; }).sort(function (a, b) { return b.s - a.s; });
+  var best = sc[0], gap = best ? best.s - (sc[1] ? sc[1].s : 0) : 0;
+  if (D.links[k] !== '-' && best && best.s >= ST_CFG.MATCH_MIN && gap >= ST_CFG.MATCH_GAP && stOwnOk_(m[1], best.x[1], m[4]) && stOwnOk_(m[4], best.x[2])) return out(best.x[0], 'name', { score: Math.round(best.s * 100) });
+  return { ok: true, show: true, found: false, rejected: D.links[k] === '-', candidates: sc.slice(0, 5).map(function (c) { return { rollNo: c.x[0], name: c.x[1], father: c.x[2], marks: c.x[4], score: Math.round(c.s * 100) }; }) };
+}
+/** admin / CP confirm which board record belongs to the student (board = board Roll No, '-' = not the one found by name) */
+function stBoardLink_(user, roll, board) {
+  if (!stFull_(user)) return { ok: false, error: 'NOT_ALLOWED' };
+  var m = stCheck_(user, roll), book = SpreadsheetApp.openById(ST_CFG.BOARD_BOOK), sh = book.getSheetByName(ST_CFG.BOARD_LINKS);
+  if (!sh) { sh = book.insertSheet(ST_CFG.BOARD_LINKS); sh.getRange(1, 1, 1, 5).setValues([['Enroll#', 'Board Roll No', 'Student', 'Confirmed by', 'Date']]).setFontWeight('bold'); }
+  var lr = sh.getLastRow(), row = 0;
+  if (lr > 1) sh.getRange(2, 1, lr - 1, 1).getDisplayValues().forEach(function (r, i) { if (!row && gtK_(r[0]) === gtK_(roll)) row = i + 2; });
+  var vals = [[gtS_(m[0]), gtS_(board), gtS_(m[1]), user.username || '', new Date()]];
+  if (row) sh.getRange(row, 1, 1, 5).setValues(vals); else sh.getRange(lr + 1, 1, 1, 5).setValues(vals);
+  CacheService.getScriptCache().remove('st_board_v1_n');
+  return stBoard_(user, roll);
+}
+

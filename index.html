@@ -450,6 +450,13 @@ details.fold[open]>#aBody{margin-bottom:12px}
 .ssgrid span{display:block;font-size:11.5px;color:var(--muted)}.ssgrid b{font-weight:650;word-break:break-word}
 .ssgrid .wide{grid-column:1/-1;border-right:0!important;border-bottom:0}
 .chips2{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}.chips2 i{font-style:normal;font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;background:var(--surface2);color:var(--ink)}
+.sswide{grid-column:1/-1}
+.ssmon summary{list-style:none}.ssmon summary::-webkit-details-marker{display:none}.ssmon summary::before{content:'▸ ';color:var(--muted)}.ssmon[open] summary::before{content:'▾ '}
+.sspi{display:flex;gap:14px;align-items:flex-start}.sspi .ssgrid{flex:1;min-width:0}
+.ssbig{width:150px;height:185px;flex:none;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:var(--surface2);display:grid;place-items:center;color:var(--muted);font-size:12px}
+.ssbig img{width:100%;height:100%;object-fit:cover;display:block}
+.sstop{display:flex;justify-content:space-between;align-items:baseline;margin:0 2px 10px;color:var(--ink)}.sstop b{font-size:17px}.sstop span{color:var(--muted);font-size:12.5px}
+@media (max-width:520px){.sspi{flex-direction:column;align-items:center}.sspi .ssgrid{width:100%}.ssbig{width:170px;height:210px}}
 .sswrap{overflow-x:auto}.ssph{width:58px;height:58px;border-radius:50%;object-fit:cover;flex:none;border:2px solid rgba(255,255,255,.5);position:relative;z-index:1}
 .ssmon{border-top:1px solid var(--line);padding:6px 0}.ssmon summary{cursor:pointer;font-weight:800;padding:6px 0}.ssmon summary small{color:var(--muted);font-weight:600;margin-left:6px}
 .sscals{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-top:6px}
@@ -3916,7 +3923,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-31 v7.7 student search';
+const APP_BUILD = '2026-10-31 v7.8 student search pdf copy';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4827,7 +4834,7 @@ async function tpGo(kind){
    Teachers: students of their sections; personal details limited (the server sends nothing more).
    Attendance per subject and month (monthly attendance workbooks + approved leaves), day by day as a calendar
    (daily attendance workbooks), monthly tests, grand test and detention. */
-let ssv = { q:'', list:[], busy:false, roll:'', p:null, months:{}, tests:null, err:'', t:0, full:false, open:{} };
+let ssv = { q:'', list:[], busy:false, roll:'', p:null, months:{}, tests:null, board:null, err:'', t:0, full:false, open:{} };
 document.addEventListener('input', ev => { if(ev.target && ev.target.id === 'ssQ') ssFind(ev.target.value); });
 document.addEventListener('toggle', ev => { const d = ev.target; if(d && d.classList && d.classList.contains('ssmon')) ssv.open[d.dataset.m] = d.open; }, true);
 function searchCard(){
@@ -4857,13 +4864,14 @@ function ssListHtml(){
 }
 function ssPaintList(){ const b = $q('#ssRes'); if(b) b.innerHTML = ssListHtml(); }
 function ssOpen(roll){
-  Object.assign(ssv, { roll, p:null, months:{}, tests:null, err:'', open:{} });
+  Object.assign(ssv, { roll, p:null, months:{}, tests:null, board:null, err:'', open:{} });
   rerender(); window.scrollTo(0, 0);
   const same = f => r => { if(ssv.roll === roll){ f(r); if(appView === 'search') rerender(); } };
   const fail = k => e => { if(ssv.roll === roll){ ssv[k] = { error:errText(e) }; if(appView === 'search') rerender(); } };
   const call = (q, ms) => api(q, ms).then(r => { if(!r.ok) throw new Error(String(r.error || 'Failed').replace(/^NOT_ALLOWED: /, '')); return r; });
   call({ action:'st_profile', roll }, 60000).then(same(r => { ssv.p = r; })).catch(fail('p'));
   call({ action:'st_tests', roll }, 120000).then(same(r => { ssv.tests = r; })).catch(fail('tests'));
+  call({ action:'st_board', roll }, 90000).then(same(r => { ssv.board = r; })).catch(e => { if(ssv.roll === roll){ ssv.board = { show:true, error:errText(e) }; if(appView === 'search') rerender(); } });
   SEAS.slice(0, seasNow() + 1).forEach(m => call({ action:'st_month', roll, mon:m }, 120000).then(same(r => { ssv.months[m] = r; })).catch(e => { if(ssv.roll === roll){ ssv.months[m] = { error:errText(e) }; if(appView === 'search') rerender(); } }));
 }
 const ssMons = () => SEAS.slice(0, seasNow() + 1);
@@ -4901,10 +4909,11 @@ function renderSearch(){
   const P0 = ssv.p, A = ssAtt(), T = ssv.tests, mons = ssMons();
   const name = P0 && !P0.error ? P0.name : ssv.roll, cls = P0 && !P0.error ? P0.cls : '';
   h += `<div class="acts2" style="margin:0 0 10px"><button class="btn" type="button" id="ssBack">${I.back}Results</button><button class="btn primary" type="button" id="ssPdf" ${P0 && !P0.error ? '' : 'disabled'}>${I.share}Share PDF</button></div>`;
+  h += '<div id="ssRec">';
   h += `<section class="hero"><div class="phead grow">${P0 && P0.photo ? `<img class="ssph" src="${esc(P0.photo)}" alt="Photo of ${esc(name)}">` : `<div class="big">${esc(initials(name))}</div>`}<div style="min-width:0;position:relative;z-index:1">
     <div class="eyebrow">${esc(ssv.roll)}${cls ? ' · ' + esc(cls) : ''}</div><h2>${esc(name)}</h2></div></div>
     ${A.pct != null ? `<div class="ring" style="--p:${Math.min(100, A.pct)};--c:${A.pct < LOW ? '#FF8A80' : '#5FD3A2'}"><div><b>${Math.round(A.pct)}%</b><small>Session</small></div></div>` : ''}</section>`;
-  if(P0 && P0.error){ $q('#app').innerHTML = h + `<section class="card"><div class="empty">${esc(P0.error)}</div></section></main>`; return; }
+  if(P0 && P0.error){ $q('#app').innerHTML = h + `<section class="card"><div class="empty">${esc(P0.error)}</div></section></div></main>`; return; }
   const mtAll = T && T.mt ? Object.values(T.mt).flatMap(o => Object.values(o).map(ssTestPct)).filter(x => x != null) : [];
   const gtP = T && T.gt ? Object.values(T.gt).map(ssTestPct).filter(x => x != null) : [];
   const dt600 = T && T.dt ? T.dt['#TOTAL (600)'] : '';
@@ -4914,8 +4923,8 @@ function renderSearch(){
     <div class="kpi ${tone(avg(mtAll))}"><b>${avg(mtAll) == null ? '–' : avg(mtAll) + '%'}</b><small>Monthly tests</small></div>
     <div class="kpi ${tone(avg(gtP))}"><b>${dt600 || (avg(gtP) == null ? '–' : avg(gtP) + '%')}</b><small>${dt600 ? 'Detention (600)' : 'Grand test'}</small></div></div><div class="grid2">`;
   // profile
-  h += `<section class="card"><h3>Student profile${P0 && !P0.full ? '' : ''}</h3>${!P0 ? '<div class="empty">Loading…</div>' :
-    `<div class="ssgrid">${P0.fields.map(f => `<div><span>${esc(f[0])}</span><b>${esc(f[1] || '–')}</b></div>`).join('')}<div class="wide"><span>Subjects</span><div class="chips2">${P0.subjects.map(x => `<i>${esc(x)}</i>`).join('')}</div></div></div>`}</section>`;
+  h += `<section class="card sswide"><h3>Student profile</h3>${!P0 ? '<div class="empty">Loading…</div>' :
+    `<div class="sspi">${P0.full ? `<div class="ssbig">${P0.photo ? `<img src="${esc(P0.photo)}" alt="Photo of ${esc(name)}">` : '<span>No photo</span>'}</div>` : ''}<div class="ssgrid">${P0.fields.map(f => `<div><span>${esc(f[0])}</span><b>${esc(f[1] || '–')}</b></div>`).join('')}<div class="wide"><span>Subjects</span><div class="chips2">${P0.subjects.map(x => `<i>${esc(x)}</i>`).join('')}</div></div></div></div>`}</section>${ssBoardHtml()}`;
   // attendance table
   const subNames = Object.keys(A.subs).sort(), pend = mons.filter(m => !ssv.months[m]).length;
   h += `<section class="card"><h3>${I.chart} Attendance by subject and month</h3>${pend ? `<div class="sub">Loading ${pend} month${pend > 1 ? 's' : ''}…</div>` : ''}
@@ -4949,8 +4958,81 @@ function renderSearch(){
   h += `<section class="card"><h3>${I.doc} Detention exam</h3>${!T ? '<div class="empty">Loading…</div>' : dtS.length ? `<table class="mtab"><thead><tr><th>Subject</th><th class="c">Theory</th><th class="c">Practical</th><th class="c">Total</th></tr></thead><tbody>${dtS.map(sub => { const x = T.dt[sub], pc = /^A/i.test(x.tot) ? 0 : numOf(x.tot) != null ? numOf(x.tot) / x.max * 100 : null;
       return `<tr><td>${esc(titleCase(sub))}</td><td class="c">${esc(x.th || '–')}${x.th ? ' / ' + x.thMax : ''}</td><td class="c">${x.prMax ? esc(x.pr || '–') + (x.pr ? ' / ' + x.prMax : '') : '–'}</td><td class="c"><span class="pill ${/^A/i.test(x.tot) ? 'bad' : pc == null ? '' : pc < 40 ? 'bad' : pc < 60 ? 'mid' : 'good'}">${esc(x.tot || 'N/R')} / ${x.max}</span></td></tr>`; }).join('')}</tbody></table>
       <div class="rnote">${['#TOTAL (600)', '#PERCENTAGE', '#POSITION'].filter(k => T.dt[k]).map(k => esc(k.slice(1)) + ': <b>' + esc(T.dt[k]) + '</b>').join(' · ')}</div>` : '<div class="empty">No detention marks found.</div>'}</section>`;
-  h += '</div></main>';
+  h += '</div></div></main>';
   $q('#app').innerHTML = h;
+}
+function ssBoardHtml(){
+  const B = ssv.board; if(!B || B.show === false) return '';
+  let h = `<section class="card"><h3>${I.doc} 1st year board result</h3>`;
+  if(B.error) return h + `<div class="empty">${esc(B.error)}</div></section>`;
+  if(B.found){
+    h += `<div class="ssgrid"><div><span>Board Roll No</span><b>${esc(B.rollNo)}</b></div><div><span>Registration #</span><b>${esc(B.reg || '–')}</b></div>
+      <div><span>Marks</span><b>${esc(B.marks || '–')}${B.pct ? ' (' + esc(B.pct) + '%)' : ''}</b></div><div><span>Grade</span><b>${esc(B.grade || '–')}</b></div></div>
+      <div class="rnote">${B.how === 'enroll' ? 'From boardResult1STYEAR (matched by Enroll #).' : B.how === 'confirmed' ? 'Confirmed in the app.' : 'Found by name: ' + esc(B.boardName) + ' D/O ' + esc(B.boardFather) + ' (' + B.score + '% alike). Please check.'}</div>`;
+    if(B.how === 'name') h += `<div class="acts2 noprint"><button class="btn small primary" type="button" data-xbl="${esc(B.rollNo)}">Yes, this is her</button><button class="btn small" type="button" data-xbl="-">Not her</button></div>`;
+  } else {
+    h += `<div class="sub">${B.rejected ? 'The record found by name was marked "Not her".' : 'Not found automatically: her name or father name is spelled differently, or she is not in the board\'s 1st year list.'} Is she one of these?</div>
+      <div class="noprint">${(B.candidates || []).map(c => `<button class="li" type="button" data-xbl="${esc(c.rollNo)}"><span class="tx"><b>${esc(c.name)}</b><small>D/O ${esc(c.father)} · Roll No ${esc(c.rollNo)} · Marks ${esc(c.marks || '–')} · ${c.score}% alike</small></span><span class="pill">This is her</span></button>`).join('')}</div>`;
+  }
+  return h + '</section>';
+}
+async function ssBoardLink(rn){
+  const roll = ssv.roll;
+  try{
+    const r = await api({ action:'st_board_link', roll, board:rn }, 60000);
+    if(!r.ok) throw new Error(r.error);
+    if(ssv.roll === roll){ ssv.board = r; rerender(); toast(rn === '-' ? 'Saved: not her. Choose the right one from the list.' : 'Saved. This board record now belongs to her.'); }
+  }catch(e){ toast('Not saved: ' + errText(e)); }
+}
+/* ----- PDF = an exact copy of the record on the screen (picture of the page, all months open) ----- */
+let h2cP = null;
+function h2cLoad(){
+  return h2cP || (h2cP = new Promise((ok, no) => {
+    if(window.html2canvas) return ok();
+    const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    sc.onload = () => ok(); sc.onerror = () => { h2cP = null; no(new Error('Could not load the PDF picture tool. Connect to the internet and try again.')); };
+    document.head.appendChild(sc);
+  }));
+}
+async function ssPdfCopy(){
+  const src = $q('#ssRec'), P0 = ssv.p; if(!src || !P0 || P0.error) return;
+  const btn = $q('#ssPdf'); if(btn) btn.disabled = true;
+  toast('Making the PDF…');
+  let clone = null;
+  try{
+    await Promise.all([P.libs(), h2cLoad()]);
+    const W = 820, bg = getComputedStyle(document.body).backgroundColor || '#fff';
+    clone = src.cloneNode(true); clone.removeAttribute('id');
+    clone.querySelectorAll('details').forEach(d => { d.open = true; });
+    clone.querySelectorAll('.noprint').forEach(e => e.remove());
+    const top = document.createElement('div'); top.className = 'sstop';
+    top.innerHTML = `<b>Jinnah College for Women</b><span>Student record · ${esc(fmtDate(new Date()))}</span>`;
+    clone.prepend(top);
+    Object.assign(clone.style, { width:W + 'px', position:'fixed', left:'0', top:'0', zIndex:'-1', background:bg, padding:'14px', boxSizing:'border-box' });
+    document.body.appendChild(clone);
+    if(document.fonts && document.fonts.ready) await document.fonts.ready;
+    await new Promise(r => setTimeout(r, 80));
+    const scale = Math.max(1, Math.min(2, Math.floor(16000 / clone.scrollHeight) || 1));
+    const canvas = await window.html2canvas(clone, { scale, backgroundColor:bg, width:W, windowWidth:W, scrollX:0, scrollY:0, useCORS:true, logging:false });
+    const top0 = clone.getBoundingClientRect().top;
+    const breaks = [...clone.querySelectorAll('section, .kpis, .sscal, .ssmon, tr')].map(e => (e.getBoundingClientRect().top - top0) * scale).sort((a, b) => a - b);
+    clone.remove(); clone = null;
+    const pdf = new window.jspdf.jsPDF({ unit:'mm', format:'a4', orientation:'portrait' });
+    const M = 6, cw = 210 - 2 * M, ch = 297 - 2 * M, pxPerMm = canvas.width / cw, pageH = Math.floor(ch * pxPerMm);
+    let y = 0, first = true;
+    while(y < canvas.height - 1){
+      let end = Math.min(y + pageH, canvas.height);
+      if(end < canvas.height){ const c2 = breaks.filter(b => b > y + pageH * 0.45 && b <= end); if(c2.length) end = Math.floor(c2[c2.length - 1]); }
+      const part = document.createElement('canvas'); part.width = canvas.width; part.height = end - y;
+      const g = part.getContext('2d'); g.fillStyle = bg; g.fillRect(0, 0, part.width, part.height);
+      g.drawImage(canvas, 0, y, canvas.width, end - y, 0, 0, canvas.width, end - y);
+      if(!first) pdf.addPage();
+      pdf.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG', M, M, cw, (end - y) / pxPerMm);
+      first = false; y = end;
+    }
+    P.offerFile(pdf.output('blob'), 'Student-record_' + P.safe(P0.name) + '_' + P.safe(P0.roll) + '.pdf', 'Student record ' + P0.name);
+  }catch(e){ toast('PDF not made: ' + errText(e)); }
+  finally{ if(clone) clone.remove(); const b2 = $q('#ssPdf'); if(b2) b2.disabled = false; }
 }
 function ssPdf(){
   const C = P.C, P0 = ssv.p, A = ssAtt(), T = ssv.tests || { mt:{}, gt:{}, dt:{} }, mons = ssMons();
@@ -6339,7 +6421,8 @@ document.addEventListener('click', ev => {
   if(t.closest('#wrGo')) return wrGo();
   if((b = t.closest('[data-xss]'))) return ssOpen(b.dataset.xss);
   if(t.closest('#ssBack')){ ssv.roll = ''; return rerender(); }
-  if(t.closest('#ssPdf')) return P.run(ssPdf);
+  if(t.closest('#ssPdf')) return ssPdfCopy();
+  if((b = t.closest('[data-xbl]'))) return ssBoardLink(b.dataset.xbl);
   if((b = t.closest('[data-xas]'))){ attSrc = b.dataset.xas; store.set('attSrc', attSrc); for(const k in rpCache) delete rpCache[k]; return rerender(); }
   if((b = t.closest('[data-xtk]'))){ tp.kind = b.dataset.xtk; store.set('tp', tp); return rerender(); }
   if((b = t.closest('[data-xte]'))){ tp.exam = b.dataset.xte; store.set('tp', tp); return rerender(); }
