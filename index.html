@@ -3903,7 +3903,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-31 v7.4 official sheet PDFs';
+const APP_BUILD = '2026-10-31 v7.5 toppers and 100% attendance';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4378,6 +4378,7 @@ function renderReports(){
     <div id="rpProg"></div>
     <div class="rnote">${scope ? 'Taken from the college sheets, updated every time a teacher saves.' : 'Only your own subjects are included.'}${rp.kind === 'att' || rp.kind === 'short' ? '' : ' Needs internet.'} Held = lectures delivered, Present = lectures attended.</div></section>`;
   h += wrCard();
+  h += tpCard();
   const cur = mine();
   if(cur.length) h += lowCard(cur);
   h += ewCard();
@@ -4503,7 +4504,7 @@ function wrCard(){
     <div class="form"><div class="frow">${wrNeedsMon() ? fld('Month', `<select id="wrMon" aria-label="Month">${mons.map(t => `<option value="${t}" ${t === wr.mon ? 'selected' : ''}>${monName(t)}</option>`).join('')}</select>`) : ''}
       ${fld('Section', secs.length ? `<select id="wrCls" aria-label="Section">${secs.map(c => `<option ${c === wr.cls ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>` : `<div class="empty">${wrSecBusy || !wrS ? 'Loading your sections…' : 'No sections'}</div>`)}</div></div>
     <div class="acts2"><button class="btn primary" type="button" id="wrGo" ${wrBusy || !wr.cls ? 'disabled' : ''}>${I.share}${wrBusy ? 'Making the PDF…' : 'Create PDF'}</button></div>
-    <div class="rnote">Needs internet; takes 10 to 30 seconds. ${wr.kind === 'att' ? 'Below ' + LOW + '% is yellow; approved leaves are added to the overall %.' : wr.kind === 'dt' ? 'Fail (below 33%) is red, absent is pink.' : 'Highest in each subject is grey, absent is pink.'} Students who left (struck through) are not listed.</div>
+    <div class="rnote">Needs internet; takes 10 to 30 seconds. ${wr.kind === 'att' ? 'Below ' + LOW + '% is yellow; approved leaves are added to the overall %.' : wr.kind === 'dt' ? 'Absent red, below 40% dark red, N/R green, subjects not taken empty.' : 'Highest in each subject is grey, absent is pink.'} Students who left (struck through) are not listed.</div>
     <div id="wrRecent">${wrRecentHtml()}</div></section>`;
 }
 function wrAfter(){ wrLoadSecs(); wrList(); }
@@ -4531,6 +4532,226 @@ async function wrOpen(id){
   const x = (await wrAll()).find(r => r.id === id);
   if(!x) return toast('That PDF is no longer on this phone. Make it again.');
   P.offerFile(x.blob, x.name, x.title);
+}
+
+/* ======================= TOPPERS (monthly test, grand test, detention) and 100% ATTENDANCE =======================
+   Toppers: marks of every section sheet of the exam workbook (server, kept 20 min), ranked here by subject, section,
+   program, class and whole college, morning and evening separately (evening sections = timetable settings).
+   Equal marks share a position (1, 1, 2 ...). Overall % only for students with marks in all their subjects of the exam.
+   100% attendance: every lecture of every subject attended (leave is not attendance), from the attendance records. */
+let tp = Object.assign({ kind:'tp', exam:'mt', mon:SEAS[seasNow()], n:3, from:'SEPT', to:SEAS[seasNow()] }, store.get('tp', {})), tpBusy = false;
+const tpMarks = {};
+const TP_EXAMS = [['mt', 'Monthly test'], ['gt', 'Grand test'], ['dt', 'Detention']];
+const tpExamName = () => tp.exam === 'mt' ? monName(tp.mon) + ' Monthly Test' : tp.exam === 'gt' ? 'Grand Test' : 'Detention Exam';
+const clsU = c => String(c || '').toUpperCase().replace(/\s+/g, '');
+const clsProg = c => { const u = clsU(c); return /^FCS/.test(u) ? 'FCS' : /^PRE-?ENG/.test(u) ? 'Pre-Engineering' : /^F\.?A-?\d/.test(u) ? 'F.A' : /^[A-Z]\d$/.test(u) ? 'Pre-Medical' : 'Other'; };
+const clsYear = c => { const m = clsU(c).match(/^(?:FCS|PRE-?ENG|F\.?A)-?(\d)/) || clsU(c).match(/^[A-Z](\d)$/); return m ? (m[1] === '1' ? '1st Year' : '2nd Year') : 'Other'; };
+const SHIFTS = [['M', 'Morning'], ['E', 'Evening']];
+function shiftMap(){ const m = {}; [].concat((ttAll && ttAll.rows) || [], (tt && tt.rows) || []).forEach(r => { if(r && r.cls && shR(r) === 'E') m[normC(r.cls)] = 'E'; }); return m; }
+const SUBK_ALIAS = { PASHTO:'PUSHTO', ISLAMIYATELECTIVE:'ISLAMIYATELE' };
+const subK = x => { const k = String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); return SUBK_ALIAS[k] || k; };
+const r2 = v => Math.round(v * 100) / 100;
+function tpModel(list){
+  const sm = shiftMap();
+  const S = list.map(x => {
+    const subs = Object.keys(x[3] || {}).map(k => { const v = x[3][k][0], max = Number(x[3][k][1]) || 0, o = v === 'A' ? 0 : Number(v) || 0; return { sub:k, v, o, max, pct:max ? r2(o / max * 100) : 0 }; }).filter(g => g.max > 0 && g.o <= g.max);   // marks above the total = typing mistake, left out
+    return { roll:x[0], name:x[1], cls:x[2], sh:sm[normC(x[2])] || 'M', prog:clsProg(x[2]), yr:clsYear(x[2]), subs, takes:(x[4] || []).map(subK) };
+  });
+  const secSubs = {}; S.forEach(s => s.subs.forEach(g => { (secSubs[s.cls] = secSubs[s.cls] || new Set()).add(subK(g.sub)); }));
+  S.forEach(s => {
+    const have = new Set(s.subs.map(g => subK(g.sub)));
+    s.missing = [...(secSubs[s.cls] || [])].filter(k => (!s.takes.length || s.takes.includes(k)) && !have.has(k));
+    s.obt = s.subs.reduce((a, g) => a + g.o, 0); s.max = s.subs.reduce((a, g) => a + g.max, 0);
+    s.pct = s.max ? r2(s.obt / s.max * 100) : 0; s.ok = s.subs.length > 0 && !s.missing.length && s.obt > 0;
+  });
+  return S;
+}
+/** positions 1..n, equal values share a position */
+function rankTop(arr, val, n){
+  const a = arr.filter(x => val(x) > 0).sort((x, y) => val(y) - val(x)), out = []; let pos = 0, last = null;
+  for(const x of a){ const v = val(x); if(v !== last){ pos++; last = v; } if(pos > n) break; out.push({ pos, x, v }); }
+  return out;
+}
+const ordN = n => n + (n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th');
+const byNum = (a, b) => a.localeCompare(b, undefined, { numeric:true });
+/** every table of the toppers report for one shift: [{ title, head, rows:[{ cells, pos }] }] */
+function tpTables(S, n){
+  const ok = S.filter(s => s.ok), T = [];
+  const studRow = (g, r, extra) => ({ pos:r.pos, cells:[].concat(g, [ordN(r.pos), r.x.roll, r.x.name], extra ? [r.x.cls] : [], [r.x.obt + ' / ' + r.x.max, r.x.pct + '%']) });
+  const grp = (title, label, keys, pick, extra) => {
+    const rows = [];
+    keys.forEach(k => rankTop(ok.filter(s => pick(s) === k), s => s.pct, n).forEach((r, i) => rows.push(studRow(i ? [''] : [k], r, extra))));
+    if(rows.length) T.push({ title, head:[label, 'Pos', 'Roll No', 'Student name'].concat(extra ? ['Section'] : [], ['Marks', '%']), rows });
+  };
+  const college = rankTop(ok, s => s.pct, n).map(r => studRow([], r, true));
+  if(college.length) T.push({ title:'Whole college', head:['Pos', 'Roll No', 'Student name', 'Section', 'Marks', '%'], rows:college });
+  const yrs = [...new Set(S.map(s => s.yr))].sort(), progs = [...new Set(S.map(s => s.prog))].sort(), secs = [...new Set(S.map(s => s.cls))].sort(byNum);
+  grp('Each class', 'Class', yrs, s => s.yr, true);
+  grp('Each program (both years)', 'Program', progs, s => s.prog, true);
+  grp('Each program and class', 'Program · class', [...new Set(S.map(s => s.prog + ' · ' + s.yr))].sort(), s => s.prog + ' · ' + s.yr, true);
+  grp('Each section', 'Section', secs, s => s.cls, false);
+  // subjects: class-wise (1st year Physics and 2nd year Physics are different papers)
+  const subRows = [];
+  yrs.forEach(y => {
+    const inY = S.filter(s => s.yr === y), subs = [...new Set(inY.flatMap(s => s.subs.map(g => g.sub)))].sort();
+    subs.forEach(sub => {
+      const xs = inY.map(s => ({ s, g:s.subs.find(g => g.sub === sub) })).filter(z => z.g);
+      rankTop(xs, z => z.g.pct, n).forEach((r, i) => subRows.push({ pos:r.pos, cells:[i ? '' : y, i ? '' : titleCase(sub), ordN(r.pos), r.x.s.roll, r.x.s.name, r.x.s.cls, r.x.g.o + ' / ' + r.x.g.max, r.x.g.pct + '%'] }));
+    });
+  });
+  if(subRows.length) T.push({ title:'Each subject (class-wise)', head:['Class', 'Subject', 'Pos', 'Roll No', 'Student name', 'Section', 'Marks', '%'], rows:subRows });
+  const secSub = [];
+  secs.forEach(c => {
+    const inC = S.filter(s => s.cls === c), subs = [...new Set(inC.flatMap(s => s.subs.map(g => g.sub)))].sort(); let first = true;
+    subs.forEach(sub => {
+      const xs = inC.map(s => ({ s, g:s.subs.find(g => g.sub === sub) })).filter(z => z.g), top = rankTop(xs, z => z.g.pct, 1);
+      if(!top.length) return;
+      secSub.push({ pos:1, cells:[first ? c : '', titleCase(sub), top.map(r => r.x.s.name + ' (' + r.x.s.roll + ')').join(', '), top[0].x.g.o + ' / ' + top[0].x.g.max] }); first = false;
+    });
+  });
+  if(secSub.length) T.push({ title:'Subject toppers of each section', head:['Section', 'Subject', 'Topper(s)', 'Marks'], rows:secSub });
+  return T;
+}
+const MEDAL = { 1:[255, 215, 0], 2:[205, 205, 205], 3:[222, 160, 100] };
+async function tpData(){
+  const key = tp.exam + '|' + (tp.exam === 'mt' ? tp.mon : '');
+  const c = tpMarks[key]; if(c && Date.now() - c.at < 20 * 60e3) return c;
+  if(!navigator.onLine) throw new Error('This needs internet.');
+  const q = { action:'wr_marks', kind:tp.exam }; if(tp.exam === 'mt') q.mon = tp.mon;
+  const r = await api(q, 330000);
+  if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'The server is not updated yet (WorkbookReports).' : r.error || 'Could not read the marks');
+  if(scope && !ttAll) await loadTTAll().catch(() => {});
+  return (tpMarks[key] = { at:Date.now(), list:r.students || [], book:r.book });
+}
+function tpPdf(D){
+  const S = tpModel(D.list), C = P.C, doc = P.newDoc(); let first = true, any = false;
+  const sm = shiftMap(), eve = [...new Set(S.filter(s => s.sh === 'E').map(s => s.cls))].sort(byNum);
+  SHIFTS.forEach(([k, label]) => {
+    const part = S.filter(s => s.sh === k); if(!part.length) return;
+    if(!first) doc.addPage(); first = false; any = true;
+    let Y = P.TOP;
+    Y = P.heading(doc, Y, 'Toppers · ' + tpExamName(), label + ' · ' + (scope ? allLabel() : 'Your sections') + ' · ' + part.length + ' students · session ' + seasonTxt());
+    const okN = part.filter(s => s.ok).length;
+    Y = P.statBoxes(doc, Y, [{ l:'Students', v:part.length }, { l:'With all marks', v:okN }, { l:'Marks missing', v:part.length - okN, c:part.length - okN ? C.RED : C.GREEN, bg:part.length - okN ? C.REDBG : C.GREENBG }, { l:'Sections', v:new Set(part.map(s => s.cls)).size }]) + 5;
+    tpTables(part, tp.n).forEach(t => {
+      Y = P.sectionTitle(doc, Y, t.title);
+      const posCol = t.head.indexOf('Pos');
+      P.table(doc, { startY:Y, head:[t.head], body:t.rows.map(r => r.cells), styles:{ font:'helvetica', fontSize:8, cellPadding:1.6, lineColor:C.LINE, lineWidth:0.2, textColor:C.INK, valign:'middle' },
+        didParseCell:h => { if(h.section !== 'body') return; const r = t.rows[h.row.index];
+          if(h.column.index === posCol && MEDAL[r.pos]){ h.cell.styles.fillColor = MEDAL[r.pos]; h.cell.styles.fontStyle = 'bold'; h.cell.styles.halign = 'center'; }
+          if(h.column.index < (posCol < 0 ? 1 : posCol) && h.cell.raw){ h.cell.styles.fontStyle = 'bold'; } } });
+      Y = doc.lastAutoTable.finalY + 6;
+    });
+  });
+  if(!any) throw new Error('No marks found in ' + D.book + '.');
+  doc.addPage(); let Y = P.TOP;
+  Y = P.sectionTitle(doc, Y, 'How the positions are worked out');
+  P.smallNote(doc, Y, 'Marks from "' + D.book + '". Position by percentage (obtained / total of all subjects); equal marks share a position. Overall positions only for students who have marks (or A) in every subject of the exam that she takes; absent counts 0. Subject positions are class-wise. ' +
+    'Evening sections (from the timetable settings): ' + (eve.length ? eve.join(', ') : 'none set') + '. Gold / silver / bronze = 1st / 2nd / 3rd.');
+  P.finalize(doc);
+  return { doc, title:'Toppers ' + tpExamName(), file:'Toppers_' + P.safe(tpExamName()) + '_' + P.safe(scope ? allLabel() : 'My-sections') + '.pdf' };
+}
+function tpCsv(D){
+  const S = tpModel(D.list), L = [['Shift', 'Level', 'Group', 'Subject', 'Position', 'Roll No', 'Student name', 'Section', 'Obtained', 'Total', '%']];
+  SHIFTS.forEach(([k, label]) => {
+    const part = S.filter(s => s.sh === k); if(!part.length) return;
+    tpTables(part, tp.n).forEach(t => { let g = ''; t.rows.forEach(r => {
+      const c = r.cells, h = t.head, at = x => h.indexOf(x);
+      if(at('Pos') > 0 && c[0]) g = c[0];
+      if(t.title === 'Subject toppers of each section'){ if(c[0]) g = c[0]; L.push([label, t.title, g, c[1], '1st', '', c[2], g, String(c[3]).split(' / ')[0], String(c[3]).split(' / ')[1], '']); return; }
+      const sub = at('Subject') >= 0 ? c[at('Subject')] : ''; if(at('Subject') >= 0 && c[0]) g = c[0];
+      const mk = String(c[at('Marks')]).split(' / ');
+      L.push([label, t.title, t.title === 'Whole college' ? 'College' : g, sub, c[at('Pos')], c[at('Roll No')], c[at('Student name')], at('Section') >= 0 ? c[at('Section')] : g, mk[0], mk[1], String(c[at('%')]).replace('%', '')]);
+    }); });
+  });
+  return { text:L.map(csvLine).join('\r\n'), file:'Toppers_' + P.safe(tpExamName()) + '.csv', title:'Toppers ' + tpExamName() };
+}
+const seasonTxt = () => { const y = new Date().getMonth() >= 7 ? new Date().getFullYear() : new Date().getFullYear() - 1; return y + '-' + String(y + 1).slice(-2); };
+/* ----- 100% attendance ----- */
+function hundredModel(rows){
+  const by = {};
+  aggregate(rows).forEach(s => {
+    const b = by[s.roll] = by[s.roll] || { roll:s.roll, name:s.name, cls:'', p:0, d:0, months:{} };
+    if(!b.cls || (!s.guest && !/optional/i.test(s.cls) && (/optional/i.test(b.cls) || b.guest))){ b.cls = s.cls; b.guest = !!s.guest || /optional/i.test(s.cls); }
+    Object.values(s.subs).forEach(g => { if(g.off) return; b.p += g.p; b.d += g.d;
+      Object.keys(g.months).forEach(m => { const x = g.months[m]; if(x.off) return; const mm = b.months[m] = b.months[m] || { p:0, d:0 }; mm.p += x.p; mm.d += x.d; }); });
+  });
+  const sm = shiftMap();
+  return Object.values(by).filter(b => b.d > 0).map(b => Object.assign(b, { sh:sm[normC(b.cls)] || 'M', full:b.p === b.d,
+    some:Object.values(b.months).some(m => m.d > 0 && m.p === m.d) })).sort((a, b) => (a.sh === 'E') - (b.sh === 'E') || byNum(a.cls, b.cls) || enrollN(a.roll) - enrollN(b.roll));
+}
+async function hundredData(){
+  const q = { from:tp.from, to:tp.to }, rows = await getRows(q);
+  if(!rows.length) throw new Error('No attendance found for ' + rangeTxt(q) + '.');
+  if(scope && !ttAll && navigator.onLine) await loadTTAll().catch(() => {});
+  const H = hundredModel(rows), fathers = {};
+  const want = H.filter(b => b.some).map(b => b.roll);
+  if(want.length && navigator.onLine){ try{ const r = await api({ action:'wr_fathers', rolls:want }, 60000); if(r.ok) Object.assign(fathers, r.fathers || {}); }catch(e){} }
+  H.forEach(b => { b.father = fathers[b.roll] || ''; });
+  return { q, H, mons:SEAS.slice(SEAS.indexOf(tp.from), SEAS.indexOf(tp.to) + 1) };
+}
+function hundredPdf(D){
+  const C = P.C, { q, H, mons } = D, full = H.filter(b => b.full), some = H.filter(b => b.some && !b.full);
+  const doc = P.newDoc(mons.length > 2 ? 'landscape' : 'portrait'); let Y = P.TOP;
+  Y = P.heading(doc, Y, '100% Attendance', (scope ? allLabel() : 'Your subjects') + ' · ' + rangeTxt(q));
+  Y = P.statBoxes(doc, Y, [{ l:'100% in all months', v:full.length, c:C.GREEN, bg:C.GREENBG }, { l:'100% in some months', v:some.length }, { l:'Students checked', v:H.length },
+    { l:'Sections', v:new Set(full.map(b => b.cls)).size }]) + 5;
+  const mCell = (b, m) => { const x = b.months[m]; return !x || !x.d ? '-' : x.p === x.d ? '100%' : pct2(x.p, x.d) + '%'; };
+  const part = (title, list) => {
+    Y = P.sectionTitle(doc, Y, title);
+    if(!list.length){ Y = P.notice(doc, Y, 'No student in this list.', 'info'); return; }
+    let last = '';
+    const body = list.map((b, i) => { const g = (b.sh === 'E' ? 'Evening' : 'Morning'); const row = [i + 1, b.roll, b.name, b.father, b.cls + (b.sh === 'E' ? ' (Eve)' : '')].concat(mons.map(m => mCell(b, m)), [b.d, b.p]); last = g; return row; });
+    P.table(doc, { startY:Y, head:[['#', 'Roll No', 'Student name', 'Father name', 'Section'].concat(mons.map(m => monName(m).slice(0, 3)), ['Held', 'Attended'])], body,
+      styles:{ font:'helvetica', fontSize:8, cellPadding:1.6, lineColor:C.LINE, lineWidth:0.2, textColor:C.INK, valign:'middle' },
+      columnStyles:{ 0:{ halign:'center', cellWidth:8 } },
+      didParseCell:h => { if(h.section === 'body' && h.column.index >= 5 && h.cell.raw === '100%'){ h.cell.styles.textColor = C.GREEN; h.cell.styles.fontStyle = 'bold'; } if(h.section === 'body' && h.column.index >= 5) h.cell.styles.halign = 'center'; } });
+    Y = doc.lastAutoTable.finalY + 6;
+  };
+  part('100% attendance in every month (' + rangeTxt(q) + ')', full);
+  if(mons.length > 1) part('100% attendance in some months', some);
+  Y = P.smallNote(doc, Y, '100% = every lecture of every subject attended (P). Leave (L), absent (A) and bunk (B) are not attendance. Held / Attended = lectures of all subjects in ' + rangeTxt(q) + '. Morning sections first, then evening.');
+  P.signatures(doc, Y, ['Prepared by', 'Chief Proctor', 'Principal']);
+  P.finalize(doc);
+  return { doc, title:'100% attendance', file:'100-percent-attendance_' + P.safe(scope ? allLabel() : 'My-subjects') + '_' + q.from + '-' + q.to + '.pdf' };
+}
+function hundredCsv(D){
+  const { q, H, mons } = D, L = [['List', 'Shift', 'Section', 'Roll No', 'Student name', 'Father name'].concat(mons.map(monName), ['Held', 'Attended', '%'])];
+  H.filter(b => b.some).forEach(b => L.push([b.full ? '100% all months' : '100% some months', b.sh === 'E' ? 'Evening' : 'Morning', b.cls, b.roll, b.name, b.father]
+    .concat(mons.map(m => { const x = b.months[m]; return !x || !x.d ? '' : pct2(x.p, x.d); }), [b.d, b.p, pct2(b.p, b.d)])));
+  return { text:L.map(csvLine).join('\r\n'), file:'100-percent-attendance_' + q.from + '-' + q.to + '.csv', title:'100% attendance' };
+}
+function tpCard(){
+  const mons = SEAS.slice(0, seasNow() + 1);
+  if(!mons.includes(tp.mon)) tp.mon = mons[mons.length - 1];
+  if(!mons.includes(tp.from)) tp.from = mons[0];
+  if(!mons.includes(tp.to)) tp.to = mons[mons.length - 1];
+  const sel2 = (id, v, label) => fld(label, `<select id="${id}" aria-label="${label}">${mons.map(t => `<option value="${t}" ${t === v ? 'selected' : ''}>${monName(t)}</option>`).join('')}</select>`);
+  let h = `<section class="card" id="tpCard"><h3>${I.chart} Toppers &amp; 100% attendance</h3>
+    <div class="seg2" role="tablist"><button type="button" data-xtk="tp" class="${tp.kind === 'tp' ? 'on' : ''}">Toppers</button><button type="button" data-xtk="hd" class="${tp.kind === 'hd' ? 'on' : ''}">100% attendance</button></div>`;
+  if(tp.kind === 'tp'){
+    h += `<div class="sub">Positions in each subject, section, program, class and the whole college, morning and evening separately.</div>
+      <div class="seg2" role="tablist">${TP_EXAMS.map(e => `<button type="button" data-xte="${e[0]}" class="${tp.exam === e[0] ? 'on' : ''}">${e[1]}</button>`).join('')}</div>
+      <div class="form"><div class="frow">${tp.exam === 'mt' ? sel2('tpMon', tp.mon, 'Month') : ''}${fld('Positions', `<select id="tpN" aria-label="Positions">${[1, 2, 3, 5, 10].map(n => `<option value="${n}" ${n === tp.n ? 'selected' : ''}>Top ${n}</option>`).join('')}</select>`)}</div></div>`;
+  } else {
+    h += `<div class="sub">Students who attended every lecture of every subject: in all the chosen months, and month by month. With father names, morning and evening.</div>
+      <div class="form"><div class="frow">${sel2('tpFrom', tp.from, 'From')}${sel2('tpTo', tp.to, 'To')}</div></div>`;
+  }
+  h += `<div class="acts2"><button class="btn primary" type="button" id="tpPdf" ${tpBusy ? 'disabled' : ''}>${I.doc}${tpBusy ? 'Working…' : 'Create PDF'}</button><button class="btn" type="button" id="tpCsv" ${tpBusy ? 'disabled' : ''}>Excel (CSV)</button></div>
+    <div class="rnote">${tp.kind === 'tp' ? 'Needs internet. The first time it reads every section sheet of the workbook (up to a minute or two); then it is quick for 20 minutes.' : 'From the attendance marked in the app' + (scope ? ' (all sections).' : ' (your subjects only).')}</div></section>`;
+  return h;
+}
+async function tpGo(kind){
+  if(tpBusy) return;
+  tpBusy = true; ['#tpPdf', '#tpCsv'].forEach(s => { const b = $q(s); if(b) b.disabled = true; });
+  toast(tp.kind === 'tp' ? 'Reading the marks of every section… this can take a minute.' : 'Preparing the 100% attendance list…');
+  try{
+    if(kind === 'pdf') await P.libs();
+    const D = tp.kind === 'tp' ? await tpData() : await hundredData();
+    if(kind === 'csv'){ const r = tp.kind === 'tp' ? tpCsv(D) : hundredCsv(D); await deliverFile(new Blob(['﻿' + r.text], { type:'text/csv' }), r.file, r.title); }
+    else await P.deliver(tp.kind === 'tp' ? tpPdf(D) : hundredPdf(D));
+  }catch(e){ toast('Not made: ' + (e && e.name === 'AbortError' ? 'the server took too long. Try again in a minute.' : errText(e))); }
+  finally{ tpBusy = false; ['#tpPdf', '#tpCsv'].forEach(s => { const b = $q(s); if(b) b.disabled = false; }); }
 }
 
 /* ======================= TIMETABLE: periods, days, timings, workload ======================= */
@@ -5879,6 +6100,10 @@ document.addEventListener('click', ev => {
   if(t.closest('#rpClr')){ rp.roll = ''; rp.name = ''; rp.scls = ''; return rerender(); }
   if((b = t.closest('[data-xwk]'))){ wr.kind = b.dataset.xwk; store.set('wr', wr); return rerender(); }
   if(t.closest('#wrGo')) return wrGo();
+  if((b = t.closest('[data-xtk]'))){ tp.kind = b.dataset.xtk; store.set('tp', tp); return rerender(); }
+  if((b = t.closest('[data-xte]'))){ tp.exam = b.dataset.xte; store.set('tp', tp); return rerender(); }
+  if(t.closest('#tpPdf')) return tpGo('pdf');
+  if(t.closest('#tpCsv')) return tpGo('csv');
   if((b = t.closest('[data-xwr]'))) return wrOpen(b.dataset.xwr);
   if(t.closest('#rpPdf')) return rpGo('pdf');
   if(t.closest('#rpCsv')) return rpGo('csv');
@@ -5997,6 +6222,10 @@ document.addEventListener('change', ev => {
   if(t.id === 'adept'){ aF.dept = t.value; return refreshABody(); }
   if(t.id === 'fdept'){ fr.dept = t.value; return refreshFree(); }
   if(t.id === 'wrMon'){ wr.mon = t.value; store.set('wr', wr); return; }
+  if(t.id === 'tpMon'){ tp.mon = t.value; store.set('tp', tp); return; }
+  if(t.id === 'tpN'){ tp.n = Number(t.value) || 3; store.set('tp', tp); return; }
+  if(t.id === 'tpFrom'){ tp.from = t.value; if(SEAS.indexOf(tp.to) < SEAS.indexOf(tp.from)) tp.to = tp.from; store.set('tp', tp); return rerender(); }
+  if(t.id === 'tpTo'){ tp.to = t.value; if(SEAS.indexOf(tp.from) > SEAS.indexOf(tp.to)) tp.from = tp.to; store.set('tp', tp); return rerender(); }
   if(t.id === 'wrCls'){ wr.cls = t.value; store.set('wr', wr); return; }
   if(t.id === 'rpCls'){ rp.cls = t.value; rp.sub = ''; return rerender(); }
   if(t.id === 'rpSub'){ rp.sub = t.value; return rerender(); }
@@ -6060,7 +6289,8 @@ function leavesOn(day){
 window.leavesOn = leavesOn;
 
 /* 2) pre-mark L for students on approved leave who have no mark yet in this lecture */
-const toasted = {};
+const lvToday = () => new Date().toDateString();
+const toasted = (o => o && o.d === lvToday() ? o.k : {})(store.get('lvToast', null));   // shown once a day per lecture, also after refresh
 function fillLeaves(){
   if(mode !== 'att') return 0;
   const d = data[sheetName()]; if(!d) return 0;
@@ -6068,7 +6298,7 @@ function fillLeaves(){
   d.students.forEach(s => { if(!s.off && lv[s.roll] && !draft[s.roll]){ draft[s.roll] = 'L'; n++; } });
   if(n){
     const k = sheetName() + '|' + sel.day + '|' + sel.period;
-    if(!toasted[k]){ toasted[k] = 1; setTimeout(() => toast(n + ' student' + (n > 1 ? 's are' : ' is') + ' on approved leave today and marked L. You can still change it.'), 300); }
+    if(!toasted[k]){ toasted[k] = 1; store.set('lvToast', { d:lvToday(), k:toasted }); setTimeout(() => toast(n + ' student' + (n > 1 ? 's are' : ' is') + ' on approved leave today and marked L. You can still change it.'), 300); }
   }
   return n;
 }

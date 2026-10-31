@@ -29,6 +29,8 @@ function wrRoute_(user, req) {
     switch (String(req.action || '')) {
       case 'wr_sections': return wrSections_(user);
       case 'wr_pdf':      return wrPdf_(user, req);
+      case 'wr_marks':    return wrMarks_(user, req);
+      case 'wr_fathers':  return wrFathers_(user, req);
     }
     return { ok: false, error: 'UNKNOWN_ACTION' };
   } catch (e) {
@@ -419,5 +421,86 @@ function wrDtPdf_(T, cls) {
     '<span class="abt">Red</span> = absent · <span class="flt">Dark red</span> = below ' + Math.round(WR_CFG.DT_FAIL * 100) + '% · ' +
     '<span class="nrt">N/R</span> = marks not received · Empty = subject not taken</div></body></html>';
   return wrPdfOut_(h, T.name + '_Detention_AwardList_' + gtSession_() + '.pdf');
+}
+
+/* ================= TOPPERS: marks of every student of one exam (the app ranks them) =================
+   wr_marks { kind:'mt'|'gt'|'dt', mon } -> { students:[[roll, name, section, { SUBJECT:[obtained|'A', max] }, [subjects she takes]]] }
+   Read once from every section sheet of the workbook and kept 20 minutes. Teachers get their own sections only. */
+function wrBookOf_(kind, mon) {
+  if (kind === 'mt') { var b = mtBook_(mon); if (!b) throw new Error('No Monthly Test workbook for ' + mtMonthName_(mon) + ' yet.'); return b; }
+  if (kind === 'gt') return gtBook_();
+  if (kind === 'dt') return dtBook_();
+  throw new Error('Unknown exam.');
+}
+function wrCacheGet_(key) {
+  var c = CacheService.getScriptCache(), n = Number(c.get(key + '_n') || 0); if (!n) return null;
+  var keys = []; for (var i = 0; i < n; i++) keys.push(key + '_' + i);
+  var got = c.getAll(keys), out = '';
+  for (var j = 0; j < n; j++) { if (got[keys[j]] == null) return null; out += got[keys[j]]; }
+  try { return JSON.parse(out); } catch (e) { return null; }
+}
+function wrCachePut_(key, obj, secs) {
+  try {
+    var str = JSON.stringify(obj), parts = {}, n = Math.ceil(str.length / 90000);
+    for (var i = 0; i < n; i++) parts[key + '_' + i] = str.substr(i * 90000, 90000);
+    parts[key + '_n'] = String(n);
+    CacheService.getScriptCache().putAll(parts, secs);
+  } catch (e) {}
+}
+function wrMarks_(user, req) {
+  var kind = String(req.kind || ''), mon = String(req.mon || '').toUpperCase(), key = 'wr_marks_' + kind + '_' + (kind === 'mt' ? mon : '');
+  var data = req.fresh ? null : wrCacheGet_(key);
+  if (!data) { data = wrMarksBuild_(kind, mon); wrCachePut_(key, data, 1200); }
+  var ok = {}; wrSectionList_(user).forEach(function (c) { ok[gtK_(c)] = 1; });
+  var list = wrAll_(user) ? data.students : data.students.filter(function (x) { return ok[gtK_(x[2])]; });
+  return { ok: true, kind: kind, mon: mon, book: data.book, at: data.at, students: list };
+}
+function wrMarksBuild_(kind, mon) {
+  var book = wrBookOf_(kind, mon), M = getMaster_(), home = {}, out = {};
+  M.rows.forEach(function (r) { home[gtK_(r[0])] = r; });
+  var gtTotal = 0; if (kind === 'gt') { try { gtTotal = gtApp_().total; } catch (e) {} }
+  book.getSheets().forEach(function (sh) {
+    var nm = sh.getName();
+    if (/report|combine|log|settings|missing|summary|backup|copy of|position|result/i.test(nm)) return;
+    var T = wrRead_(sh); if (!T) return;
+    wrGroupRows_(T, [], {});
+    var subs = {};
+    for (var c = T.idc; c < T.lc; c++) {
+      var g = T['g' + c]; if (!g || !g.label || typeof g.id !== 'number' || /total/i.test(g.label)) continue;
+      var h = gtK_(T.head[c]), S = subs[g.label] = subs[g.label] || {};
+      if (kind === 'dt') { if (h === 'TOTAL') { S.obt = c; S.max = dtLimits_(g.label).st; } }
+      else if (h === 'OBTAINEDMARKS' || h === 'OM' || h === 'OBTAINEDGTMARKS') S.obt = c;
+      else if (h === 'TOTALMARKS' || h === 'TM' || h === 'TOTALGTMARKS') S.tot = c;
+    }
+    Object.keys(subs).forEach(function (lab) {                       // a subject's total: the first total marks written in its column
+      var S = subs[lab]; if (S.obt == null) { delete subs[lab]; return; }
+      if (kind === 'dt') return;
+      S.max = 0;
+      if (S.tot != null) for (var i = 0; i < T.rows.length && !S.max; i++) { var x = Number(gtS_(T.rows[i][S.tot])); if (x > 0) S.max = x; }
+      if (!S.max) S.max = gtTotal;
+    });
+    T.rows.forEach(function (row) {
+      var roll = gtS_(row[T.en]), k = gtK_(roll), m = home[k];
+      if (!m) return;                                                // not in the strength sheet (left / not admitted): not ranked
+      var cls = gtS_(m[2]);
+      if (!cls) return;
+      var o = out[k] = out[k] || [roll, m ? gtS_(m[1]) : '', cls, {}, m ? (m[3] || []).map(function (x) { return gtS_(x).toUpperCase(); }) : []];
+      Object.keys(subs).forEach(function (lab) {
+        var S = subs[lab], v = gtS_(row[S.obt]);
+        if (v === '' || !S.max) return;
+        var val = wrAbsent_(v) ? 'A' : (isNaN(Number(v)) ? null : Number(v));
+        if (val === null) return;                                     // L (leave) and anything else: not counted
+        o[3][lab.toUpperCase()] = [val, S.max];
+      });
+    });
+  });
+  return { book: book.getName(), at: Date.now(), students: Object.keys(out).map(function (k) { return out[k]; }) };
+}
+/** father names for the 100% attendance list: { roll: father } (strength sheet) */
+function wrFathers_(user, req) {
+  var want = {}; (req.rolls || []).slice(0, 4000).forEach(function (r) { want[gtK_(r)] = 1; });
+  var out = {};
+  getMaster_().rows.forEach(function (r) { var k = gtK_(r[0]); if (want[k]) out[gtS_(r[0])] = gtS_(r[4]); });
+  return { ok: true, fathers: out };
 }
 
