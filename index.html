@@ -3925,7 +3925,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-31 v7.8.4 board position';
+const APP_BUILD = '2026-10-31 v7.8.5 teachers see full record';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4840,7 +4840,7 @@ let ssv = { q:'', list:[], busy:false, roll:'', p:null, months:{}, tests:null, b
 document.addEventListener('input', ev => { if(ev.target && ev.target.id === 'ssQ') ssFind(ev.target.value); });
 document.addEventListener('toggle', ev => { const d = ev.target; if(d && d.classList && d.classList.contains('ssmon')) ssv.open[d.dataset.m] = d.open; }, true);
 function searchCard(){
-  return `<section class="card"><h3>${I.search} Student search</h3><div class="sub">${scope || isCP ? 'Any student of the college: profile, photo, attendance of every month, day-by-day calendar, monthly tests, grand test and detention.' : 'Students of your sections: profile, attendance of every month, day-by-day calendar and all test results.'}</div>
+  return `<section class="card"><h3>${I.search} Student search</h3><div class="sub">${scope || isCP ? 'Any student of the college: profile, photo, attendance of every month, day-by-day calendar, monthly tests, grand test and detention.' : 'Students of your sections: profile and photo, attendance of every month, day-by-day calendar, all test results and the 1st year board result.'}</div>
     <button class="more" type="button" data-view="search">Open student search</button></section>`;
 }
 function ssFind(v){
@@ -4926,7 +4926,7 @@ function renderSearch(){
     <div class="kpi ${tone(avg(gtP))}"><b>${dt600 || (avg(gtP) == null ? '–' : avg(gtP) + '%')}</b><small>${dt600 ? 'Detention (600)' : 'Grand test'}</small></div></div><div class="grid2">`;
   // profile
   h += `<section class="card sswide"><h3>Student profile</h3>${!P0 ? '<div class="empty">Loading…</div>' :
-    `<div class="sspi">${P0.full ? `<div class="ssbig">${P0.photo ? `<img src="${esc(P0.photo)}" alt="Photo of ${esc(name)}">` : '<span>No photo</span>'}</div>` : ''}<div class="ssgrid">${P0.fields.map(f => `<div><span>${esc(f[0])}</span><b>${esc(f[1] || '–')}</b></div>`).join('')}<div class="wide"><span>Subjects</span><div class="chips2">${P0.subjects.map(x => `<i>${esc(x)}</i>`).join('')}</div></div></div></div>`}</section>${ssBoardHtml()}`;
+    `<div class="sspi"><div class="ssbig">${P0.photo ? `<img src="${esc(P0.photo)}" alt="Photo of ${esc(name)}">` : '<span>No photo</span>'}</div><div class="ssgrid">${P0.fields.map(f => `<div><span>${esc(f[0])}</span><b>${esc(f[1] || '–')}</b></div>`).join('')}<div class="wide"><span>Subjects</span><div class="chips2">${P0.subjects.map(x => `<i>${esc(x)}</i>`).join('')}</div></div></div></div>`}</section>${ssBoardHtml()}`;
   // attendance table
   const subNames = Object.keys(A.subs).sort(), pend = mons.filter(m => !ssv.months[m]).length;
   h += `<section class="card"><h3>${I.chart} Attendance by subject and month</h3>${pend ? `<div class="sub">Loading ${pend} month${pend > 1 ? 's' : ''}…</div>` : ''}
@@ -4982,10 +4982,10 @@ function ssBoardHtml(){
     h += `<div class="ssgrid"><div><span>Board Roll No</span><b>${esc(B.rollNo)}</b></div><div><span>Registration #</span><b>${esc(B.reg || '–')}</b></div>
       ${ssBoardResult(B)}</div>
       <div class="rnote">${B.how === 'enroll' ? 'From boardResult1STYEAR (matched by Enroll #).' : B.how === 'confirmed' ? 'Confirmed in the app.' : 'Found by name: ' + esc(B.boardName) + ' D/O ' + esc(B.boardFather) + ' (' + B.score + '% alike). Please check.'}</div>`;
-    if(B.how === 'name') h += `<div class="acts2 noprint"><button class="btn small primary" type="button" data-xbl="${esc(B.rollNo)}">Yes, this is her</button><button class="btn small" type="button" data-xbl="-">Not her</button></div>`;
+    if(B.how === 'name' && ssv.p && ssv.p.full) h += `<div class="acts2 noprint"><button class="btn small primary" type="button" data-xbl="${esc(B.rollNo)}">Yes, this is her</button><button class="btn small" type="button" data-xbl="-">Not her</button></div>`;
   } else {
     h += `<div class="sub">${B.rejected ? 'The record found by name was marked "Not her".' : 'Not found automatically: her name or father name is spelled differently, or she is not in the board\'s 1st year list.'} Is she one of these?</div>
-      <div class="noprint">${(B.candidates || []).map(c => `<button class="li" type="button" data-xbl="${esc(c.rollNo)}"><span class="tx"><b>${esc(c.name)}</b><small>D/O ${esc(c.father)} · Roll No ${esc(c.rollNo)} · Marks ${esc(c.marks || '–')} · ${c.score}% alike</small></span><span class="pill">This is her</span></button>`).join('')}</div>`;
+      <div class="noprint">${!(ssv.p && ssv.p.full) ? '<div class="rnote">The admin or Chief Proctor can choose the right record.</div>' : ''}${(ssv.p && ssv.p.full ? B.candidates || [] : []).map(c => `<button class="li" type="button" data-xbl="${esc(c.rollNo)}"><span class="tx"><b>${esc(c.name)}</b><small>D/O ${esc(c.father)} · Roll No ${esc(c.rollNo)} · Marks ${esc(c.marks || '–')} · ${c.score}% alike</small></span><span class="pill">This is her</span></button>`).join('')}</div>`;
   }
   return h + '</section>';
 }
