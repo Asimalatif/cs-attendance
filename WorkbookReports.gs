@@ -31,6 +31,7 @@ function wrRoute_(user, req) {
       case 'wr_pdf':      return wrPdf_(user, req);
       case 'wr_marks':    return wrMarks_(user, req);
       case 'wr_fathers':  return wrFathers_(user, req);
+      case 'wr_hundred':  return wrHundred_(user, req);
     }
     return { ok: false, error: 'UNKNOWN_ACTION' };
   } catch (e) {
@@ -502,5 +503,47 @@ function wrFathers_(user, req) {
   var out = {};
   getMaster_().rows.forEach(function (r) { var k = gtK_(r[0]); if (want[k]) out[gtS_(r[0])] = gtS_(r[4]); });
   return { ok: true, fathers: out };
+}
+
+/* ================= 100% ATTENDANCE from the monthly attendance workbooks =================
+   wr_hundred { mon } -> { students:[[roll, name, section, attended, held, father]] }
+   attended / held = A.L / T.L of every subject of the student in that month (her own section sheet plus the
+   optional-subject sheet). Students struck through or not in the strength sheet are left out. Kept 30 minutes. */
+function wrHundred_(user, req) {
+  var mon = String(req.mon || '').toUpperCase();
+  if (!MA_BOOKS[mon]) return { ok: false, error: 'No monthly attendance workbook for ' + mtMonthName_(mon) + '.' };
+  var key = 'wr_h_' + mon, data = req.fresh ? null : wrCacheGet_(key);
+  if (!data) { data = wrHundredBuild_(mon); wrCachePut_(key, data, 1800); }
+  if (wrAll_(user)) return { ok: true, mon: mon, students: data };
+  var ok = {}; wrSectionList_(user).forEach(function (c) { ok[gtK_(c)] = 1; });
+  return { ok: true, mon: mon, students: data.filter(function (x) { return ok[gtK_(x[2])]; }) };
+}
+function wrHundredBuild_(mon) {
+  var book = SpreadsheetApp.openById(MA_BOOKS[mon]), home = {}, out = {};
+  getMaster_().rows.forEach(function (r) { home[gtK_(r[0])] = r; });
+  book.getSheets().forEach(function (sh) {
+    var nm = sh.getName();
+    if (/report|combine|log|settings|missing|summary|backup|copy of|leave|shortage|100/i.test(nm)) return;
+    var T = wrRead_(sh); if (!T) return;
+    wrGroupRows_(T, [], {});
+    var tl = [], al = [];
+    for (var c = T.idc; c < T.lc; c++) {
+      var g = T['g' + c] || {}, h = gtK_(T.head[c]);
+      if (!g.label || typeof g.id !== 'number' || /total|overall/i.test(g.label)) continue;    // subject columns only, never a grand total
+      if (h === 'TL' || h === 'TOTALLECTURES') tl.push(c);
+      else if (h === 'AL' || h === 'ATTENDEDLECTURE' || h === 'ATTENDEDLECTURES') al.push(c);
+    }
+    if (!tl.length) return;
+    T.rows.forEach(function (row) {
+      var k = gtK_(row[T.en]), m = home[k]; if (!m) return;
+      var p = 0, d = 0;
+      tl.forEach(function (c) { var x = Number(gtS_(row[c])); if (x > 0) d += x; });
+      al.forEach(function (c) { var x = Number(gtS_(row[c])); if (x > 0) p += x; });
+      if (!d) return;
+      var o = out[k] = out[k] || [gtS_(m[0]), gtS_(m[1]), gtS_(m[2]), 0, 0, gtS_(m[4])];
+      o[3] += p; o[4] += d;
+    });
+  });
+  return Object.keys(out).map(function (k) { return out[k]; });
 }
 
