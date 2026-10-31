@@ -1,5 +1,5 @@
 // Bump VERSION every time you change index.html so phones pick up the update.
-const VERSION = 'csa-v70';
+const VERSION = 'csa-v71';
 const CORE = ['./', './index.html', './admission.html', './grandtest.html', './detention.html', './manifest.json', './icon-192.png', './jcw-logo.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
