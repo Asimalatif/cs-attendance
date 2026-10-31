@@ -1,6 +1,6 @@
 // Bump VERSION every time you change index.html so phones pick up the update.
-const VERSION = 'csa-v49';
-const CORE = ['./', './index.html', './admission.html', './grandtest.html', './manifest.json', './icon-192.png', './icon-512.png'];
+const VERSION = 'csa-v50';
+const CORE = ['./', './index.html', './admission.html', './grandtest.html', './detention.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
@@ -22,7 +22,7 @@ self.addEventListener('fetch', e => {
 
   // Pages: network first, fall back to the saved copy when offline
   if (req.mode === 'navigate') {
-    const page = /admission\.html$/.test(url.pathname) ? './admission.html' : /grandtest\.html$/.test(url.pathname) ? './grandtest.html' : /student\.html$/.test(url.pathname) ? './student.html' : './index.html';
+    const page = /admission\.html$/.test(url.pathname) ? './admission.html' : /grandtest\.html$/.test(url.pathname) ? './grandtest.html' : /detention\.html$/.test(url.pathname) ? './detention.html' : /student\.html$/.test(url.pathname) ? './student.html' : './index.html';
     e.respondWith(
       fetch(req).then(res => {
         const copy = res.clone();

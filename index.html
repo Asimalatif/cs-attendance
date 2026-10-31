@@ -3335,6 +3335,23 @@ function gtCard(){
   return `<section class="card"><h3>${I.doc} Grand test <span class="pill ${open ? 'good' : ''}">${esc(state)}</span></h3><div class="sub">${esc(sub)}${adm ? ' Admin: set the total marks, opening date and deadline, and see which subjects are still missing.' : ''}</div>
     <div class="acts2">${open || adm ? '<a class="btn primary" href="grandtest.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Grand test</a>' : '<button class="btn" type="button" disabled>Open Grand test</button>'}</div></section>`;
 }
+/* ---------- Home: Detention exam card. Teachers can open it only between the opening date (default 1 February) and the deadline. ---------- */
+let dtWin = store.get('dtwin', null), dtWinAt = 0;
+function dtCard(){
+  if(navigator.onLine && authed() && Date.now() - dtWinAt > 600000){
+    dtWinAt = Date.now();
+    api({ action:'dt_window' }).then(r => { if(r && r.ok){ dtWin = r; store.set('dtwin', r); if(appView === 'home') rerender(); } }).catch(() => {});
+  }
+  const now = Date.now(), n = new Date(), feb = new Date(n.getMonth() >= 7 ? n.getFullYear() + 1 : n.getFullYear(), 1, 1).getTime();
+  const w = dtWin || { opens:feb, deadline:null }, adm = scope === 'all';
+  const before = w.opens && now < w.opens, after = w.deadline && now > w.deadline, open = !before && !after;
+  const fmt = t => new Date(t).toLocaleString([], { day:'numeric', month:'short', year:'numeric', hour:'numeric', minute:'2-digit' });
+  const state = before ? 'Opens ' + fmt(w.opens) : after ? 'Closed ' + fmt(w.deadline) : w.deadline ? 'Open until ' + fmt(w.deadline) : 'Open';
+  const sub = open ? 'Enter detention exam marks (theory and practical) for your classes, also without internet, and get the award list PDF.'
+    : before ? 'Detention marks can be entered from ' + fmt(w.opens) + '.' : 'The detention exam is closed. Ask the admin if a mark must be corrected.';
+  return `<section class="card"><h3>${I.doc} Detention exam <span class="pill ${open ? 'good' : ''}">${esc(state)}</span></h3><div class="sub">${esc(sub)}${adm ? ' Admin: set the marks, opening date and deadline, and see which subjects are still missing.' : ''}</div>
+    <div class="acts2">${open || adm ? '<a class="btn primary" href="detention.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Detention exam</a>' : '<button class="btn" type="button" disabled>Open Detention exam</button>'}</div></section>`;
+}
 function renderHome(){
   const now = new Date(), day = now.getDate(), sun = now.getDay() === 0, cur = mine();
   const dow = now.getDay(), nowM = now.getHours() * 60 + now.getMinutes();
@@ -3375,6 +3392,7 @@ function renderHome(){
 
   if(cur.length) h += mtCard(cur);
   if(cur.length || scope) h += gtCard();
+  if(cur.length || scope) h += dtCard();
 
   if(cur.length){
     const aggs = cur.map(e => secAgg(e)).filter(Boolean), nLow = lowList('week', cur).length;
@@ -5423,8 +5441,8 @@ function bkCard(){
   if(!bk.list && !bk.loading && navigator.onLine){ bk.loading = true; srv({ action:'bk_list' }, 60000).then(r => { bk.list = r.books || []; }).catch(e => { bk.list = []; bk.err = e.message; }).finally(() => { bk.loading = false; refreshBk(); }); }
   const R = bk.res, n = R ? R.diffs.reduce((a, d) => a + d.missing.length + d.extra.length, 0) : 0;
   const groups = bk.list ? [...new Set(bk.list.map(b => b.group || ''))] : [];
-  return `<section class="card" id="bkCard"><h3>${I.check} Monthly attendance &amp; test sheets vs strength sheet</h3>
-    <div class="sub">Checks that every section sheet of the monthly attendance, monthly test and grand test workbooks has exactly the students of Transform-ALL-COLLEGE-STRENGTH. (Daily attendance sheets: the card <b>Sheets vs strength sheet</b>.) Nothing changes until you press a button.</div>
+  return `<section class="card" id="bkCard"><h3>${I.check} Monthly attendance, test &amp; detention sheets vs strength sheet</h3>
+    <div class="sub">Checks that every section sheet of the monthly attendance, monthly test, grand test and detention workbooks has exactly the students of Transform-ALL-COLLEGE-STRENGTH. (Daily attendance sheets: the card <b>Sheets vs strength sheet</b>.) Nothing changes until you press a button.</div>
     ${bk.list ? (groups.map(g => `<div class="sub" style="margin-top:10px;font-weight:700">${esc(g)}</div><div class="acts2" style="margin-top:4px">${bk.list.filter(b => (b.group || '') === g).map(b => `<button class="btn ${bk.key === b.key ? 'primary' : ''}" type="button" data-xbk="${esc(b.key)}" ${bk.busy ? 'disabled' : ''} title="${esc(b.name)}">Check ${esc(b.label)}</button>`).join('')}</div>`).join('') || '<div class="sub">No workbook found.</div>') : '<div class="acts2"><span class="sub">Looking for the workbooks…</span></div>'}
     ${bk.busy ? `<div class="sub" style="margin-top:8px">Checking… this can take a minute.</div><span class="mbar" style="height:10px;margin-top:4px"><i style="width:60%"></i></span>` : ''}
     ${bk.err ? `<div class="err2">${esc(bk.err)}</div>` : ''}
