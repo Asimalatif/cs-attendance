@@ -343,8 +343,8 @@ function gtPdf_(user, cls, sub) {
       '</td><td>' + esc(s.cs) + '</td><td>' + esc(total || '') + '</td><td class="' + cls2 + '">' + esc(show) + '</td></tr>';
   }).join('');
   var html = '<html><head><style>@page{size:A4 portrait;margin:10mm}body{font-family:Arial,sans-serif;font-size:10px}' +
-    'h2,h4{text-align:center;margin:4px 0}table{border-collapse:collapse;width:100%;margin-top:6px}th,td{border:1px solid #000;padding:3px;text-align:center;font-size:12px}' +
-    'td.l{text-align:left}th{background:#f2f2f2}.ab{background:#ffd6d6;color:#c00;font-weight:bold}.nr{background:#e0e0e0;color:#060;font-weight:bold}' +
+    'h2,h4{text-align:center;margin:4px 0}h2{color:#6B3423}h4{color:#8A4A35}table{border-collapse:collapse;width:100%;margin-top:6px}th,td{border:1px solid #8A4A35;padding:3px;text-align:center;font-size:12px}' +
+    'td.l{text-align:left}th{background:#6B3423;color:#fff}.ab{background:#ffd6d6;color:#c00;font-weight:bold}.nr{background:#e0e0e0;color:#060;font-weight:bold}' +
     '.top{background:#d4f8d4;font-weight:bold}.low{background:#fff0b3;color:#d9534f;font-weight:bold}.sum{margin-top:10px;font-weight:bold;font-size:12px}.sig{margin-top:28px;text-align:right;font-weight:bold;font-size:11px}</style></head><body>' +
     '<h2>' + esc(GT_CFG.TITLE) + ' AWARD LIST</h2><h4>Section: ' + esc(x.sh.getName()) + ' | Subject: ' + esc(x.S.name) + ' | Teacher: ' + esc(a.teacher) + ' | Session: ' + gtSession_() + '</h4>' +
     '<table><tr><th>S.No</th><th>Enroll#</th><th>Name</th><th>Father Name</th><th>Class-Sec</th><th>Total</th><th>Obtained</th></tr>' + rows + '</table>' +

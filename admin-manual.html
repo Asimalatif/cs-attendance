@@ -37,10 +37,18 @@ ol.check{list-style:none;padding:0}ol.check li{padding:5px 0 5px 32px;position:r
 .tag{display:inline-block;font-size:11.5px;font-weight:800;padding:1px 8px;border-radius:999px;background:var(--tea2);color:var(--brown)}
 @media(max-width:900px){.wrap{grid-template-columns:minmax(0,1fr)}main,nav.toc{min-width:0}table{display:block;overflow-x:auto}nav.toc{position:static;max-height:none}}
 @media print{header.top,nav.toc{display:none}.wrap{display:block;padding:0}main section{box-shadow:none}}
+.ttsBar{display:flex;gap:6px;align-items:center}
+.ttsBar button,.ttsBar select,.tts1{font:inherit;font-weight:700;border-radius:999px;border:1.5px solid #E7B7AE;background:#FBEDEA;color:#6B3423;height:32px;padding:0 12px;cursor:pointer}
+.ttsBar select{padding:0 6px}
+.tts1{height:28px;padding:0 9px;font-size:13px;margin-left:8px;vertical-align:middle}
+.tts1.on,#ttsAll.on{background:#6B3423;color:#fff;border-color:#6B3423}
+section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
+@media (max-width:640px){.ttsBar select{display:none}header.top h1 small{display:none}}
+@media print{.tts1,.ttsBar{display:none}}
 </style>
 </head>
 <body>
-<header class="top"><img src="jcw-logo.png" alt=""><h1>JCW Admin &amp; Developer Manual<small>How the system works inside: modules, data flow, where every piece of data is saved, how to change it</small></h1><span class="sp"></span><a href="manual.html">User manual</a><a href="./">App</a></header>
+<header class="top"><img src="jcw-logo.png" alt=""><h1>JCW Admin &amp; Developer Manual<small>How the system works inside: modules, data flow, where every piece of data is saved, how to change it</small></h1><span class="sp"></span><span class="ttsBar"><button type="button" id="ttsAll">🔊 Listen to all</button><select id="ttsRate" aria-label="Reading speed"><option value="0.8">Slow</option><option value="1" selected>Normal</option><option value="1.2">Fast</option></select></span><a href="manual.html">User manual</a><a href="./">App</a></header>
 <div class="wrap">
 <nav class="toc" aria-label="Contents">
 <div class="grp">Understand</div>
@@ -91,6 +99,16 @@ ol.check{list-style:none;padding:0}ol.check li{padding:5px 0 5px 32px;position:r
 <tr><td><b>Admissions settings</b><br><code>ADM_CFG.SETTINGS_BOOK_ID</code></td><td>Quota Settings · Program Sections</td><td>Seats per program/quota, sections — read only</td><td>You</td></tr>
 </table>
 <div class="warn">Do not rename sheets or move header rows. The code finds sheets by name (e.g. <i>Transform-ALL-COLLEGE-STRENGTH</i>, <i>App Settings</i>) and finds columns by header text (Enroll#, Total Marks, THEORY …). Adding columns at the end is safe.</div>
+</section>
+
+<section id="voice"><h2>Voice features (index.html)</h2>
+<p>All voice code is one self-contained script at the end of <code>index.html</code> (search <code>VOICE:</code>). It uses only the browser: <code>SpeechRecognition</code> / <code>webkitSpeechRecognition</code> to listen (online, Chrome/Edge/Safari) and <code>speechSynthesis</code> to speak (offline). Nothing is sent to the Apps Script server and no sheet changes.</p>
+<ul><li><b>Voice typing</b>: a floating mic appears on focus of a text box and inserts the words; language EN/اردو is stored in <code>csa2_vtype</code>.</li>
+<li><b>Voice roll call / Say the absentees</b>: items <code>voice</code> and <code>vabs</code> in <code>openMore()</code> → <code>doAct()</code> → <code>window.JCWVOICE</code>. They only click the existing P/A/L/B buttons of <code>#list .row</code>, so saving, offline queue and sheets work exactly as with taps.</li>
+<li><b>Speak marks</b>: a button <code>#vSpeakMk</code> is added beside <code>#mtFillA</code>; it fills <code>.mk</code> inputs and fires <code>input</code> so the normal checks run.</li>
+<li>To add words (e.g. Pashto answers), edit <code>markOf()</code>; numbers are read by <code>wordsToNums()</code>.</li>
+<li><b>Listening to manuals</b>: the 🔊 buttons in <code>manual.html</code> / <code>admin-manual.html</code> and <b>🔊 Listen</b> in the in-app help.</li></ul>
+<p><b>Report colours</b>: client PDFs use the palette at the top of <code>window.JCWPDF</code> (NAVY = brown, TEA strip, logo from <code>jcw-logo.png</code>); Excel files are built by <code>toXlsx()</code> with xlsx-js-style. Server PDFs (official sheets, grand test, detention) take their colours from the CSS in <code>WorkbookReports.gs</code> (<code>wrCss_</code>), <code>GrandTest.gs</code> and <code>Detention.gs</code>.</p>
 </section>
 
 <section id="roles"><h2>3. Users and roles</h2>
@@ -269,5 +287,38 @@ if(!r.ok) throw new Error(r.error);</pre>
 <tr><td>Phones show an old version</td><td><code>VERSION</code> in sw.js was not changed; or the phone has been offline.</td></tr></table>
 </section>
 </main></div>
+<script>
+// listen: read a chapter or the whole manual aloud (the phone's own voice, works offline)
+(() => {
+  const ok = 'speechSynthesis' in window, all = document.getElementById('ttsAll'), rate = document.getElementById('ttsRate');
+  if(!ok){ document.querySelector('.ttsBar').style.display = 'none'; return; }
+  try{ rate.value = localStorage.getItem('jcw_ttsrate') || '1'; }catch(e){}
+  rate.onchange = () => { try{ localStorage.setItem('jcw_ttsrate', rate.value); }catch(e){} };
+  let voices = []; const lv = () => { voices = speechSynthesis.getVoices() || []; }; lv(); speechSynthesis.onvoiceschanged = lv;
+  const voice = () => { const en = voices.filter(v => /^en/i.test(v.lang)); return en.find(v => /female|zira|samantha|heera|veena/i.test(v.name)) || en.find(v => /en-(in|gb)/i.test(v.lang)) || en[0] || null; };
+  const speak = t => new Promise(res => { const u = new SpeechSynthesisUtterance(t), v = voice(); if(v){ u.voice = v; u.lang = v.lang; } u.rate = Number(rate.value) || 1; u.onend = u.onerror = () => res(); speechSynthesis.speak(u); });
+  let token = 0;
+  const stop = () => { token++; speechSynthesis.cancel(); document.querySelectorAll('.tts1.on,#ttsAll.on').forEach(b => { b.classList.remove('on'); b.textContent = b.id === 'ttsAll' ? '🔊 Listen to all' : '🔊'; }); document.querySelectorAll('section.reading').forEach(s => s.classList.remove('reading')); };
+  const textOf = s => [...s.querySelectorAll('h2, h3, p, li, tr, figcaption, .warn')].filter(x => !x.closest('li li') && !(x.tagName === 'P' && x.closest('li'))).map(x => {
+      const c = x.cloneNode(true); c.querySelectorAll('.tts1,.n').forEach(n => n.remove());
+      return (x.tagName === 'TR' ? [...c.children].map(td => td.textContent).join(': ') : c.textContent).replace(/\s+/g, ' ').trim();
+    }).filter(Boolean);
+  async function read(list, btn){
+    const my = ++token; btn.classList.add('on'); btn.textContent = btn.id === 'ttsAll' ? '■ Stop' : '■';
+    for(const s of list){
+      if(my !== token) return;
+      document.querySelectorAll('section.reading').forEach(x => x.classList.remove('reading')); s.classList.add('reading');
+      s.scrollIntoView({ behavior:'smooth', block:'start' });
+      for(const t of textOf(s)){ if(my !== token) return; await speak(t); }
+    }
+    if(my === token) stop();
+  }
+  const secs = [...document.querySelectorAll('main section')];
+  secs.forEach(s => { const h = s.querySelector('h2'); if(!h) return; const b = document.createElement('button'); b.type = 'button'; b.className = 'tts1'; b.textContent = '🔊'; b.title = 'Listen to this chapter';
+    b.onclick = () => { if(b.classList.contains('on')) return stop(); stop(); read([s], b); }; h.appendChild(b); });
+  all.onclick = () => { if(all.classList.contains('on')) return stop(); stop(); const vis = secs.filter(s => s.style.display !== 'none'); const top = window.scrollY + 80; let i = vis.findIndex(s => s.offsetTop + s.offsetHeight > top); read(vis.slice(Math.max(0, i)), all); };
+  addEventListener('pagehide', stop);
+})();
+</script>
 </body>
 </html>

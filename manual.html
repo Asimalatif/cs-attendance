@@ -58,6 +58,14 @@ kbd,.k{display:inline-block;padding:0 7px;border-radius:6px;border:1px solid var
 #zoom img{max-width:100%;max-height:100%;border-radius:16px}
 @media(max-width:860px){.wrap{grid-template-columns:minmax(0,1fr)}main,nav.toc{min-width:0}table{display:block;overflow-x:auto}nav.toc{position:static;max-height:none}.row,.row.rev{grid-template-columns:1fr}.row.rev figure{order:0}}
 @media print{header.top,nav.toc{display:none}.wrap{display:block;padding:0}main section{box-shadow:none;break-inside:avoid-page}figure img{max-width:220px}}
+.ttsBar{display:flex;gap:6px;align-items:center}
+.ttsBar button,.ttsBar select,.tts1{font:inherit;font-weight:700;border-radius:999px;border:1.5px solid #E7B7AE;background:#FBEDEA;color:#6B3423;height:32px;padding:0 12px;cursor:pointer}
+.ttsBar select{padding:0 6px}
+.tts1{height:28px;padding:0 9px;font-size:13px;margin-left:8px;vertical-align:middle}
+.tts1.on,#ttsAll.on{background:#6B3423;color:#fff;border-color:#6B3423}
+section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
+@media (max-width:640px){.ttsBar select{display:none}header.top h1 small{display:none}}
+@media print{.tts1,.ttsBar{display:none}}
 </style>
 </head>
 <body>
@@ -65,6 +73,7 @@ kbd,.k{display:inline-block;padding:0 7px;border-radius:6px;border:1px solid var
   <img src="jcw-logo.png" alt="">
   <h1>JCW App Manual<small>Jinnah College for Women · attendance, tests, reports, student search, admissions</small></h1>
   <span class="sp"></span>
+  <span class="ttsBar"><button type="button" id="ttsAll">🔊 Listen to all</button><select id="ttsRate" aria-label="Reading speed"><option value="0.8">Slow</option><option value="1" selected>Normal</option><option value="1.2">Fast</option></select></span>
   <a href="./">Open the app</a>
 </header>
 <div class="wrap">
@@ -87,6 +96,7 @@ kbd,.k{display:inline-block;padding:0 7px;border-radius:6px;border:1px solid var
     <li><a href="#share">13. Share, download, print</a></li>
     <li><a href="#account">14. Account, sync, text size</a></li>
     <li><a href="#offline">15. Working offline</a></li>
+    <li><a href="#voice">🎙 Voice: speak, listen</a></li>
   </ol>
   <div class="grp">Admin, principal, HOD, Chief Proctor</div>
   <ol>
@@ -169,6 +179,8 @@ kbd,.k{display:inline-block;padding:0 7px;border-radius:6px;border:1px solid var
 <div class="row rev"><figure><img src="manual-img/10-summary.jpg" alt="Summary"><figcaption>Monthly summary</figcaption></figure>
 <div><h3>⋯ More menu</h3>
 <table><tr><th>Item</th><th>What it does</th></tr>
+<tr><td>🎙 Voice roll call</td><td>The app says each name; answer <b>present / absent / leave / bunk</b> (or haazir, ghair haazir, chutti). See <a href="#voice">Voice</a>.</td></tr>
+<tr><td>🗣 Say the absentees</td><td>Say “absent 3, 7 and 12, leave 5”; everyone else becomes P after you press Apply.</td></tr>
 <tr><td>Add / Edit day note</td><td>College closed, class not held, holiday. The date gets a yellow dot.</td></tr>
 <tr><td>More than one lecture today</td><td>Adds a lecture bar 1, 2, 3… Each lecture is saved separately; the sheet shows 2P, 3P… in the day cell.</td></tr>
 <tr><td>Add guest student</td><td>A student of another section who attends your class. Type 2+ letters of her name or roll no.</td></tr>
@@ -247,13 +259,13 @@ kbd,.k{display:inline-block;padding:0 7px;border-radius:6px;border:1px solid var
 </section>
 
 <section id="reports"><h2><span class="n">10</span>Reports</h2>
-<p class="lead">The <b>Reports</b> tab makes PDFs and Excel (CSV) files. Teachers get their own subjects; admin, principal and HOD the whole college or department.</p>
+<p class="lead">The <b>Reports</b> tab makes PDFs and Excel files (.xlsx in the college colours: brown header, tea-pink rows). Teachers get their own subjects; admin, principal and HOD the whole college or department.</p>
 <div class="row"><figure><img src="manual-img/15-reports-create.jpg" alt="Create a report"><figcaption>Create a report</figcaption></figure>
 <div><ol class="steps">
 <li><b>What do you need?</b> Attendance (month-wise % and tests), Daily register (P/A/L/B every date), Test results, or Shortage (below 73%).</li>
 <li><b>For whom?</b> One student, one section or all your sections / the college.</li>
 <li><b>Choose</b> the student or section, subject and months.</li>
-<li><b>Create PDF</b> or <b>Excel (CSV)</b>.</li></ol>
+<li><b>Create PDF</b> or <b>Excel</b>.</li></ol>
 <div class="note"><b>Attendance from</b> (for Attendance and Shortage): <b>Monthly + daily</b> uses the monthly attendance sheets first and the daily app where a subject has no monthly entry; or choose <b>Monthly sheets</b> or <b>Daily app</b> only.</div>
 <p>Further down: <b>Low attendance</b> this week/month, <b>Early warning</b> (students below 73% and at risk), and <b>Shortcuts</b> (shortage of the session or month, all data as Excel).</p></div></div>
 <div class="row rev"><figure><img src="manual-img/15b-reports-section.jpg" alt="One section"><figcaption>One section: choose section, subject, months</figcaption></figure><div></div></div>
@@ -281,7 +293,8 @@ kbd,.k{display:inline-block;padding:0 7px;border-radius:6px;border:1px solid var
 <div class="row"><figure><img src="manual-img/19-file-dialog.jpg" alt="File ready"><figcaption>Every PDF / Excel file opens this window</figcaption></figure>
 <div><ul><li><b>Share</b> (phone): WhatsApp, Gmail, Drive and other apps.</li>
 <li><b>Download</b>: saved in the Downloads folder (Files / My Files on a phone).</li>
-<li><b>Open / Print</b>: view the PDF and print it, or view an Excel file as a table.</li></ul></div></div>
+<li><b>Open / Print</b>: view the PDF and print it, or view an Excel file as a table.</li></ul>
+<p>All PDFs carry the JCW logo on a brown band with a tea-pink strip. Excel files are real <b>.xlsx</b> workbooks with the title, date, a brown header row, tea-pink stripes, filters and fitted columns. If the Excel tool cannot load (no internet the very first time), the file is given as CSV instead, which Excel also opens.</p></div></div>
 </section>
 
 <section id="account"><h2><span class="n">14</span>Account, sync and text size</h2>
@@ -297,6 +310,27 @@ kbd,.k{display:inline-block;padding:0 7px;border-radius:6px;border:1px solid var
 <section id="offline"><h2><span class="n">15</span>Working offline</h2>
 <p>After the first sign-in the app opens without internet. You can mark attendance, enter monthly test, grand test and detention marks, look at your sections and make most PDFs. Everything you save waits on the phone and is sent automatically when internet returns. Student search, official sheet PDFs, toppers and admissions search need internet.</p>
 <p>The app updates itself a few seconds after it opens with internet. To force it: status chip → <b>Check for update</b>.</p>
+</section>
+
+
+<section id="voice"><h2><span class="n">🎙</span>Voice: speak instead of typing, listen to the manual</h2>
+<p class="lead">The app can listen and speak. Listening (speech to text) needs internet and permission for the microphone; reading aloud works offline. Best in Chrome on Android, Chrome/Edge on a laptop and Safari on iPhone.</p>
+<h3>Voice typing</h3>
+<p>Tap in any text box (search, comments, notes, marks). A round brown <b>🎙</b> button appears at the bottom right. Tap it and speak; tap again to stop. The small button next to it switches between <b>English</b> and <b>اردو</b>. In a marks box, “seven”, “8.5” or “absent” become 7, 8.5 or A.</p>
+<h3>Voice roll call</h3>
+<ol><li>Open a class and day, then <b>⋯ More → Voice roll call</b>.</li>
+<li>The app says each student’s name and the row turns highlighted.</li>
+<li>Answer <b>present</b> (yes, haazir, ji), <b>absent</b> (no, ghair haazir), <b>leave</b> (chutti) or <b>bunk</b>.</li>
+<li>Say <b>next</b> to skip, <b>back</b> for the previous student, <b>repeat</b>, or <b>stop</b>. You can tap P A L B in the window at any time.</li>
+<li>At the end the app tells the totals. Check the list and press <b>Save attendance</b> as usual. Nothing is saved by voice alone.</li></ol>
+<p>Options in the window: <i>Read names aloud</i> (turn off in a quiet room and read the names yourself), <i>Only unmarked</i>, and the answer language.</p>
+<h3>Say the absentees</h3>
+<p>Fastest for a big class: <b>⋯ More → Say the absentees</b>, then say “absent 3, 7 and 12, leave 5” using the row numbers on the left (first names also work). The window lists what it understood; press <b>Apply</b>, and everyone not named becomes P. Then Save.</p>
+<h3>Speak marks (monthly test)</h3>
+<p>On the monthly test screen, enter the total, then tap <b>🎙 Speak marks</b> next to “Fill empty with A”. The app says each name; say the marks or “absent”. Marks above the total are refused and asked again. Press <b>Save test marks</b> when done.</p>
+<h3>Listen to the manual</h3>
+<p>In the app, the <b>?</b> help window has <b>🔊 Listen</b>: it reads the help from where you are. In this manual, every chapter has a <b>🔊</b> button, and the bar at the top has <b>Listen to all</b> and the reading speed.</p>
+<div class="warn">If nothing is heard: allow the microphone for the app (browser settings → Site settings → Microphone), check the internet, and speak after the red dot appears.</div>
 </section>
 
 <section id="ahome"><h2><span class="n">16</span>Admin home <span class="who">Admin / principal</span></h2>
@@ -373,6 +407,38 @@ document.getElementById('find').addEventListener('input', e => {
   const q = e.target.value.trim().toLowerCase();
   document.querySelectorAll('main section').forEach(s => { s.style.display = !q || s.textContent.toLowerCase().includes(q) ? '' : 'none'; });
 });
+
+// listen: read a chapter or the whole manual aloud (the phone's own voice, works offline)
+(() => {
+  const ok = 'speechSynthesis' in window, all = document.getElementById('ttsAll'), rate = document.getElementById('ttsRate');
+  if(!ok){ document.querySelector('.ttsBar').style.display = 'none'; return; }
+  try{ rate.value = localStorage.getItem('jcw_ttsrate') || '1'; }catch(e){}
+  rate.onchange = () => { try{ localStorage.setItem('jcw_ttsrate', rate.value); }catch(e){} };
+  let voices = []; const lv = () => { voices = speechSynthesis.getVoices() || []; }; lv(); speechSynthesis.onvoiceschanged = lv;
+  const voice = () => { const en = voices.filter(v => /^en/i.test(v.lang)); return en.find(v => /female|zira|samantha|heera|veena/i.test(v.name)) || en.find(v => /en-(in|gb)/i.test(v.lang)) || en[0] || null; };
+  const speak = t => new Promise(res => { const u = new SpeechSynthesisUtterance(t), v = voice(); if(v){ u.voice = v; u.lang = v.lang; } u.rate = Number(rate.value) || 1; u.onend = u.onerror = () => res(); speechSynthesis.speak(u); });
+  let token = 0;
+  const stop = () => { token++; speechSynthesis.cancel(); document.querySelectorAll('.tts1.on,#ttsAll.on').forEach(b => { b.classList.remove('on'); b.textContent = b.id === 'ttsAll' ? '🔊 Listen to all' : '🔊'; }); document.querySelectorAll('section.reading').forEach(s => s.classList.remove('reading')); };
+  const textOf = s => [...s.querySelectorAll('h2, h3, p, li, tr, figcaption, .warn')].filter(x => !x.closest('li li') && !(x.tagName === 'P' && x.closest('li'))).map(x => {
+      const c = x.cloneNode(true); c.querySelectorAll('.tts1,.n').forEach(n => n.remove());
+      return (x.tagName === 'TR' ? [...c.children].map(td => td.textContent).join(': ') : c.textContent).replace(/\s+/g, ' ').trim();
+    }).filter(Boolean);
+  async function read(list, btn){
+    const my = ++token; btn.classList.add('on'); btn.textContent = btn.id === 'ttsAll' ? '■ Stop' : '■';
+    for(const s of list){
+      if(my !== token) return;
+      document.querySelectorAll('section.reading').forEach(x => x.classList.remove('reading')); s.classList.add('reading');
+      s.scrollIntoView({ behavior:'smooth', block:'start' });
+      for(const t of textOf(s)){ if(my !== token) return; await speak(t); }
+    }
+    if(my === token) stop();
+  }
+  const secs = [...document.querySelectorAll('main section')];
+  secs.forEach(s => { const h = s.querySelector('h2'); if(!h) return; const b = document.createElement('button'); b.type = 'button'; b.className = 'tts1'; b.textContent = '🔊'; b.title = 'Listen to this chapter';
+    b.onclick = () => { if(b.classList.contains('on')) return stop(); stop(); read([s], b); }; h.appendChild(b); });
+  all.onclick = () => { if(all.classList.contains('on')) return stop(); stop(); const vis = secs.filter(s => s.style.display !== 'none'); const top = window.scrollY + 80; let i = vis.findIndex(s => s.offsetTop + s.offsetHeight > top); read(vis.slice(Math.max(0, i)), all); };
+  addEventListener('pagehide', stop);
+})();
 </script>
 </body>
 </html>

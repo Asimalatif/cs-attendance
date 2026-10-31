@@ -2163,7 +2163,7 @@ const HINTS = [
  ['[data-xact=reports]','Reports','Student, class, shortage and complete reports as PDF or Excel.','reports'],
  ['[data-xact=del]','Delete attendance','Deletes the marks of this lecture (or day). You must type the day number to confirm.','delete'],
  ['[data-xts]','Text size','Normal, Large or Extra large. Extra large puts each name on its own line with four big buttons.','textsize'],
- ['.vtabs [data-view=reports]','Reports','Student, class, shortage and complete reports as PDF or Excel (CSV).','reports'],
+ ['.vtabs [data-view=reports]','Reports','Student, class, shortage and complete reports as PDF or Excel.','reports'],
  ['[data-xopen]','Class','Tap to open this class for today. Green = marked, red = still to mark.','home'],
  ['[data-xlow]','This week / This month','Show students below 73% for this week or for the whole month.','reports'],
  ['#xLowPdf,#xLowPdf2','Share PDF','Weekly (or monthly) low-attendance report as PDF for WhatsApp or email.','reports'],
@@ -2178,7 +2178,7 @@ const HINTS = [
  ['#rpFrom,#rpTo','Months','From which month to which month. September to now = the whole session so far.','reports'],
  ['#rpBelow','Shortage limit','Students below this percentage are listed (73 by default).','reports'],
  ['#rpPdf','Create PDF','Makes the report as a PDF and opens the share menu (download on a laptop).','reports'],
- ['#rpCsv','Excel (CSV)','The same data as a file Excel and Google Sheets can open.','reports'],
+ ['#rpCsv','Excel','The same data as a file Excel and Google Sheets can open.','reports'],
  ['[data-xq]','Shortcut','One-tap report with no choices to make.','reports'],
  ['[data-xtab]','Overview tab','Teachers today, section-wise percentages, or low attendance.','home'],
  ['#helpBtn,#helpLogin','Help and manual','Opens the illustrated manual. You can also switch on Hint mode there.','hints'],
@@ -2430,7 +2430,7 @@ function sections(){
     <p>Open the <b>Reports</b> tab (or <b>⋯ More → Reports</b>). Everything is in one card, <b>Create a report</b>, in three steps:</p>
     <ol><li><b>What do you need?</b> Tap one of the four tiles.</li><li><b>For whom?</b> One student, one section, or all your sections.</li><li><b>Choose</b> the student or section (and subject), the months, then tap <b>Create PDF</b>.</li></ol>
     <div class="tip"><b>Every PDF and Excel file</b> in the app (reports, absentees, summary, register, timetable, free teachers…) opens a small window with three choices: <b>Share</b> (WhatsApp, Gmail, Drive… on phones), <b>Download</b> (saved in the Downloads folder: Files / My Files app on a phone) and <b>Open / Print</b>.</div>
-    <ul><li><b>Attendance</b>: lectures attended / held and % month by month, with the monthly test. <i>One student</i>: every subject of that student. <i>One section</i>: all students in one table (one subject month by month, or all subjects side by side); <b>One page per student</b> gives each student her own session register page. <i>All sections</i>: a section-wise summary, then every section on its own page. Also as <b>Excel (CSV)</b>.</li>
+    <ul><li><b>Attendance</b>: lectures attended / held and % month by month, with the monthly test. <i>One student</i>: every subject of that student. <i>One section</i>: all students in one table (one subject month by month, or all subjects side by side); <b>One page per student</b> gives each student her own session register page. <i>All sections</i>: a section-wise summary, then every section on its own page. Also as <b>Excel</b>.</li>
     <li><b>Daily register</b>: P / A / L / B for every date, then Present, Held and %. For a student, a section (one or all subjects) or all sections (admin, principal, HOD: one month at a time).</li>
     <li><b>Test results</b>: Obtained / Total for each monthly test, session % and class position. <b>Result card of every student</b> makes one card per student of the section.</li>
     <li><b>Shortage</b>: everyone below the limit (73% unless you change <b>Below %</b>) in the months you choose. <b>Needed</b> = lectures in a row she must attend to reach the limit. A dot after a name = short in more than one subject.</li>
@@ -2657,7 +2657,8 @@ const LIBS = [
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js'
 ];
-const INK=[15,27,45], NAVY=[15,27,45], ACC=[47,91,234], LINE=[214,220,230], MUTED=[102,112,133], SOFT=[247,249,252],
+// JCW uniform colours: brown, tea pink, white (NAVY keeps its old name: it is the brown of headers and table heads)
+const INK=[43,25,18], NAVY=[107,52,35], ACC=[194,118,106], TEA=[231,183,174], BR2=[138,74,53], LINE=[226,192,184], MUTED=[124,97,89], SOFT=[251,237,234],
       RED=[217,45,32], REDBG=[253,236,234], GREEN=[18,128,92], GREENBG=[230,244,238],
       AMB=[183,121,31], AMBBG=[255,244,219], PUR=[91,63,209], PURBG=[238,233,255];
 
@@ -2693,7 +2694,47 @@ function libs(){
     .catch(e => { libP = null; throw e; });
   return libP;
 }
-const warm = () => { if(navigator.onLine) libs().catch(() => {}); };
+/* JCW logo for the PDF header band (data URL, kept in the PDF tools cache so it also works offline) */
+let LOGO = null;
+(async () => {
+  try{
+    const src = new URL('jcw-logo.png', location.href).href; let r = null;
+    try{ if(window.caches) r = await (await caches.open(PDF_CACHE)).match(src); }catch(e){}
+    if(!r){ r = await fetch(src); if(r.ok && window.caches) (await caches.open(PDF_CACHE)).put(src, r.clone()).catch(() => {}); }
+    if(!r || !r.ok) return;
+    const b = await r.blob(); LOGO = await new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(b); });
+  }catch(e){}
+})();
+/* Excel: every table the app exports becomes a real .xlsx in the JCW colours (brown header, tea-pink stripes).
+   Without the Excel tool (first time offline) the plain CSV is given instead. */
+const XLSX_LIB = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.min.js';
+let xlsxP = null;
+function xlsxLib(){ if(window.XLSX && window.XLSX.utils) return Promise.resolve(); if(!xlsxP) xlsxP = loadScript(XLSX_LIB).catch(e => { xlsxP = null; throw e; }); return xlsxP; }
+async function toXlsx(csvBlob, name, title){
+  await xlsxLib();
+  const rows = parseCsv(await csvBlob.text()).filter(r => r.some(v => String(v).trim() !== ''));
+  if(!rows.length) throw new Error('empty');
+  const X = window.XLSX, n = Math.max(...rows.map(r => r.length));
+  const num = v => { const t = String(v).trim(); return t !== '' && t.length < 15 && /^-?\d+(\.\d+)?$/.test(t) && !/^0\d/.test(t) ? Number(t) : v; };
+  const head = [[title || name.replace(/\.[^.]+$/, '')], ['Jinnah College for Women · ' + stampNow()]];
+  const ws = X.utils.aoa_to_sheet(head.concat(rows.map(r => r.map(num))));
+  const bd = { style:'thin', color:{ rgb:'E2C0B8' } }, border = { top:bd, bottom:bd, left:bd, right:bd };
+  for(let r = 0; r < rows.length + 2; r++) for(let c = 0; c < n; c++){
+    const a = X.utils.encode_cell({ r, c }); if(!ws[a]) ws[a] = { t:'s', v:'' };
+    ws[a].s = r === 0 ? { font:{ bold:true, sz:14, color:{ rgb:'6B3423' } } }
+      : r === 1 ? { font:{ italic:true, sz:9, color:{ rgb:'7C6159' } } }
+      : r === 2 ? { fill:{ patternType:'solid', fgColor:{ rgb:'6B3423' } }, font:{ bold:true, color:{ rgb:'FFFFFF' } }, alignment:{ vertical:'center', wrapText:true }, border }
+      : { fill:(r % 2 ? { patternType:'solid', fgColor:{ rgb:'FBEDEA' } } : { patternType:'solid', fgColor:{ rgb:'FFFFFF' } }), font:{ color:{ rgb:'2B1912' } }, border };
+  }
+  ws['!merges'] = [{ s:{ r:0, c:0 }, e:{ r:0, c:Math.max(0, n - 1) } }, { s:{ r:1, c:0 }, e:{ r:1, c:Math.max(0, n - 1) } }];
+  ws['!cols'] = Array.from({ length:n }, (_, c) => ({ wch:Math.min(42, Math.max(8, ...rows.map(r => String(r[c] == null ? '' : r[c]).length + 2))) }));
+  ws['!rows'] = [{ hpt:22 }, {}, { hpt:30 }];
+  ws['!autofilter'] = { ref:X.utils.encode_range({ s:{ r:2, c:0 }, e:{ r:rows.length + 1, c:n - 1 } }) };
+  const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, String(title || 'Report').replace(/[\\/?*\[\]:]/g, ' ').slice(0, 31) || 'Report');
+  const out = X.write(wb, { bookType:'xlsx', type:'array' });
+  return { blob:new Blob([out], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), name:name.replace(/\.csv$/i, '.xlsx') };
+}
+const warm = () => { if(navigator.onLine){ libs().catch(() => {}); setTimeout(() => xlsxLib().catch(() => {}), 4000); } };
 setTimeout(warm, 3000); window.addEventListener('online', warm);
 
 /* ---------- drawing helpers ---------- */
@@ -2713,7 +2754,7 @@ function heading(doc, Y, t, sub){
 }
 function sectionTitle(doc, Y, t){
   Y = need(doc, Y, 20);
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...ACC); doc.text(t.toUpperCase(), 14, Y + 3);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...BR2); doc.text(t.toUpperCase(), 14, Y + 3);
   return Y + 5.5;
 }
 function infoGrid(doc, Y, pairs, cols){
@@ -2791,11 +2832,13 @@ function finalize(doc){
   const n = doc.internal.getNumberOfPages(), w = W(doc), h = H(doc), stamp = stampNow();
   for(let i = 1; i <= n; i++){
     doc.setPage(i);
-    doc.setFillColor(...NAVY); doc.rect(0, 0, w, 22, 'F'); doc.setFillColor(...ACC); doc.rect(0, 22, w, 1.2, 'F');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(255, 255, 255); doc.text(COLLEGE, 14, 10);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(200, 212, 235); doc.text(COLLEGE_SUB, 14, 15.5);
+    doc.setFillColor(...NAVY); doc.rect(0, 0, w, 22, 'F'); doc.setFillColor(...TEA); doc.rect(0, 22, w, 1.4, 'F');
+    let tx = 14;
+    if(LOGO){ try{ doc.setFillColor(255, 255, 255); doc.circle(21, 11, 8, 'F'); doc.addImage(LOGO, 'PNG', 14.6, 4.6, 12.8, 12.4); tx = 32; }catch(e){} }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(255, 255, 255); doc.text(COLLEGE, tx, 10);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(244, 214, 208); doc.text(COLLEGE_SUB, tx, 15.5);
     doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(255, 255, 255); doc.text(SYSTEM, w - 14, 10, { align:'right' });
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(200, 212, 235); doc.text(stamp, w - 14, 15.5, { align:'right' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(244, 214, 208); doc.text(stamp, w - 14, 15.5, { align:'right' });
     doc.setDrawColor(...LINE); doc.setLineWidth(0.2); doc.line(14, h - 13, w - 14, h - 13);
     doc.setFontSize(7.5); doc.setTextColor(...MUTED);
     doc.text('Computer-generated report' + (teacher ? ' \u00b7 prepared by ' + teacher : '') + ' \u00b7 ' + stamp, 14, h - 8.5);
@@ -3041,7 +3084,11 @@ function fileDlg(){
   if(!d){ d = document.createElement('dialog'); d.id = 'fileDlg'; d.innerHTML = '<div class="dlg" id="fileDlgBody"></div>'; document.body.appendChild(d); }
   return d;
 }
-function offerFile(blob, name, title, preferOpen){
+function offerFile(blob, name, title, preferOpen, csvSrc){
+  if(csvSrc === undefined && /\.csv$/i.test(name)){
+    toXlsx(blob, name, title).then(x => offerFile(x.blob, x.name, title, preferOpen, blob)).catch(() => offerFile(blob, name, title, preferOpen, null));
+    return;
+  }
   const d = fileDlg(), isPdf = /\.pdf$/i.test(name), file = new File([blob], name, { type:blob.type || (isPdf ? 'application/pdf' : 'text/csv') });
   const canShare = !!(navigator.canShare && navigator.canShare({ files:[file] })), kb = Math.max(1, Math.round(blob.size / 1024));
   const big = (id, label, sub, primary) => `<button type="button" class="fbtn ${primary ? 'primary' : ''}" id="${id}"><b>${label}</b><small>${sub}</small></button>`;
@@ -3065,7 +3112,7 @@ function offerFile(blob, name, title, preferOpen){
     toast('Downloaded: ' + name + '\nYou find it in the Downloads folder' + (isPdf ? ' (Files / My Files app on a phone).' : '. It opens in Excel or Google Sheets.'));
   };
   const op = document.getElementById('fOpen');
-  if(op && !isPdf) op.onclick = () => { csvView(blob, name, title); close(); };
+  if(op && !isPdf) op.onclick = () => { csvView(csvSrc || blob, name.replace(/\.xlsx$/i, '.csv'), title); close(); };
   else if(op) op.onclick = () => {
     const u = URL.createObjectURL(blob), w = window.open(u, '_blank');
     if(!w){ download(blob, name); toast('The PDF was downloaded (this browser does not open it directly).'); }
@@ -3086,7 +3133,7 @@ function parseCsv(t){
   if(f !== '' || row.length){ row.push(f); rows.push(row); }
   return rows.filter(r => r.some(x => x !== ''));
 }
-/** "Open / Print" for an Excel (CSV) file: a table in a new tab with a filter on every column and a Print button. */
+/** "Open / Print" for an Excel file: a table in a new tab with a filter on every column and a Print button. */
 function csvView(blob, name, title){
   const w = window.open('', '_blank');
   if(!w){ download(blob, name); return toast('The file was downloaded (this browser blocked the new tab).'); }
@@ -3938,6 +3985,8 @@ function openMore(){
   $q('#dlgBody').innerHTML = `<h2>More options</h2>
     <div class="meta">${esc(sel.cls)} · ${esc(titleCase(sel.sub))} · ${sel.day} ${MONTHS[m].slice(0, 3)}${hasMulti() ? ' · lecture ' + sel.period : ''}</div>
     <div class="mlist">
+      ${mode === 'att' ? item('voice', '🎙', 'Voice roll call', 'The app says each name, you answer present / absent / leave') : ''}
+      ${mode === 'att' ? item('vabs', '🗣', 'Say the absentees', '“Absent 3, 7 and 12, leave 5”: everyone else becomes P') : ''}
       ${item('note', I.note, note ? 'Edit day note' : 'Add day note', note ? 'Note: ' + esc(note) : 'College closed, class not held, holiday…')}
       ${multiOk ? item('multi', I.plus, 'More than one lecture today', 'Adds a lecture bar (1, 2, 3…) for this day') : ''}
       ${item('guest', I.guest, 'Add guest student', 'A student of another section who attends here')}
@@ -3955,6 +4004,8 @@ function openMore(){
 }
 function doAct(a){
   const dlg = $q('#dlg'); if(dlg.open) dlg.close();
+  if(a === 'voice') return window.JCWVOICE && window.JCWVOICE.rollCall();
+  if(a === 'vabs') return window.JCWVOICE && window.JCWVOICE.sayAbsent();
   if(a === 'note') return openNote();
   if(a === 'multi'){ multi[multiKey()] = 2; store.set('multi2', multi); renderMain(); return toast('Lecture bar added for day ' + sel.day + '. Tap 2 for your second lecture.'); }
   if(a === 'guest') return openGuest();
@@ -3977,7 +4028,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-10-31 v8.1 manuals';
+const APP_BUILD = '2026-10-31 v8.2 voice and JCW colour reports';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4211,7 +4262,7 @@ function classTable(doc, S, q, Y, label){
   const n = body.length;
   const p0 = doc.internal.getNumberOfPages();
   P.table(doc, { startY:Y, margin:{ top:P.TOP + (label ? 7 : 0), left:10, right:10, bottom:18 },
-    didDrawPage:d => { if(label && doc.internal.getCurrentPageInfo().pageNumber > p0){ doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(20, 33, 61); doc.text(label + '  (continued)', 10, P.TOP + 3); } },
+    didDrawPage:d => { if(label && doc.internal.getCurrentPageInfo().pageNumber > p0){ doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(107, 52, 35); doc.text(label + '  (continued)', 10, P.TOP + 3); } },
     styles:{ font:'helvetica', fontSize:7.2, cellPadding:1.1, lineColor:C.LINE, lineWidth:0.15, textColor:C.INK, valign:'middle', halign:'center', overflow:'linebreak' },
     headStyles:{ fillColor:C.NAVY, textColor:[255, 255, 255], fontStyle:'bold', halign:'center', valign:'middle', fontSize:6.6, cellPadding:1 },
     head, body,
@@ -4317,7 +4368,7 @@ function shortagePdf(S, q){
   P.finalize(doc);
   return { doc, title:'Shortage report', file:'Shortage_' + P.safe(where) + '_' + q.from + '-' + q.to + '.pdf' };
 }
-/* ----- Excel (CSV) ----- */
+/* ----- Excel ----- */
 const csvLine = a => a.map(v => { const t = String(v == null ? '' : v); return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; }).join(',');
 function detailCsv(rows, q){
   const L = [['Section', 'Roll No', 'Student Name', 'Subject', 'Teacher', 'Month', 'Attended', 'Held', 'Attendance %', 'Monthly test', 'Test total', 'Note']];
@@ -4495,7 +4546,7 @@ function renderReports(){
   const second = rp.who === 'sec' && rp.kind === 'att' ? 'One page per student'
     : rp.who === 'sec' && rp.kind === 'tests' ? 'Result card of every student' : '';
   const csv = rp.kind === 'att' || rp.kind === 'short';
-  h += `<div class="acts2"><button class="btn primary" type="button" id="rpPdf" ${rpBusy ? 'disabled' : ''}>${I.doc}Create PDF</button>${second ? `<button class="btn" type="button" id="rpCards" ${rpBusy ? 'disabled' : ''}>${second}</button>` : ''}${csv ? `<button class="btn" type="button" id="rpCsv" ${rpBusy ? 'disabled' : ''}>Excel (CSV)</button>` : ''}</div>
+  h += `<div class="acts2"><button class="btn primary" type="button" id="rpPdf" ${rpBusy ? 'disabled' : ''}>${I.doc}Create PDF</button>${second ? `<button class="btn" type="button" id="rpCards" ${rpBusy ? 'disabled' : ''}>${second}</button>` : ''}${csv ? `<button class="btn" type="button" id="rpCsv" ${rpBusy ? 'disabled' : ''}>Excel</button>` : ''}</div>
     <div id="rpProg"></div>
     <div class="rnote">${scope ? 'Taken from the college sheets, updated every time a teacher saves.' : 'Only your own subjects are included.'}${rp.kind === 'att' || rp.kind === 'short' ? '' : ' Needs internet.'} Held = lectures delivered, Present = lectures attended.</div></section>`;
   h += wrCard();
@@ -4507,7 +4558,7 @@ function renderReports(){
   h += `<section class="card"><h3>${I.doc} Shortcuts</h3><div class="sub">One tap, no choices. Session so far = September to ${MONTHS[monIdx(SEAS[seasNow()])]}.</div>
     <button class="li" type="button" data-xq="short"><span class="tx"><b>Shortage · whole session</b><small>${esc(allLabel())}, below ${LOW}%</small></span><span class="chev">${I.chev}</span></button>
     <button class="li" type="button" data-xq="shortm"><span class="tx"><b>Shortage · this month</b><small>${esc(allLabel())}, ${MONTHS[monIdx(SEAS[seasNow()])]}</small></span><span class="chev">${I.chev}</span></button>
-    <button class="li" type="button" data-xq="csv"><span class="tx"><b>All data · Excel (CSV)</b><small>Every student, subject and month</small></span><span class="chev">${I.chev}</span></button>
+    <button class="li" type="button" data-xq="csv"><span class="tx"><b>All data · Excel</b><small>Every student, subject and month</small></span><span class="chev">${I.chev}</span></button>
   </section></div></main>`;
   $q('#app').innerHTML = h;
   wrAfter();
@@ -4866,7 +4917,7 @@ function tpCard(){
     h += `<div class="sub">Students who attended every lecture of every subject: in all the chosen months, and month by month. With father names, morning and evening.</div>
       ${attSrcHtml()}<div class="form"><div class="frow">${sel2('tpFrom', tp.from, 'From')}${sel2('tpTo', tp.to, 'To')}</div></div>`;
   }
-  h += `<div class="acts2"><button class="btn primary" type="button" id="tpPdf" ${tpBusy ? 'disabled' : ''}>${I.doc}${tpBusy ? 'Working…' : 'Create PDF'}</button><button class="btn" type="button" id="tpCsv" ${tpBusy ? 'disabled' : ''}>Excel (CSV)</button></div>
+  h += `<div class="acts2"><button class="btn primary" type="button" id="tpPdf" ${tpBusy ? 'disabled' : ''}>${I.doc}${tpBusy ? 'Working…' : 'Create PDF'}</button><button class="btn" type="button" id="tpCsv" ${tpBusy ? 'disabled' : ''}>Excel</button></div>
     <div class="rnote">${tp.kind === 'tp' ? 'Needs internet. The first time it reads every section sheet of the workbook (up to a minute or two); then it is quick for 20 minutes.' : 'Needs internet for the monthly sheets: about half a minute per month the first time, then quick for 30 minutes.'}</div></section>`;
   return h;
 }
@@ -6396,11 +6447,11 @@ function slipsPdf(r){
     const k = i % (cols * rows); if(i && !k) doc.addPage();
     const x = mx + (k % cols) * w, y = my + Math.floor(k / cols) * hh;
     doc.setDrawColor(150); doc.setLineDashPattern([1.5, 1.5], 0); doc.rect(x, y, w, hh); doc.setLineDashPattern([], 0);
-    doc.setTextColor(20, 33, 61); doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.text('JINNAH COLLEGE FOR WOMEN · Result page', x + 4, y + 7);
+    doc.setTextColor(107, 52, 35); doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.text('JINNAH COLLEGE FOR WOMEN · Result page', x + 4, y + 7);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(60);
     doc.text(doc.splitTextToSize(s.name, w - 8)[0], x + 4, y + 14); doc.text(s.roll + '  ·  ' + s.cls, x + 4, y + 19);
     doc.setFontSize(7.5); doc.text('Your private code', x + 4, y + 26);
-    doc.setFont('courier', 'bold'); doc.setFontSize(20); doc.setTextColor(20, 33, 61); doc.text(s.code.replace(/(\d{3})(\d{3})/, '$1 $2'), x + 4, y + 34);
+    doc.setFont('courier', 'bold'); doc.setFontSize(20); doc.setTextColor(107, 52, 35); doc.text(s.code.replace(/(\d{3})(\d{3})/, '$1 $2'), x + 4, y + 34);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(60);
     doc.text(doc.splitTextToSize('Open: ' + url, w - 8), x + 4, y + 40);
     doc.text(doc.splitTextToSize('Keep this code to yourself. The page shows only your own attendance and tests, and nobody can contact you through it.', w - 8), x + 4, y + hh - 7);
@@ -7224,5 +7275,395 @@ loadOpts(false);
 })();
 </script>
 
+<script>
+/* ======================= VOICE: voice typing, voice roll call, marks by voice, read aloud =======================
+   Uses the phone's own speech tools (Chrome / Edge / Safari): speech-to-text needs internet, reading aloud works offline.
+   - A microphone button appears whenever a text box is in use: speak instead of typing (English or Urdu).
+   - Attendance ⋯ More → Voice roll call: the app says each name, the teacher answers present / absent / leave / bunk
+     (or haazir, ghair haazir, chutti). "next", "back", "repeat", "stop" also work.
+   - Attendance ⋯ More → Say the absentees: "absent 3, 7 and 12, leave 5" (row numbers or names); the rest become P.
+   - Monthly test → Speak marks: the app says each name, the teacher says the marks or "absent".
+   - Help (?) → Listen: reads the manual aloud. */
+(() => {
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const canSpeak = 'speechSynthesis' in window;
+const st = { get:(k, d) => { try{ const v = localStorage.getItem('csa2_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } }, set:(k, v) => { try{ localStorage.setItem('csa2_' + k, JSON.stringify(v)); }catch(e){} } };
+const LANGS = [['en-IN', 'English'], ['ur-PK', 'اردو']];
+const tLang = () => st.get('vtype', 'en-IN');
+const say = (m) => { try{ toast(m); }catch(e){} };
+const css = document.createElement('style');
+css.textContent = `
+#vMic{position:fixed;right:14px;bottom:calc(96px + env(safe-area-inset-bottom,0px));z-index:60;display:none;align-items:center;gap:6px}
+#vMic button{border:0;border-radius:999px;font:inherit;font-weight:800;box-shadow:0 10px 22px -10px rgba(74,36,24,.8)}
+#vMic .mic{width:52px;height:52px;background:linear-gradient(180deg,#8A4A35,#6B3423);color:#fff;display:grid;place-items:center}
+#vMic .mic.on{background:#C0392B;animation:vPulse 1s infinite}
+#vMic .lg{height:34px;padding:0 12px;background:#FBEDEA;color:#6B3423;border:1.5px solid #E2C0B8}
+@keyframes vPulse{50%{box-shadow:0 0 0 10px rgba(192,57,43,.18)}}
+#vDlg{border:1.5px solid var(--line);border-top:5px solid #6B3423;border-radius:22px;padding:0;width:min(440px,94vw);background:var(--surface);color:var(--ink);box-shadow:0 18px 38px -18px rgba(74,36,24,.6)}
+#vDlg::backdrop{background:rgba(26,17,15,.45)}
+#vDlg .vb{padding:16px}
+#vDlg h2{margin:0 0 2px;font-size:18px;color:#6B3423}
+#vDlg .meta{font-size:12.5px;color:var(--muted)}
+#vDlg .who2{margin:14px 0 6px;padding:14px;border-radius:16px;background:linear-gradient(135deg,#F4D6D0,#FBEDEA);text-align:center}
+#vDlg .who2 b{display:block;font-size:24px;line-height:1.2;color:#2B1912}
+#vDlg .who2 small{color:#7C6159}
+#vDlg .heard{min-height:22px;text-align:center;font-size:14px;color:#7C6159;margin:6px 0}
+#vDlg .heard.ok{color:#0E8A5F;font-weight:800}#vDlg .heard.bad{color:#C0392B}
+#vDlg .lst{display:flex;align-items:center;justify-content:center;gap:8px;font-weight:800;color:#6B3423;margin:8px 0}
+#vDlg .lst i{width:12px;height:12px;border-radius:50%;background:#C0392B;animation:vPulse 1s infinite}
+#vDlg .lst.off i{background:#ccc;animation:none}
+#vDlg .pk{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}
+#vDlg .pk button,#vDlg .row2 button{height:46px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font:inherit;font-weight:800;font-size:16px;color:var(--ink)}
+#vDlg .pk .P{color:#0E8A5F}#vDlg .pk .A{color:#D4352B}#vDlg .pk .L{color:#B4740E}#vDlg .pk .B{color:#5B45D6}
+#vDlg .row2{display:flex;gap:8px;margin-top:8px}#vDlg .row2 button{flex:1;font-size:14px}
+#vDlg .row2 .pri{background:linear-gradient(180deg,#8A4A35,#6B3423);border-color:#6B3423;color:#fff}
+#vDlg .help2{font-size:12.5px;color:var(--muted);line-height:1.45;margin-top:10px}
+#vDlg .opts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+#vDlg .opts label{display:flex;align-items:center;gap:5px;font-size:13px;padding:4px 10px;border-radius:999px;background:#FBEDEA;color:#6B3423;font-weight:700}
+#vDlg .res{max-height:38vh;overflow:auto;margin:8px 0;padding:0;list-style:none}
+#vDlg .res li{display:flex;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:10px;margin-bottom:5px;background:#FBEDEA;font-size:14px}
+#vDlg input.vt{width:100%;height:44px;border:1.5px solid var(--line);border-radius:12px;padding:0 12px;font:inherit;font-size:16px;background:var(--surface);color:var(--ink)}
+.row.vNow{outline:3px solid #E7B7AE;outline-offset:2px}
+.vListen{display:inline-flex;align-items:center;gap:6px}
+`;
+document.head.appendChild(css);
+
+/* ---------- reading aloud ---------- */
+let voices = [];
+function loadVoices(){ try{ voices = speechSynthesis.getVoices() || []; }catch(e){} }
+if(canSpeak){ loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+function pickVoice(lang){
+  const l = String(lang || 'en').toLowerCase().slice(0, 2), v = voices.filter(x => String(x.lang).toLowerCase().startsWith(l));
+  return v.find(x => /female|zira|samantha|google uk english female|veena|heera/i.test(x.name)) || v.find(x => /en-in|en-gb/i.test(x.lang)) || v[0] || null;
+}
+function speak(text, lang){
+  return new Promise(res => {
+    if(!canSpeak || !text) return res();
+    try{
+      const u = new SpeechSynthesisUtterance(String(text));
+      const v = pickVoice(lang || 'en'); if(v){ u.voice = v; u.lang = v.lang; } else u.lang = lang || 'en-IN';
+      u.rate = st.get('vrate', 1); u.onend = () => res(); u.onerror = () => res();
+      speechSynthesis.speak(u);
+      setTimeout(res, Math.min(20000, 1500 + String(text).length * 90));          // never hang
+    }catch(e){ res(); }
+  });
+}
+function stopSpeak(){ try{ if(canSpeak) speechSynthesis.cancel(); }catch(e){} }
+
+/* ---------- listening ---------- */
+function needSR(){
+  if(!SR){ say('Voice input is not available in this browser. Use Chrome on Android or a laptop, or Safari on iPhone.'); return false; }
+  if(!navigator.onLine){ say('Voice input needs internet. Reading aloud still works offline.'); return false; }
+  return true;
+}
+/** one answer: resolves with the alternatives heard ([] on silence) */
+let cur = null;
+function hear(lang, ms){
+  return new Promise(res => {
+    let done = false, alts = [];
+    const r = new SR(); cur = r;
+    r.lang = lang || 'en-IN'; r.interimResults = false; r.continuous = false; r.maxAlternatives = 5;
+    r.onresult = e => { const x = e.results[0]; for(let i = 0; i < x.length; i++) alts.push(String(x[i].transcript || '').trim()); };
+    const fin = () => { if(done) return; done = true; cur = null; res(alts); };
+    r.onerror = e => { if(e && (e.error === 'not-allowed' || e.error === 'service-not-allowed')) say('Allow the microphone for this app (browser settings) to use voice.'); fin(); };
+    r.onend = fin;
+    try{ r.start(); }catch(e){ fin(); }
+    setTimeout(() => { try{ r.stop(); }catch(e){} }, ms || 7000);
+  });
+}
+function stopHear(){ try{ if(cur) cur.abort(); }catch(e){} cur = null; }
+
+/* ---------- what was said -> P / A / L / B, a number, or a command ---------- */
+const W2N = { zero:0, one:1, two:2, to:2, too:2, three:3, four:4, for:4, five:5, six:6, seven:7, eight:8, ate:8, nine:9, ten:10, eleven:11, twelve:12, thirteen:13, fourteen:14, fifteen:15, sixteen:16, seventeen:17, eighteen:18, nineteen:19, twenty:20, thirty:30, forty:40, fifty:50, sixty:60, seventy:70, eighty:80, ninety:90, hundred:100,
+  'ایک':1, 'دو':2, 'تین':3, 'چار':4, 'پانچ':5, 'چھ':6, 'سات':7, 'آٹھ':8, 'نو':9, 'دس':10, 'گیارہ':11, 'بارہ':12, 'تیرہ':13, 'چودہ':14, 'پندرہ':15, 'سولہ':16, 'سترہ':17, 'اٹھارہ':18, 'انیس':19, 'بیس':20 };
+const URDIG = s => String(s).replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
+function wordsToNums(t){
+  t = URDIG(String(t).toLowerCase()).replace(/(\d)\s*(?:point|dot|اعشاریہ)\s*(\d)/g, '$1.$2');
+  const out = []; let acc = null;
+  t.split(/[\s,;:]+/).forEach(w => {
+    if(/^\d+(\.\d+)?$/.test(w)){ if(acc != null){ out.push(acc); acc = null; } out.push(Number(w)); return; }
+    if(W2N[w] != null){ const n = W2N[w]; if(acc != null && acc >= 20 && acc % 10 === 0 && n < 10) acc += n; else { if(acc != null) out.push(acc); acc = n; } return; }
+    if(acc != null){ out.push(acc); acc = null; }
+  });
+  if(acc != null) out.push(acc);
+  return out;
+}
+function markOf(alts){
+  for(const raw of alts){
+    const t = ' ' + String(raw).toLowerCase().replace(/[.!?،۔]/g, ' ') + ' ';
+    if(/ (stop|end|finish|bas|khatam|بس|ختم) /.test(t)) return { cmd:'stop' };
+    if(/ (next|skip|agla|اگلا|آگے) /.test(t)) return { cmd:'next' };
+    if(/ (back|previous|pichla|پچھلا|واپس) /.test(t)) return { cmd:'back' };
+    if(/ (repeat|again|dobara|دوبارہ) /.test(t)) return { cmd:'repeat' };
+    if(/ (absent|not present|no|nahi|nahin|ghair|gair|غیر|غائب|نہیں) /.test(t) || /^ a $/.test(t)) return { v:'A' };
+    if(/ (leave|chutti|chhutti|on leave|رخصت|چھٹی) /.test(t) || /^ (l|el) $/.test(t)) return { v:'L' };
+    if(/ (bunk|bunked|bank|bang) /.test(t) || /^ (b|bee) $/.test(t)) return { v:'B' };
+    if(/ (present|yes|yeah|here|haazir|hazir|hazar|haazar|ji|jee|yes madam|yes maam|حاضر|جی|ہاں) /.test(t) || /^ (p|pee|pea) $/.test(t)) return { v:'P' };
+  }
+  return null;
+}
+
+/* ---------- dialog ---------- */
+function dlg(){
+  let d = document.getElementById('vDlg');
+  if(!d){ d = document.createElement('dialog'); d.id = 'vDlg'; d.innerHTML = '<div class="vb" id="vBody"></div>'; document.body.appendChild(d);
+    d.addEventListener('close', () => { run.on = false; stopHear(); stopSpeak(); document.querySelectorAll('.row.vNow').forEach(r => r.classList.remove('vNow')); }); }
+  return d;
+}
+const run = { on:false, i:0, list:[], kind:'', step:null };
+const rowsNow = (sel) => [...document.querySelectorAll(sel)].filter(r => !r.classList.contains('off'));
+const nameOf = r => { const b = r.querySelector('.who b'); return b ? b.textContent.trim() : ''; };
+const noOf = r => { const n = r.querySelector('.no'); return n ? Number(n.textContent) : 0; };
+const curMark = r => { const b = r.querySelector('button[data-v][aria-pressed="true"]'); return b ? b.dataset.v : ''; };
+function setMark(r, v){ if(curMark(r) === v) return; const b = r.querySelector('button[data-v="' + v + '"]'); if(b) b.click(); }
+const firstName = n => String(n).split(/\s+/)[0];
+
+/* ---------- 1) voice roll call ---------- */
+function rollCall(){
+  if(!needSR()) return;
+  const all = rowsNow('#list .row');
+  if(!all.length) return say('Open a class and day first.');
+  const onlyUn = st.get('vOnlyUn', true), names = st.get('vNames', true);
+  run.list = onlyUn ? all.filter(r => !curMark(r)) : all; if(!run.list.length) run.list = all;
+  run.kind = 'roll'; run.i = 0; run.on = true;
+  const d = dlg();
+  document.getElementById('vBody').innerHTML = `<h2>Voice roll call</h2><div class="meta" id="vMeta"></div>
+    <div class="who2"><b id="vName">…</b><small id="vRoll"></small></div>
+    <div class="lst" id="vLst"><i></i><span>Listening…</span></div><div class="heard" id="vHeard"></div>
+    <div class="pk">${['P', 'A', 'L', 'B'].map(v => `<button type="button" class="${v}" data-vm="${v}">${v}</button>`).join('')}</div>
+    <div class="row2"><button type="button" data-vc="back">◀ Back</button><button type="button" data-vc="repeat">Repeat</button><button type="button" data-vc="next">Skip ▶</button></div>
+    <div class="row2"><button type="button" class="pri" data-vc="stop">Finish</button></div>
+    <div class="opts"><label><input type="checkbox" id="vOptNames" ${names ? 'checked' : ''}> Read names aloud</label><label><input type="checkbox" id="vOptUn" ${onlyUn ? 'checked' : ''}> Only unmarked</label>
+      <label>Answer in <select id="vOptLang">${LANGS.map(l => `<option value="${l[0]}" ${st.get('vroll', 'en-IN') === l[0] ? 'selected' : ''}>${l[1]}</option>`).join('')}</select></label></div>
+    <div class="help2">Say <b>present</b> / <b>haazir</b>, <b>absent</b> / <b>ghair haazir</b>, <b>leave</b> / <b>chutti</b> or <b>bunk</b>. Also <b>next</b>, <b>back</b>, <b>repeat</b>, <b>stop</b>. You can tap P A L B at any time. Press <b>Save</b> on the screen when done.</div>`;
+  if(!d.open) d.showModal();
+  step();
+}
+async function step(){
+  if(!run.on || run.kind !== 'roll') return;
+  if(run.i < 0) run.i = 0;
+  if(run.i >= run.list.length) return finishRoll();
+  const r = run.list[run.i], name = nameOf(r), roll = r.dataset.roll;
+  document.querySelectorAll('.row.vNow').forEach(x => x.classList.remove('vNow')); r.classList.add('vNow');
+  try{ r.scrollIntoView({ block:'center', behavior:'smooth' }); }catch(e){}
+  const meta = document.getElementById('vMeta'); if(!meta) return;
+  meta.textContent = 'Student ' + (run.i + 1) + ' of ' + run.list.length + (curMark(r) ? ' · now ' + curMark(r) : '');
+  document.getElementById('vName').textContent = name; document.getElementById('vRoll').textContent = noOf(r) + ' · ' + roll;
+  const heard = document.getElementById('vHeard'); heard.className = 'heard'; heard.textContent = '';
+  const my = run.i;
+  if(st.get('vNames', true)){ document.getElementById('vLst').classList.add('off'); await speak(name, 'en'); }
+  if(!run.on || run.i !== my) return;
+  let tries = 0;
+  while(run.on && run.i === my && tries < 3){
+    document.getElementById('vLst').classList.remove('off');
+    const alts = await hear(st.get('vroll', 'en-IN'), 6000);
+    if(!run.on || run.i !== my) return;
+    document.getElementById('vLst').classList.add('off');
+    const m = markOf(alts);
+    if(!m){ tries++; heard.className = 'heard bad'; heard.textContent = alts.length ? 'Did not understand: "' + alts[0] + '"' : 'Nothing heard'; continue; }
+    heard.className = 'heard ok'; heard.textContent = '“' + (alts[0] || '') + '”';
+    return act(m);
+  }
+  if(run.on && run.i === my){ heard.className = 'heard bad'; heard.textContent = 'Tap P, A, L or B, or Skip.'; }
+}
+function act(m){
+  if(!run.on) return;
+  if(m.cmd === 'stop') return finishRoll();
+  if(m.cmd === 'next'){ run.i++; return step(); }
+  if(m.cmd === 'back'){ run.i = Math.max(0, run.i - 1); return step(); }
+  if(m.cmd === 'repeat') return step();
+  if(m.v){ setMark(run.list[run.i], m.v); if(navigator.vibrate) navigator.vibrate(15); run.i++; setTimeout(step, 250); }
+}
+function finishRoll(){
+  run.on = false; stopHear(); stopSpeak();
+  const all = rowsNow('#list .row'), c = { P:0, A:0, L:0, B:0, '':0 }; all.forEach(r => { c[curMark(r)]++; });
+  const msg = 'Roll call finished. ' + c.P + ' present, ' + c.A + ' absent' + (c.L ? ', ' + c.L + ' on leave' : '') + (c.B ? ', ' + c.B + ' bunk' : '') + (c[''] ? ', ' + c[''] + ' not marked' : '') + '.';
+  const d = document.getElementById('vDlg'); if(d && d.open) d.close();
+  say(msg + (c[''] ? '' : ' Press Save attendance.')); if(st.get('vNames', true)) speak(msg, 'en');
+}
+
+/* ---------- 2) say the absentees ---------- */
+async function sayAbsent(){
+  if(!needSR()) return;
+  const all = rowsNow('#list .row'); if(!all.length) return say('Open a class and day first.');
+  run.kind = 'abs'; run.on = true;
+  const d = dlg();
+  document.getElementById('vBody').innerHTML = `<h2>Say the absentees</h2><div class="meta">${all.length} students · everyone not named becomes P</div>
+    <div class="lst" id="vLst"><i></i><span>Listening…</span></div><div class="heard" id="vHeard">Say for example: “absent 3, 7 and 12, leave 5”, or names: “absent Ayesha, Sana”.</div>
+    <ul class="res" id="vRes"></ul>
+    <div class="row2"><button type="button" data-vc="again">🎙 Listen again</button><button type="button" class="pri" data-vc="apply" disabled id="vApply">Apply</button></div>
+    <div class="help2">Numbers are the row numbers on the left of the list (1, 2, 3 …). Say <b>absent</b>, <b>leave</b> or <b>bunk</b> before them. Nothing is changed until you press Apply.</div>`;
+  if(!d.open) d.showModal();
+  listenAbs();
+}
+let absPlan = null;
+async function listenAbs(){
+  const lst = document.getElementById('vLst'), heard = document.getElementById('vHeard'); if(!lst) return;
+  lst.classList.remove('off');
+  const alts = await hear(st.get('vroll', 'en-IN'), 12000);
+  lst.classList.add('off');
+  if(!alts.length){ heard.className = 'heard bad'; heard.textContent = 'Nothing heard. Press Listen again.'; return; }
+  const all = rowsNow('#list .row'), byNo = {}; all.forEach(r => { byNo[noOf(r)] = r; });
+  const text = alts[0], plan = {}; let mode = 'A';
+  const toks = URDIG(text.toLowerCase()).replace(/[,.;،۔]/g, ' ').split(/\s+/);
+  for(let i = 0; i < toks.length; i++){
+    const w = toks[i], m = markOf([w]);
+    if(m && m.v && m.v !== 'P'){ mode = m.v; continue; }
+    const nums = wordsToNums(w); if(nums.length){ nums.forEach(n => { if(byNo[n]) plan[byNo[n].dataset.roll] = { r:byNo[n], v:mode }; }); continue; }
+    if(w.length >= 3){ const hit = all.filter(r => firstName(nameOf(r)).toLowerCase() === w || nameOf(r).toLowerCase().split(/\s+/).includes(w)); if(hit.length === 1) plan[hit[0].dataset.roll] = { r:hit[0], v:mode }; }
+  }
+  absPlan = plan;
+  heard.className = 'heard ok'; heard.textContent = '“' + text + '”';
+  const items = Object.values(plan);
+  document.getElementById('vRes').innerHTML = items.length ? items.map(x => `<li><span>${noOf(x.r)} · ${nameOf(x.r)}</span><b>${x.v === 'A' ? 'Absent' : x.v === 'L' ? 'Leave' : 'Bunk'}</b></li>`).join('') : '<li>No student recognised. Try again with row numbers.</li>';
+  const ap = document.getElementById('vApply'); if(ap) ap.disabled = !items.length;
+}
+function applyAbs(){
+  const all = rowsNow('#list .row'); if(!absPlan) return;
+  all.forEach(r => { const p = absPlan[r.dataset.roll]; setMark(r, p ? p.v : (curMark(r) || 'P')); });
+  const n = Object.keys(absPlan).length; absPlan = null;
+  const d = document.getElementById('vDlg'); if(d && d.open) d.close();
+  say(n + ' marked absent / leave / bunk, everyone else P. Check the list and press Save attendance.');
+}
+
+/* ---------- 3) monthly test marks by voice ---------- */
+function speakMarks(){
+  if(!needSR()) return;
+  const tot = document.getElementById('mtTotal'); if(tot && !Number(tot.value)) return say('Enter the total marks first.');
+  const all = rowsNow('#mtList .row'); if(!all.length) return;
+  run.list = all.filter(r => !(r.querySelector('.mk') || {}).value); if(!run.list.length) run.list = all;
+  run.kind = 'mt'; run.i = 0; run.on = true;
+  const d = dlg();
+  document.getElementById('vBody').innerHTML = `<h2>Speak marks</h2><div class="meta" id="vMeta"></div>
+    <div class="who2"><b id="vName">…</b><small id="vRoll"></small></div>
+    <div class="lst" id="vLst"><i></i><span>Listening…</span></div><div class="heard" id="vHeard"></div>
+    <input class="vt" id="vMk" inputmode="decimal" placeholder="or type the marks / A">
+    <div class="row2"><button type="button" data-vc="back">◀ Back</button><button type="button" data-vc="repeat">Repeat</button><button type="button" data-vc="next">Skip ▶</button></div>
+    <div class="row2"><button type="button" class="pri" data-vc="stop">Finish</button></div>
+    <div class="help2">Say the marks (“seven”, “8.5”) or <b>absent</b>. Also <b>next</b>, <b>back</b>, <b>repeat</b>, <b>stop</b>. Out of ${tot ? tot.value : '?'}. Press <b>Save test marks</b> when done.</div>`;
+  if(!d.open) d.showModal();
+  mtStep();
+}
+function setMk(r, v){ const i = r.querySelector('.mk'); if(!i) return false; const old = i.value; i.value = v; i.dispatchEvent(new Event('input', { bubbles:true })); return i.value === String(v) || i.value !== old; }
+async function mtStep(){
+  if(!run.on || run.kind !== 'mt') return;
+  if(run.i >= run.list.length){ run.on = false; const d = document.getElementById('vDlg'); if(d && d.open) d.close(); say('All marks entered. Check them and press Save test marks.'); return; }
+  const r = run.list[run.i], name = nameOf(r), my = run.i;
+  document.querySelectorAll('.row.vNow').forEach(x => x.classList.remove('vNow')); r.classList.add('vNow');
+  try{ r.scrollIntoView({ block:'center', behavior:'smooth' }); }catch(e){}
+  document.getElementById('vMeta').textContent = 'Student ' + (run.i + 1) + ' of ' + run.list.length;
+  document.getElementById('vName').textContent = name; document.getElementById('vRoll').textContent = noOf(r) + ' · ' + r.dataset.roll;
+  const heard = document.getElementById('vHeard'), mk = document.getElementById('vMk'); heard.className = 'heard'; heard.textContent = ''; mk.value = (r.querySelector('.mk') || {}).value || '';
+  document.getElementById('vLst').classList.add('off'); await speak(name, 'en');
+  let tries = 0;
+  while(run.on && run.i === my && tries < 3){
+    document.getElementById('vLst').classList.remove('off');
+    const alts = await hear(st.get('vroll', 'en-IN'), 6000);
+    if(!run.on || run.i !== my) return;
+    document.getElementById('vLst').classList.add('off');
+    const m = markOf(alts);
+    if(m && m.cmd){ return mtAct(m.cmd); }
+    let val = null;
+    if(m && m.v === 'A') val = 'A';
+    else for(const a of alts){ const n = wordsToNums(a); if(n.length){ val = String(n[n.length - 1]); break; } }
+    if(val == null){ tries++; heard.className = 'heard bad'; heard.textContent = alts.length ? 'Did not understand: "' + alts[0] + '"' : 'Nothing heard'; continue; }
+    setMk(r, val); const got = (r.querySelector('.mk') || {}).value;
+    if(String(got).toUpperCase() !== String(val).toUpperCase()){ tries++; heard.className = 'heard bad'; heard.textContent = val + ' is not allowed (more than the total?). Say it again.'; continue; }
+    heard.className = 'heard ok'; heard.textContent = (val === 'A' ? 'Absent' : val + ' marks');
+    run.i++; return setTimeout(mtStep, 250);
+  }
+}
+function mtAct(c){ if(c === 'stop'){ run.on = false; const d = document.getElementById('vDlg'); if(d && d.open) d.close(); return say('Stopped. Press Save test marks when done.'); }
+  if(c === 'next') run.i++; if(c === 'back') run.i = Math.max(0, run.i - 1); mtStep(); }
+
+/* ---------- dialog buttons ---------- */
+document.addEventListener('click', e => {
+  const t = e.target; if(!t.closest) return; let b;
+  if((b = t.closest('#vDlg [data-vm]'))){ if(run.kind === 'roll' && run.on){ stopHear(); stopSpeak(); act({ v:b.dataset.vm }); } return; }
+  if((b = t.closest('#vDlg [data-vc]'))){
+    const c = b.dataset.vc;
+    if(run.kind === 'abs'){ if(c === 'again') return listenAbs(); if(c === 'apply') return applyAbs(); }
+    stopHear(); stopSpeak();
+    if(run.kind === 'mt') return mtAct(c);
+    return act({ cmd:c });
+  }
+  if(t.closest('#vSpeakMk')) return speakMarks();
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if(t.id === 'vOptNames') st.set('vNames', t.checked);
+  if(t.id === 'vOptUn') st.set('vOnlyUn', t.checked);
+  if(t.id === 'vOptLang') st.set('vroll', t.value);
+  if(t.id === 'vMk' && run.kind === 'mt' && run.on){ const r = run.list[run.i]; const v = t.value.trim().toUpperCase(); if(v && r){ stopHear(); stopSpeak(); setMk(r, v); run.i++; mtStep(); } }
+});
+/* "Speak marks" next to "Fill empty with A" on the monthly test screen */
+new MutationObserver(() => {
+  const f = document.getElementById('mtFillA');
+  if(f && !document.getElementById('vSpeakMk')){ const b = document.createElement('button'); b.id = 'vSpeakMk'; b.type = 'button'; b.className = 'fillA'; b.textContent = '🎙 Speak marks'; b.title = 'Say each student\'s marks instead of typing'; f.insertAdjacentElement('afterend', b); }
+}).observe(document.body, { childList:true, subtree:true });
+
+/* ---------- 4) voice typing in any text box ---------- */
+const mic = document.createElement('div'); mic.id = 'vMic';
+mic.innerHTML = '<button type="button" class="lg" id="vLang"></button><button type="button" class="mic" id="vMicBtn" aria-label="Voice typing" title="Speak instead of typing">🎙</button>';
+document.body.appendChild(mic);
+const langBtn = mic.querySelector('#vLang'), micBtn = mic.querySelector('#vMicBtn');
+const paintLang = () => { langBtn.textContent = (LANGS.find(l => l[0] === tLang()) || LANGS[0])[1]; };
+paintLang();
+let field = null, typing = null, hideT = 0;
+const okField = el => el && ((el.tagName === 'TEXTAREA') || (el.tagName === 'INPUT' && /^(text|search|number|tel|)$/.test(el.type || 'text') && el.inputMode !== 'none')) && !el.readOnly && !el.disabled && el.id !== 'user' && el.id !== 'vMk';
+document.addEventListener('focusin', e => { if(!SR) return; if(okField(e.target)){ field = e.target; clearTimeout(hideT); mic.style.display = 'flex'; } });
+document.addEventListener('focusout', () => { hideT = setTimeout(() => { if(!typing) mic.style.display = 'none'; }, 300); });
+mic.addEventListener('mousedown', e => e.preventDefault());              // keep the text box focused
+mic.addEventListener('touchstart', () => clearTimeout(hideT), { passive:true });
+langBtn.onclick = () => { const i = LANGS.findIndex(l => l[0] === tLang()); st.set('vtype', LANGS[(i + 1) % LANGS.length][0]); paintLang(); if(field) field.focus(); };
+function insertText(el, txt){
+  if(!el || !txt) return;
+  if(el.classList.contains('mk') || el.type === 'number' || el.inputMode === 'decimal' || el.inputMode === 'numeric'){
+    const m = markOf([txt]); const n = wordsToNums(txt); txt = m && m.v === 'A' ? 'A' : n.length ? String(n[n.length - 1]) : '';
+    if(!txt) return; el.value = txt;
+  } else {
+    const s0 = el.selectionStart != null ? el.selectionStart : el.value.length, s1 = el.selectionEnd != null ? el.selectionEnd : s0;
+    const before = el.value.slice(0, s0), after = el.value.slice(s1), sep = before && !/\s$/.test(before) ? ' ' : '';
+    el.value = before + sep + txt + after; const p = (before + sep + txt).length; try{ el.setSelectionRange(p, p); }catch(e){}
+  }
+  el.dispatchEvent(new Event('input', { bubbles:true }));
+}
+micBtn.onclick = () => {
+  if(typing){ try{ typing.stop(); }catch(e){} return; }
+  if(!needSR() || !field) return;
+  const r = new SR(); typing = r; r.lang = tLang(); r.interimResults = false; r.continuous = true;
+  micBtn.classList.add('on'); field.focus();
+  r.onresult = e => { for(let i = e.resultIndex; i < e.results.length; i++) if(e.results[i].isFinal) insertText(field, String(e.results[i][0].transcript || '').trim()); };
+  r.onerror = e => { if(e && /not-allowed/.test(e.error)) say('Allow the microphone for this app to type by voice.'); };
+  r.onend = () => { typing = null; micBtn.classList.remove('on'); if(document.activeElement !== field) mic.style.display = 'none'; };
+  try{ r.start(); }catch(e){ typing = null; micBtn.classList.remove('on'); }
+};
+
+/* ---------- 5) Listen to the help / manual ---------- */
+let reading = false;
+async function readHelp(btn){
+  if(reading){ reading = false; stopSpeak(); btn.textContent = '🔊 Listen'; return; }
+  if(!canSpeak) return say('Reading aloud is not available in this browser.');
+  const body = document.getElementById('hmBody'); if(!body) return;
+  const secs = [...body.querySelectorAll('section')].filter(s => s.style.display !== 'none');
+  const top = body.scrollTop; let start = secs.findIndex(s => s.offsetTop + s.offsetHeight - 20 > top); if(start < 0) start = 0;
+  reading = true; btn.textContent = '■ Stop reading';
+  for(let i = start; i < secs.length && reading; i++){
+    const s = secs[i]; body.scrollTo({ top:s.offsetTop - 8, behavior:'smooth' });
+    const parts = [s.querySelector('h3') ? s.querySelector('h3').textContent : ''].concat([...s.querySelectorAll('p, li')].map(x => x.textContent));
+    for(const p of parts){ if(!reading) break; const t = p.replace(/\s+/g, ' ').trim(); if(t) await speak(t, 'en'); }
+  }
+  reading = false; btn.textContent = '🔊 Listen';
+}
+document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('#hmListen'); if(b) readHelp(b); });
+new MutationObserver(() => {
+  const tools = document.querySelector('#helpDlg .hmTools');
+  if(tools && !document.getElementById('hmListen')){ const b = document.createElement('button'); b.type = 'button'; b.id = 'hmListen'; b.className = 'btn small vListen'; b.textContent = '🔊 Listen'; b.title = 'Read this part of the manual aloud'; tools.appendChild(b); }
+}).observe(document.body, { childList:true, subtree:true });
+document.addEventListener('close', e => { if(e.target && e.target.id === 'helpDlg'){ reading = false; stopSpeak(); const b = document.getElementById('hmListen'); if(b) b.textContent = '🔊 Listen'; } }, true);
+
+window.JCWVOICE = { rollCall, sayAbsent, speakMarks, speak, stop:() => { stopHear(); stopSpeak(); } };
+})();
+</script>
 </body>
 </html>
