@@ -28,7 +28,7 @@ var DT_CFG = {
   // Marks of each subject: [theory, practical]. Every subject not listed: theory 100, no practical.
   SCHEME: {
     'BOTANY': [85, 15], 'CHEMISTRY': [85, 15], 'PHYSICS': [85, 15], 'ZOOLOGY': [85, 15],
-    'COMPUTER SCIENCE': [75, 25], 'STATISTICS': [75, 25], 'PSYCHOLOGY': [75, 25], 'GEOGRAPHY': [75, 25],
+    'COMPUTER SCIENCE': [75, 25], 'GEOGRAPHY': [75, 25],
     'PAK-STUDIES': [50, 0], 'ISLAMIYAT': [50, 0], 'MUTALIA QURAN': [50, 0]
   },
   DEFAULT_SCHEME: [100, 0],
