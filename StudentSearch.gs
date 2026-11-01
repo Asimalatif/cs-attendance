@@ -274,8 +274,9 @@ function stBoardData_() {
   var sh = book.getSheetByName(ST_CFG.BOARD_LIST);
   if (sh) {
     var v = sh.getDataRange().getDisplayValues(), h = v[0];
-    var ir = col(h, ['Roll No']), inm = col(h, ['Name']), ifa = col(h, ['Father Name']), ig = col(h, ['Registration #', 'Registration']), im = col(h, ['Marks']), igr = col(h, ['Grade', 'Remarks']), ip = col(h, ['Position']), ic = col(h, ['College Name']);
+    var ir = col(h, ['Roll No']), inm = col(h, ['Name']), ifa = col(h, ['Father Name']), ig = col(h, ['Registration #', 'Registration']), im = col(h, ['Marks']), igr = col(h, ['Grade', 'Remarks']), ip = col(h, ['Position']), ic = col(h, ['College Name']), ie = col(h, ['Enroll#']);
     for (var i = 1; i < v.length; i++) if (gtS_(v[i][ir]) && (ic < 0 || !gtS_(v[i][ic]) || ST_CFG.BOARD_COLLEGE.test(v[i][ic]))) out.list.push([gtS_(v[i][ir]), gtS_(v[i][inm]), gtS_(v[i][ifa]), ig >= 0 ? gtS_(v[i][ig]) : '', im >= 0 ? gtS_(v[i][im]) : '', igr >= 0 ? gtS_(v[i][igr]) : '', ip >= 0 ? gtS_(v[i][ip]) : '']);
+    if (ie >= 0) for (var i2 = 1; i2 < v.length; i2++) { var en2 = gtK_(v[i2][ie]); if (en2 && en2 !== '2MATCHES' && gtS_(v[i2][ir])) out.enr[en2] = [gtS_(v[i2][ir]), ig >= 0 ? gtS_(v[i2][ig]) : '', im >= 0 ? gtS_(v[i2][im]) : '', igr >= 0 ? gtS_(v[i2][igr]) : '', '']; }   // Enroll# filled by HSSC Fill
   }
   sh = book.getSheetByName(ST_CFG.BOARD_BY_ENROLL);
   if (sh) {
