@@ -67,6 +67,13 @@ label.f input,label.f select{height:44px;border:1.5px solid var(--line);border-r
 .pct{font-weight:800;font-size:12px;padding:2px 8px;border-radius:999px;color:#fff;background:#757575}
 .pct.hi{background:var(--good)}.pct.md{background:#C99712}
 .sec{margin-top:16px;font-weight:800;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.qc{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.qc button{border:1.5px solid var(--line);background:var(--surface2);border-radius:10px;padding:6px 9px;font-size:13px;text-align:left;cursor:pointer;color:var(--ink);max-width:100%}
+.qc button b{font-weight:800}.qc button small{display:inline;color:var(--muted);font-size:12px}
+.qc button.on{border-color:var(--good);background:var(--good-bg);box-shadow:0 0 0 2px var(--good)}
+.qc .p{display:inline-block;min-width:38px;font-weight:800;color:#fff;background:#757575;border-radius:999px;padding:0 6px;margin-right:6px;text-align:center}
+.qc .p.hi{background:var(--good)}.qc .p.md{background:#C99712}
+#qbar{position:sticky;bottom:0;z-index:5;background:var(--surface);border:2px solid var(--good);border-radius:14px;padding:10px 12px;margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .hidden{display:none!important}
 /* certificate pages (preview and print) */
 .cert{background:#fff;color:#000;font:15px "Times New Roman",serif;padding:20px 40px;width:100%;max-width:760px;margin:0 auto}
@@ -162,7 +169,7 @@ function counts(){
 }
 function prep(){
   const R = S.data.rows, used = {};
-  R.forEach(r => { r.nt = tokens(r.name); r.ft = tokens(r.father); if(r.enroll && !r.struck) used[r.enroll.toUpperCase()] = r; });
+  R.forEach(r => { delete r._qc; r.nt = tokens(r.name); r.ft = tokens(r.father); if(r.enroll && !r.struck) used[r.enroll.toUpperCase()] = r; });
   S.used = used;
   S.src = S.data.source.map(a => { const o = { id:a[0], enroll:/#\d+$/.test(a[0]) ? '' : a[0], name:a[1], father:a[2], cls:a[3], pcs:a[4], cur:a[5] }; o.nt = tokens(o.name); o.ft = tokens(o.father); o.sj = sortedJoin(o.nt); return o; });
   S.byId = {}; S.src.forEach(o => { S.byId[o.id.toUpperCase()] = o; });
@@ -182,6 +189,18 @@ function candidates(r, q){
   });
   return out.sort((a, b) => b.sc - a.sc).slice(0, q ? 20 : 6);
 }
+/** 60%+ students from Transform for one gazette row (name + father name), cached */
+function quickCands(r){
+  if(r._qc) return r._qc;
+  const tj = sortedJoin(r.nt), out = [];
+  S.src.forEach(s => {
+    const u = S.used[(s.enroll || s.id).toUpperCase()]; if(u && u !== r) return;
+    if(ratio(tj, s.sj) < .45) return;
+    const x = score(r, s); if(x.sc >= .6) out.push({ s, sc:x.sc });
+  });
+  return r._qc = out.sort((a, b) => b.sc - a.sc).slice(0, 6);
+}
+function pickedFor(id){ return Object.keys(S.picks).find(k => S.picks[k] === id); }
 function findAuto(){
   const open = S.data.rows.filter(r => status(r) === 'match' && r.nt.length), pairs = [];
   open.forEach(r => {
@@ -251,12 +270,26 @@ function filtered(){
 }
 function paintList(){
   const box = $('#cList'); if(!box) return;
-  const L = filtered(), max = 200;
+  const L = filtered(), max = 200; S.picks = S.picks || {};
   const lab = { ready:['t-ready', 'Ready'], match:['t-match', 'Not linked'], fail:['t-fail', 'Not eligible'], left:['t-left', 'Left'] };
   box.innerHTML = (L.length ? '' : '<div class="sub">Nobody here.</div>') + L.slice(0, max).map(r => {
     const st = status(r), t = st === 'match' && canPrint(r) ? ['t-match', 'Ready · no Enroll#'] : lab[st];
-    return `<div class="it ${r.struck ? 'struck' : ''}" data-row="${r.row}"><div class="tx"><b>${esc(r.name)}</b><small>D/o ${esc(r.father)} · Roll ${esc(r.roll || '—')} · ${esc(r.marks || '—')} · ${esc(r.grade || '—')}${r.enroll ? ' · ' + esc(r.enroll) : ''}${r.pcs ? ' · ' + esc(r.pcs) : ''}${r.pstatus ? ' · Portal: ' + esc(r.pstatus) : ''}</small>${r.remarks ? `<small>Remarks: ${esc(r.remarks)}</small>` : ''}${hasDist(r) ? `<small style="color:var(--good);font-weight:700">Distinction: ${esc(r.dist)}</small>` : r.pos && Number(r.pos) <= 20 ? `<small style="color:var(--blue);font-weight:700">Board position ${esc(r.pos)} — no distinction typed</small>` : ''}${st === 'fail' ? `<small style="color:var(--bad);font-weight:700">Not eligible: ${esc(whyNot(r))}</small>` : ''}${st === 'left' ? `<small style="color:var(--muted);font-weight:700">${esc(r.how || 'Struck through')}</small>` : ''}${r.leftHint ? `<small style="color:var(--mid);font-weight:700">Possible left student: ${esc(hintText(r.leftHint))}</small>` : ''}</div>${canPrint(r) && !r.dob ? '<span class="tag t-warn">No DOB</span>' : ''}<span class="tag ${t[0]}">${t[1]}</span></div>`;
+    return `<div class="it ${r.struck ? 'struck' : ''}" data-row="${r.row}"><div class="tx"><b>${esc(r.name)}</b><small>D/o ${esc(r.father)} · Roll ${esc(r.roll || '—')} · ${esc(r.marks || '—')} · ${esc(r.grade || '—')}${r.enroll ? ' · ' + esc(r.enroll) : ''}${r.pcs ? ' · ' + esc(r.pcs) : ''}${r.pstatus ? ' · Portal: ' + esc(r.pstatus) : ''}</small>${r.remarks ? `<small>Remarks: ${esc(r.remarks)}</small>` : ''}${hasDist(r) ? `<small style="color:var(--good);font-weight:700">Distinction: ${esc(r.dist)}</small>` : r.pos && Number(r.pos) <= 20 ? `<small style="color:var(--blue);font-weight:700">Board position ${esc(r.pos)} — no distinction typed</small>` : ''}${st === 'fail' ? `<small style="color:var(--bad);font-weight:700">Not eligible: ${esc(whyNot(r))}</small>` : ''}${st === 'left' ? `<small style="color:var(--muted);font-weight:700">${esc(r.how || 'Struck through')}</small>` : ''}${r.leftHint ? `<small style="color:var(--mid);font-weight:700">Possible left student: ${esc(hintText(r.leftHint))}</small>` : ''}${!r.struck && !r.enroll ? (() => { const qc = quickCands(r); return qc.length ? `<div class="qc">${qc.map(c => { const p = Math.round(c.sc * 100); return `<button type="button" class="${S.picks[r.row] === c.s.id ? 'on' : ''}" data-qrow="${r.row}" data-qpick="${esc(c.s.id)}"><span class="p ${p >= 90 ? 'hi' : p >= 75 ? 'md' : ''}">${p}%</span><b>${esc(c.s.name)}</b> <small>D/o ${esc(c.s.father)}${c.s.enroll ? ' · ' + esc(c.s.enroll) : ''}${c.s.pcs ? ' · ' + esc(c.s.pcs) : ''}</small></button>`; }).join('')}</div>` : '<small style="color:var(--muted)">No 60%+ student in the list — open her to search.</small>'; })() : ''}</div>${canPrint(r) && !r.dob ? '<span class="tag t-warn">No DOB</span>' : ''}<span class="tag ${t[0]}">${t[1]}</span></div>`;
   }).join('') + (L.length > max ? `<div class="sub">${L.length - max} more — search to narrow.</div>` : '');
+  const n = Object.keys(S.picks).length;
+  box.insertAdjacentHTML('beforeend', n ? `<div id="qbar"><b style="flex:1">${n} student${n > 1 ? 's' : ''} selected</b><button class="btn sm" id="qClear">Clear</button><button class="btn ok" id="qFill" ${S.busy ? 'disabled' : ''}>${S.busy === 'qfill' ? 'Saving…' : 'Fill ' + n + ' in one go'}</button></div>` : '');
+}
+async function quickFill(){
+  const rows = S.data.rows, items = Object.keys(S.picks).map(k => { const r = rows.find(x => x.row === Number(k)); return r && { row:r.row, roll:r.roll, name:r.name, father:r.father, id:S.picks[k], by:'Chosen by hand (app list)' }; }).filter(Boolean);
+  if(!items.length) return;
+  S.busy = 'qfill'; paintList();
+  try{
+    const x = await api({ action:'pc_link', sheet:S.data.sheet, items }, 300000);
+    (x.rows || []).forEach(upsert);
+    S.picks = {};
+    S.msg = esc(x.done.length + ' students filled in the sheet' + (x.skipped.length ? '; ' + x.skipped.length + ' skipped (' + x.skipped[0].msg + ')' : '') + '.');
+  }catch(e){ S.err = e.message; }
+  S.busy = ''; paintStats();
 }
 
 /* ---------- editor ---------- */
@@ -454,6 +487,14 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('click', async e => {
   const t = e.target.closest('button,.it,[data-f]'); if(!t) return;
+  if(t.dataset.qpick){
+    const row = t.dataset.qrow, id = t.dataset.qpick;
+    if(S.picks[row] === id) delete S.picks[row];
+    else { const other = pickedFor(id); if(other) delete S.picks[other]; S.picks[row] = id; }
+    const y = window.scrollY; paintList(); window.scrollTo(0, y); return;
+  }
+  if(t.id === 'qFill'){ quickFill(); return; }
+  if(t.id === 'qClear'){ S.picks = {}; paintList(); return; }
   if(t.id === 'cPrep') run('prep');
   else if(t.id === 'cLoad') run('load');
   else if(t.dataset.f){ S.filter = t.dataset.f; S.q = ''; render(); }
