@@ -148,15 +148,28 @@ function pcSetF_(X, i, t, v) { pcSet_(X, i, X.C.f[t], v); }
 function pcFlush_(X) {
   var sh = X.sh, rows = Object.keys(X.changed).map(Number).sort(function (a, b) { return a - b; });
   var A1 = function (r, c) { var s = '', n = c + 1; while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s + (r + 2); };
-  var runs = [];
+  var runs = [], fillSet = {};
+  PC_CFG.FILL.concat(PC_CFG.EXTRA).forEach(function (t) { if (X.C.f[t] >= 0) fillSet[X.C.f[t]] = true; });
+  var gapOk = function (a, b) { for (var c = a + 1; c < b; c++) if (!fillSet[c]) return false; return true; };   // only our own columns in between
   rows.forEach(function (i) {
     var cols = Object.keys(X.changed[i]).map(Number).sort(function (a, b) { return a - b; });
-    for (var a = 0; a < cols.length;) { var b = a; while (b + 1 < cols.length && cols[b + 1] === cols[b] + 1) b++; runs.push({ i: i, c0: cols[a], c1: cols[b] }); a = b + 1; }
+    for (var a = 0; a < cols.length;) {
+      var b = a; while (b + 1 < cols.length && (cols[b + 1] === cols[b] + 1 || (fillSet[cols[b]] && fillSet[cols[b + 1]] && gapOk(cols[b], cols[b + 1])))) b++;
+      runs.push({ i: i, c0: cols[a], c1: cols[b] }); a = b + 1;
+    }
   });
+  // our columns hold text (DOB, Enroll#, 2025-26 …): set plain-text format once per column, not on every write
+  if (runs.length) {
+    var props = PropertiesService.getScriptProperties(), fk = 'pc_fmt_' + sh.getSheetId() + '_' + X.n;
+    if (props.getProperty(fk) !== '1') {
+      Object.keys(fillSet).forEach(function (c) { sh.getRange(2, Number(c) + 1, Math.max(1, X.n), 1).setNumberFormat('@'); });
+      props.setProperty(fk, '1');
+    }
+  }
   if (runs.length) {
     var vals = function (r) { var out = []; for (var c = r.c0; c <= r.c1; c++) out.push(X.V[r.i][c] == null ? '' : String(X.V[r.i][c])); return out; };
     var done = false;
-    if (runs.length > 20 && typeof Sheets !== 'undefined') {
+    if (typeof Sheets !== 'undefined') {
       try {
         var q = "'" + sh.getName().replace(/'/g, "''") + "'!";
         for (var k = 0; k < runs.length; k += 3000) {
@@ -168,8 +181,8 @@ function pcFlush_(X) {
       } catch (e) { Logger.log('Sheets API write failed, using normal writes: ' + e); }
     }
     if (!done) {
-      var textCols = [X.C.f['DOB'], X.C.f['Enroll#'], X.C.roll, X.C.reg];
-      if (runs.length > 300) {                                              // many rows: one block per changed column
+      var textCols = [X.C.roll, X.C.reg];
+      if (runs.length > 600) {                                              // many rows: one block per changed column
         var cols = {}; runs.forEach(function (r) { for (var c = r.c0; c <= r.c1; c++) cols[c] = true; });
         Object.keys(cols).map(Number).forEach(function (c) {
           var rg = sh.getRange(2, c + 1, X.n, 1);
