@@ -137,11 +137,12 @@ function pcStrength_(name) {
   names.forEach(function (sn, si) {
     var v = book.getSheetByName(sn).getDataRange().getDisplayValues(), H = (v[0] || []).map(pcHead_);
     var c = { e: pcCol_(H, ['Enroll#', 'Enrollment#', 'Enrollment No', 'REG#']), n: pcCol_(H, ['Student Name', 'Name']), f: pcCol_(H, ['Father Name', 'Father']),
-      p: pcCol_(H, ['Program', 'Program Name']), c: pcCol_(H, ['Class']), s: pcCol_(H, ['Section']), x: pcCol_(H, ['PCS']), a: pcCol_(H, ['Appeared in']) };
+      p: pcCol_(H, ['Program', 'Program Name']), c: pcCol_(H, ['Class']), s: pcCol_(H, ['Section']), x: pcCol_(H, ['PCS']), a: pcCol_(H, ['Appeared in']),
+      st: pcCol_(H, ['Portal Status', 'Student Status', 'Enrollment Status', 'Status']) };
     if (c.e < 0 || c.n < 0) { if (si === 0) throw new Error(sn + ' needs Enroll# and Student Name columns.'); return; }
     var g = function (r, i) { return i >= 0 ? pcClean_(r[i]) : ''; };
     for (var i = 1; i < v.length; i++) {
-      var r = v[i], o = { enroll: g(r, c.e), name: g(r, c.n), father: g(r, c.f), program: g(r, c.p), cls: g(r, c.c), section: g(r, c.s), pcs: g(r, c.x), group: g(r, c.a) };
+      var r = v[i], o = { enroll: g(r, c.e), name: g(r, c.n), father: g(r, c.f), program: g(r, c.p), cls: g(r, c.c), section: g(r, c.s), pcs: g(r, c.x), group: g(r, c.a), status: g(r, c.st) };
       var k = pcHead_(o.enroll); if (!k || S.byEnroll[k]) continue;
       var nk = pcLetters_(o.name) + '|' + pcLetters_(o.father);
       S.rows.push(o); S.byEnroll[k] = o;
@@ -203,14 +204,24 @@ function pcLocate_(sh, C, row, roll, name, father) {
   return hit.length === 1 ? hit[0] + 2 : 0;
 }
 function pcLeftNote_(rec) { return 'LEFT STUDENT-' + (pcClean_(rec.status).toUpperCase() || 'LEFT'); }
-function pcPortalDob_() {
-  var sh = SpreadsheetApp.openById(PC_CFG.USERS).getSheetByName(PC_CFG.PORTAL), out = {};
+/** Portal backup: DOB and portal status (Enrolled, Migrated, Cancelled …) by Enroll# */
+function pcPortal_() {
+  var sh = SpreadsheetApp.openById(PC_CFG.USERS).getSheetByName(PC_CFG.PORTAL), out = { dob: {}, status: {} };
   if (!sh) return out;
-  var v = sh.getDataRange().getDisplayValues(), H = (v[0] || []).map(pcHead_), e = pcCol_(H, ['Enrollment#', 'Enrollment', 'Enroll#']), d = pcCol_(H, ['DOB', 'Date of Birth']);
-  if (e < 0 || d < 0) return out;
-  for (var i = 1; i < v.length; i++) { var k = pcHead_(v[i][e]), x = pcClean_(v[i][d]); if (k && x && !pcPlaceholderDob_(x) && !out[k]) out[k] = x; }
+  var v = sh.getDataRange().getDisplayValues(), H = (v[0] || []).map(pcHead_), e = pcCol_(H, ['Enrollment#', 'Enrollment', 'Enroll#']),
+    d = pcCol_(H, ['DOB', 'Date of Birth']), t = pcCol_(H, ['Portal Status', 'Student Status', 'Enrollment Status', 'Status']);
+  if (e < 0) return out;
+  for (var i = 1; i < v.length; i++) {
+    var k = pcHead_(v[i][e]); if (!k) continue;
+    var x = d >= 0 ? pcClean_(v[i][d]) : ''; if (x && !pcPlaceholderDob_(x) && !out.dob[k]) out.dob[k] = x;
+    var y = t >= 0 ? pcClean_(v[i][t]) : ''; if (y && !out.status[k]) out.status[k] = y;
+  }
   return out;
 }
+function pcPortalDob_() { return pcPortal_().dob; }
+/** every status except Enrolled (and passed / promoted) means she left: Migrated, Cancelled, Disenrolled, Struck off … */
+function pcLeftStatus_(s) { s = pcClean_(s).toUpperCase(); return !!s && !/^ENROLL/.test(s) && !/PASS|COMPLET|GRADUAT|PROMOT|ACTIVE|REGULAR/.test(s); }
+function pcStatusOf_(P, S, enroll) { var k = pcHead_(enroll); if (!k) return ''; return (P && P.status[k]) || (S.byEnroll[k] && S.byEnroll[k].status) || ''; }
 
 /* ============================================================ list of sheets */
 function pcSheets_() {
@@ -225,7 +236,7 @@ function pcPrepare_(name, strength) {
   try {
     var sh = pcSheet_(name), C = pcCols_(sh, true), n = sh.getLastRow() - 1;
     if (n < 1) throw new Error('The sheet has no students.');
-    var S = pcStrength_(strength), L = pcLeft_(), DOB = pcPortalDob_();
+    var S = pcStrength_(strength), L = pcLeft_(), P = pcPortal_(), DOB = P.dob;
     var all = sh.getRange(2, 1, n, C.last).getDisplayValues();
     var cols = PC_CFG.FILL.map(function (t) { return sh.getRange(2, C.f[t] + 1, n, 1).getValues(); });
     var F = {}; PC_CFG.FILL.forEach(function (t, x) { F[t] = cols[x]; });
@@ -241,6 +252,8 @@ function pcPrepare_(name, strength) {
       st.jcw++;
       var nm = pcClean_(r[C.name]), fa = pcClean_(r[C.father]), en = pcClean_(F['Enroll#'][i][0]), rg = C.reg >= 0 ? pcClean_(r[C.reg]) : '';
       if (!nm && !fa) return;
+      var ps0 = pcStatusOf_(P, S, en);
+      if (pcLeftStatus_(ps0)) { F['Matched by'][i][0] = 'LEFT STUDENT-' + ps0.toUpperCase(); strike.push(i + 2); st.left++; return; }
       var lf = pcLeftOf_(L, S, nm, fa, en, rg);
       if (lf) { F['Matched by'][i][0] = pcLeftNote_(lf); strike.push(i + 2); st.left++; return; }
       if (/^Left \/ no match/i.test(pcClean_(F['Matched by'][i][0]))) return;           // struck by hand: keep
@@ -253,6 +266,8 @@ function pcPrepare_(name, strength) {
         else if (list.length > 1) { F['Matched by'][i][0] = 'Duplicate name - choose in the app'; st.dup++; }
       }
       if (t) {
+        var ps = pcStatusOf_(P, S, t.enroll);
+        if (pcLeftStatus_(ps)) { F['Enroll#'][i][0] = t.enroll; F['SName'][i][0] = t.name; F['SFname'][i][0] = t.father; F['Matched by'][i][0] = 'LEFT STUDENT-' + ps.toUpperCase(); strike.push(i + 2); st.left++; return; }
         var lf2 = pcLeftOf_(L, S, nm, fa, t.enroll, rg);
         if (lf2) { F['Enroll#'][i][0] = t.enroll; F['Matched by'][i][0] = pcLeftNote_(lf2); strike.push(i + 2); st.left++; return; }
         used[pcHead_(t.enroll)] = i;
@@ -300,6 +315,8 @@ function pcPrepare_(name, strength) {
 
 /* ============================================================ data for the app */
 function pcLoad_(name, S, strength) {
+  S = S || pcStrength_(strength);
+  var P = pcPortal_();
   var sh = pcSheet_(name), C = pcCols_(sh, true), n = sh.getLastRow() - 1, rows = [];
   if (n > 0) {
     var v = sh.getRange(2, 1, n, C.last).getDisplayValues(), lines = sh.getRange(2, C.name + 1, n, 1).getFontLines();
@@ -311,10 +328,10 @@ function pcLoad_(name, S, strength) {
         remarks: g(r, C.remarks), pos: g(r, C.pos), enroll: g(r, C.f['Enroll#']), sname: g(r, C.f['SName']), program: g(r, C.f['Program']),
         cls: g(r, C.f['Class']), section: g(r, C.f['Section']), pcs: g(r, C.f['PCS']), group: g(r, C.f['Group']), session: g(r, C.f['Session']),
         dist: g(r, C.f['Distinction_won']), dob: g(r, C.f['DOB']), grade: g(r, C.f['Grade']), how: g(r, C.f['Matched by']),
-        total: g(r, C.f['Total Marks']), conduct: g(r, C.f['Conduct']), struck: lines[i][0] === 'line-through' });
+        total: g(r, C.f['Total Marks']), conduct: g(r, C.f['Conduct']), struck: lines[i][0] === 'line-through',
+        pstatus: pcStatusOf_(P, S, g(r, C.f['Enroll#'])) });
     });
   }
-  S = S || pcStrength_(strength);
   return { ok: true, sheet: sh.getName(), url: SpreadsheetApp.openById(PC_CFG.BOOK).getUrl() + '#gid=' + sh.getSheetId(),
     total: pcTotal_(sh.getName()), rows: rows,
     source: S.rows.map(function (o) { return [o.enroll, o.name, o.father, o.cls, o.pcs]; }) };
