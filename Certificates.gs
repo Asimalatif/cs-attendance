@@ -9,7 +9,7 @@
  *                        (existing Enroll#, then exact Name + Father Name; the app then offers 96%+ matches)
  *   3. Portal backup  -> DOB (01/01/2000 and empty left out)
  *   4. Grade          -> Grade column of the gazette; else a grade in Remarks; else worked out from Marks
- *   5. Session (e.g. 2025-2026) and Distinction_won (board position 1-20) when empty
+ *   5. Session (e.g. 2025-26) when empty. Distinction_won is never filled here: the admin types it in the app
  * Nothing already typed by hand is overwritten (Enroll#, DOB, Group, Session, Distinction_won, Grade).
  * The same columns are used by the "Certificates" menu script in the workbook, so both keep working.
  *
@@ -322,8 +322,8 @@ function pcPrepare_(name, strength) {
       }
       if (pcClean_(F['Session'][i][0]) === longSession) F['Session'][i][0] = session;   // 2025-2026 -> 2025-26
       set('Session', i, session, true);
-      var pos = C.pos >= 0 ? Number(r[C.pos]) : 0;
-      if (pos >= 1 && pos <= PC_CFG.TOP) set('Distinction_won', i, pcOrd_(pos) + ' Position in BISE Peshawar', true);
+      // Distinction_won is typed by the admin in the app; only the old automatic text is removed
+      if (/^\d+(st|nd|rd|th) Position in BISE Peshawar$/i.test(pcClean_(F['Distinction_won'][i][0]))) F['Distinction_won'][i][0] = '';
       if (PC_CFG.PASS.indexOf(pcClean_(F['Grade'][i][0]).toUpperCase()) >= 0 && pcClean_(r[C.roll])) st.ready++; else st.fail++;
     });
 
