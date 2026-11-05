@@ -67,6 +67,13 @@ label.f input,label.f select{height:44px;border:1.5px solid var(--line);border-r
 .pct{font-weight:800;font-size:12px;padding:2px 8px;border-radius:999px;color:#fff;background:#757575}
 .pct.hi{background:var(--good)}.pct.md{background:#C99712}
 .sec{margin-top:16px;font-weight:800;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.qc{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.qc button{border:1.5px solid var(--line);background:var(--surface2);border-radius:10px;padding:6px 9px;font-size:13px;text-align:left;cursor:pointer;color:var(--ink);max-width:100%}
+.qc button b{font-weight:800}.qc button small{display:inline;color:var(--muted);font-size:12px}
+.qc button.on{border-color:var(--good);background:var(--good-bg);box-shadow:0 0 0 2px var(--good)}
+.qc .p{display:inline-block;min-width:38px;font-weight:800;color:#fff;background:#757575;border-radius:999px;padding:0 6px;margin-right:6px;text-align:center}
+.qc .p.hi{background:var(--good)}.qc .p.md{background:#C99712}
+#qbar{position:sticky;bottom:0;z-index:5;background:var(--surface);border:2px solid var(--good);border-radius:14px;padding:10px 12px;margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .hidden{display:none!important}
 /* certificate pages (preview and print) */
 .cert{background:#fff;color:#000;font:15px "Times New Roman",serif;padding:20px 40px;width:100%;max-width:760px;margin:0 auto}
@@ -78,11 +85,11 @@ label.f input,label.f select{height:44px;border:1.5px solid var(--line);border-r
 #prev{border:1px solid var(--line);border-radius:12px;overflow:auto;margin-top:10px;background:#fff}
 #print{display:none}
 @media print{
-  @page{size:A4;margin:12mm}
+  @page{size:A4;margin:0}
   body{background:#fff;padding:0}
   header,main,#ed{display:none!important}
   #print{display:block}
-  #print .cert{page-break-after:always;max-width:none;padding:0 10mm}
+  #print .cert{page-break-after:always;max-width:none;padding:14mm 20mm 10mm;box-sizing:border-box}
   #print .cert:last-child{page-break-after:auto}
 }
 </style>
@@ -111,7 +118,7 @@ async function api(payload, ms = 330000){
     if(j && j.error === 'BAD_LOGIN') throw new Error('Your saved login was refused. Open the app, sign out and sign in again.');
     if(j && j.ok === false) throw new Error(j.error || 'Failed');
     return j;
-  }catch(e){ if(e.name === 'AbortError') throw new Error('The server took too long. Try again.'); if(e instanceof TypeError) throw new Error('No internet.'); throw e; }
+  }catch(e){ if(e.name === 'AbortError') throw new Error('The server took too long. Try again.'); if(e instanceof TypeError) throw new Error(navigator.onLine ? 'The internet works, but the Apps Script server did not answer. In Apps Script: run the function pcAuthorize once and press Allow, then Deploy → Manage deployments → Edit → New version. Also check that Certificates.gs saved without a red error.' : 'No internet.'); throw e; }
   finally{ clearTimeout(t); }
 }
 
@@ -134,17 +141,45 @@ function status(r){
   if(!r.enroll) return 'match';
   return 'ready';
 }
+const hintText = h => !h ? '' : typeof h === 'string' ? h : h.name + ' D/o ' + h.father + (h.enroll ? ' · ' + h.enroll : '') + (h.status ? ' · ' + h.status : '') + ' (' + h.pct + '%) — not struck: ' + h.why;
+/** suggestions for Distinctions won: NIL, her board position, and anything already typed for other students */
+function ordinal(n){ const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+function distSuggest(r){
+  const out = ['NIL'], p = r && Number(r.pos);
+  if(p >= 1) out.push(ordinal(p) + ' Position in BISE Peshawar');
+  (S.data ? S.data.rows : []).forEach(x => { if(x.dist && !/^NIL$/i.test(x.dist) && !out.includes(x.dist)) out.push(x.dist); });
+  return out.slice(0, 40);
+}
+const hasDist = r => r.dist && !/^NIL$/i.test(r.dist);
+/** why she gets no certificate (shown in the list and the editor) */
+function whyNot(r){
+  const g = String(r.grade || '').toUpperCase(), why = [];
+  if(!r.roll) why.push('no Roll No');
+  if(!g) why.push('no grade');
+  else if(PASS.indexOf(g) < 0) why.push('grade ' + g + (g === 'F' ? ' (failed)' : ' (not a pass grade)'));
+  if(r.marks === '' || r.marks === '0' || r.marks === 0) why.push('marks ' + (r.marks === '' ? 'missing' : '0'));
+  if(r.remarks) why.push('Remarks: ' + r.remarks);
+  return why.join(' · ');
+}
 const canPrint = r => !r.struck && r.roll && PASS.indexOf(String(r.grade).toUpperCase()) >= 0;
 function counts(){
-  const R = S.data.rows, c = { all:R.length, ready:0, match:0, fail:0, left:0, nodob:0, print:0 };
-  R.forEach(r => { c[status(r)]++; if(canPrint(r)){ c.print++; if(!r.dob) c.nodob++; } });
+  const R = S.data.rows, c = { all:R.length, ready:0, match:0, fail:0, left:0, nodob:0, print:0, hint:0, dist:0, open:0 };
+  R.forEach(r => { if(!r.struck && !r.enroll) c.open++; c[status(r)]++; if(r.leftHint) c.hint++; if(!r.struck && (hasDist(r) || (Number(r.pos) >= 1 && Number(r.pos) <= 20))) c.dist++; if(canPrint(r)){ c.print++; if(!r.dob) c.nodob++; } });
   return c;
 }
 function prep(){
   const R = S.data.rows, used = {};
-  R.forEach(r => { r.nt = tokens(r.name); r.ft = tokens(r.father); if(r.enroll && !r.struck) used[r.enroll.toUpperCase()] = r; });
+  R.forEach(r => { delete r._qc; r.nt = tokens(r.name); r.ft = tokens(r.father); if(r.enroll && !r.struck) used[r.enroll.toUpperCase()] = r; });
   S.used = used;
-  S.src = S.data.source.map(a => { const o = { enroll:a[0], name:a[1], father:a[2], cls:a[3], pcs:a[4] }; o.nt = tokens(o.name); o.ft = tokens(o.father); o.sj = sortedJoin(o.nt); return o; });
+  S.src = S.data.source.map(a => { const o = { id:a[0], enroll:/#\d+$/.test(a[0]) ? '' : a[0], name:a[1], father:a[2], cls:a[3], pcs:a[4], cur:a[5] }; o.nt = tokens(o.name); o.ft = tokens(o.father); o.sj = sortedJoin(o.nt); return o; });
+  S.byId = {}; S.src.forEach(o => { S.byId[o.id.toUpperCase()] = o; });
+  // possible left students: Left Students records with a slightly different spelling (exact ones are struck by Prepare)
+  const L = (S.data.left || []).map(a => { const o = { name:a[0], father:a[1], enroll:a[2], status:a[3] }; o.nt = tokens(o.name); o.ft = tokens(o.father); return o; });
+  R.forEach(r => {
+    r.leftHint = null; if(r.struck || !r.nt.length) return;
+    let best = null; L.forEach(l => { const x = score(r, l); if(x.sc >= .8 && (!best || x.sc > best.sc)) best = { l, ...x }; });
+    if(best) r.leftHint = { name:best.l.name, father:best.l.father, enroll:best.l.enroll, status:best.l.status, pct:Math.round(best.sc * 100), why:best.sc >= .999 ? 'the same name is still in the current student list' : 'name ' + Math.round(best.ns * 100) + '% / father ' + Math.round((best.fs || 0) * 100) + '% alike' };
+  });
 }
 function candidates(r, q){
   const out = [];
@@ -154,15 +189,27 @@ function candidates(r, q){
   });
   return out.sort((a, b) => b.sc - a.sc).slice(0, q ? 20 : 6);
 }
+/** 60%+ students from Transform for one gazette row (name + father name), cached */
+function quickCands(r){
+  if(r._qc) return r._qc;
+  const tj = sortedJoin(r.nt), out = [];
+  S.src.forEach(s => {
+    const u = S.used[(s.enroll || s.id).toUpperCase()]; if(u && u !== r) return;
+    if(ratio(tj, s.sj) < .45) return;
+    const x = score(r, s); if(x.sc >= .6) out.push({ s, sc:x.sc });
+  });
+  return r._qc = out.sort((a, b) => b.sc - a.sc).slice(0, 6);
+}
+function pickedFor(id){ return Object.keys(S.picks).find(k => S.picks[k] === id); }
 function findAuto(){
   const open = S.data.rows.filter(r => status(r) === 'match' && r.nt.length), pairs = [];
   open.forEach(r => {
     const tj = sortedJoin(r.nt); let best = null, second = 0;
-    S.src.forEach(s => { const u = S.used[s.enroll.toUpperCase()]; if(u && u !== r) return; if(ratio(tj, s.sj) < .7) return; const x = score(r, s); if(!best || x.sc > best.sc){ if(best) second = best.sc; best = { s, sc:x.sc }; } else if(x.sc > second) second = x.sc; });
+    S.src.forEach(s => { const u = S.used[(s.enroll || s.id).toUpperCase()]; if(u && u !== r) return; if(ratio(tj, s.sj) < .7) return; const x = score(r, s); if(!best || x.sc > best.sc){ if(best) second = best.sc; best = { s, sc:x.sc }; } else if(x.sc > second) second = x.sc; });
     if(best && best.sc >= .96 && best.sc - second >= .02) pairs.push({ r, s:best.s, sc:best.sc });
   });
-  const claims = {}; pairs.forEach(p => claims[p.s.enroll] = (claims[p.s.enroll] || 0) + 1);
-  S.auto = pairs.filter(p => claims[p.s.enroll] === 1);
+  const claims = {}; pairs.forEach(p => claims[p.s.id] = (claims[p.s.id] || 0) + 1);
+  S.auto = pairs.filter(p => claims[p.s.id] === 1);
 }
 
 /* ---------- screen ---------- */
@@ -176,7 +223,7 @@ function render(){
     <div class="sub">Upload the gazette PDF in <a href="board.html">Board results</a> first; it opens this page and prepares everything by itself. Only Jinnah College rows are used.</div>
     <div class="grid">
       <label class="f">Result sheet<select id="cSheet">${(S.sheets || (S.sheet ? [S.sheet] : [])).map(n => `<option ${n === S.sheet ? 'selected' : ''}>${esc(n)}</option>`).join('') || '<option value="">Loading…</option>'}</select></label>
-      <label class="f">Student list (Users workbook)<input id="cStrength" placeholder="Transform-ALL-COLLEGE-STRENGTH" value="${esc(S.strength)}"></label>
+      <label class="f">Student list (Users workbook)<input id="cStrength" placeholder="Empty = current + older Transform sheets" value="${esc(S.strength)}"></label>
     </div>
     <div class="acts">
       <button class="btn pri" id="cPrep" ${S.busy || !S.sheet ? 'disabled' : ''}>${S.busy === 'prep' ? 'Preparing… (1-3 min)' : 'Prepare all certificates (one go)'}</button>
@@ -190,9 +237,11 @@ function render(){
   ${D ? `
   <section class="card" style="--c:#0E8A5F"><h2>Certificates</h2>
     <div class="stats">
-      ${[['all', c.all, 'JCW students'], ['ready', c.print, 'ready to print'], ['match', c.match, 'not linked to a student'], ['fail', c.fail, 'fail / no grade / no roll no'], ['left', c.left, 'left / struck'], ['nodob', c.nodob, 'ready but no DOB']].map(x => `<button data-f="${x[0]}" class="${S.filter === x[0] ? 'on' : ''}"><b>${x[1]}</b><span>${x[2]}</span></button>`).join('')}
+      ${[['all', c.all, 'JCW students'], ['ready', c.print, 'ready to print'], ['match', c.match, 'ready but no Enroll#'], ['fail', c.fail, 'fail / no grade / no roll no'], ['left', c.left, 'left / struck'], ['hint', c.hint, 'possible left — check'], ['dist', c.dist, 'top 20 / distinctions'], ['nodob', c.nodob, 'ready but no DOB']].map(x => `<button data-f="${x[0]}" class="${S.filter === x[0] ? 'on' : ''}"><b>${x[1]}</b><span>${x[2]}</span></button>`).join('')}
     </div>
-    ${S.auto && S.auto.length ? `<div class="note mid">${S.auto.length} unlinked rows have a 96%+ match in the student list. <button class="btn sm ok" id="cAuto" ${S.busy ? 'disabled' : ''}>Link all ${S.auto.length}</button> <button class="btn sm" id="cAutoSee">See them</button></div>` : ''}
+    <div class="sub" style="margin-top:8px"><b>Ready · no Enroll#</b> = she passed and her certificate can print, but she is not yet linked to a student in Transform, so her DOB and left-student status could not be checked. Tap her and choose the right student. <b>Not eligible</b> shows the reason on each row.</div>
+    ${c.open ? `<div class="note mid">${c.open} students were not matched 100% (${(S.auto || []).length} of them 96%+). Nothing is saved until you tick them. <button class="btn sm ok" id="cAuto" ${S.busy ? 'disabled' : ''}>Check and fill ${c.open}</button></div>` : ''}
+    ${c.hint ? `<div class="note mid">${c.hint} students look like Left Students with a slightly different spelling. They are NOT struck yet. <button class="btn sm" id="cLeftRev" ${S.busy ? 'disabled' : ''}>Review ${c.hint} possible left</button></div>` : ''}
     <div class="acts">
       <button class="btn pri" id="cPrintAll" ${!c.print ? 'disabled' : ''}>Print / save PDF — all ${c.print} ready</button>
       <button class="btn" id="cDrive" ${S.busy || !c.print ? 'disabled' : ''}>${S.busy === 'pdf' ? 'Making PDF…' : 'One PDF to Google Drive'}</button>
@@ -212,6 +261,8 @@ function filtered(){
       if(S.filter === 'ready' && !canPrint(r)) return false;
       if(S.filter === 'nodob' && !(canPrint(r) && !r.dob)) return false;
       if(['match', 'fail', 'left'].includes(S.filter) && st !== S.filter) return false;
+      if(S.filter === 'hint' && !r.leftHint) return false;
+      if(S.filter === 'dist' && (r.struck || !(hasDist(r) || (Number(r.pos) >= 1 && Number(r.pos) <= 20)))) return false;
     }
     const hay = (r.name + ' ' + r.father + ' ' + r.roll + ' ' + r.enroll + ' ' + r.reg).toLowerCase();
     return words.every(w => hay.includes(w));
@@ -219,12 +270,26 @@ function filtered(){
 }
 function paintList(){
   const box = $('#cList'); if(!box) return;
-  const L = filtered(), max = 200;
+  const L = filtered(), max = 200; S.picks = S.picks || {};
   const lab = { ready:['t-ready', 'Ready'], match:['t-match', 'Not linked'], fail:['t-fail', 'Not eligible'], left:['t-left', 'Left'] };
   box.innerHTML = (L.length ? '' : '<div class="sub">Nobody here.</div>') + L.slice(0, max).map(r => {
-    const st = status(r), t = st === 'match' && canPrint(r) ? ['t-match', 'Ready · not linked'] : lab[st];
-    return `<div class="it ${r.struck ? 'struck' : ''}" data-row="${r.row}"><div class="tx"><b>${esc(r.name)}</b><small>D/o ${esc(r.father)} · Roll ${esc(r.roll || '—')} · ${esc(r.marks || '—')} · ${esc(r.grade || '—')}${r.enroll ? ' · ' + esc(r.enroll) : ''}${r.pcs ? ' · ' + esc(r.pcs) : ''}</small></div>${canPrint(r) && !r.dob ? '<span class="tag t-warn">No DOB</span>' : ''}<span class="tag ${t[0]}">${t[1]}</span></div>`;
+    const st = status(r), t = st === 'match' && canPrint(r) ? ['t-match', 'Ready · no Enroll#'] : lab[st];
+    return `<div class="it ${r.struck ? 'struck' : ''}" data-row="${r.row}"><div class="tx"><b>${esc(r.name)}</b><small>D/o ${esc(r.father)} · Roll ${esc(r.roll || '—')} · ${esc(r.marks || '—')} · ${esc(r.grade || '—')}${r.enroll ? ' · ' + esc(r.enroll) : ''}${r.pcs ? ' · ' + esc(r.pcs) : ''}${r.pstatus ? ' · Portal: ' + esc(r.pstatus) : ''}</small>${r.remarks ? `<small>Remarks: ${esc(r.remarks)}</small>` : ''}${hasDist(r) ? `<small style="color:var(--good);font-weight:700">Distinction: ${esc(r.dist)}</small>` : r.pos && Number(r.pos) <= 20 ? `<small style="color:var(--blue);font-weight:700">Board position ${esc(r.pos)} — no distinction typed</small>` : ''}${st === 'fail' ? `<small style="color:var(--bad);font-weight:700">Not eligible: ${esc(whyNot(r))}</small>` : ''}${st === 'left' ? `<small style="color:var(--muted);font-weight:700">${esc(r.how || 'Struck through')}</small>` : ''}${r.leftHint ? `<small style="color:var(--mid);font-weight:700">Possible left student: ${esc(hintText(r.leftHint))}</small>` : ''}${!r.struck && !r.enroll ? (() => { const qc = quickCands(r); return qc.length ? `<div class="qc">${qc.map(c => { const p = Math.round(c.sc * 100); return `<button type="button" class="${S.picks[r.row] === c.s.id ? 'on' : ''}" data-qrow="${r.row}" data-qpick="${esc(c.s.id)}"><span class="p ${p >= 90 ? 'hi' : p >= 75 ? 'md' : ''}">${p}%</span><b>${esc(c.s.name)}</b> <small>D/o ${esc(c.s.father)}${c.s.enroll ? ' · ' + esc(c.s.enroll) : ''}${c.s.pcs ? ' · ' + esc(c.s.pcs) : ''}</small></button>`; }).join('')}</div>` : '<small style="color:var(--muted)">No 60%+ student in the list — open her to search.</small>'; })() : ''}</div>${canPrint(r) && !r.dob ? '<span class="tag t-warn">No DOB</span>' : ''}<span class="tag ${t[0]}">${t[1]}</span></div>`;
   }).join('') + (L.length > max ? `<div class="sub">${L.length - max} more — search to narrow.</div>` : '');
+  const n = Object.keys(S.picks).length;
+  box.insertAdjacentHTML('beforeend', n ? `<div id="qbar"><b style="flex:1">${n} student${n > 1 ? 's' : ''} selected</b><button class="btn sm" id="qClear">Clear</button><button class="btn ok" id="qFill" ${S.busy ? 'disabled' : ''}>${S.busy === 'qfill' ? 'Saving…' : 'Fill ' + n + ' in one go'}</button></div>` : '');
+}
+async function quickFill(){
+  const rows = S.data.rows, items = Object.keys(S.picks).map(k => { const r = rows.find(x => x.row === Number(k)); return r && { row:r.row, roll:r.roll, name:r.name, father:r.father, id:S.picks[k], by:'Chosen by hand (app list)' }; }).filter(Boolean);
+  if(!items.length) return;
+  S.busy = 'qfill'; paintList();
+  try{
+    const x = await api({ action:'pc_link', sheet:S.data.sheet, items }, 300000);
+    (x.rows || []).forEach(upsert);
+    S.picks = {};
+    S.msg = esc(x.done.length + ' students filled in the sheet' + (x.skipped.length ? '; ' + x.skipped.length + ' skipped (' + x.skipped[0].msg + ')' : '') + '.');
+  }catch(e){ S.err = e.message; }
+  S.busy = ''; paintStats();
 }
 
 /* ---------- editor ---------- */
@@ -233,7 +298,8 @@ const FIELDS = [['roll', 'Roll No'], ['reg', 'Registration No'], ['name', 'Name 
 let E = null;
 function certVals(r){
   const D = S.data, two = /2nd/i.test(D.sheet);
-  return { name:r.name, father:r.father, group:r.group || (two ? 'H.S.S.C (Part-II)' : 'H.S.S.C (Part-I)'), session:r.session, roll:r.roll, reg:r.reg, marks:r.marks,
+  const y = Number((D.sheet.match(/20\d\d/) || [new Date().getFullYear()])[0]);
+  return { name:r.name, father:r.father, group:r.group || (two ? 'H.S.S.C (Part-II)' : 'H.S.S.C (Part-I)'), session:r.session || (y - 1) + '-' + String(y).slice(2), roll:r.roll, reg:r.reg, marks:r.marks,
     total:r.total || D.total, grade:r.grade, dob:r.dob, dist:r.dist || 'NIL', conduct:r.conduct || 'GOOD' };
 }
 function certHtml(v){
@@ -257,14 +323,19 @@ function openEd(r){
 }
 function paintEd(){
   const ed = $('#ed'); if(!E){ ed.classList.add('hidden'); ed.innerHTML = ''; return; }
+  if(E.review){ paintReview(ed); return; }
   const r = E.r, v = E.v, cands = r ? candidates(r, E.mq.trim().toLowerCase()) : [];
   ed.classList.remove('hidden');
   ed.innerHTML = `<div class="pn">
     <div style="display:flex;gap:8px;align-items:center"><h3 style="flex:1">${r ? esc(r.name) + ` <small class="sub">row ${r.row}</small>` : 'Student not in the gazette'}</h3><button class="btn sm" id="eClose">Close</button></div>
-    ${r ? `<div class="sub">${esc(r.how || '')}${r.pos ? ' · Board position ' + esc(r.pos) : ''}${r.remarks ? ' · Remarks: ' + esc(r.remarks) : ''}</div>` : ''}
+    ${r && status(r) === 'fail' ? `<div class="note bad">Not eligible: ${esc(whyNot(r))}</div>` : ''}
+    ${r && r.leftHint ? `<div class="note mid">Possible left student: ${esc(hintText(r.leftHint))}. If it is her, press <b>Strike through</b>.</div>` : ''}
+    ${r ? `<div class="sub">${esc(r.how || '')}${r.pstatus ? ' · Portal status: ' + esc(r.pstatus) : ''}${r.pos ? ' · Board position ' + esc(r.pos) : ''}${r.remarks ? ' · Remarks: ' + esc(r.remarks) : ''}</div>` : ''}
     ${E.err ? `<div class="note bad">${esc(E.err)}</div>` : ''}${E.msg ? `<div class="note ok">${esc(E.msg)}</div>` : ''}
     <div class="sec">Certificate</div>
-    <div class="two">${FIELDS.map(f => `<label class="f">${f[1]}<input data-k="${f[0]}" value="${esc(v[f[0]])}" ${f[0] === 'grade' ? 'list="gl"' : ''}></label>`).join('')}</div>
+    <div class="two">${FIELDS.map(f => `<label class="f">${f[1]}<input data-k="${f[0]}" value="${esc(v[f[0]])}" ${f[0] === 'grade' ? 'list="gl"' : f[0] === 'dist' ? 'list="dl" placeholder="NIL" style="border-color:var(--brown)"' : ''}></label>`).join('')}</div>
+    <div class="sub" style="margin-top:4px">Distinctions won: type it yourself (pick a suggestion or write your own). Empty = NIL.${r && r.pos ? ' Board position: <b>' + esc(r.pos) + '</b>.' : ''}</div>
+    <datalist id="dl">${distSuggest(r).map(x => `<option value="${esc(x)}">`).join('')}</datalist>
     <datalist id="gl">${PASS.concat(['F']).map(g => `<option>${g}</option>`).join('')}</datalist>
     <div class="acts">
       <button class="btn pri" id="eSave">${E.busy ? 'Saving…' : 'Save'}</button>
@@ -272,9 +343,11 @@ function paintEd(){
       ${r ? `<button class="btn" id="eDrive">PDF to Drive</button><button class="btn red" id="eStrike">${r.struck ? 'Remove strike-through' : 'Strike through (no certificate)'}</button>` : ''}
     </div>
     <div class="sec">Linked student (Transform)</div>
-    <label class="f">Enroll#<input data-k="enroll" value="${esc(v.enroll)}" placeholder="e.g. JCW-F24-1234 (empty = not linked)"></label>
+    ${(() => { const pk = E.pick, cur = r && r.enroll ? (r.sname || r.name) + ' · ' + r.enroll + (r.pcs ? ' · ' + r.pcs : '') : '';
+      return pk !== undefined ? `<div class="note mid">${pk ? 'Will link to <b>' + esc(pk.name) + '</b> D/o ' + esc(pk.father) + (pk.enroll ? ' · ' + esc(pk.enroll) : '') : 'Will remove the link'} — press <b>Save</b>. <button class="btn sm" id="ePickUndo">Undo</button></div>`
+        : `<div class="sub">${cur ? 'Linked to: <b>' + esc(cur) + '</b> <button class="btn sm red" id="eUnlink">Remove link</button>' : 'Not linked to a student yet. Pick her below (by name + father name).'}</div>`; })()}
     ${r && !r.struck ? `<input class="search" id="eMq" placeholder="Search the student list by name, father, Enroll# or PCS" value="${esc(E.mq)}">
-    ${cands.map(c => { const p = Math.round(c.sc * 100), u = S.used[c.s.enroll.toUpperCase()]; return `<div class="cand"><span class="pct ${p >= 85 ? 'hi' : p >= 65 ? 'md' : ''}">${p}%</span><div class="tx"><b>${esc(c.s.name)}</b> D/o ${esc(c.s.father)}<br><small class="sub">${esc(c.s.enroll)} · ${esc(c.s.pcs || '-')} · ${esc(c.s.cls || '-')}${u && u !== r ? ' · <span style="color:var(--bad)">used in row ' + u.row + '</span>' : ''}</small></div><button class="btn sm" data-link="${esc(c.s.enroll)}">Use</button></div>`; }).join('') || '<div class="sub" style="margin-top:6px">No close student. Search above.</div>'}` : ''}
+    ${cands.map(c => { const p = Math.round(c.sc * 100), u = S.used[(c.s.enroll || c.s.id).toUpperCase()]; return `<div class="cand"><span class="pct ${p >= 85 ? 'hi' : p >= 65 ? 'md' : ''}">${p}%</span><div class="tx"><b>${esc(c.s.name)}</b> D/o ${esc(c.s.father)}<br><small class="sub">${esc(c.s.enroll)} · ${esc(c.s.pcs || '-')} · ${esc(c.s.cls || '-')}${u && u !== r ? ' · <span style="color:var(--bad)">used in row ' + u.row + '</span>' : ''}</small></div><button class="btn sm" data-link="${esc(c.s.id)}">Use</button></div>`; }).join('') || '<div class="sub" style="margin-top:6px">No close student. Search above.</div>'}` : ''}
     <div class="sec">Preview</div><div id="prev">${certHtml(v)}</div>
   </div>`;
 }
@@ -290,19 +363,20 @@ async function saveEd(){
     if(!r || String(v[k] || '') !== String(certVals(r)[k] || '')) send[k] = v[k];
   });
   if(r){ send.name = v.name; send.father = v.father; }
-  if(!r || (v.enroll || '') !== (r.enroll || '')) send.enroll = v.enroll || '';
+  if(E.pick !== undefined) send.id = E.pick ? E.pick.id : '';
   if(r && Object.keys(send).length === 2 && send.name === r.name && send.father === r.father){ E.msg = 'Nothing changed.'; paintEd(); return; }
   E.busy = true; E.err = ''; E.msg = ''; paintEd();
   try{
-    const x = await api({ action:'pc_save', sheet:S.data.sheet, row:r ? r.row : 0, expect:r ? { name:r.name, father:r.father } : null, values:send }, 120000);
-    E.r = upsert(x.row); E.v = certVals(E.r); E.v.enroll = E.r.enroll; E.msg = 'Saved in the sheet.';
+    const x = await api({ action:'pc_save', sheet:S.data.sheet, row:r ? r.row : 0, expect:r ? { name:r.name, father:r.father, roll:r.roll } : null, values:send }, 120000);
+    if(x.moved && r) S.data.rows = S.data.rows.filter(z => z.row !== r.row);
+    E.r = upsert(x.row); E.v = certVals(E.r); E.pick = undefined; E.msg = 'Saved in the sheet.';
   }catch(e){ E.err = e.message; }
   E.busy = false; paintEd(); paintStats();
 }
 async function strikeEd(){
   const r = E.r, on = !r.struck;
   if(on && !confirm('Strike through ' + r.name + '? She gets no certificate.')) return;
-  try{ await api({ action:'pc_strike', sheet:S.data.sheet, row:r.row, name:r.name, father:r.father, on }, 60000); r.struck = on; r.how = on ? 'Left / no match (struck)' : (r.enroll ? 'Chosen by hand (app)' : 'Not found in Transform'); prep(); findAuto(); E.msg = on ? 'Struck through.' : 'Strike-through removed.'; }
+  try{ await api({ action:'pc_strike', sheet:S.data.sheet, row:r.row, roll:r.roll, name:r.name, father:r.father, on }, 60000); r.struck = on; if(on) r.leftHint = ''; r.how = on ? 'Left / no match (struck)' : (r.enroll ? 'Chosen by hand (app)' : 'Not found in Transform'); prep(); findAuto(); E.msg = on ? 'Struck through.' : 'Strike-through removed.'; }
   catch(e){ E.err = e.message; }
   paintEd(); paintStats();
 }
@@ -335,24 +409,73 @@ async function run(kind){
   try{
     const d = await api({ action:kind === 'prep' ? 'pc_prepare' : 'pc_load', sheet:S.sheet }, 360000);
     S.data = d; prep(); findAuto();
-    if(d.stats){ const s = d.stats; S.msg = `Done: ${s.jcw} Jinnah College rows · ${s.enroll + s.name} linked (${s.name} new by name) · ${s.left} left students struck through · ${s.dob} with DOB · ${s.open} not linked${s.dup ? ' (' + s.dup + ' same names)' : ''} · <b>${s.ready} certificates ready</b>.`; }
+    if(kind === 'load' && d.rows.length && !d.rows.some(r => r.how)){ S.busy = ''; return run('prep'); }   // never prepared yet -> do it now
+    if(d.stats){ const s = d.stats; S.msg = `Student lists used: ${esc((s.sheets || []).join(', '))}.<br>Left Students records read: ${s.leftRead || 0}${(s.leftSheets || []).length ? ' (' + esc(s.leftSheets.join(', ')) + ')' : ''}.<br>Done: ${s.jcw} Jinnah College rows · ${s.linked} filled (100% name + father name) · ${s.kept} kept from your earlier choices · ${s.left} left students struck through · ${s.dob} with DOB · ${s.open} not matched 100% · <b>${s.ready} certificates ready</b> · ${s.cells} rows written${s.fast ? ' (fast mode)' : ''}.`; }
   }catch(e){ S.err = e.message; }
   S.busy = ''; render(); assets();
+}
+/* ---------- review before saving: 96%+ links and possible left students ---------- */
+function openReview(kind){
+  let items;
+  if(kind === 'link'){
+    items = S.data.rows.filter(r => !r.struck && !r.enroll && r.nt.length).map(r => {
+      const opts = candidates(r, '').filter(c => { const u = S.used[(c.s.enroll || c.s.id).toUpperCase()]; return !u || u === r; }).slice(0, 3)
+        .map(c => ({ s:c.s, pct:Math.round(c.sc * 100), ns:Math.round(c.ns * 100), fs:Math.round((c.fs || 0) * 100) }));
+      return { r, opts, sel:0 };
+    }).filter(x => x.opts.length).sort((a, b) => b.opts[0].pct - a.opts[0].pct);
+  } else {
+    items = S.data.rows.filter(r => r.leftHint && !r.struck).map(r => ({ r, h:r.leftHint })).sort((a, b) => b.h.pct - a.h.pct);
+  }
+  E = { review:kind, items, tick:new Set(), msg:'', err:'' };
+  paintEd();
+}
+function paintReview(ed){
+  const R = E, link = R.review === 'link';
+  ed.classList.remove('hidden');
+  ed.innerHTML = `<div class="pn">
+    <div style="display:flex;gap:8px;align-items:center"><h3 style="flex:1">${link ? 'Students not matched 100%' : 'Possible left students'}</h3><button class="btn sm" id="eClose">Close</button></div>
+    <div class="sub">${link ? 'Each gazette student with her closest students in Transform (by name + father name). Pick the right one, tick her, then save all ticked rows in one go. Nothing is written before that.' : 'Gazette students whose name + father name look like a Left Students record. Tick the ones who really left; they are struck through in one go.'}</div>
+    ${R.err ? `<div class="note bad">${esc(R.err)}</div>` : ''}
+    <div class="acts">${link ? '<button class="btn sm" id="rT96">Tick 96%+</button>' : ''}<button class="btn sm" id="rAll">Tick all</button><button class="btn sm" id="rNone">Untick all</button><span class="sub" style="align-self:center">${R.items.length} students</span></div>
+    ${R.items.map((x, i) => link ? `<div class="cand"><input type="checkbox" data-ri="${i}" ${R.tick.has(i) ? 'checked' : ''} style="width:22px;height:22px;flex:none">
+      <div class="tx"><b>${esc(x.r.name)}</b> D/o ${esc(x.r.father)} <small class="sub">Roll ${esc(x.r.roll || '-')}</small>
+        <select data-rpick="${i}" style="width:100%;margin-top:4px;height:38px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)">${x.opts.map((o, k) => `<option value="${k}" ${k === x.sel ? 'selected' : ''}>${o.pct}% · ${esc(o.s.name)} D/o ${esc(o.s.father)}${o.s.enroll ? ' · ' + esc(o.s.enroll) : ''} · ${esc(o.s.cls || '-')} ${esc(o.s.pcs || '')}</option>`).join('')}</select></div>
+      <span class="pct ${x.opts[x.sel].pct >= 96 ? 'hi' : x.opts[x.sel].pct >= 80 ? 'md' : ''}">${x.opts[x.sel].pct}%</span></div>`
+      : `<label class="cand" style="cursor:pointer"><input type="checkbox" data-ri="${i}" ${R.tick.has(i) ? 'checked' : ''} style="width:22px;height:22px;flex:none">
+      <div class="tx"><b>${esc(x.r.name)}</b> D/o ${esc(x.r.father)} <small class="sub">Roll ${esc(x.r.roll || '-')}</small><br>⇄ <b>${esc(x.h.name)}</b> D/o ${esc(x.h.father)} <small class="sub">${esc((x.h.enroll || '') + (x.h.status ? ' · ' + x.h.status : ''))} · ${esc(x.h.why)}</small></div>
+      <span class="pct ${x.h.pct >= 90 ? 'hi' : 'md'}">${x.h.pct}%</span></label>`).join('') || '<div class="sub" style="margin-top:10px">Nothing to check.</div>'}
+    <div class="acts" style="position:sticky;bottom:0;background:var(--surface);padding:8px 0"><button class="btn pri" id="rApply" ${R.busy || !R.tick.size ? 'disabled' : ''}>${R.busy ? 'Saving…' : (link ? 'Fill ' : 'Strike through ') + R.tick.size + ' ticked in one go'}</button></div>
+  </div>`;
+}
+async function applyReview(){
+  const R = E, picked = R.items.filter((x, i) => R.tick.has(i)); if(!picked.length) return;
+  R.busy = true; R.err = ''; paintEd();
+  let x;
+  try{
+    x = R.review === 'link'
+      ? await api({ action:'pc_link', sheet:S.data.sheet, items:picked.map(p => ({ row:p.r.row, roll:p.r.roll, name:p.r.name, father:p.r.father, id:p.opts[p.sel].s.id, by:'Chosen by hand (ticked list)' })) }, 300000)
+      : await api({ action:'pc_strikes', sheet:S.data.sheet, on:true, items:picked.map(p => ({ row:p.r.row, roll:p.r.roll, name:p.r.name, father:p.r.father })) }, 300000);
+  }catch(e){ R.busy = false; R.err = e.message; paintEd(); return; }
+  (x.rows || []).forEach(upsert);
+  S.msg = esc((R.review === 'link' ? x.done.length + ' students filled in the sheet' : x.done.length + ' students struck through as left students') + (x.skipped && x.skipped.length ? '; ' + x.skipped.length + ' skipped (' + x.skipped[0].msg + ')' : '') + '.');
+  E = null; paintEd(); paintStats();
 }
 async function autoLink(){
   const list = S.auto || []; if(!list.length) return;
   S.busy = 'auto'; render();
+  let msg = '', err = '';
   try{
-    const x = await api({ action:'pc_link', sheet:S.data.sheet, items:list.map(p => ({ row:p.r.row, name:p.r.name, father:p.r.father, enroll:p.s.enroll, by:'Auto 96%+ (app)' })) }, 300000);
-    x.rows.forEach(upsert);
-    S.msg = x.done.length + ' rows linked' + (x.skipped.length ? ', ' + x.skipped.length + ' skipped (' + esc(x.skipped[0].msg) + ')' : '') + '.';
-  }catch(e){ S.err = e.message; }
-  S.busy = ''; prep(); findAuto(); render();
+    const x = await api({ action:'pc_link', sheet:S.data.sheet, items:list.map(p => ({ row:p.r.row, roll:p.r.roll, name:p.r.name, father:p.r.father, enroll:p.s.enroll, by:'Auto 96%+ (app)' })) }, 300000);
+    msg = x.done.length + ' rows linked and saved in the sheet' + (x.skipped.length ? '; ' + x.skipped.length + ' skipped (' + esc(x.skipped[0].msg) + ')' : '') + '.';
+  }catch(e){ err = e.message; }
+  S.busy = ''; await run('load');                 // fresh rows from the sheet
+  S.msg = msg; S.err = err || S.err; render();
 }
-
 /* ---------- events ---------- */
 document.addEventListener('change', e => {
   const t = e.target;
+  if(t.dataset && t.dataset.ri !== undefined && E && E.review){ const i = Number(t.dataset.ri); t.checked ? E.tick.add(i) : E.tick.delete(i); const b = $('#rApply'); if(b){ b.disabled = !E.tick.size; b.textContent = (E.review === 'link' ? 'Fill ' : 'Strike through ') + E.tick.size + ' ticked in one go'; } return; }
+  if(t.dataset && t.dataset.rpick !== undefined && E && E.review){ const i = Number(t.dataset.rpick); E.items[i].sel = Number(t.value); E.tick.add(i); paintEd(); return; }
   if(t.id === 'cSheet'){ S.sheet = t.value; S.data = null; ls.set('pc_sheet', S.sheet); run('load'); }
   if(t.id === 'cStrength'){ S.strength = t.value.trim(); ls.set('pc_strength', S.strength); }
 });
@@ -364,11 +487,22 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('click', async e => {
   const t = e.target.closest('button,.it,[data-f]'); if(!t) return;
+  if(t.dataset.qpick){
+    const row = t.dataset.qrow, id = t.dataset.qpick;
+    if(S.picks[row] === id) delete S.picks[row];
+    else { const other = pickedFor(id); if(other) delete S.picks[other]; S.picks[row] = id; }
+    const y = window.scrollY; paintList(); window.scrollTo(0, y); return;
+  }
+  if(t.id === 'qFill'){ quickFill(); return; }
+  if(t.id === 'qClear'){ S.picks = {}; paintList(); return; }
   if(t.id === 'cPrep') run('prep');
   else if(t.id === 'cLoad') run('load');
   else if(t.dataset.f){ S.filter = t.dataset.f; S.q = ''; render(); }
   else if(t.classList.contains('it')){ await assets(); openEd(S.data.rows.find(r => r.row === Number(t.dataset.row))); }
-  else if(t.id === 'cAuto') autoLink();
+  else if(t.id === 'cAuto') openReview('link');
+  else if(t.id === 'cLeftRev') openReview('left');
+  else if(t.id === 'rApply') applyReview();
+  else if(t.id === 'rAll' || t.id === 'rNone'){ E.tick = new Set(t.id === 'rAll' ? E.items.map((x, i) => i) : []); paintEd(); }
   else if(t.id === 'cAutoSee'){ alert(S.auto.map(p => 'Row ' + p.r.row + ': ' + p.r.name + ' D/o ' + p.r.father + '  →  ' + p.s.enroll + ' ' + p.s.name + ' D/o ' + p.s.father + ' (' + Math.round(p.sc * 100) + '%)').join('\n')); }
   else if(t.id === 'cPrintAll') printRows(S.data.rows.filter(canPrint));
   else if(t.id === 'cDrive') drive(null);
@@ -378,7 +512,11 @@ document.addEventListener('click', async e => {
   else if(t.id === 'eStrike') strikeEd();
   else if(t.id === 'ePrint'){ readEd(); await assets(); $('#print').innerHTML = certHtml(E.v); window.print(); }
   else if(t.id === 'eDrive'){ const p = await drive([E.r]); if(p){ E.msg = 'PDF saved in Drive.'; paintEd(); window.open(p.url, '_blank'); } else { E.err = S.err; paintEd(); } }
-  else if(t.dataset.link){ readEd(); E.v.enroll = t.dataset.link; paintEd(); E.msg = 'Enroll# ' + t.dataset.link + ' chosen — press Save.'; paintEd(); }
+  else if(t.dataset.link){ readEd(); E.pick = S.byId[t.dataset.link.toUpperCase()] || null; E.msg = ''; paintEd(); }
+  else if(t.id === 'eUnlink'){ readEd(); E.pick = null; paintEd(); }
+  else if(t.id === 'ePickUndo'){ readEd(); E.pick = undefined; paintEd(); }
+  else if(t.dataset.rpick !== undefined){ /* handled on change */ }
+  else if(t.id === 'rT96'){ E.tick = new Set(E.items.map((x, i) => i).filter(i => (E.items[i].opts[E.items[i].sel] || {}).pct >= 96)); paintEd(); }
 });
 $('#ed').addEventListener('click', e => { if(e.target.id === 'ed'){ E = null; paintEd(); paintStats(); } });
 render();
