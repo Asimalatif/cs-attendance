@@ -78,11 +78,11 @@ label.f input,label.f select{height:44px;border:1.5px solid var(--line);border-r
 #prev{border:1px solid var(--line);border-radius:12px;overflow:auto;margin-top:10px;background:#fff}
 #print{display:none}
 @media print{
-  @page{size:A4;margin:12mm}
+  @page{size:A4;margin:0}
   body{background:#fff;padding:0}
   header,main,#ed{display:none!important}
   #print{display:block}
-  #print .cert{page-break-after:always;max-width:none;padding:0 10mm}
+  #print .cert{page-break-after:always;max-width:none;padding:14mm 20mm 10mm;box-sizing:border-box}
   #print .cert:last-child{page-break-after:auto}
 }
 </style>
