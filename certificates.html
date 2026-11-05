@@ -200,6 +200,34 @@ function quickCands(r){
   });
   return r._qc = out.sort((a, b) => b.sc - a.sc).slice(0, 6);
 }
+/** best suggestion for every unlinked student; one Transform student never goes to two rows (higher % wins) */
+function bestPairs(min, max){
+  const all = [];
+  S.data.rows.filter(r => !r.struck && !r.enroll && r.nt && r.nt.length).forEach(r => { const q = quickCands(r); if(q.length) all.push({ r, c:q[0], next:q[1] ? q[1].sc : 0 }); });
+  all.sort((a, b) => b.c.sc - a.c.sc);
+  const taken = {}, out = [];
+  all.forEach(p => { if(Math.round(p.c.sc * 100) < Math.round(min * 100) || p.c.sc >= max || taken[p.c.s.id]) return; if(min >= .95 && p.c.sc - p.next < .02) return; taken[p.c.s.id] = 1; out.push(p); });
+  return out;
+}
+async function fill95(){
+  S.busy = 'q95'; render();
+  await new Promise(z => setTimeout(z, 30));                    // let the screen show "working" before the matching runs
+  const pairs = bestPairs(.95, 2);
+  if(!pairs.length){ S.busy = ''; S.msg = 'No 95%+ matches left.'; render(); return; }
+  try{
+    const x = await api({ action:'pc_link', sheet:S.data.sheet, items:pairs.map(p => ({ row:p.r.row, roll:p.r.roll, name:p.r.name, father:p.r.father, id:p.c.s.id, by:'Chosen by hand (95%+ in one go)' })) }, 330000);
+    upsertMany(x.rows);
+    S.msg = esc(x.done.length + ' students with a 95%+ match filled in the sheet' + (x.skipped.length ? '; ' + x.skipped.length + ' skipped (' + x.skipped[0].msg + ')' : '') + '. Now press "Select the best match for the rest".');
+  }catch(e){ S.err = e.message; }
+  S.busy = ''; paintStats();
+}
+async function selectBest(){
+  S.busy = 'qbest'; render();
+  await new Promise(z => setTimeout(z, 30));
+  S.picks = {}; bestPairs(0, 2).forEach(p => { S.picks[p.r.row] = p.c.s.id; });
+  S.busy = ''; S.filter = 'all'; S.q = ''; render();
+  S.msg = Object.keys(S.picks).length + ' students have their best match selected (green). Check them, tap another suggestion where needed, then press Fill at the bottom.'; render();
+}
 function pickedFor(id){ return Object.keys(S.picks).find(k => S.picks[k] === id); }
 function findAuto(){
   const open = S.data.rows.filter(r => status(r) === 'match' && r.nt.length), pairs = [];
@@ -248,6 +276,8 @@ function render(){
       <button class="btn" id="cNew">+ Student not in gazette</button>
     </div>
     ${S.pdf ? `<div class="note ok">PDF with ${S.pdf.n} certificate${S.pdf.n > 1 ? 's' : ''} saved in Drive “Certificates (all)”. <a href="${esc(S.pdf.url)}" target="_blank" rel="noopener">Open PDF</a></div>` : ''}
+    ${c.open ? `<div class="acts"><button class="btn ok" id="q95" ${S.busy ? 'disabled' : ''}>Fill all 95%+ matches now</button><button class="btn" id="qBest" ${S.busy ? 'disabled' : ''}>Select the best match for the rest</button></div>
+    <div class="sub" style="margin-top:4px">95%+ are filled straight away in one go. "Select the best match" ticks the top suggestion under every other student: check them, tap another suggestion where needed, then press Fill.</div>` : ''}
     <input class="search" id="cQ" placeholder="Search name, father name, roll no or Enroll#" value="${esc(S.q)}" autocomplete="off">
     <div class="list" id="cList"></div>
   </section>` : ''}`;
@@ -285,7 +315,7 @@ async function quickFill(){
   S.busy = 'qfill'; paintList();
   try{
     const x = await api({ action:'pc_link', sheet:S.data.sheet, items }, 300000);
-    (x.rows || []).forEach(upsert);
+    upsertMany(x.rows);
     S.picks = {};
     S.msg = esc(x.done.length + ' students filled in the sheet' + (x.skipped.length ? '; ' + x.skipped.length + ' skipped (' + x.skipped[0].msg + ')' : '') + '.');
   }catch(e){ S.err = e.message; }
@@ -352,6 +382,12 @@ function paintEd(){
   </div>`;
 }
 function readEd(){ document.querySelectorAll('#ed input[data-k]').forEach(i => { E.v[i.dataset.k] = i.value.trim(); }); }
+/** many rows from the server at once: one recalculation instead of one per row (that is what froze the page) */
+function upsertMany(rows){
+  const R = S.data.rows, at = {}; R.forEach((x, i) => { at[x.row] = i; });
+  (rows || []).forEach(row => { if(at[row.row] !== undefined) R[at[row.row]] = row; else R.push(row); });
+  prep(); findAuto();
+}
 function upsert(row){
   const R = S.data.rows, i = R.findIndex(x => x.row === row.row);
   if(i >= 0) R[i] = row; else R.push(row);
@@ -456,7 +492,7 @@ async function applyReview(){
       ? await api({ action:'pc_link', sheet:S.data.sheet, items:picked.map(p => ({ row:p.r.row, roll:p.r.roll, name:p.r.name, father:p.r.father, id:p.opts[p.sel].s.id, by:'Chosen by hand (ticked list)' })) }, 300000)
       : await api({ action:'pc_strikes', sheet:S.data.sheet, on:true, items:picked.map(p => ({ row:p.r.row, roll:p.r.roll, name:p.r.name, father:p.r.father })) }, 300000);
   }catch(e){ R.busy = false; R.err = e.message; paintEd(); return; }
-  (x.rows || []).forEach(upsert);
+  upsertMany(x.rows);
   S.msg = esc((R.review === 'link' ? x.done.length + ' students filled in the sheet' : x.done.length + ' students struck through as left students') + (x.skipped && x.skipped.length ? '; ' + x.skipped.length + ' skipped (' + x.skipped[0].msg + ')' : '') + '.');
   E = null; paintEd(); paintStats();
 }
@@ -494,6 +530,8 @@ document.addEventListener('click', async e => {
     const y = window.scrollY; paintList(); window.scrollTo(0, y); return;
   }
   if(t.id === 'qFill'){ quickFill(); return; }
+  if(t.id === 'q95'){ fill95(); return; }
+  if(t.id === 'qBest'){ selectBest(); return; }
   if(t.id === 'qClear'){ S.picks = {}; paintList(); return; }
   if(t.id === 'cPrep') run('prep');
   else if(t.id === 'cLoad') run('load');
