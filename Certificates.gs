@@ -246,7 +246,8 @@ function pcPortal_() {
 }
 function pcPortalDob_() { return pcPortal_().dob; }
 /** every status except Enrolled (and passed / promoted) means she left: Migrated, Cancelled, Disenrolled, Struck off … */
-function pcLeftStatus_(s) { s = pcClean_(s).toUpperCase(); return !!s && !/^ENROLL/.test(s) && !/PASS|COMPLET|GRADUAT|PROMOT|ACTIVE|REGULAR/.test(s); }
+/** only a status that clearly says she left: Migrated, Cancelled, Disenrolled, Struck off, Left, Withdrawn, Expelled */
+function pcLeftStatus_(s) { return /MIGRAT|CANCEL|DISENROL|STRUCK|^LEFT|WITHDR|EXPEL|RUSTICAT/.test(pcClean_(s).toUpperCase()); }
 function pcStatusOf_(P, S, enroll) { var k = pcHead_(enroll); if (!k) return ''; return (P && P.status[k]) || (S.byEnroll[k] && S.byEnroll[k].status) || ''; }
 
 /* ============================================================ list of sheets */
@@ -272,6 +273,11 @@ function pcPrepare_(name, strength) {
 
     // Enroll# already in use (kept)
     all.forEach(function (r, i) { if (C.college < 0 || PC_CFG.COLLEGE.test(r[C.college])) { var k = pcHead_(F['Enroll#'][i][0]); if (k) used[k] = i; } });
+
+    // rows this tool struck before are checked again from scratch (strike removed below if she is not left);
+    // rows struck by hand ("Left / no match (struck)") are kept
+    var was = {};
+    all.forEach(function (r, i) { if (/^LEFT STUDENT/i.test(pcClean_(F['Matched by'][i][0]))) { was[i + 2] = true; F['Matched by'][i][0] = ''; } });
 
     all.forEach(function (r, i) {
       if (C.college >= 0 && !PC_CFG.COLLEGE.test(r[C.college])) return;
@@ -326,12 +332,17 @@ function pcPrepare_(name, strength) {
       if (t === 'DOB' || t === 'Enroll#') rg.setNumberFormat('@');
       rg.setValues(F[t]);
     });
-    strike.sort(function (a, b) { return a - b; });
-    for (var a = 0; a < strike.length;) {
-      var b = a; while (b + 1 < strike.length && strike[b + 1] === strike[b] + 1) b++;
-      sh.getRange(strike[a], 1, strike[b] - strike[a] + 1, C.last).setFontLine('line-through');
-      a = b + 1;
-    }
+    var blocks = function (list, line) {
+      list.sort(function (a, b) { return a - b; });
+      for (var a = 0; a < list.length;) {
+        var b = a; while (b + 1 < list.length && list[b + 1] === list[b] + 1) b++;
+        sh.getRange(list[a], 1, list[b] - list[a] + 1, C.last).setFontLine(line);
+        a = b + 1;
+      }
+    };
+    var isStruck = {}; strike.forEach(function (r) { isStruck[r] = true; });
+    blocks(Object.keys(was).map(Number).filter(function (r) { return !isStruck[r]; }), 'none');
+    blocks(strike, 'line-through');
     SpreadsheetApp.flush();
     var out = pcLoad_(name, S);
     out.stats = st; out.stats.sheets = S.sheets; out.stats.leftRead = L.count; out.stats.leftSheets = L.sheets;
