@@ -117,22 +117,38 @@ function pcCols_(sh, make) {
 }
 
 /* ============================================================ sources (Users workbook) */
+/** Students from Transform-ALL-COLLEGE-STRENGTH and its older copies ("Transform-ALL-COLLEGE-STRENGTH 2025" …),
+ *  so a 2nd-year gazette also finds students who are no longer in the current sheet.
+ *  The current sheet wins when an Enroll# is in both. name = one sheet only (the box on the page). */
 function pcStrength_(name) {
-  name = pcClean_(name) || PC_CFG.STRENGTH;
-  var sh = SpreadsheetApp.openById(PC_CFG.USERS).getSheetByName(name);
-  if (!sh) throw new Error('Sheet "' + name + '" not found in the Users workbook.');
-  var v = sh.getDataRange().getDisplayValues(), H = (v[0] || []).map(pcHead_);
-  var c = { e: pcCol_(H, ['Enroll#', 'Enrollment#', 'Enrollment No', 'REG#']), n: pcCol_(H, ['Student Name', 'Name']), f: pcCol_(H, ['Father Name', 'Father']),
-    p: pcCol_(H, ['Program', 'Program Name']), c: pcCol_(H, ['Class']), s: pcCol_(H, ['Section']), x: pcCol_(H, ['PCS']), a: pcCol_(H, ['Appeared in']) };
-  if (c.e < 0 || c.n < 0) throw new Error(PC_CFG.STRENGTH + ' needs Enroll# and Student Name columns.');
-  var g = function (r, i) { return i >= 0 ? pcClean_(r[i]) : ''; };
-  var S = { rows: [], byEnroll: {}, byName: {} };
-  for (var i = 1; i < v.length; i++) {
-    var r = v[i], o = { enroll: g(r, c.e), name: g(r, c.n), father: g(r, c.f), program: g(r, c.p), cls: g(r, c.c), section: g(r, c.s), pcs: g(r, c.x), group: g(r, c.a) };
-    var k = pcHead_(o.enroll); if (!k || S.byEnroll[k]) continue;
-    S.rows.push(o); S.byEnroll[k] = o;
-    var nk = pcLetters_(o.name) + '|' + pcLetters_(o.father); if (nk !== '|') (S.byName[nk] = S.byName[nk] || []).push(o);
+  var book = SpreadsheetApp.openById(PC_CFG.USERS), names;
+  name = pcClean_(name);
+  if (name) {
+    if (!book.getSheetByName(name)) throw new Error('Sheet "' + name + '" not found in the Users workbook.');
+    names = [name];
+  } else {
+    var base = pcHead_(PC_CFG.STRENGTH);
+    names = book.getSheets().map(function (x) { return x.getName(); })
+      .filter(function (n) { return pcHead_(n).indexOf(base) === 0; })
+      .sort(function (a, b) { return pcHead_(a) === base ? -1 : pcHead_(b) === base ? 1 : b.localeCompare(a); });
+    if (!names.length) throw new Error('Sheet "' + PC_CFG.STRENGTH + '" not found in the Users workbook.');
   }
+  var S = { rows: [], byEnroll: {}, byName: {}, cur: { byEnroll: {}, byName: {} }, sheets: names };
+  names.forEach(function (sn, si) {
+    var v = book.getSheetByName(sn).getDataRange().getDisplayValues(), H = (v[0] || []).map(pcHead_);
+    var c = { e: pcCol_(H, ['Enroll#', 'Enrollment#', 'Enrollment No', 'REG#']), n: pcCol_(H, ['Student Name', 'Name']), f: pcCol_(H, ['Father Name', 'Father']),
+      p: pcCol_(H, ['Program', 'Program Name']), c: pcCol_(H, ['Class']), s: pcCol_(H, ['Section']), x: pcCol_(H, ['PCS']), a: pcCol_(H, ['Appeared in']) };
+    if (c.e < 0 || c.n < 0) { if (si === 0) throw new Error(sn + ' needs Enroll# and Student Name columns.'); return; }
+    var g = function (r, i) { return i >= 0 ? pcClean_(r[i]) : ''; };
+    for (var i = 1; i < v.length; i++) {
+      var r = v[i], o = { enroll: g(r, c.e), name: g(r, c.n), father: g(r, c.f), program: g(r, c.p), cls: g(r, c.c), section: g(r, c.s), pcs: g(r, c.x), group: g(r, c.a) };
+      var k = pcHead_(o.enroll); if (!k || S.byEnroll[k]) continue;
+      var nk = pcLetters_(o.name) + '|' + pcLetters_(o.father);
+      S.rows.push(o); S.byEnroll[k] = o;
+      if (nk !== '|') (S.byName[nk] = S.byName[nk] || []).push(o);
+      if (si === 0) { S.cur.byEnroll[k] = o; if (nk !== '|') (S.cur.byName[nk] = S.cur.byName[nk] || []).push(o); }
+    }
+  });
   return S;
 }
 function pcLeft_() {
@@ -156,9 +172,9 @@ function pcLeft_() {
 }
 function pcLeftOf_(L, S, name, father, enroll, reg) {
   var ek = pcHead_(enroll), rk = pcHead_(reg), nk = pcLetters_(name) + '|' + pcLetters_(father);
-  if (ek && L.byEnroll[ek] && !S.byEnroll[ek]) return L.byEnroll[ek];
+  if (ek && L.byEnroll[ek] && !S.cur.byEnroll[ek]) return L.byEnroll[ek];
   if (rk && L.byReg[rk]) return L.byReg[rk];
-  if (name && father && L.byName[nk] && !(S.byName[nk] || []).length) return L.byName[nk];   // still studying -> not left
+  if (name && father && L.byName[nk] && !(S.cur.byName[nk] || []).length) return L.byName[nk];   // still studying -> not left
   return null;
 }
 function pcLeftNote_(rec) { return 'LEFT STUDENT-' + (pcClean_(rec.status).toUpperCase() || 'LEFT'); }
@@ -188,7 +204,7 @@ function pcPrepare_(name, strength) {
     var all = sh.getRange(2, 1, n, C.last).getDisplayValues();
     var cols = PC_CFG.FILL.map(function (t) { return sh.getRange(2, C.f[t] + 1, n, 1).getValues(); });
     var F = {}; PC_CFG.FILL.forEach(function (t, x) { F[t] = cols[x]; });
-    var total = pcTotal_(sh.getName()), year = pcYear_(sh.getName()), session = (year - 1) + '-' + year;
+    var total = pcTotal_(sh.getName()), year = pcYear_(sh.getName()), session = (year - 1) + '-' + String(year).slice(2), longSession = (year - 1) + '-' + year;
     var used = {}, strike = [], st = { jcw: 0, left: 0, enroll: 0, name: 0, open: 0, dup: 0, dob: 0, ready: 0, fail: 0 };
     var set = function (t, i, v, keep) { if (keep && pcClean_(F[t][i][0]) !== '') return; F[t][i][0] = v; };
 
@@ -230,6 +246,7 @@ function pcPrepare_(name, strength) {
           : /FAIL|ABSENT|\bABS\b|UFM|CANCEL|COMP|SUPP|R\.?\s?L|WITHHELD|\bF\b/.test(rem) ? 'F'
           : pcGradeOf_(r[C.marks], total);
       }
+      if (pcClean_(F['Session'][i][0]) === longSession) F['Session'][i][0] = session;   // 2025-2026 -> 2025-26
       set('Session', i, session, true);
       var pos = C.pos >= 0 ? Number(r[C.pos]) : 0;
       if (pos >= 1 && pos <= PC_CFG.TOP) set('Distinction_won', i, pcOrd_(pos) + ' Position in BISE Peshawar', true);
@@ -249,7 +266,7 @@ function pcPrepare_(name, strength) {
     }
     SpreadsheetApp.flush();
     var out = pcLoad_(name, S);
-    out.stats = st;
+    out.stats = st; out.stats.sheets = S.sheets;
     return out;
   } finally { lock.releaseLock(); }
 }
@@ -296,7 +313,7 @@ function pcLinkCore_(req) {
         F['Matched by'][i][0] = 'Not found in Transform'; done.push(Number(it.row)); return;
       }
       var t = S.byEnroll[pcHead_(it.enroll)];
-      if (!t) { skipped.push({ row: it.row, msg: it.enroll + ' is not in ' + PC_CFG.STRENGTH }); return; }
+      if (!t) { skipped.push({ row: it.row, msg: it.enroll + ' is not in ' + S.sheets.join(' / ') }); return; }
       var other = used[pcHead_(it.enroll)];
       if (other && other !== Number(it.row)) { skipped.push({ row: it.row, msg: it.enroll + ' is already used in row ' + other }); return; }
       var old = pcHead_(F['Enroll#'][i][0]); if (old && used[old] === Number(it.row)) delete used[old];

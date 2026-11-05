@@ -176,7 +176,7 @@ function render(){
     <div class="sub">Upload the gazette PDF in <a href="board.html">Board results</a> first; it opens this page and prepares everything by itself. Only Jinnah College rows are used.</div>
     <div class="grid">
       <label class="f">Result sheet<select id="cSheet">${(S.sheets || (S.sheet ? [S.sheet] : [])).map(n => `<option ${n === S.sheet ? 'selected' : ''}>${esc(n)}</option>`).join('') || '<option value="">Loading…</option>'}</select></label>
-      <label class="f">Student list (Users workbook)<input id="cStrength" placeholder="Transform-ALL-COLLEGE-STRENGTH" value="${esc(S.strength)}"></label>
+      <label class="f">Student list (Users workbook)<input id="cStrength" placeholder="Empty = current + older Transform sheets" value="${esc(S.strength)}"></label>
     </div>
     <div class="acts">
       <button class="btn pri" id="cPrep" ${S.busy || !S.sheet ? 'disabled' : ''}>${S.busy === 'prep' ? 'Preparing… (1-3 min)' : 'Prepare all certificates (one go)'}</button>
@@ -233,7 +233,8 @@ const FIELDS = [['roll', 'Roll No'], ['reg', 'Registration No'], ['name', 'Name 
 let E = null;
 function certVals(r){
   const D = S.data, two = /2nd/i.test(D.sheet);
-  return { name:r.name, father:r.father, group:r.group || (two ? 'H.S.S.C (Part-II)' : 'H.S.S.C (Part-I)'), session:r.session, roll:r.roll, reg:r.reg, marks:r.marks,
+  const y = Number((D.sheet.match(/20\d\d/) || [new Date().getFullYear()])[0]);
+  return { name:r.name, father:r.father, group:r.group || (two ? 'H.S.S.C (Part-II)' : 'H.S.S.C (Part-I)'), session:r.session || (y - 1) + '-' + String(y).slice(2), roll:r.roll, reg:r.reg, marks:r.marks,
     total:r.total || D.total, grade:r.grade, dob:r.dob, dist:r.dist || 'NIL', conduct:r.conduct || 'GOOD' };
 }
 function certHtml(v){
@@ -335,7 +336,8 @@ async function run(kind){
   try{
     const d = await api({ action:kind === 'prep' ? 'pc_prepare' : 'pc_load', sheet:S.sheet }, 360000);
     S.data = d; prep(); findAuto();
-    if(d.stats){ const s = d.stats; S.msg = `Done: ${s.jcw} Jinnah College rows · ${s.enroll + s.name} linked (${s.name} new by name) · ${s.left} left students struck through · ${s.dob} with DOB · ${s.open} not linked${s.dup ? ' (' + s.dup + ' same names)' : ''} · <b>${s.ready} certificates ready</b>.`; }
+    if(kind === 'load' && d.rows.length && !d.rows.some(r => r.how)){ S.busy = ''; return run('prep'); }   // never prepared yet -> do it now
+    if(d.stats){ const s = d.stats; S.msg = `Student lists used: ${esc((s.sheets || []).join(', '))}.<br>Done: ${s.jcw} Jinnah College rows · ${s.enroll + s.name} linked (${s.name} new by name) · ${s.left} left students struck through · ${s.dob} with DOB · ${s.open} not linked${s.dup ? ' (' + s.dup + ' same names)' : ''} · <b>${s.ready} certificates ready</b>.`; }
   }catch(e){ S.err = e.message; }
   S.busy = ''; render(); assets();
 }
