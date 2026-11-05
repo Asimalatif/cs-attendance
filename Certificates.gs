@@ -60,6 +60,7 @@ function pcRoute_(user, req) {
       case 'pc_link':    return pcLink_(req);
       case 'pc_save':    return pcSave_(req);
       case 'pc_strike':  return pcStrike_(req);
+      case 'pc_strikes': return { ok: true, done: (req.items || []).map(function (it) { var x = pcStrike_({ sheet: req.sheet, row: it.row, roll: it.roll, name: it.name, father: it.father, on: true }); return x.ok ? Number(it.row) : 0; }).filter(Number) };
       case 'pc_assets':  return pcAssets_();
       case 'pc_pdf':     return pcPdf_(req);
     }
@@ -201,19 +202,14 @@ function pcLeftNear_(L, name, father) {
   if (best) best.unique = best.sc - second >= 0.03;
   return best;
 }
-function pcLeftOf_(L, S, name, father, enroll, reg) {
-  var ek = pcHead_(enroll), rk = pcHead_(reg), nk = pcLetters_(name) + '|' + pcLetters_(father);
-  if (ek && L.byEnroll[ek] && !S.cur.byEnroll[ek]) return L.byEnroll[ek];
-  if (rk && L.byReg[rk]) return L.byReg[rk];
-  if ((S.cur.byName[nk] || []).length || (ek && S.cur.byEnroll[ek])) return null;           // still studying -> not left
-  if (name && father && L.byName[nk]) return L.byName[nk];
-  // same name, father written a little differently ("M. Yameen" / "Muhammad Yameen"): one such record, same last word of father
-  var one = L.byOnly[pcLetters_(name)] || [], lw = function (s) { var w = pcClean_(s).toUpperCase().replace(/[^A-Z ]/g, ' ').trim().split(/\s+/); return w[w.length - 1] || ''; };
-  if (one.length === 1 && father && one[0].father && lw(one[0].father) === lw(father)) return one[0];
-  // spelling differences in both names ("Wareesha"/"Warisha", "Mehmood"/"Mahmood"): very close and only one such record
-  var nr = pcLeftNear_(L, name, father);
-  if (nr && nr.unique && ((nr.ns >= 0.88 && nr.fs >= 0.8) || (nr.ns >= 0.8 && nr.fs >= 0.95))) return nr.rec;
-  return null;
+/** Left student = the same Student Name + Father Name (letters only) in Left Students, and NOT the same
+ *  Name + Father Name in the current Transform sheet. Enroll#, REG# and portal status are not used.
+ *  Near spellings are never struck automatically: the app shows them for the admin to confirm. */
+function pcLeftOf_(L, S, name, father) {
+  if (!name || !father) return null;
+  var nk = pcLetters_(name) + '|' + pcLetters_(father);
+  if ((S.cur.byName[nk] || []).length) return null;                                  // still studying -> not left
+  return L.byName[nk] || null;
 }
 /** The sheet row of this student: the given row if it still holds her, else her Roll No, else her unique Name + Father Name
  *  (rows can move when the sheet is sorted or filtered). 0 = not found. */
@@ -272,7 +268,8 @@ function pcPrepare_(name, strength) {
     var set = function (t, i, v, keep) { if (keep && pcClean_(F[t][i][0]) !== '') return; F[t][i][0] = v; };
 
     // Enroll# already in use (kept)
-    all.forEach(function (r, i) { if (C.college < 0 || PC_CFG.COLLEGE.test(r[C.college])) { var k = pcHead_(F['Enroll#'][i][0]); if (k) used[k] = i; } });
+    var byHand = function (i) { return /^Chosen by hand|^Auto 96/i.test(pcClean_(F['Matched by'][i][0])); };   // links the admin confirmed
+    all.forEach(function (r, i) { if ((C.college < 0 || PC_CFG.COLLEGE.test(r[C.college])) && byHand(i)) { var k = pcHead_(F['Enroll#'][i][0]); if (k) used[k] = i; } });
 
     // rows this tool struck before are checked again from scratch (strike removed below if she is not left);
     // rows struck by hand ("Left / no match (struck)") are kept
@@ -284,31 +281,30 @@ function pcPrepare_(name, strength) {
       st.jcw++;
       var nm = pcClean_(r[C.name]), fa = pcClean_(r[C.father]), en = pcClean_(F['Enroll#'][i][0]), rg = C.reg >= 0 ? pcClean_(r[C.reg]) : '';
       if (!nm && !fa) return;
-      var ps0 = pcStatusOf_(P, S, en);
-      if (pcLeftStatus_(ps0)) { F['Matched by'][i][0] = 'LEFT STUDENT-' + ps0.toUpperCase(); strike.push(i + 2); st.left++; return; }
-      var lf = pcLeftOf_(L, S, nm, fa, en, rg);
+      var lf = pcLeftOf_(L, S, nm, fa);
       if (lf) { F['Matched by'][i][0] = pcLeftNote_(lf); strike.push(i + 2); st.left++; return; }
       if (/^Left \/ no match/i.test(pcClean_(F['Matched by'][i][0]))) return;           // struck by hand: keep
 
-      var t = en ? S.byEnroll[pcHead_(en)] : null, how = '';
-      if (t) how = pcClean_(F['Matched by'][i][0]) || 'Existing Enroll# - Transform';
-      if (!t && !en) {
+      // link to Transform by Student Name + Father Name only; links the admin confirmed are kept
+      var t = null, how = '';
+      if (byHand(i) && en && S.byEnroll[pcHead_(en)]) { t = S.byEnroll[pcHead_(en)]; how = pcClean_(F['Matched by'][i][0]); }
+      else {
         var list = (S.byName[pcLetters_(nm) + '|' + pcLetters_(fa)] || []).filter(function (o) { var u = used[pcHead_(o.enroll)]; return u === undefined || u === i; });
         if (list.length === 1) { t = list[0]; how = 'Name + Father Name - Transform'; }
-        else if (list.length > 1) { F['Matched by'][i][0] = 'Duplicate name - choose in the app'; st.dup++; }
+        else {
+          if (en) ['Enroll#', 'SName', 'SFname', 'Program', 'Class', 'Section', 'PCS'].forEach(function (x) { F[x][i][0] = ''; });   // old link not by name: removed
+          F['Matched by'][i][0] = list.length > 1 ? 'Duplicate name - choose in the app' : 'Not found in Transform';
+          if (list.length > 1) st.dup++;
+          st.open++;
+        }
       }
       if (t) {
-        var ps = pcStatusOf_(P, S, t.enroll);
-        if (pcLeftStatus_(ps)) { F['Enroll#'][i][0] = t.enroll; F['SName'][i][0] = t.name; F['SFname'][i][0] = t.father; F['Matched by'][i][0] = 'LEFT STUDENT-' + ps.toUpperCase(); strike.push(i + 2); st.left++; return; }
-        var lf2 = pcLeftOf_(L, S, nm, fa, t.enroll, rg);
-        if (lf2) { F['Enroll#'][i][0] = t.enroll; F['Matched by'][i][0] = pcLeftNote_(lf2); strike.push(i + 2); st.left++; return; }
         used[pcHead_(t.enroll)] = i;
         set('Enroll#', i, t.enroll); set('SName', i, t.name); set('SFname', i, t.father); set('Program', i, t.program);
         set('Class', i, t.cls); set('Section', i, t.section); set('PCS', i, t.pcs); set('Group', i, t.group, true);
         F['Matched by'][i][0] = how;
-        if (how.indexOf('Existing') === 0) st.enroll++; else st.name++;
-      } else if (!pcClean_(F['Matched by'][i][0]) || /^Not found/i.test(F['Matched by'][i][0])) { F['Matched by'][i][0] = 'Not found in Transform'; st.open++; }
-      else st.open++;
+        if (/^Name/.test(how)) st.name++; else st.enroll++;
+      }
 
       var k = pcHead_(F['Enroll#'][i][0]);
       if (k && DOB[k] && !pcClean_(F['DOB'][i][0])) { F['DOB'][i][0] = DOB[k]; }
@@ -352,15 +348,16 @@ function pcPrepare_(name, strength) {
 
 /** a possible Left Students record for a row that was NOT struck, with the reason it was not struck */
 function pcLeftHint_(L, S, name, father, enroll) {
-  var ek = pcHead_(enroll), rec = ek && L.byEnroll[ek], why = '';
-  var nr = rec ? null : pcLeftNear_(L, name, father);
-  if (!rec && nr && nr.ns >= 0.8) rec = nr.rec;
-  if (!rec) return '';
-  var nk = pcLetters_(name) + '|' + pcLetters_(father);
-  if ((S.cur.byName[nk] || []).length || (ek && S.cur.byEnroll[ek])) why = 'she is still in the current student list';
-  else if (nr) why = 'names only ' + Math.round(nr.ns * 100) + '% / father ' + Math.round(nr.fs * 100) + '% alike';
-  else why = 'press Prepare again';
-  return rec.name + ' D/o ' + rec.father + (rec.enroll ? ' · ' + rec.enroll : '') + (rec.status ? ' · ' + rec.status : '') + ' — not struck: ' + why;
+  var nk = pcLetters_(name) + '|' + pcLetters_(father), rec = L.byName[nk], why = '', pct = 100;
+  if (rec && (S.cur.byName[nk] || []).length) why = 'the same name is still in the current student list';
+  if (!rec) {
+    var nr = pcLeftNear_(L, name, father);
+    if (!nr || nr.ns < 0.8) return '';
+    rec = nr.rec; pct = Math.round(nr.sc * 100);
+    why = 'name ' + Math.round(nr.ns * 100) + '% / father ' + Math.round(nr.fs * 100) + '% alike';
+  }
+  if (!why) why = 'press Prepare again';
+  return { name: rec.name, father: rec.father, enroll: rec.enroll, status: rec.status, pct: pct, why: why };
 }
 
 /* ============================================================ data for the app */

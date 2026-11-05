@@ -134,6 +134,7 @@ function status(r){
   if(!r.enroll) return 'match';
   return 'ready';
 }
+const hintText = h => !h ? '' : typeof h === 'string' ? h : h.name + ' D/o ' + h.father + (h.enroll ? ' · ' + h.enroll : '') + (h.status ? ' · ' + h.status : '') + ' (' + h.pct + '%) — not struck: ' + h.why;
 /** suggestions for Distinctions won: NIL, her board position, and anything already typed for other students */
 function ordinal(n){ const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
 function distSuggest(r){
@@ -212,7 +213,8 @@ function render(){
       ${[['all', c.all, 'JCW students'], ['ready', c.print, 'ready to print'], ['match', c.match, 'ready but no Enroll#'], ['fail', c.fail, 'fail / no grade / no roll no'], ['left', c.left, 'left / struck'], ['hint', c.hint, 'possible left — check'], ['dist', c.dist, 'top 20 / distinctions'], ['nodob', c.nodob, 'ready but no DOB']].map(x => `<button data-f="${x[0]}" class="${S.filter === x[0] ? 'on' : ''}"><b>${x[1]}</b><span>${x[2]}</span></button>`).join('')}
     </div>
     <div class="sub" style="margin-top:8px"><b>Ready · no Enroll#</b> = she passed and her certificate can print, but she is not yet linked to a student in Transform, so her DOB and left-student status could not be checked. Tap her and choose the right student. <b>Not eligible</b> shows the reason on each row.</div>
-    ${S.auto && S.auto.length ? `<div class="note mid">${S.auto.length} unlinked rows have a 96%+ match in the student list. <button class="btn sm ok" id="cAuto" ${S.busy ? 'disabled' : ''}>Link all ${S.auto.length}</button> <button class="btn sm" id="cAutoSee">See them</button></div>` : ''}
+    ${S.auto && S.auto.length ? `<div class="note mid">${S.auto.length} unlinked students have a 96%+ name + father name match in the student list. Nothing is saved until you check them. <button class="btn sm ok" id="cAuto" ${S.busy ? 'disabled' : ''}>Review ${S.auto.length} matches</button></div>` : ''}
+    ${c.hint ? `<div class="note mid">${c.hint} students look like Left Students with a slightly different spelling. They are NOT struck yet. <button class="btn sm" id="cLeftRev" ${S.busy ? 'disabled' : ''}>Review ${c.hint} possible left</button></div>` : ''}
     <div class="acts">
       <button class="btn pri" id="cPrintAll" ${!c.print ? 'disabled' : ''}>Print / save PDF — all ${c.print} ready</button>
       <button class="btn" id="cDrive" ${S.busy || !c.print ? 'disabled' : ''}>${S.busy === 'pdf' ? 'Making PDF…' : 'One PDF to Google Drive'}</button>
@@ -245,7 +247,7 @@ function paintList(){
   const lab = { ready:['t-ready', 'Ready'], match:['t-match', 'Not linked'], fail:['t-fail', 'Not eligible'], left:['t-left', 'Left'] };
   box.innerHTML = (L.length ? '' : '<div class="sub">Nobody here.</div>') + L.slice(0, max).map(r => {
     const st = status(r), t = st === 'match' && canPrint(r) ? ['t-match', 'Ready · no Enroll#'] : lab[st];
-    return `<div class="it ${r.struck ? 'struck' : ''}" data-row="${r.row}"><div class="tx"><b>${esc(r.name)}</b><small>D/o ${esc(r.father)} · Roll ${esc(r.roll || '—')} · ${esc(r.marks || '—')} · ${esc(r.grade || '—')}${r.enroll ? ' · ' + esc(r.enroll) : ''}${r.pcs ? ' · ' + esc(r.pcs) : ''}${r.pstatus ? ' · Portal: ' + esc(r.pstatus) : ''}</small>${r.remarks ? `<small>Remarks: ${esc(r.remarks)}</small>` : ''}${hasDist(r) ? `<small style="color:var(--good);font-weight:700">Distinction: ${esc(r.dist)}</small>` : r.pos && Number(r.pos) <= 20 ? `<small style="color:var(--blue);font-weight:700">Board position ${esc(r.pos)} — no distinction typed</small>` : ''}${st === 'fail' ? `<small style="color:var(--bad);font-weight:700">Not eligible: ${esc(whyNot(r))}</small>` : ''}${st === 'left' ? `<small style="color:var(--muted);font-weight:700">${esc(r.how || 'Struck through')}</small>` : ''}${r.leftHint ? `<small style="color:var(--mid);font-weight:700">Possible left student: ${esc(r.leftHint)}</small>` : ''}</div>${canPrint(r) && !r.dob ? '<span class="tag t-warn">No DOB</span>' : ''}<span class="tag ${t[0]}">${t[1]}</span></div>`;
+    return `<div class="it ${r.struck ? 'struck' : ''}" data-row="${r.row}"><div class="tx"><b>${esc(r.name)}</b><small>D/o ${esc(r.father)} · Roll ${esc(r.roll || '—')} · ${esc(r.marks || '—')} · ${esc(r.grade || '—')}${r.enroll ? ' · ' + esc(r.enroll) : ''}${r.pcs ? ' · ' + esc(r.pcs) : ''}${r.pstatus ? ' · Portal: ' + esc(r.pstatus) : ''}</small>${r.remarks ? `<small>Remarks: ${esc(r.remarks)}</small>` : ''}${hasDist(r) ? `<small style="color:var(--good);font-weight:700">Distinction: ${esc(r.dist)}</small>` : r.pos && Number(r.pos) <= 20 ? `<small style="color:var(--blue);font-weight:700">Board position ${esc(r.pos)} — no distinction typed</small>` : ''}${st === 'fail' ? `<small style="color:var(--bad);font-weight:700">Not eligible: ${esc(whyNot(r))}</small>` : ''}${st === 'left' ? `<small style="color:var(--muted);font-weight:700">${esc(r.how || 'Struck through')}</small>` : ''}${r.leftHint ? `<small style="color:var(--mid);font-weight:700">Possible left student: ${esc(hintText(r.leftHint))}</small>` : ''}</div>${canPrint(r) && !r.dob ? '<span class="tag t-warn">No DOB</span>' : ''}<span class="tag ${t[0]}">${t[1]}</span></div>`;
   }).join('') + (L.length > max ? `<div class="sub">${L.length - max} more — search to narrow.</div>` : '');
 }
 
@@ -280,12 +282,13 @@ function openEd(r){
 }
 function paintEd(){
   const ed = $('#ed'); if(!E){ ed.classList.add('hidden'); ed.innerHTML = ''; return; }
+  if(E.review){ paintReview(ed); return; }
   const r = E.r, v = E.v, cands = r ? candidates(r, E.mq.trim().toLowerCase()) : [];
   ed.classList.remove('hidden');
   ed.innerHTML = `<div class="pn">
     <div style="display:flex;gap:8px;align-items:center"><h3 style="flex:1">${r ? esc(r.name) + ` <small class="sub">row ${r.row}</small>` : 'Student not in the gazette'}</h3><button class="btn sm" id="eClose">Close</button></div>
     ${r && status(r) === 'fail' ? `<div class="note bad">Not eligible: ${esc(whyNot(r))}</div>` : ''}
-    ${r && r.leftHint ? `<div class="note mid">Possible left student: ${esc(r.leftHint)}. If it is her, press <b>Strike through</b>.</div>` : ''}
+    ${r && r.leftHint ? `<div class="note mid">Possible left student: ${esc(hintText(r.leftHint))}. If it is her, press <b>Strike through</b>.</div>` : ''}
     ${r ? `<div class="sub">${esc(r.how || '')}${r.pstatus ? ' · Portal status: ' + esc(r.pstatus) : ''}${r.pos ? ' · Board position ' + esc(r.pos) : ''}${r.remarks ? ' · Remarks: ' + esc(r.remarks) : ''}</div>` : ''}
     ${E.err ? `<div class="note bad">${esc(E.err)}</div>` : ''}${E.msg ? `<div class="note ok">${esc(E.msg)}</div>` : ''}
     <div class="sec">Certificate</div>
@@ -368,6 +371,43 @@ async function run(kind){
   }catch(e){ S.err = e.message; }
   S.busy = ''; render(); assets();
 }
+/* ---------- review before saving: 96%+ links and possible left students ---------- */
+function openReview(kind){
+  const items = kind === 'link'
+    ? (S.auto || []).map(p => ({ r:p.r, a:[p.r.name, p.r.father], b:[p.s.name, p.s.father], extra:p.s.enroll + ' · ' + (p.s.cls || '-') + ' · ' + (p.s.pcs || '-'), pct:Math.round(p.sc * 100), enroll:p.s.enroll }))
+    : S.data.rows.filter(r => r.leftHint && !r.struck).map(r => { const h = r.leftHint; return { r, a:[r.name, r.father], b:[h.name || '', h.father || ''], extra:(h.enroll || '') + (h.status ? ' · ' + h.status : ''), pct:h.pct || 0, why:h.why }; });
+  E = { review:kind, items, tick:new Set(items.map((x, i) => i)), msg:'', err:'' };
+  paintEd();
+}
+function paintReview(ed){
+  const R = E, link = R.review === 'link';
+  ed.classList.remove('hidden');
+  ed.innerHTML = `<div class="pn">
+    <div style="display:flex;gap:8px;align-items:center"><h3 style="flex:1">${link ? 'Check these matches' : 'Check possible left students'}</h3><button class="btn sm" id="eClose">Close</button></div>
+    <div class="sub">${link ? 'Left: name in the gazette. Right: student in Transform. Untick any that is not the same girl; only ticked rows are linked.' : 'Left: name in the gazette. Right: record in Left Students. Untick any that is not the same girl; only ticked rows are struck through.'}</div>
+    ${R.err ? `<div class="note bad">${esc(R.err)}</div>` : ''}
+    <div class="acts"><button class="btn sm" id="rAll">Tick all</button><button class="btn sm" id="rNone">Untick all</button></div>
+    ${R.items.map((x, i) => `<label class="cand" style="cursor:pointer"><input type="checkbox" data-ri="${i}" ${R.tick.has(i) ? 'checked' : ''} style="width:20px;height:20px;flex:none">
+      <div class="tx"><b>${esc(x.a[0])}</b> D/o ${esc(x.a[1])} <small class="sub">Roll ${esc(x.r.roll || '-')}</small><br>⇄ <b>${esc(x.b[0])}</b> D/o ${esc(x.b[1])} <small class="sub">${esc(x.extra)}</small></div>
+      <span class="pct ${x.pct >= 85 ? 'hi' : x.pct >= 65 ? 'md' : ''}">${x.pct}%</span></label>`).join('') || '<div class="sub">Nothing to check.</div>'}
+    <div class="acts"><button class="btn pri" id="rApply" ${R.busy || !R.tick.size ? 'disabled' : ''}>${R.busy ? 'Saving…' : (link ? 'Link ' : 'Strike through ') + R.tick.size + ' ticked'}</button></div>
+  </div>`;
+}
+async function applyReview(){
+  const R = E, picked = R.items.filter((x, i) => R.tick.has(i)); if(!picked.length) return;
+  R.busy = true; R.err = ''; paintEd();
+  let msg = '';
+  try{
+    if(R.review === 'link'){
+      const x = await api({ action:'pc_link', sheet:S.data.sheet, items:picked.map(p => ({ row:p.r.row, roll:p.r.roll, name:p.r.name, father:p.r.father, enroll:p.enroll, by:'Chosen by hand (checked 96%+)' })) }, 300000);
+      msg = x.done.length + ' students linked' + (x.skipped.length ? '; ' + x.skipped.length + ' skipped (' + x.skipped[0].msg + ')' : '') + '.';
+    }else{
+      const x = await api({ action:'pc_strikes', sheet:S.data.sheet, items:picked.map(p => ({ row:p.r.row, roll:p.r.roll, name:p.r.name, father:p.r.father })) }, 300000);
+      msg = x.done.length + ' students struck through as left students.';
+    }
+  }catch(e){ R.busy = false; R.err = e.message; paintEd(); return; }
+  E = null; paintEd(); await run('load'); S.msg = esc(msg); render();
+}
 async function autoLink(){
   const list = S.auto || []; if(!list.length) return;
   S.busy = 'auto'; render();
@@ -382,6 +422,7 @@ async function autoLink(){
 /* ---------- events ---------- */
 document.addEventListener('change', e => {
   const t = e.target;
+  if(t.dataset && t.dataset.ri !== undefined && E && E.review){ const i = Number(t.dataset.ri); t.checked ? E.tick.add(i) : E.tick.delete(i); const b = $('#rApply'); if(b){ b.disabled = !E.tick.size; b.textContent = (E.review === 'link' ? 'Link ' : 'Strike through ') + E.tick.size + ' ticked'; } return; }
   if(t.id === 'cSheet'){ S.sheet = t.value; S.data = null; ls.set('pc_sheet', S.sheet); run('load'); }
   if(t.id === 'cStrength'){ S.strength = t.value.trim(); ls.set('pc_strength', S.strength); }
 });
@@ -397,7 +438,10 @@ document.addEventListener('click', async e => {
   else if(t.id === 'cLoad') run('load');
   else if(t.dataset.f){ S.filter = t.dataset.f; S.q = ''; render(); }
   else if(t.classList.contains('it')){ await assets(); openEd(S.data.rows.find(r => r.row === Number(t.dataset.row))); }
-  else if(t.id === 'cAuto') autoLink();
+  else if(t.id === 'cAuto') openReview('link');
+  else if(t.id === 'cLeftRev') openReview('left');
+  else if(t.id === 'rApply') applyReview();
+  else if(t.id === 'rAll' || t.id === 'rNone'){ E.tick = new Set(t.id === 'rAll' ? E.items.map((x, i) => i) : []); paintEd(); }
   else if(t.id === 'cAutoSee'){ alert(S.auto.map(p => 'Row ' + p.r.row + ': ' + p.r.name + ' D/o ' + p.r.father + '  →  ' + p.s.enroll + ' ' + p.s.name + ' D/o ' + p.s.father + ' (' + Math.round(p.sc * 100) + '%)').join('\n')); }
   else if(t.id === 'cPrintAll') printRows(S.data.rows.filter(canPrint));
   else if(t.id === 'cDrive') drive(null);
