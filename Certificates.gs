@@ -152,30 +152,55 @@ function pcStrength_(name) {
   return S;
 }
 function pcLeft_() {
-  var sh = SpreadsheetApp.openById(PC_CFG.USERS).getSheetByName(PC_CFG.LEFT), out = { byEnroll: {}, byReg: {}, byName: {} };
-  if (!sh || sh.getLastRow() < 2) return out;
-  var v = sh.getDataRange().getDisplayValues(), at = -1, ix = null;
-  for (var h = 0; h < Math.min(10, v.length); h++) {             // the header may sit on row 2
-    var H = v[h].map(pcHead_), x = { e: pcCol_(H, ['Enroll#', 'Enrollment#', 'Enrollment No']), n: pcCol_(H, ['Student Name', 'Name']), f: pcCol_(H, ['Father Name', 'Father']),
-      r: pcCol_(H, ['REG#', 'Registration #', 'Registration No']), st: pcCol_(H, ['Portal Status', 'Status']) };
-    if (x.n >= 0 && x.f >= 0 && (x.e >= 0 || x.r >= 0)) { at = h; ix = x; break; }
-  }
-  if (at < 0) return out;
-  for (var i = at + 1; i < v.length; i++) {
-    var r = v[i], g = function (k) { return k >= 0 ? pcClean_(r[k]) : ''; };
-    var rec = { enroll: g(ix.e), reg: g(ix.r), name: g(ix.n), father: g(ix.f), status: g(ix.st) };
-    if (rec.enroll) out.byEnroll[pcHead_(rec.enroll)] = out.byEnroll[pcHead_(rec.enroll)] || rec;
-    if (rec.reg) out.byReg[pcHead_(rec.reg)] = out.byReg[pcHead_(rec.reg)] || rec;
-    if (rec.name && rec.father) out.byName[pcLetters_(rec.name) + '|' + pcLetters_(rec.father)] = rec;
-  }
+  var book = SpreadsheetApp.openById(PC_CFG.USERS), base = pcHead_(PC_CFG.LEFT);
+  var out = { byEnroll: {}, byReg: {}, byName: {}, byOnly: {}, count: 0, sheets: [] };
+  book.getSheets().forEach(function (sh) {
+    if (pcHead_(sh.getName()).indexOf(base) !== 0 || sh.getLastRow() < 2) return;
+    var v = sh.getDataRange().getDisplayValues(), at = -1, ix = null;
+    for (var h = 0; h < Math.min(10, v.length); h++) {             // the header may sit on row 2
+      var H = v[h].map(pcHead_), x = { e: pcCol_(H, ['Enroll#', 'Enrollment#', 'Enrollment No', 'Enroll No']), n: pcCol_(H, ['Student Name', 'Name']), f: pcCol_(H, ['Father Name', 'Father']),
+        r: pcCol_(H, ['REG#', 'Registration #', 'Registration No']), st: pcCol_(H, ['Portal Status', 'Status']) };
+      if (x.n >= 0 && (x.e >= 0 || x.r >= 0 || x.f >= 0)) { at = h; ix = x; break; }
+    }
+    if (at < 0) return;
+    out.sheets.push(sh.getName());
+    for (var i = at + 1; i < v.length; i++) {
+      var r = v[i], g = function (k) { return k >= 0 ? pcClean_(r[k]) : ''; };
+      var rec = { enroll: g(ix.e), reg: g(ix.r), name: g(ix.n), father: g(ix.f), status: g(ix.st) };
+      if (!rec.name && !rec.enroll && !rec.reg) continue;
+      out.count++;
+      if (rec.enroll) out.byEnroll[pcHead_(rec.enroll)] = out.byEnroll[pcHead_(rec.enroll)] || rec;
+      if (rec.reg) out.byReg[pcHead_(rec.reg)] = out.byReg[pcHead_(rec.reg)] || rec;
+      if (rec.name && rec.father) out.byName[pcLetters_(rec.name) + '|' + pcLetters_(rec.father)] = rec;
+      if (rec.name) (out.byOnly[pcLetters_(rec.name)] = out.byOnly[pcLetters_(rec.name)] || []).push(rec);
+    }
+  });
   return out;
 }
 function pcLeftOf_(L, S, name, father, enroll, reg) {
   var ek = pcHead_(enroll), rk = pcHead_(reg), nk = pcLetters_(name) + '|' + pcLetters_(father);
   if (ek && L.byEnroll[ek] && !S.cur.byEnroll[ek]) return L.byEnroll[ek];
   if (rk && L.byReg[rk]) return L.byReg[rk];
-  if (name && father && L.byName[nk] && !(S.cur.byName[nk] || []).length) return L.byName[nk];   // still studying -> not left
+  if ((S.cur.byName[nk] || []).length || (ek && S.cur.byEnroll[ek])) return null;           // still studying -> not left
+  if (name && father && L.byName[nk]) return L.byName[nk];
+  // same name, father written a little differently ("M. Yameen" / "Muhammad Yameen"): one such record, same last word of father
+  var one = L.byOnly[pcLetters_(name)] || [], lw = function (s) { var w = pcClean_(s).toUpperCase().replace(/[^A-Z ]/g, ' ').trim().split(/\s+/); return w[w.length - 1] || ''; };
+  if (one.length === 1 && father && one[0].father && lw(one[0].father) === lw(father)) return one[0];
   return null;
+}
+/** The sheet row of this student: the given row if it still holds her, else her Roll No, else her unique Name + Father Name
+ *  (rows can move when the sheet is sorted or filtered). 0 = not found. */
+function pcLocate_(sh, C, row, roll, name, father) {
+  var n = sh.getLastRow() - 1; if (n < 1) return 0;
+  var col = function (k) { return k >= 0 ? sh.getRange(2, k + 1, n, 1).getDisplayValues().map(function (x) { return pcClean_(x[0]); }) : null; };
+  var N = col(C.name), Fa = col(C.father), R = col(C.roll), same = function (i) { return pcLetters_(N[i]) === pcLetters_(name) && pcLetters_(Fa[i]) === pcLetters_(father); };
+  roll = pcClean_(roll); row = Number(row) || 0;
+  if (row >= 2 && row - 2 < n && (roll && R ? R[row - 2] === roll : same(row - 2))) return row;
+  var i, hit = [];
+  if (roll && R) for (i = 0; i < n; i++) if (R[i] === roll) hit.push(i);
+  if (hit.length === 1) return hit[0] + 2;
+  hit = []; for (i = 0; i < n; i++) if (same(i)) hit.push(i);
+  return hit.length === 1 ? hit[0] + 2 : 0;
 }
 function pcLeftNote_(rec) { return 'LEFT STUDENT-' + (pcClean_(rec.status).toUpperCase() || 'LEFT'); }
 function pcPortalDob_() {
@@ -228,6 +253,8 @@ function pcPrepare_(name, strength) {
         else if (list.length > 1) { F['Matched by'][i][0] = 'Duplicate name - choose in the app'; st.dup++; }
       }
       if (t) {
+        var lf2 = pcLeftOf_(L, S, nm, fa, t.enroll, rg);
+        if (lf2) { F['Enroll#'][i][0] = t.enroll; F['Matched by'][i][0] = pcLeftNote_(lf2); strike.push(i + 2); st.left++; return; }
         used[pcHead_(t.enroll)] = i;
         set('Enroll#', i, t.enroll); set('SName', i, t.name); set('SFname', i, t.father); set('Program', i, t.program);
         set('Class', i, t.cls); set('Section', i, t.section); set('PCS', i, t.pcs); set('Group', i, t.group, true);
@@ -266,7 +293,7 @@ function pcPrepare_(name, strength) {
     }
     SpreadsheetApp.flush();
     var out = pcLoad_(name, S);
-    out.stats = st; out.stats.sheets = S.sheets;
+    out.stats = st; out.stats.sheets = S.sheets; out.stats.leftRead = L.count; out.stats.leftSheets = L.sheets;
     return out;
   } finally { lock.releaseLock(); }
 }
@@ -305,9 +332,9 @@ function pcLinkCore_(req) {
     var used = {}; F['Enroll#'].forEach(function (x, i) { var k = pcHead_(x[0]); if (k) used[k] = i + 2; });
     var done = [], skipped = [];
     (req.items || []).forEach(function (it) {
-      var i = Number(it.row) - 2;
-      if (!(i >= 0 && i < n)) { skipped.push({ row: it.row, msg: 'row not found' }); return; }
-      if (pcClean_(names[i][0]) !== pcClean_(it.name) || pcClean_(fathers[i][0]) !== pcClean_(it.father)) { skipped.push({ row: it.row, msg: 'row changed; reload' }); return; }
+      var at = pcLocate_(sh, C, it.row, it.roll, it.name, it.father), i = at - 2;
+      if (!at) { skipped.push({ row: it.row, msg: (it.roll || it.name) + ' not found in the sheet any more' }); return; }
+      it.row = at;
       if (!it.enroll) {                                           // unlink
         ['Enroll#', 'SName', 'SFname', 'Program', 'Class', 'Section', 'PCS'].forEach(function (t) { F[t][i][0] = ''; });
         F['Matched by'][i][0] = 'Not found in Transform'; done.push(Number(it.row)); return;
@@ -340,10 +367,11 @@ function pcSave_(req) {
   try {
     var sh = pcSheet_(req.sheet), C = pcCols_(sh, true), v = req.values || {}, row = Number(req.row) || 0;
     if (!pcClean_(v.name) || !pcClean_(v.father)) return { ok: false, error: 'Name and Father name are needed.' };
+    var asked = row;
     if (row) {
-      var cur = sh.getRange(row, 1, 1, C.last).getDisplayValues()[0];
-      if (pcClean_(cur[C.name]) !== pcClean_(req.expect && req.expect.name) || pcClean_(cur[C.father]) !== pcClean_(req.expect && req.expect.father))
-        return { ok: false, error: 'Row ' + row + ' has changed since it was loaded. Reload the list.' };
+      var X = req.expect || {};
+      row = pcLocate_(sh, C, row, X.roll, X.name, X.father);
+      if (!row) return { ok: false, error: 'Roll No ' + (X.roll || '-') + ' / ' + X.name + ' was not found in "' + sh.getName() + '" any more. Press Reload.' };
     }
     var roll = pcClean_(v.roll);
     if (roll && C.roll >= 0) {
@@ -369,21 +397,20 @@ function pcSave_(req) {
     });
     if (v.enroll !== undefined) {
       SpreadsheetApp.flush();
-      var r2 = pcLinkCore_({ sheet: req.sheet, strength: req.strength, items: [{ row: row, name: v.name, father: v.father, enroll: pcClean_(v.enroll), by: 'Chosen by hand (app)' }] });
+      var r2 = pcLinkCore_({ sheet: req.sheet, strength: req.strength, items: [{ row: row, roll: v.roll || (req.expect && req.expect.roll), name: v.name, father: v.father, enroll: pcClean_(v.enroll), by: 'Chosen by hand (app)' }] });
       if (r2.skipped && r2.skipped.length && pcClean_(v.enroll)) return { ok: false, error: 'Saved, but Enroll#: ' + r2.skipped[0].msg };
     }
     SpreadsheetApp.flush();
     var one = pcLoad_(req.sheet, null, req.strength).rows.filter(function (r) { return r.row === row; })[0];
-    return { ok: true, row: one };
+    return { ok: true, row: one, moved: !!asked && asked !== row };
   } finally { lock.releaseLock(); }
 }
 
 /** strike / un-strike a row (no certificate) */
 function pcStrike_(req) {
-  var sh = pcSheet_(req.sheet), C = pcCols_(sh, true), row = Number(req.row);
-  if (!row || row < 2 || row > sh.getLastRow()) return { ok: false, error: 'Row not found.' };
+  var sh = pcSheet_(req.sheet), C = pcCols_(sh, true), row = pcLocate_(sh, C, req.row, req.roll, req.name, req.father);
+  if (!row) return { ok: false, error: (req.roll || req.name) + ' was not found in the sheet any more. Press Reload.' };
   var v = sh.getRange(row, 1, 1, C.last).getDisplayValues()[0];
-  if (pcClean_(v[C.name]) !== pcClean_(req.name) || pcClean_(v[C.father]) !== pcClean_(req.father)) return { ok: false, error: 'Row changed; reload.' };
   sh.getRange(row, 1, 1, C.last).setFontLine(req.on ? 'line-through' : 'none');
   var hc = sh.getRange(row, C.f['Matched by'] + 1), cur = pcClean_(hc.getDisplayValue());
   if (req.on) hc.setValue('Left / no match (struck)'); else if (/^Left \/ no match|^LEFT STUDENT/.test(cur)) hc.setValue(pcClean_(v[C.f['Enroll#']]) ? 'Chosen by hand (app)' : 'Not found in Transform');

@@ -295,7 +295,8 @@ async function saveEd(){
   if(r && Object.keys(send).length === 2 && send.name === r.name && send.father === r.father){ E.msg = 'Nothing changed.'; paintEd(); return; }
   E.busy = true; E.err = ''; E.msg = ''; paintEd();
   try{
-    const x = await api({ action:'pc_save', sheet:S.data.sheet, row:r ? r.row : 0, expect:r ? { name:r.name, father:r.father } : null, values:send }, 120000);
+    const x = await api({ action:'pc_save', sheet:S.data.sheet, row:r ? r.row : 0, expect:r ? { name:r.name, father:r.father, roll:r.roll } : null, values:send }, 120000);
+    if(x.moved && r) S.data.rows = S.data.rows.filter(z => z.row !== r.row);
     E.r = upsert(x.row); E.v = certVals(E.r); E.v.enroll = E.r.enroll; E.msg = 'Saved in the sheet.';
   }catch(e){ E.err = e.message; }
   E.busy = false; paintEd(); paintStats();
@@ -303,7 +304,7 @@ async function saveEd(){
 async function strikeEd(){
   const r = E.r, on = !r.struck;
   if(on && !confirm('Strike through ' + r.name + '? She gets no certificate.')) return;
-  try{ await api({ action:'pc_strike', sheet:S.data.sheet, row:r.row, name:r.name, father:r.father, on }, 60000); r.struck = on; r.how = on ? 'Left / no match (struck)' : (r.enroll ? 'Chosen by hand (app)' : 'Not found in Transform'); prep(); findAuto(); E.msg = on ? 'Struck through.' : 'Strike-through removed.'; }
+  try{ await api({ action:'pc_strike', sheet:S.data.sheet, row:r.row, roll:r.roll, name:r.name, father:r.father, on }, 60000); r.struck = on; r.how = on ? 'Left / no match (struck)' : (r.enroll ? 'Chosen by hand (app)' : 'Not found in Transform'); prep(); findAuto(); E.msg = on ? 'Struck through.' : 'Strike-through removed.'; }
   catch(e){ E.err = e.message; }
   paintEd(); paintStats();
 }
@@ -337,21 +338,21 @@ async function run(kind){
     const d = await api({ action:kind === 'prep' ? 'pc_prepare' : 'pc_load', sheet:S.sheet }, 360000);
     S.data = d; prep(); findAuto();
     if(kind === 'load' && d.rows.length && !d.rows.some(r => r.how)){ S.busy = ''; return run('prep'); }   // never prepared yet -> do it now
-    if(d.stats){ const s = d.stats; S.msg = `Student lists used: ${esc((s.sheets || []).join(', '))}.<br>Done: ${s.jcw} Jinnah College rows · ${s.enroll + s.name} linked (${s.name} new by name) · ${s.left} left students struck through · ${s.dob} with DOB · ${s.open} not linked${s.dup ? ' (' + s.dup + ' same names)' : ''} · <b>${s.ready} certificates ready</b>.`; }
+    if(d.stats){ const s = d.stats; S.msg = `Student lists used: ${esc((s.sheets || []).join(', '))}.<br>Left Students records read: ${s.leftRead || 0}${(s.leftSheets || []).length ? ' (' + esc(s.leftSheets.join(', ')) + ')' : ''}.<br>Done: ${s.jcw} Jinnah College rows · ${s.enroll + s.name} linked (${s.name} new by name) · ${s.left} left students struck through · ${s.dob} with DOB · ${s.open} not linked${s.dup ? ' (' + s.dup + ' same names)' : ''} · <b>${s.ready} certificates ready</b>.`; }
   }catch(e){ S.err = e.message; }
   S.busy = ''; render(); assets();
 }
 async function autoLink(){
   const list = S.auto || []; if(!list.length) return;
   S.busy = 'auto'; render();
+  let msg = '', err = '';
   try{
-    const x = await api({ action:'pc_link', sheet:S.data.sheet, items:list.map(p => ({ row:p.r.row, name:p.r.name, father:p.r.father, enroll:p.s.enroll, by:'Auto 96%+ (app)' })) }, 300000);
-    x.rows.forEach(upsert);
-    S.msg = x.done.length + ' rows linked' + (x.skipped.length ? ', ' + x.skipped.length + ' skipped (' + esc(x.skipped[0].msg) + ')' : '') + '.';
-  }catch(e){ S.err = e.message; }
-  S.busy = ''; prep(); findAuto(); render();
+    const x = await api({ action:'pc_link', sheet:S.data.sheet, items:list.map(p => ({ row:p.r.row, roll:p.r.roll, name:p.r.name, father:p.r.father, enroll:p.s.enroll, by:'Auto 96%+ (app)' })) }, 300000);
+    msg = x.done.length + ' rows linked and saved in the sheet' + (x.skipped.length ? '; ' + x.skipped.length + ' skipped (' + esc(x.skipped[0].msg) + ')' : '') + '.';
+  }catch(e){ err = e.message; }
+  S.busy = ''; await run('load');                 // fresh rows from the sheet
+  S.msg = msg; S.err = err || S.err; render();
 }
-
 /* ---------- events ---------- */
 document.addEventListener('change', e => {
   const t = e.target;
