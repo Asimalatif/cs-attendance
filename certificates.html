@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#6B3423">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<title>JCW Provisional Certificates</title>
+<style>
+:root{--bg:#F7EDEA;--surface:#fff;--surface2:#FBEDEA;--ink:#2B1912;--muted:#7C6159;--line:#E2C0B8;--brown:#6B3423;--tea:#E7B7AE;--good:#0E8A5F;--good-bg:#E3F4EC;--bad:#C0392B;--bad-bg:#FDE3E1;--mid:#B4740E;--mid-bg:#FFF2D6;--blue:#1F4E8C;--blue-bg:#E4ECF8}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1A110F;--surface:#261915;--surface2:#30201B;--ink:#F6E9E5;--muted:#C4A8A0;--line:#4A3029;--tea:#8A5A50;--good-bg:#14302A;--bad-bg:#3A1C1F;--mid-bg:#3A2F14;--blue-bg:#18243A}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;padding-bottom:60px}
+button,select,input{font:inherit;color:inherit}
+header{background:linear-gradient(120deg,#4A2418,#8A4A35);color:#fff;padding:calc(12px + env(safe-area-inset-top,0px)) 16px 14px}
+header .in{max-width:980px;margin:0 auto;display:flex;align-items:center;gap:12px}
+header img{width:44px;height:44px;border-radius:50%;background:#fff;padding:3px;flex:none}
+header h1{margin:0;font-size:19px;line-height:1.2}
+header small{display:block;opacity:.85;font-size:12.5px;font-weight:400}
+header a{margin-left:auto;color:#fff;text-decoration:none;font-weight:700;font-size:14px;background:rgba(255,255,255,.14);padding:7px 12px;border-radius:999px;white-space:nowrap}
+main{max-width:980px;margin:0 auto;padding:16px}
+.card{background:var(--surface);border:1.5px solid var(--line);border-top:5px solid var(--c,var(--brown));border-radius:20px;padding:16px;margin-bottom:16px}
+.card h2{margin:0 0 4px;font-size:17px;color:var(--brown)}
+@media(prefers-color-scheme:dark){.card h2{color:var(--tea)}}
+.sub{color:var(--muted);font-size:13.5px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:10px;margin-top:12px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:700;color:var(--muted)}
+label.f input,label.f select{height:44px;border:1.5px solid var(--line);border-radius:12px;padding:0 12px;background:var(--surface);font-size:15px;font-weight:600;color:var(--ink);width:100%;min-width:0}
+.btn{min-height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-weight:800;padding:0 14px;cursor:pointer;color:var(--ink);text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+.btn.pri{background:linear-gradient(180deg,#8A4A35,#6B3423);border-color:#6B3423;color:#fff}
+.btn.ok{background:var(--good);border-color:var(--good);color:#fff}
+.btn.red{color:var(--bad);border-color:var(--bad)}
+.btn.sm{min-height:36px;padding:0 10px;font-size:13px;border-radius:10px}
+.btn:disabled{opacity:.5;cursor:default}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(120px,46%),1fr));gap:8px;margin-top:12px}
+.stats button{background:var(--surface2);border:1.5px solid var(--line);border-radius:14px;padding:10px 6px;text-align:center;cursor:pointer}
+.stats button.on{border-color:var(--brown);box-shadow:0 0 0 2px var(--tea)}
+.stats b{display:block;font-size:22px;color:var(--brown)}
+@media(prefers-color-scheme:dark){.stats b{color:var(--tea)}}
+.stats span{font-size:12px;color:var(--muted)}
+.note{border-radius:12px;padding:10px 12px;font-size:13.5px;margin-top:10px}
+.note.ok{background:var(--good-bg);color:var(--good)}.note.bad{background:var(--bad-bg);color:var(--bad)}.note.mid{background:var(--mid-bg);color:var(--mid)}
+.search{height:46px;border:1.5px solid var(--line);border-radius:12px;padding:0 12px;background:var(--surface);width:100%;font-size:15px;margin-top:12px}
+.list{margin-top:10px}
+.it{display:flex;gap:10px;align-items:center;padding:10px 12px;border:1.5px solid var(--line);border-radius:14px;background:var(--surface);margin-bottom:7px;cursor:pointer}
+.it:hover{border-color:var(--tea)}
+.it .tx{flex:1;min-width:0}
+.it b{display:block;font-size:15.5px}
+.it small{display:block;color:var(--muted);font-size:12.5px;overflow:hidden;text-overflow:ellipsis}
+.it.struck b,.it.struck small{text-decoration:line-through;opacity:.7}
+.tag{font-size:11.5px;font-weight:800;padding:3px 8px;border-radius:999px;white-space:nowrap}
+.t-ready{background:var(--good-bg);color:var(--good)}.t-match{background:var(--mid-bg);color:var(--mid)}.t-fail{background:var(--bad-bg);color:var(--bad)}.t-left{background:#555;color:#fff}.t-warn{background:var(--blue-bg);color:var(--blue)}
+.bar{height:10px;border-radius:999px;background:var(--surface2);border:1px solid var(--line);overflow:hidden;margin:10px 0 4px}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,#C2766A,#6B3423);transition:width .3s}
+/* edit panel */
+#ed{position:fixed;inset:0;background:rgba(30,15,10,.45);display:flex;justify-content:flex-end;z-index:20}
+#ed .pn{background:var(--surface);width:min(560px,100%);height:100%;overflow:auto;padding:16px 16px 80px;box-shadow:-10px 0 30px rgba(0,0,0,.25)}
+#ed h3{margin:0;font-size:18px;color:var(--brown)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.cand{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;margin-top:6px;background:var(--surface2)}
+.cand .tx{flex:1;min-width:0;font-size:13.5px}
+.pct{font-weight:800;font-size:12px;padding:2px 8px;border-radius:999px;color:#fff;background:#757575}
+.pct.hi{background:var(--good)}.pct.md{background:#C99712}
+.sec{margin-top:16px;font-weight:800;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.hidden{display:none!important}
+/* certificate pages (preview and print) */
+.cert{background:#fff;color:#000;font:15px "Times New Roman",serif;padding:20px 40px;width:100%;max-width:760px;margin:0 auto}
+.cert .t{text-align:center}
+.cert table{width:100%;border-collapse:collapse;margin-top:16px}
+.cert td.l{white-space:nowrap;padding:0 6px 0 0}
+.cert td.v{border-bottom:1px solid #000;text-align:center;font-weight:bold}
+.cert.fail{background:#FFC0CB;color:#D50000}
+#prev{border:1px solid var(--line);border-radius:12px;overflow:auto;margin-top:10px;background:#fff}
+#print{display:none}
+@media print{
+  @page{size:A4;margin:12mm}
+  body{background:#fff;padding:0}
+  header,main,#ed{display:none!important}
+  #print{display:block}
+  #print .cert{page-break-after:always;max-width:none;padding:0 10mm}
+  #print .cert:last-child{page-break-after:auto}
+}
+</style>
+</head>
+<body>
+<header><div class="in"><img src="jcw-logo.png" alt=""><h1>Provisional certificates<small>Gazette → matched students → certificates</small></h1><a href="./">← App</a></div></header>
+<main id="main"></main>
+<div id="ed" class="hidden"></div>
+<div id="print"></div>
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm7d7-UKg0W-OoWAiuRBHe4mjlRgMQXIHuLm6zi--i/exec';
+const PASS = ['A1', 'A', 'B', 'C', 'D', 'E'];
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const ls = { get(k, d){ try{ const v = localStorage.getItem('csa2_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } }, set(k, v){ try{ localStorage.setItem('csa2_' + k, JSON.stringify(v)); }catch(e){} } };
+const user = ls.get('user', ''), pass = ls.get('pass', '');
+const qs = new URLSearchParams(location.search);
+let S = { sheets:null, sheet:qs.get('sheet') || ls.get('pc_sheet', ''), strength:ls.get('pc_strength', ''), data:null, stats:null, busy:'', err:'', msg:'', filter:qs.get('filter') || 'all', q:'', auto:null, assets:ls.get('pc_assets', null), pdf:null };
+
+async function api(payload, ms = 330000){
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms);
+  try{
+    const r = await fetch(API, { method:'POST', body:JSON.stringify({ username:user, password:pass, strength:S.strength || undefined, ...payload }), signal:ctl.signal, redirect:'follow' });
+    const txt = await r.text(); let j; try{ j = JSON.parse(txt); }catch(e){ throw new Error('The server sent a web page instead of data. Check the deployment.'); }
+    if(j && j.error === 'UNKNOWN_ACTION') throw new Error('The server does not know certificates yet: add Certificates.gs and its doPost line, then deploy a new version.');
+    if(j && j.error === 'BAD_LOGIN') throw new Error('Your saved login was refused. Open the app, sign out and sign in again.');
+    if(j && j.ok === false) throw new Error(j.error || 'Failed');
+    return j;
+  }catch(e){ if(e.name === 'AbortError') throw new Error('The server took too long. Try again.'); if(e instanceof TypeError) throw new Error('No internet.'); throw e; }
+  finally{ clearTimeout(t); }
+}
+
+/* ---------- similarity (same as the Name Fixer / HSSC Fill) ---------- */
+const tokens = s => String(s || '').toUpperCase().replace(/[^A-Z ]/g, ' ').split(' ').filter(x => x);
+function lev(a, b){ const m = a.length, n = b.length; if(!m) return n; if(!n) return m; let p = [], c = []; for(let j = 0; j <= n; j++) p[j] = j; for(let i = 1; i <= m; i++){ c = [i]; for(let j = 1; j <= n; j++) c[j] = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); p = c; } return p[n]; }
+const ratio = (a, b) => { const L = Math.max(a.length, b.length); return L ? 1 - lev(a, b) / L : 1; };
+const collapse = s => s.replace(/(.)\1+/g, '$1');
+const skel = s => collapse(s[0] + s.slice(1).replace(/[AEIOUY]/g, ''));
+function tokSim(a, b){ if(a === b) return 1; let r = ratio(collapse(a), collapse(b)); const sa = skel(a), sb = skel(b); if(sa.length > 1 && sb.length > 1) r = Math.max(r, .8 * ratio(sa, sb)); if((a.length === 1 || b.length === 1) && a[0] === b[0]) r = Math.max(r, .75); return r; }
+function dirSim(A, B){ let t = 0, w = 0; A.forEach(x => { let best = 0; B.forEach(y => { const v = tokSim(x, y); if(v > best) best = v; }); t += best * x.length; w += x.length; }); return t / w; }
+function textSim(A, B){ if(!A.length || !B.length) return null; return Math.max((dirSim(A, B) + dirSim(B, A)) / 2, ratio(collapse(A.join('')), collapse(B.join('')))); }
+function score(t, s){ const ns = textSim(t.nt, s.nt), fs = textSim(t.ft, s.ft); if(ns === null) return { sc:0, ns:0, fs }; return { sc:fs === null ? ns * .85 : .6 * ns + .4 * fs, ns, fs }; }
+const sortedJoin = a => collapse(a.slice().sort().join(''));
+
+/* ---------- status of a row ---------- */
+function status(r){
+  if(r.struck || /^LEFT STUDENT|^Left \//.test(r.how)) return 'left';
+  if(!r.roll || PASS.indexOf(String(r.grade).toUpperCase()) < 0) return 'fail';
+  if(!r.enroll) return 'match';
+  return 'ready';
+}
+const canPrint = r => !r.struck && r.roll && PASS.indexOf(String(r.grade).toUpperCase()) >= 0;
+function counts(){
+  const R = S.data.rows, c = { all:R.length, ready:0, match:0, fail:0, left:0, nodob:0, print:0 };
+  R.forEach(r => { c[status(r)]++; if(canPrint(r)){ c.print++; if(!r.dob) c.nodob++; } });
+  return c;
+}
+function prep(){
+  const R = S.data.rows, used = {};
+  R.forEach(r => { r.nt = tokens(r.name); r.ft = tokens(r.father); if(r.enroll && !r.struck) used[r.enroll.toUpperCase()] = r; });
+  S.used = used;
+  S.src = S.data.source.map(a => { const o = { enroll:a[0], name:a[1], father:a[2], cls:a[3], pcs:a[4] }; o.nt = tokens(o.name); o.ft = tokens(o.father); o.sj = sortedJoin(o.nt); return o; });
+}
+function candidates(r, q){
+  const out = [];
+  S.src.forEach(s => {
+    if(q){ const hay = (s.name + ' ' + s.father + ' ' + s.enroll + ' ' + s.pcs).toLowerCase(); if(!q.split(/\s+/).every(w => hay.includes(w))) return; }
+    const x = score(r, s); if(q || x.sc >= .55) out.push({ s, ...x });
+  });
+  return out.sort((a, b) => b.sc - a.sc).slice(0, q ? 20 : 6);
+}
+function findAuto(){
+  const open = S.data.rows.filter(r => status(r) === 'match' && r.nt.length), pairs = [];
+  open.forEach(r => {
+    const tj = sortedJoin(r.nt); let best = null, second = 0;
+    S.src.forEach(s => { const u = S.used[s.enroll.toUpperCase()]; if(u && u !== r) return; if(ratio(tj, s.sj) < .7) return; const x = score(r, s); if(!best || x.sc > best.sc){ if(best) second = best.sc; best = { s, sc:x.sc }; } else if(x.sc > second) second = x.sc; });
+    if(best && best.sc >= .96 && best.sc - second >= .02) pairs.push({ r, s:best.s, sc:best.sc });
+  });
+  const claims = {}; pairs.forEach(p => claims[p.s.enroll] = (claims[p.s.enroll] || 0) + 1);
+  S.auto = pairs.filter(p => claims[p.s.enroll] === 1);
+}
+
+/* ---------- screen ---------- */
+function render(){
+  const m = $('#main');
+  if(!user || !pass){ m.innerHTML = `<div class="card"><h2>Sign in first</h2><div class="sub">Open the attendance app and sign in with the admin login, then come back.</div><div class="acts"><a class="btn pri" href="./">Open the app</a></div></div>`; return; }
+  if(ls.get('admin', false) !== true){ m.innerHTML = `<div class="card"><h2>Admin only</h2><div class="sub">Certificates are made by the admin.</div><div class="acts"><a class="btn pri" href="./">Back to the app</a></div></div>`; return; }
+  const D = S.data, c = D ? counts() : null;
+  m.innerHTML = `
+  <section class="card"><h2>Result sheet</h2>
+    <div class="sub">Upload the gazette PDF in <a href="board.html">Board results</a> first; it opens this page and prepares everything by itself. Only Jinnah College rows are used.</div>
+    <div class="grid">
+      <label class="f">Result sheet<select id="cSheet">${(S.sheets || (S.sheet ? [S.sheet] : [])).map(n => `<option ${n === S.sheet ? 'selected' : ''}>${esc(n)}</option>`).join('') || '<option value="">Loading…</option>'}</select></label>
+      <label class="f">Student list (Users workbook)<input id="cStrength" placeholder="Transform-ALL-COLLEGE-STRENGTH" value="${esc(S.strength)}"></label>
+    </div>
+    <div class="acts">
+      <button class="btn pri" id="cPrep" ${S.busy || !S.sheet ? 'disabled' : ''}>${S.busy === 'prep' ? 'Preparing… (1-3 min)' : 'Prepare all certificates (one go)'}</button>
+      <button class="btn" id="cLoad" ${S.busy || !S.sheet ? 'disabled' : ''}>${S.busy === 'load' ? 'Loading…' : 'Reload'}</button>
+      ${D ? `<a class="btn" href="${esc(D.url)}" target="_blank" rel="noopener">Open the sheet</a>` : ''}
+    </div>
+    <div class="sub" style="margin-top:8px">One go = Left Students struck through · Enroll#, Program, Class, Section, PCS, Group from the student list · DOB from Portal backup · Grade (gazette, or worked out from marks) · Session · board position 1-20 as distinction. Values you typed are never overwritten.</div>
+    ${S.busy ? '<div class="bar"><i style="width:60%"></i></div>' : ''}
+    ${S.err ? `<div class="note bad">${esc(S.err)}</div>` : ''}${S.msg ? `<div class="note ok">${S.msg}</div>` : ''}
+  </section>
+  ${D ? `
+  <section class="card" style="--c:#0E8A5F"><h2>Certificates</h2>
+    <div class="stats">
+      ${[['all', c.all, 'JCW students'], ['ready', c.print, 'ready to print'], ['match', c.match, 'not linked to a student'], ['fail', c.fail, 'fail / no grade / no roll no'], ['left', c.left, 'left / struck'], ['nodob', c.nodob, 'ready but no DOB']].map(x => `<button data-f="${x[0]}" class="${S.filter === x[0] ? 'on' : ''}"><b>${x[1]}</b><span>${x[2]}</span></button>`).join('')}
+    </div>
+    ${S.auto && S.auto.length ? `<div class="note mid">${S.auto.length} unlinked rows have a 96%+ match in the student list. <button class="btn sm ok" id="cAuto" ${S.busy ? 'disabled' : ''}>Link all ${S.auto.length}</button> <button class="btn sm" id="cAutoSee">See them</button></div>` : ''}
+    <div class="acts">
+      <button class="btn pri" id="cPrintAll" ${!c.print ? 'disabled' : ''}>Print / save PDF — all ${c.print} ready</button>
+      <button class="btn" id="cDrive" ${S.busy || !c.print ? 'disabled' : ''}>${S.busy === 'pdf' ? 'Making PDF…' : 'One PDF to Google Drive'}</button>
+      <button class="btn" id="cNew">+ Student not in gazette</button>
+    </div>
+    ${S.pdf ? `<div class="note ok">PDF with ${S.pdf.n} certificate${S.pdf.n > 1 ? 's' : ''} saved in Drive “Certificates (all)”. <a href="${esc(S.pdf.url)}" target="_blank" rel="noopener">Open PDF</a></div>` : ''}
+    <input class="search" id="cQ" placeholder="Search name, father name, roll no or Enroll#" value="${esc(S.q)}" autocomplete="off">
+    <div class="list" id="cList"></div>
+  </section>` : ''}`;
+  if(D) paintList();
+}
+function filtered(){
+  const q = S.q.trim().toLowerCase(), words = q ? q.split(/\s+/) : [];
+  return S.data.rows.filter(r => {
+    const st = status(r);
+    if(!words.length){
+      if(S.filter === 'ready' && !canPrint(r)) return false;
+      if(S.filter === 'nodob' && !(canPrint(r) && !r.dob)) return false;
+      if(['match', 'fail', 'left'].includes(S.filter) && st !== S.filter) return false;
+    }
+    const hay = (r.name + ' ' + r.father + ' ' + r.roll + ' ' + r.enroll + ' ' + r.reg).toLowerCase();
+    return words.every(w => hay.includes(w));
+  }).sort((a, b) => (Number(a.roll) || 9e9) - (Number(b.roll) || 9e9));
+}
+function paintList(){
+  const box = $('#cList'); if(!box) return;
+  const L = filtered(), max = 200;
+  const lab = { ready:['t-ready', 'Ready'], match:['t-match', 'Not linked'], fail:['t-fail', 'Not eligible'], left:['t-left', 'Left'] };
+  box.innerHTML = (L.length ? '' : '<div class="sub">Nobody here.</div>') + L.slice(0, max).map(r => {
+    const st = status(r), t = st === 'match' && canPrint(r) ? ['t-match', 'Ready · not linked'] : lab[st];
+    return `<div class="it ${r.struck ? 'struck' : ''}" data-row="${r.row}"><div class="tx"><b>${esc(r.name)}</b><small>D/o ${esc(r.father)} · Roll ${esc(r.roll || '—')} · ${esc(r.marks || '—')} · ${esc(r.grade || '—')}${r.enroll ? ' · ' + esc(r.enroll) : ''}${r.pcs ? ' · ' + esc(r.pcs) : ''}</small></div>${canPrint(r) && !r.dob ? '<span class="tag t-warn">No DOB</span>' : ''}<span class="tag ${t[0]}">${t[1]}</span></div>`;
+  }).join('') + (L.length > max ? `<div class="sub">${L.length - max} more — search to narrow.</div>` : '');
+}
+
+/* ---------- editor ---------- */
+const FIELDS = [['roll', 'Roll No'], ['reg', 'Registration No'], ['name', 'Name (Miss)'], ['father', 'Father name (Mr.)'], ['group', 'Appeared in (group)'], ['session', 'Examination held in'],
+  ['marks', 'Marks obtained'], ['total', 'Out of'], ['grade', 'Grade'], ['dob', 'Date of birth'], ['dist', 'Distinctions won'], ['conduct', 'Conduct and moral character']];
+let E = null;
+function certVals(r){
+  const D = S.data, two = /2nd/i.test(D.sheet);
+  return { name:r.name, father:r.father, group:r.group || (two ? 'H.S.S.C (Part-II)' : 'H.S.S.C (Part-I)'), session:r.session, roll:r.roll, reg:r.reg, marks:r.marks,
+    total:r.total || D.total, grade:r.grade, dob:r.dob, dist:r.dist || 'NIL', conduct:r.conduct || 'GOOD' };
+}
+function certHtml(v){
+  const A = S.assets || {}, cfg = A.cfg || { title:'PROVISIONAL CUM CHARACTER CERTIFICATE', college:'JINNAH COLLEGE FOR WOMEN', university:'UNIVERSITY OF PESHAWAR', gazette:'has been declared successful according to the Result Gazette, of Board of Intermediate and Secondary Education, Peshawar.', sign:['Principal,', 'Jinnah College for Women,', 'University of Peshawar.'] };
+  const row = parts => `<table><tr>${parts.map(p => `<td class="l">${esc(p[0])}</td><td class="v" style="width:${p[2]}%">${esc(p[1]) || '&nbsp;'}</td>`).join('<td style="width:10px"></td>')}</tr></table>`;
+  const fail = PASS.indexOf(String(v.grade).toUpperCase()) < 0;
+  return `<div class="cert ${fail ? 'fail' : ''}">
+    <div class="t">${A.logo ? `<img src="${A.logo}" style="width:470px;max-width:100%">` : `<div style="font-size:30px;font-weight:bold;color:#1F4E8C">${esc(cfg.college)}</div>`}</div>
+    <div class="t" style="font-size:20px;font-weight:bold;color:#1F4E8C;margin-top:4px">${esc(cfg.university)}</div>
+    <div class="t" style="font-size:14px;font-weight:bold;text-decoration:underline;margin:22px 0 26px">${esc(cfg.title)}</div>
+    ${row([['This is to certify that Miss.', v.name, 70]])}${row([['Daughter of Mr.', v.father, 70]])}${row([['Appeared in the', v.group, 30], ['Examination held in', v.session, 25]])}
+    <div style="margin-top:18px;line-height:1.5">${esc(cfg.gazette)}</div><div style="margin-top:14px">Other Particulars are: -</div>
+    ${row([['Roll No.', v.roll, 30], ['Registration No.', v.reg, 40]])}${row([['Marks obtained', v.marks, 15], ['out of', v.total, 15], ['Grade/Division', v.grade, 15]])}
+    ${row([['Date of Birth', v.dob, 70]])}${row([['Distinctions Won', v.dist, 70]])}${row([['Conduct and Moral Character', v.conduct, 55]])}
+    <div style="margin-top:40px;text-align:right"><div style="display:inline-block;width:230px;text-align:center"><div style="height:60px">${A.sign ? `<img src="${A.sign}" style="height:55px">` : ''}</div>${cfg.sign.map(esc).join('<br>')}</div></div>
+  </div>`;
+}
+function openEd(r){
+  E = { r, v:r ? certVals(r) : { name:'', father:'', group:'', session:'', roll:'', reg:'', marks:'', total:S.data.total, grade:'', dob:'', dist:'NIL', conduct:'GOOD' }, mq:'', enroll:r ? r.enroll : '', msg:'', err:'' };
+  E.v.enroll = E.enroll; paintEd();
+}
+function paintEd(){
+  const ed = $('#ed'); if(!E){ ed.classList.add('hidden'); ed.innerHTML = ''; return; }
+  const r = E.r, v = E.v, cands = r ? candidates(r, E.mq.trim().toLowerCase()) : [];
+  ed.classList.remove('hidden');
+  ed.innerHTML = `<div class="pn">
+    <div style="display:flex;gap:8px;align-items:center"><h3 style="flex:1">${r ? esc(r.name) + ` <small class="sub">row ${r.row}</small>` : 'Student not in the gazette'}</h3><button class="btn sm" id="eClose">Close</button></div>
+    ${r ? `<div class="sub">${esc(r.how || '')}${r.pos ? ' · Board position ' + esc(r.pos) : ''}${r.remarks ? ' · Remarks: ' + esc(r.remarks) : ''}</div>` : ''}
+    ${E.err ? `<div class="note bad">${esc(E.err)}</div>` : ''}${E.msg ? `<div class="note ok">${esc(E.msg)}</div>` : ''}
+    <div class="sec">Certificate</div>
+    <div class="two">${FIELDS.map(f => `<label class="f">${f[1]}<input data-k="${f[0]}" value="${esc(v[f[0]])}" ${f[0] === 'grade' ? 'list="gl"' : ''}></label>`).join('')}</div>
+    <datalist id="gl">${PASS.concat(['F']).map(g => `<option>${g}</option>`).join('')}</datalist>
+    <div class="acts">
+      <button class="btn pri" id="eSave">${E.busy ? 'Saving…' : 'Save'}</button>
+      <button class="btn" id="ePrint">Print this one</button>
+      ${r ? `<button class="btn" id="eDrive">PDF to Drive</button><button class="btn red" id="eStrike">${r.struck ? 'Remove strike-through' : 'Strike through (no certificate)'}</button>` : ''}
+    </div>
+    <div class="sec">Linked student (Transform)</div>
+    <label class="f">Enroll#<input data-k="enroll" value="${esc(v.enroll)}" placeholder="e.g. JCW-F24-1234 (empty = not linked)"></label>
+    ${r && !r.struck ? `<input class="search" id="eMq" placeholder="Search the student list by name, father, Enroll# or PCS" value="${esc(E.mq)}">
+    ${cands.map(c => { const p = Math.round(c.sc * 100), u = S.used[c.s.enroll.toUpperCase()]; return `<div class="cand"><span class="pct ${p >= 85 ? 'hi' : p >= 65 ? 'md' : ''}">${p}%</span><div class="tx"><b>${esc(c.s.name)}</b> D/o ${esc(c.s.father)}<br><small class="sub">${esc(c.s.enroll)} · ${esc(c.s.pcs || '-')} · ${esc(c.s.cls || '-')}${u && u !== r ? ' · <span style="color:var(--bad)">used in row ' + u.row + '</span>' : ''}</small></div><button class="btn sm" data-link="${esc(c.s.enroll)}">Use</button></div>`; }).join('') || '<div class="sub" style="margin-top:6px">No close student. Search above.</div>'}` : ''}
+    <div class="sec">Preview</div><div id="prev">${certHtml(v)}</div>
+  </div>`;
+}
+function readEd(){ document.querySelectorAll('#ed input[data-k]').forEach(i => { E.v[i.dataset.k] = i.value.trim(); }); }
+function upsert(row){
+  const R = S.data.rows, i = R.findIndex(x => x.row === row.row);
+  if(i >= 0) R[i] = row; else R.push(row);
+  prep(); findAuto(); return row;
+}
+async function saveEd(){
+  readEd(); const r = E.r, v = E.v;
+  const send = {}; ['name', 'father', 'roll', 'reg', 'marks', 'grade', 'dob', 'group', 'session', 'dist', 'total', 'conduct'].forEach(k => {
+    if(!r || String(v[k] || '') !== String(certVals(r)[k] || '')) send[k] = v[k];
+  });
+  if(r){ send.name = v.name; send.father = v.father; }
+  if(!r || (v.enroll || '') !== (r.enroll || '')) send.enroll = v.enroll || '';
+  if(r && Object.keys(send).length === 2 && send.name === r.name && send.father === r.father){ E.msg = 'Nothing changed.'; paintEd(); return; }
+  E.busy = true; E.err = ''; E.msg = ''; paintEd();
+  try{
+    const x = await api({ action:'pc_save', sheet:S.data.sheet, row:r ? r.row : 0, expect:r ? { name:r.name, father:r.father } : null, values:send }, 120000);
+    E.r = upsert(x.row); E.v = certVals(E.r); E.v.enroll = E.r.enroll; E.msg = 'Saved in the sheet.';
+  }catch(e){ E.err = e.message; }
+  E.busy = false; paintEd(); paintStats();
+}
+async function strikeEd(){
+  const r = E.r, on = !r.struck;
+  if(on && !confirm('Strike through ' + r.name + '? She gets no certificate.')) return;
+  try{ await api({ action:'pc_strike', sheet:S.data.sheet, row:r.row, name:r.name, father:r.father, on }, 60000); r.struck = on; r.how = on ? 'Left / no match (struck)' : (r.enroll ? 'Chosen by hand (app)' : 'Not found in Transform'); prep(); findAuto(); E.msg = on ? 'Struck through.' : 'Strike-through removed.'; }
+  catch(e){ E.err = e.message; }
+  paintEd(); paintStats();
+}
+function paintStats(){ const y = window.scrollY; render(); window.scrollTo(0, y); }
+
+/* ---------- print + Drive ---------- */
+async function assets(){
+  if(S.assets) return;
+  try{ const a = await api({ action:'pc_assets' }, 60000); S.assets = a; ls.set('pc_assets', a); }catch(e){ S.assets = { logo:'jcw-logo.png' }; }
+}
+async function printRows(rows){
+  await assets();
+  rows = rows.slice().sort((a, b) => (Number(a.roll) || 9e9) - (Number(b.roll) || 9e9));
+  $('#print').innerHTML = rows.map(r => certHtml(certVals(r))).join('');
+  const imgs = [...document.querySelectorAll('#print img')];
+  await Promise.all(imgs.map(i => i.complete ? 0 : new Promise(z => { i.onload = i.onerror = z; })));
+  window.print();
+}
+async function drive(rows){
+  S.busy = 'pdf'; S.err = ''; S.pdf = null; render();
+  try{ S.pdf = await api({ action:'pc_pdf', sheet:S.data.sheet, rows:rows ? rows.map(r => r.row) : [] }, 360000); }catch(e){ S.err = e.message; }
+  S.busy = ''; render(); return S.pdf;
+}
+
+/* ---------- loading ---------- */
+async function loadSheets(){ try{ const r = await api({ action:'pc_sheets' }, 60000); S.sheets = r.sheets; if(!S.sheet || !r.sheets.includes(S.sheet)) S.sheet = r.sheets[r.sheets.length - 1] || ''; render(); }catch(e){ S.err = e.message; render(); } }
+async function run(kind){
+  if(!S.sheet) return; ls.set('pc_sheet', S.sheet);
+  S.busy = kind; S.err = ''; S.msg = ''; S.pdf = null; render();
+  try{
+    const d = await api({ action:kind === 'prep' ? 'pc_prepare' : 'pc_load', sheet:S.sheet }, 360000);
+    S.data = d; prep(); findAuto();
+    if(d.stats){ const s = d.stats; S.msg = `Done: ${s.jcw} Jinnah College rows · ${s.enroll + s.name} linked (${s.name} new by name) · ${s.left} left students struck through · ${s.dob} with DOB · ${s.open} not linked${s.dup ? ' (' + s.dup + ' same names)' : ''} · <b>${s.ready} certificates ready</b>.`; }
+  }catch(e){ S.err = e.message; }
+  S.busy = ''; render(); assets();
+}
+async function autoLink(){
+  const list = S.auto || []; if(!list.length) return;
+  S.busy = 'auto'; render();
+  try{
+    const x = await api({ action:'pc_link', sheet:S.data.sheet, items:list.map(p => ({ row:p.r.row, name:p.r.name, father:p.r.father, enroll:p.s.enroll, by:'Auto 96%+ (app)' })) }, 300000);
+    x.rows.forEach(upsert);
+    S.msg = x.done.length + ' rows linked' + (x.skipped.length ? ', ' + x.skipped.length + ' skipped (' + esc(x.skipped[0].msg) + ')' : '') + '.';
+  }catch(e){ S.err = e.message; }
+  S.busy = ''; prep(); findAuto(); render();
+}
+
+/* ---------- events ---------- */
+document.addEventListener('change', e => {
+  const t = e.target;
+  if(t.id === 'cSheet'){ S.sheet = t.value; S.data = null; ls.set('pc_sheet', S.sheet); run('load'); }
+  if(t.id === 'cStrength'){ S.strength = t.value.trim(); ls.set('pc_strength', S.strength); }
+});
+document.addEventListener('input', e => {
+  const t = e.target;
+  if(t.id === 'cQ'){ S.q = t.value; paintList(); }
+  if(t.id === 'eMq'){ readEd(); E.mq = t.value; const p = t.selectionStart; paintEd(); const n = $('#eMq'); n.focus(); n.setSelectionRange(p, p); }
+  if(t.closest && t.closest('#ed') && t.dataset.k){ E.v[t.dataset.k] = t.value; const pv = $('#prev'); if(pv) pv.innerHTML = certHtml(E.v); }
+});
+document.addEventListener('click', async e => {
+  const t = e.target.closest('button,.it,[data-f]'); if(!t) return;
+  if(t.id === 'cPrep') run('prep');
+  else if(t.id === 'cLoad') run('load');
+  else if(t.dataset.f){ S.filter = t.dataset.f; S.q = ''; render(); }
+  else if(t.classList.contains('it')){ await assets(); openEd(S.data.rows.find(r => r.row === Number(t.dataset.row))); }
+  else if(t.id === 'cAuto') autoLink();
+  else if(t.id === 'cAutoSee'){ alert(S.auto.map(p => 'Row ' + p.r.row + ': ' + p.r.name + ' D/o ' + p.r.father + '  →  ' + p.s.enroll + ' ' + p.s.name + ' D/o ' + p.s.father + ' (' + Math.round(p.sc * 100) + '%)').join('\n')); }
+  else if(t.id === 'cPrintAll') printRows(S.data.rows.filter(canPrint));
+  else if(t.id === 'cDrive') drive(null);
+  else if(t.id === 'cNew'){ await assets(); openEd(null); }
+  else if(t.id === 'eClose'){ E = null; paintEd(); paintStats(); }
+  else if(t.id === 'eSave') saveEd();
+  else if(t.id === 'eStrike') strikeEd();
+  else if(t.id === 'ePrint'){ readEd(); await assets(); $('#print').innerHTML = certHtml(E.v); window.print(); }
+  else if(t.id === 'eDrive'){ const p = await drive([E.r]); if(p){ E.msg = 'PDF saved in Drive.'; paintEd(); window.open(p.url, '_blank'); } else { E.err = S.err; paintEd(); } }
+  else if(t.dataset.link){ readEd(); E.v.enroll = t.dataset.link; paintEd(); E.msg = 'Enroll# ' + t.dataset.link + ' chosen — press Save.'; paintEd(); }
+});
+$('#ed').addEventListener('click', e => { if(e.target.id === 'ed'){ E = null; paintEd(); paintStats(); } });
+render();
+if(user && pass && ls.get('admin', false) === true){ loadSheets(); if(S.sheet) run(qs.get('prepare') === '1' ? 'prep' : 'load'); }
+</script>
+</body>
+</html>
