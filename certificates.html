@@ -156,15 +156,23 @@ function whyNot(r){
 }
 const canPrint = r => !r.struck && r.roll && PASS.indexOf(String(r.grade).toUpperCase()) >= 0;
 function counts(){
-  const R = S.data.rows, c = { all:R.length, ready:0, match:0, fail:0, left:0, nodob:0, print:0, hint:0, dist:0 };
-  R.forEach(r => { c[status(r)]++; if(r.leftHint) c.hint++; if(!r.struck && (hasDist(r) || (Number(r.pos) >= 1 && Number(r.pos) <= 20))) c.dist++; if(canPrint(r)){ c.print++; if(!r.dob) c.nodob++; } });
+  const R = S.data.rows, c = { all:R.length, ready:0, match:0, fail:0, left:0, nodob:0, print:0, hint:0, dist:0, open:0 };
+  R.forEach(r => { if(!r.struck && !r.enroll) c.open++; c[status(r)]++; if(r.leftHint) c.hint++; if(!r.struck && (hasDist(r) || (Number(r.pos) >= 1 && Number(r.pos) <= 20))) c.dist++; if(canPrint(r)){ c.print++; if(!r.dob) c.nodob++; } });
   return c;
 }
 function prep(){
   const R = S.data.rows, used = {};
   R.forEach(r => { r.nt = tokens(r.name); r.ft = tokens(r.father); if(r.enroll && !r.struck) used[r.enroll.toUpperCase()] = r; });
   S.used = used;
-  S.src = S.data.source.map(a => { const o = { enroll:a[0], name:a[1], father:a[2], cls:a[3], pcs:a[4] }; o.nt = tokens(o.name); o.ft = tokens(o.father); o.sj = sortedJoin(o.nt); return o; });
+  S.src = S.data.source.map(a => { const o = { id:a[0], enroll:/#\d+$/.test(a[0]) ? '' : a[0], name:a[1], father:a[2], cls:a[3], pcs:a[4], cur:a[5] }; o.nt = tokens(o.name); o.ft = tokens(o.father); o.sj = sortedJoin(o.nt); return o; });
+  S.byId = {}; S.src.forEach(o => { S.byId[o.id.toUpperCase()] = o; });
+  // possible left students: Left Students records with a slightly different spelling (exact ones are struck by Prepare)
+  const L = (S.data.left || []).map(a => { const o = { name:a[0], father:a[1], enroll:a[2], status:a[3] }; o.nt = tokens(o.name); o.ft = tokens(o.father); return o; });
+  R.forEach(r => {
+    r.leftHint = null; if(r.struck || !r.nt.length) return;
+    let best = null; L.forEach(l => { const x = score(r, l); if(x.sc >= .8 && (!best || x.sc > best.sc)) best = { l, ...x }; });
+    if(best) r.leftHint = { name:best.l.name, father:best.l.father, enroll:best.l.enroll, status:best.l.status, pct:Math.round(best.sc * 100), why:best.sc >= .999 ? 'the same name is still in the current student list' : 'name ' + Math.round(best.ns * 100) + '% / father ' + Math.round((best.fs || 0) * 100) + '% alike' };
+  });
 }
 function candidates(r, q){
   const out = [];
@@ -178,11 +186,11 @@ function findAuto(){
   const open = S.data.rows.filter(r => status(r) === 'match' && r.nt.length), pairs = [];
   open.forEach(r => {
     const tj = sortedJoin(r.nt); let best = null, second = 0;
-    S.src.forEach(s => { const u = S.used[s.enroll.toUpperCase()]; if(u && u !== r) return; if(ratio(tj, s.sj) < .7) return; const x = score(r, s); if(!best || x.sc > best.sc){ if(best) second = best.sc; best = { s, sc:x.sc }; } else if(x.sc > second) second = x.sc; });
+    S.src.forEach(s => { const u = S.used[(s.enroll || s.id).toUpperCase()]; if(u && u !== r) return; if(ratio(tj, s.sj) < .7) return; const x = score(r, s); if(!best || x.sc > best.sc){ if(best) second = best.sc; best = { s, sc:x.sc }; } else if(x.sc > second) second = x.sc; });
     if(best && best.sc >= .96 && best.sc - second >= .02) pairs.push({ r, s:best.s, sc:best.sc });
   });
-  const claims = {}; pairs.forEach(p => claims[p.s.enroll] = (claims[p.s.enroll] || 0) + 1);
-  S.auto = pairs.filter(p => claims[p.s.enroll] === 1);
+  const claims = {}; pairs.forEach(p => claims[p.s.id] = (claims[p.s.id] || 0) + 1);
+  S.auto = pairs.filter(p => claims[p.s.id] === 1);
 }
 
 /* ---------- screen ---------- */
@@ -213,7 +221,7 @@ function render(){
       ${[['all', c.all, 'JCW students'], ['ready', c.print, 'ready to print'], ['match', c.match, 'ready but no Enroll#'], ['fail', c.fail, 'fail / no grade / no roll no'], ['left', c.left, 'left / struck'], ['hint', c.hint, 'possible left — check'], ['dist', c.dist, 'top 20 / distinctions'], ['nodob', c.nodob, 'ready but no DOB']].map(x => `<button data-f="${x[0]}" class="${S.filter === x[0] ? 'on' : ''}"><b>${x[1]}</b><span>${x[2]}</span></button>`).join('')}
     </div>
     <div class="sub" style="margin-top:8px"><b>Ready · no Enroll#</b> = she passed and her certificate can print, but she is not yet linked to a student in Transform, so her DOB and left-student status could not be checked. Tap her and choose the right student. <b>Not eligible</b> shows the reason on each row.</div>
-    ${S.auto && S.auto.length ? `<div class="note mid">${S.auto.length} unlinked students have a 96%+ name + father name match in the student list. Nothing is saved until you check them. <button class="btn sm ok" id="cAuto" ${S.busy ? 'disabled' : ''}>Review ${S.auto.length} matches</button></div>` : ''}
+    ${c.open ? `<div class="note mid">${c.open} students were not matched 100% (${(S.auto || []).length} of them 96%+). Nothing is saved until you tick them. <button class="btn sm ok" id="cAuto" ${S.busy ? 'disabled' : ''}>Check and fill ${c.open}</button></div>` : ''}
     ${c.hint ? `<div class="note mid">${c.hint} students look like Left Students with a slightly different spelling. They are NOT struck yet. <button class="btn sm" id="cLeftRev" ${S.busy ? 'disabled' : ''}>Review ${c.hint} possible left</button></div>` : ''}
     <div class="acts">
       <button class="btn pri" id="cPrintAll" ${!c.print ? 'disabled' : ''}>Print / save PDF — all ${c.print} ready</button>
@@ -302,9 +310,11 @@ function paintEd(){
       ${r ? `<button class="btn" id="eDrive">PDF to Drive</button><button class="btn red" id="eStrike">${r.struck ? 'Remove strike-through' : 'Strike through (no certificate)'}</button>` : ''}
     </div>
     <div class="sec">Linked student (Transform)</div>
-    <label class="f">Enroll#<input data-k="enroll" value="${esc(v.enroll)}" placeholder="e.g. JCW-F24-1234 (empty = not linked)"></label>
+    ${(() => { const pk = E.pick, cur = r && r.enroll ? (r.sname || r.name) + ' · ' + r.enroll + (r.pcs ? ' · ' + r.pcs : '') : '';
+      return pk !== undefined ? `<div class="note mid">${pk ? 'Will link to <b>' + esc(pk.name) + '</b> D/o ' + esc(pk.father) + (pk.enroll ? ' · ' + esc(pk.enroll) : '') : 'Will remove the link'} — press <b>Save</b>. <button class="btn sm" id="ePickUndo">Undo</button></div>`
+        : `<div class="sub">${cur ? 'Linked to: <b>' + esc(cur) + '</b> <button class="btn sm red" id="eUnlink">Remove link</button>' : 'Not linked to a student yet. Pick her below (by name + father name).'}</div>`; })()}
     ${r && !r.struck ? `<input class="search" id="eMq" placeholder="Search the student list by name, father, Enroll# or PCS" value="${esc(E.mq)}">
-    ${cands.map(c => { const p = Math.round(c.sc * 100), u = S.used[c.s.enroll.toUpperCase()]; return `<div class="cand"><span class="pct ${p >= 85 ? 'hi' : p >= 65 ? 'md' : ''}">${p}%</span><div class="tx"><b>${esc(c.s.name)}</b> D/o ${esc(c.s.father)}<br><small class="sub">${esc(c.s.enroll)} · ${esc(c.s.pcs || '-')} · ${esc(c.s.cls || '-')}${u && u !== r ? ' · <span style="color:var(--bad)">used in row ' + u.row + '</span>' : ''}</small></div><button class="btn sm" data-link="${esc(c.s.enroll)}">Use</button></div>`; }).join('') || '<div class="sub" style="margin-top:6px">No close student. Search above.</div>'}` : ''}
+    ${cands.map(c => { const p = Math.round(c.sc * 100), u = S.used[(c.s.enroll || c.s.id).toUpperCase()]; return `<div class="cand"><span class="pct ${p >= 85 ? 'hi' : p >= 65 ? 'md' : ''}">${p}%</span><div class="tx"><b>${esc(c.s.name)}</b> D/o ${esc(c.s.father)}<br><small class="sub">${esc(c.s.enroll)} · ${esc(c.s.pcs || '-')} · ${esc(c.s.cls || '-')}${u && u !== r ? ' · <span style="color:var(--bad)">used in row ' + u.row + '</span>' : ''}</small></div><button class="btn sm" data-link="${esc(c.s.id)}">Use</button></div>`; }).join('') || '<div class="sub" style="margin-top:6px">No close student. Search above.</div>'}` : ''}
     <div class="sec">Preview</div><div id="prev">${certHtml(v)}</div>
   </div>`;
 }
@@ -320,13 +330,13 @@ async function saveEd(){
     if(!r || String(v[k] || '') !== String(certVals(r)[k] || '')) send[k] = v[k];
   });
   if(r){ send.name = v.name; send.father = v.father; }
-  if(!r || (v.enroll || '') !== (r.enroll || '')) send.enroll = v.enroll || '';
+  if(E.pick !== undefined) send.id = E.pick ? E.pick.id : '';
   if(r && Object.keys(send).length === 2 && send.name === r.name && send.father === r.father){ E.msg = 'Nothing changed.'; paintEd(); return; }
   E.busy = true; E.err = ''; E.msg = ''; paintEd();
   try{
     const x = await api({ action:'pc_save', sheet:S.data.sheet, row:r ? r.row : 0, expect:r ? { name:r.name, father:r.father, roll:r.roll } : null, values:send }, 120000);
     if(x.moved && r) S.data.rows = S.data.rows.filter(z => z.row !== r.row);
-    E.r = upsert(x.row); E.v = certVals(E.r); E.v.enroll = E.r.enroll; E.msg = 'Saved in the sheet.';
+    E.r = upsert(x.row); E.v = certVals(E.r); E.pick = undefined; E.msg = 'Saved in the sheet.';
   }catch(e){ E.err = e.message; }
   E.busy = false; paintEd(); paintStats();
 }
@@ -367,46 +377,55 @@ async function run(kind){
     const d = await api({ action:kind === 'prep' ? 'pc_prepare' : 'pc_load', sheet:S.sheet }, 360000);
     S.data = d; prep(); findAuto();
     if(kind === 'load' && d.rows.length && !d.rows.some(r => r.how)){ S.busy = ''; return run('prep'); }   // never prepared yet -> do it now
-    if(d.stats){ const s = d.stats; S.msg = `Student lists used: ${esc((s.sheets || []).join(', '))}.<br>Left Students records read: ${s.leftRead || 0}${(s.leftSheets || []).length ? ' (' + esc(s.leftSheets.join(', ')) + ')' : ''}.<br>Done: ${s.jcw} Jinnah College rows · ${s.enroll + s.name} linked (${s.name} new by name) · ${s.left} left students struck through · ${s.dob} with DOB · ${s.open} not linked${s.dup ? ' (' + s.dup + ' same names)' : ''} · <b>${s.ready} certificates ready</b>.`; }
+    if(d.stats){ const s = d.stats; S.msg = `Student lists used: ${esc((s.sheets || []).join(', '))}.<br>Left Students records read: ${s.leftRead || 0}${(s.leftSheets || []).length ? ' (' + esc(s.leftSheets.join(', ')) + ')' : ''}.<br>Done: ${s.jcw} Jinnah College rows · ${s.linked} filled (100% name + father name) · ${s.kept} kept from your earlier choices · ${s.left} left students struck through · ${s.dob} with DOB · ${s.open} not matched 100% · <b>${s.ready} certificates ready</b> · ${s.cells} rows written${s.fast ? ' (fast mode)' : ''}.`; }
   }catch(e){ S.err = e.message; }
   S.busy = ''; render(); assets();
 }
 /* ---------- review before saving: 96%+ links and possible left students ---------- */
 function openReview(kind){
-  const items = kind === 'link'
-    ? (S.auto || []).map(p => ({ r:p.r, a:[p.r.name, p.r.father], b:[p.s.name, p.s.father], extra:p.s.enroll + ' · ' + (p.s.cls || '-') + ' · ' + (p.s.pcs || '-'), pct:Math.round(p.sc * 100), enroll:p.s.enroll }))
-    : S.data.rows.filter(r => r.leftHint && !r.struck).map(r => { const h = r.leftHint; return { r, a:[r.name, r.father], b:[h.name || '', h.father || ''], extra:(h.enroll || '') + (h.status ? ' · ' + h.status : ''), pct:h.pct || 0, why:h.why }; });
-  E = { review:kind, items, tick:new Set(items.map((x, i) => i)), msg:'', err:'' };
+  let items;
+  if(kind === 'link'){
+    items = S.data.rows.filter(r => !r.struck && !r.enroll && r.nt.length).map(r => {
+      const opts = candidates(r, '').filter(c => { const u = S.used[(c.s.enroll || c.s.id).toUpperCase()]; return !u || u === r; }).slice(0, 3)
+        .map(c => ({ s:c.s, pct:Math.round(c.sc * 100), ns:Math.round(c.ns * 100), fs:Math.round((c.fs || 0) * 100) }));
+      return { r, opts, sel:0 };
+    }).filter(x => x.opts.length).sort((a, b) => b.opts[0].pct - a.opts[0].pct);
+  } else {
+    items = S.data.rows.filter(r => r.leftHint && !r.struck).map(r => ({ r, h:r.leftHint })).sort((a, b) => b.h.pct - a.h.pct);
+  }
+  E = { review:kind, items, tick:new Set(), msg:'', err:'' };
   paintEd();
 }
 function paintReview(ed){
   const R = E, link = R.review === 'link';
   ed.classList.remove('hidden');
   ed.innerHTML = `<div class="pn">
-    <div style="display:flex;gap:8px;align-items:center"><h3 style="flex:1">${link ? 'Check these matches' : 'Check possible left students'}</h3><button class="btn sm" id="eClose">Close</button></div>
-    <div class="sub">${link ? 'Left: name in the gazette. Right: student in Transform. Untick any that is not the same girl; only ticked rows are linked.' : 'Left: name in the gazette. Right: record in Left Students. Untick any that is not the same girl; only ticked rows are struck through.'}</div>
+    <div style="display:flex;gap:8px;align-items:center"><h3 style="flex:1">${link ? 'Students not matched 100%' : 'Possible left students'}</h3><button class="btn sm" id="eClose">Close</button></div>
+    <div class="sub">${link ? 'Each gazette student with her closest students in Transform (by name + father name). Pick the right one, tick her, then save all ticked rows in one go. Nothing is written before that.' : 'Gazette students whose name + father name look like a Left Students record. Tick the ones who really left; they are struck through in one go.'}</div>
     ${R.err ? `<div class="note bad">${esc(R.err)}</div>` : ''}
-    <div class="acts"><button class="btn sm" id="rAll">Tick all</button><button class="btn sm" id="rNone">Untick all</button></div>
-    ${R.items.map((x, i) => `<label class="cand" style="cursor:pointer"><input type="checkbox" data-ri="${i}" ${R.tick.has(i) ? 'checked' : ''} style="width:20px;height:20px;flex:none">
-      <div class="tx"><b>${esc(x.a[0])}</b> D/o ${esc(x.a[1])} <small class="sub">Roll ${esc(x.r.roll || '-')}</small><br>⇄ <b>${esc(x.b[0])}</b> D/o ${esc(x.b[1])} <small class="sub">${esc(x.extra)}</small></div>
-      <span class="pct ${x.pct >= 85 ? 'hi' : x.pct >= 65 ? 'md' : ''}">${x.pct}%</span></label>`).join('') || '<div class="sub">Nothing to check.</div>'}
-    <div class="acts"><button class="btn pri" id="rApply" ${R.busy || !R.tick.size ? 'disabled' : ''}>${R.busy ? 'Saving…' : (link ? 'Link ' : 'Strike through ') + R.tick.size + ' ticked'}</button></div>
+    <div class="acts">${link ? '<button class="btn sm" id="rT96">Tick 96%+</button>' : ''}<button class="btn sm" id="rAll">Tick all</button><button class="btn sm" id="rNone">Untick all</button><span class="sub" style="align-self:center">${R.items.length} students</span></div>
+    ${R.items.map((x, i) => link ? `<div class="cand"><input type="checkbox" data-ri="${i}" ${R.tick.has(i) ? 'checked' : ''} style="width:22px;height:22px;flex:none">
+      <div class="tx"><b>${esc(x.r.name)}</b> D/o ${esc(x.r.father)} <small class="sub">Roll ${esc(x.r.roll || '-')}</small>
+        <select data-rpick="${i}" style="width:100%;margin-top:4px;height:38px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)">${x.opts.map((o, k) => `<option value="${k}" ${k === x.sel ? 'selected' : ''}>${o.pct}% · ${esc(o.s.name)} D/o ${esc(o.s.father)}${o.s.enroll ? ' · ' + esc(o.s.enroll) : ''} · ${esc(o.s.cls || '-')} ${esc(o.s.pcs || '')}</option>`).join('')}</select></div>
+      <span class="pct ${x.opts[x.sel].pct >= 96 ? 'hi' : x.opts[x.sel].pct >= 80 ? 'md' : ''}">${x.opts[x.sel].pct}%</span></div>`
+      : `<label class="cand" style="cursor:pointer"><input type="checkbox" data-ri="${i}" ${R.tick.has(i) ? 'checked' : ''} style="width:22px;height:22px;flex:none">
+      <div class="tx"><b>${esc(x.r.name)}</b> D/o ${esc(x.r.father)} <small class="sub">Roll ${esc(x.r.roll || '-')}</small><br>⇄ <b>${esc(x.h.name)}</b> D/o ${esc(x.h.father)} <small class="sub">${esc((x.h.enroll || '') + (x.h.status ? ' · ' + x.h.status : ''))} · ${esc(x.h.why)}</small></div>
+      <span class="pct ${x.h.pct >= 90 ? 'hi' : 'md'}">${x.h.pct}%</span></label>`).join('') || '<div class="sub" style="margin-top:10px">Nothing to check.</div>'}
+    <div class="acts" style="position:sticky;bottom:0;background:var(--surface);padding:8px 0"><button class="btn pri" id="rApply" ${R.busy || !R.tick.size ? 'disabled' : ''}>${R.busy ? 'Saving…' : (link ? 'Fill ' : 'Strike through ') + R.tick.size + ' ticked in one go'}</button></div>
   </div>`;
 }
 async function applyReview(){
   const R = E, picked = R.items.filter((x, i) => R.tick.has(i)); if(!picked.length) return;
   R.busy = true; R.err = ''; paintEd();
-  let msg = '';
+  let x;
   try{
-    if(R.review === 'link'){
-      const x = await api({ action:'pc_link', sheet:S.data.sheet, items:picked.map(p => ({ row:p.r.row, roll:p.r.roll, name:p.r.name, father:p.r.father, enroll:p.enroll, by:'Chosen by hand (checked 96%+)' })) }, 300000);
-      msg = x.done.length + ' students linked' + (x.skipped.length ? '; ' + x.skipped.length + ' skipped (' + x.skipped[0].msg + ')' : '') + '.';
-    }else{
-      const x = await api({ action:'pc_strikes', sheet:S.data.sheet, items:picked.map(p => ({ row:p.r.row, roll:p.r.roll, name:p.r.name, father:p.r.father })) }, 300000);
-      msg = x.done.length + ' students struck through as left students.';
-    }
+    x = R.review === 'link'
+      ? await api({ action:'pc_link', sheet:S.data.sheet, items:picked.map(p => ({ row:p.r.row, roll:p.r.roll, name:p.r.name, father:p.r.father, id:p.opts[p.sel].s.id, by:'Chosen by hand (ticked list)' })) }, 300000)
+      : await api({ action:'pc_strikes', sheet:S.data.sheet, on:true, items:picked.map(p => ({ row:p.r.row, roll:p.r.roll, name:p.r.name, father:p.r.father })) }, 300000);
   }catch(e){ R.busy = false; R.err = e.message; paintEd(); return; }
-  E = null; paintEd(); await run('load'); S.msg = esc(msg); render();
+  (x.rows || []).forEach(upsert);
+  S.msg = esc((R.review === 'link' ? x.done.length + ' students filled in the sheet' : x.done.length + ' students struck through as left students') + (x.skipped && x.skipped.length ? '; ' + x.skipped.length + ' skipped (' + x.skipped[0].msg + ')' : '') + '.');
+  E = null; paintEd(); paintStats();
 }
 async function autoLink(){
   const list = S.auto || []; if(!list.length) return;
@@ -422,7 +441,8 @@ async function autoLink(){
 /* ---------- events ---------- */
 document.addEventListener('change', e => {
   const t = e.target;
-  if(t.dataset && t.dataset.ri !== undefined && E && E.review){ const i = Number(t.dataset.ri); t.checked ? E.tick.add(i) : E.tick.delete(i); const b = $('#rApply'); if(b){ b.disabled = !E.tick.size; b.textContent = (E.review === 'link' ? 'Link ' : 'Strike through ') + E.tick.size + ' ticked'; } return; }
+  if(t.dataset && t.dataset.ri !== undefined && E && E.review){ const i = Number(t.dataset.ri); t.checked ? E.tick.add(i) : E.tick.delete(i); const b = $('#rApply'); if(b){ b.disabled = !E.tick.size; b.textContent = (E.review === 'link' ? 'Fill ' : 'Strike through ') + E.tick.size + ' ticked in one go'; } return; }
+  if(t.dataset && t.dataset.rpick !== undefined && E && E.review){ const i = Number(t.dataset.rpick); E.items[i].sel = Number(t.value); E.tick.add(i); paintEd(); return; }
   if(t.id === 'cSheet'){ S.sheet = t.value; S.data = null; ls.set('pc_sheet', S.sheet); run('load'); }
   if(t.id === 'cStrength'){ S.strength = t.value.trim(); ls.set('pc_strength', S.strength); }
 });
@@ -451,7 +471,11 @@ document.addEventListener('click', async e => {
   else if(t.id === 'eStrike') strikeEd();
   else if(t.id === 'ePrint'){ readEd(); await assets(); $('#print').innerHTML = certHtml(E.v); window.print(); }
   else if(t.id === 'eDrive'){ const p = await drive([E.r]); if(p){ E.msg = 'PDF saved in Drive.'; paintEd(); window.open(p.url, '_blank'); } else { E.err = S.err; paintEd(); } }
-  else if(t.dataset.link){ readEd(); E.v.enroll = t.dataset.link; paintEd(); E.msg = 'Enroll# ' + t.dataset.link + ' chosen — press Save.'; paintEd(); }
+  else if(t.dataset.link){ readEd(); E.pick = S.byId[t.dataset.link.toUpperCase()] || null; E.msg = ''; paintEd(); }
+  else if(t.id === 'eUnlink'){ readEd(); E.pick = null; paintEd(); }
+  else if(t.id === 'ePickUndo'){ readEd(); E.pick = undefined; paintEd(); }
+  else if(t.dataset.rpick !== undefined){ /* handled on change */ }
+  else if(t.id === 'rT96'){ E.tick = new Set(E.items.map((x, i) => i).filter(i => (E.items[i].opts[E.items[i].sel] || {}).pct >= 96)); paintEd(); }
 });
 $('#ed').addEventListener('click', e => { if(e.target.id === 'ed'){ E = null; paintEd(); paintStats(); } });
 render();
