@@ -38,6 +38,18 @@ var PC_CFG = {
   LOGO: 'jcw.png', SIGN_IMG: 'madam_sign.png', FOLDER: 'Certificates (all)'
 };
 
+/** Run this ONCE from the Apps Script editor (select pcAuthorize ▸ Run ▸ Allow), then deploy a new version.
+ *  Certificates.gs uses Drive (logo, signature, PDFs) and the Users / Provisional Certificates workbooks;
+ *  until those permissions are allowed every call from the app fails and the page shows a network error. */
+function pcAuthorize() {
+  SpreadsheetApp.openById(PC_CFG.BOOK).getName();
+  SpreadsheetApp.openById(PC_CFG.USERS).getName();
+  DriveApp.getFilesByName(PC_CFG.LOGO).hasNext();
+  CacheService.getScriptCache().get('x');
+  LockService.getScriptLock().tryLock(1);
+  Logger.log('Certificates: permissions OK. Now Deploy → Manage deployments → Edit → New version.');
+}
+
 function pcRoute_(user, req) {
   try {
     if (!isAdmin_(user)) return { ok: false, error: 'Only the admin can make certificates.' };

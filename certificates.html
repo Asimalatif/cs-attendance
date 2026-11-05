@@ -111,7 +111,7 @@ async function api(payload, ms = 330000){
     if(j && j.error === 'BAD_LOGIN') throw new Error('Your saved login was refused. Open the app, sign out and sign in again.');
     if(j && j.ok === false) throw new Error(j.error || 'Failed');
     return j;
-  }catch(e){ if(e.name === 'AbortError') throw new Error('The server took too long. Try again.'); if(e instanceof TypeError) throw new Error('No internet.'); throw e; }
+  }catch(e){ if(e.name === 'AbortError') throw new Error('The server took too long. Try again.'); if(e instanceof TypeError) throw new Error(navigator.onLine ? 'The internet works, but the Apps Script server did not answer. In Apps Script: run the function pcAuthorize once and press Allow, then Deploy → Manage deployments → Edit → New version. Also check that Certificates.gs saved without a red error.' : 'No internet.'); throw e; }
   finally{ clearTimeout(t); }
 }
 
