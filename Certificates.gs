@@ -387,6 +387,7 @@ function pcLink_(req) {
     var X = pcCtx_(req.sheet), S = pcStrength_(req.strength), P = pcPortal_(), used = {}, done = [], skipped = [];
     X.jcw.forEach(function (i) { var e = pcF_(X, i, 'Enroll#'); if (e) used[pcHead_(e)] = i; });
     (req.items || []).forEach(function (it) {
+      if (it.id === undefined && it.enroll !== undefined) it.id = it.enroll;          // older app page sends "enroll"
       var i = pcFind_(X, it.row, it.roll, it.name, it.father);
       if (i < 0) { skipped.push({ row: it.row, msg: (it.name || it.roll) + ' not found in the sheet' }); return; }
       if (!it.id) { pcUnfill_(X, i, 'Not found in Transform'); done.push(i); return; }
@@ -411,6 +412,7 @@ function pcSave_(req) {
   var lock = LockService.getScriptLock(); lock.waitLock(30000);
   try {
     var X = pcCtx_(req.sheet), C = X.C, v = req.values || {}, Xp = req.expect || {}, i;
+    if (!('id' in v) && 'enroll' in v) v.id = v.enroll;                                 // older app page sends "enroll"
     if (!pcClean_(v.name) && !Xp.name) return { ok: false, error: 'Name and Father name are needed.' };
     if (Number(req.row)) {
       i = pcFind_(X, req.row, Xp.roll, Xp.name, Xp.father);
