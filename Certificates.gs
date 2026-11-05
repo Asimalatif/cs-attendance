@@ -154,7 +154,7 @@ function pcStrength_(name) {
 }
 function pcLeft_() {
   var book = SpreadsheetApp.openById(PC_CFG.USERS), base = pcHead_(PC_CFG.LEFT);
-  var out = { byEnroll: {}, byReg: {}, byName: {}, byOnly: {}, count: 0, sheets: [] };
+  var out = { byEnroll: {}, byReg: {}, byName: {}, byOnly: {}, list: [], count: 0, sheets: [] };
   book.getSheets().forEach(function (sh) {
     if (pcHead_(sh.getName()).indexOf(base) !== 0 || sh.getLastRow() < 2) return;
     var v = sh.getDataRange().getDisplayValues(), at = -1, ix = null;
@@ -169,7 +169,7 @@ function pcLeft_() {
       var r = v[i], g = function (k) { return k >= 0 ? pcClean_(r[k]) : ''; };
       var rec = { enroll: g(ix.e), reg: g(ix.r), name: g(ix.n), father: g(ix.f), status: g(ix.st) };
       if (!rec.name && !rec.enroll && !rec.reg) continue;
-      out.count++;
+      out.count++; rec.nl = pcLetters_(rec.name); rec.fl = pcLetters_(rec.father); out.list.push(rec);
       if (rec.enroll) out.byEnroll[pcHead_(rec.enroll)] = out.byEnroll[pcHead_(rec.enroll)] || rec;
       if (rec.reg) out.byReg[pcHead_(rec.reg)] = out.byReg[pcHead_(rec.reg)] || rec;
       if (rec.name && rec.father) out.byName[pcLetters_(rec.name) + '|' + pcLetters_(rec.father)] = rec;
@@ -177,6 +177,29 @@ function pcLeft_() {
     }
   });
   return out;
+}
+/** 0..1 similarity of two letter strings (1 - edit distance / length) */
+function pcSim_(a, b) {
+  if (a === b) return 1; if (!a || !b) return 0;
+  var m = a.length, n = b.length, p = [], c, i, j;
+  for (j = 0; j <= n; j++) p[j] = j;
+  for (i = 1; i <= m; i++) { c = [i]; for (j = 1; j <= n; j++) c[j] = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); p = c; }
+  return 1 - p[n] / Math.max(m, n);
+}
+/** the closest Left Students record by name (+ father); {rec, ns, fs, sc} or null */
+function pcLeftNear_(L, name, father) {
+  var nl = pcLetters_(name), fl = pcLetters_(father), best = null, second = 0;
+  if (!nl) return null;
+  L.list.forEach(function (rec) {
+    if (!rec.nl || Math.abs(rec.nl.length - nl.length) > 10) return;
+    var ns = pcSim_(nl, rec.nl);
+    if (rec.nl.indexOf(nl) === 0 || nl.indexOf(rec.nl) === 0) ns = Math.max(ns, 0.85);   // "KOMAL" / "KOMAL KHAN"
+    if (ns < 0.75) return;
+    var fs = fl && rec.fl ? pcSim_(fl, rec.fl) : 0.5, sc = 0.6 * ns + 0.4 * fs;
+    if (!best || sc > best.sc) { if (best) second = best.sc; best = { rec: rec, ns: ns, fs: fs, sc: sc }; } else if (sc > second) second = sc;
+  });
+  if (best) best.unique = best.sc - second >= 0.03;
+  return best;
 }
 function pcLeftOf_(L, S, name, father, enroll, reg) {
   var ek = pcHead_(enroll), rk = pcHead_(reg), nk = pcLetters_(name) + '|' + pcLetters_(father);
@@ -187,6 +210,9 @@ function pcLeftOf_(L, S, name, father, enroll, reg) {
   // same name, father written a little differently ("M. Yameen" / "Muhammad Yameen"): one such record, same last word of father
   var one = L.byOnly[pcLetters_(name)] || [], lw = function (s) { var w = pcClean_(s).toUpperCase().replace(/[^A-Z ]/g, ' ').trim().split(/\s+/); return w[w.length - 1] || ''; };
   if (one.length === 1 && father && one[0].father && lw(one[0].father) === lw(father)) return one[0];
+  // spelling differences in both names ("Wareesha"/"Warisha", "Mehmood"/"Mahmood"): very close and only one such record
+  var nr = pcLeftNear_(L, name, father);
+  if (nr && nr.unique && ((nr.ns >= 0.88 && nr.fs >= 0.8) || (nr.ns >= 0.8 && nr.fs >= 0.95))) return nr.rec;
   return null;
 }
 /** The sheet row of this student: the given row if it still holds her, else her Roll No, else her unique Name + Father Name
@@ -313,10 +339,23 @@ function pcPrepare_(name, strength) {
   } finally { lock.releaseLock(); }
 }
 
+/** a possible Left Students record for a row that was NOT struck, with the reason it was not struck */
+function pcLeftHint_(L, S, name, father, enroll) {
+  var ek = pcHead_(enroll), rec = ek && L.byEnroll[ek], why = '';
+  var nr = rec ? null : pcLeftNear_(L, name, father);
+  if (!rec && nr && nr.ns >= 0.8) rec = nr.rec;
+  if (!rec) return '';
+  var nk = pcLetters_(name) + '|' + pcLetters_(father);
+  if ((S.cur.byName[nk] || []).length || (ek && S.cur.byEnroll[ek])) why = 'she is still in the current student list';
+  else if (nr) why = 'names only ' + Math.round(nr.ns * 100) + '% / father ' + Math.round(nr.fs * 100) + '% alike';
+  else why = 'press Prepare again';
+  return rec.name + ' D/o ' + rec.father + (rec.enroll ? ' · ' + rec.enroll : '') + (rec.status ? ' · ' + rec.status : '') + ' — not struck: ' + why;
+}
+
 /* ============================================================ data for the app */
 function pcLoad_(name, S, strength) {
   S = S || pcStrength_(strength);
-  var P = pcPortal_();
+  var P = pcPortal_(), L = pcLeft_();
   var sh = pcSheet_(name), C = pcCols_(sh, true), n = sh.getLastRow() - 1, rows = [];
   if (n > 0) {
     var v = sh.getRange(2, 1, n, C.last).getDisplayValues(), lines = sh.getRange(2, C.name + 1, n, 1).getFontLines();
@@ -329,7 +368,7 @@ function pcLoad_(name, S, strength) {
         cls: g(r, C.f['Class']), section: g(r, C.f['Section']), pcs: g(r, C.f['PCS']), group: g(r, C.f['Group']), session: g(r, C.f['Session']),
         dist: g(r, C.f['Distinction_won']), dob: g(r, C.f['DOB']), grade: g(r, C.f['Grade']), how: g(r, C.f['Matched by']),
         total: g(r, C.f['Total Marks']), conduct: g(r, C.f['Conduct']), struck: lines[i][0] === 'line-through',
-        pstatus: pcStatusOf_(P, S, g(r, C.f['Enroll#'])) });
+        pstatus: pcStatusOf_(P, S, g(r, C.f['Enroll#'])), leftHint: lines[i][0] === 'line-through' ? '' : pcLeftHint_(L, S, g(r, C.name), g(r, C.father), g(r, C.f['Enroll#'])) });
     });
   }
   return { ok: true, sheet: sh.getName(), url: SpreadsheetApp.openById(PC_CFG.BOOK).getUrl() + '#gid=' + sh.getSheetId(),

@@ -146,8 +146,8 @@ function whyNot(r){
 }
 const canPrint = r => !r.struck && r.roll && PASS.indexOf(String(r.grade).toUpperCase()) >= 0;
 function counts(){
-  const R = S.data.rows, c = { all:R.length, ready:0, match:0, fail:0, left:0, nodob:0, print:0 };
-  R.forEach(r => { c[status(r)]++; if(canPrint(r)){ c.print++; if(!r.dob) c.nodob++; } });
+  const R = S.data.rows, c = { all:R.length, ready:0, match:0, fail:0, left:0, nodob:0, print:0, hint:0 };
+  R.forEach(r => { c[status(r)]++; if(r.leftHint) c.hint++; if(canPrint(r)){ c.print++; if(!r.dob) c.nodob++; } });
   return c;
 }
 function prep(){
@@ -200,7 +200,7 @@ function render(){
   ${D ? `
   <section class="card" style="--c:#0E8A5F"><h2>Certificates</h2>
     <div class="stats">
-      ${[['all', c.all, 'JCW students'], ['ready', c.print, 'ready to print'], ['match', c.match, 'ready but no Enroll#'], ['fail', c.fail, 'fail / no grade / no roll no'], ['left', c.left, 'left / struck'], ['nodob', c.nodob, 'ready but no DOB']].map(x => `<button data-f="${x[0]}" class="${S.filter === x[0] ? 'on' : ''}"><b>${x[1]}</b><span>${x[2]}</span></button>`).join('')}
+      ${[['all', c.all, 'JCW students'], ['ready', c.print, 'ready to print'], ['match', c.match, 'ready but no Enroll#'], ['fail', c.fail, 'fail / no grade / no roll no'], ['left', c.left, 'left / struck'], ['hint', c.hint, 'possible left — check'], ['nodob', c.nodob, 'ready but no DOB']].map(x => `<button data-f="${x[0]}" class="${S.filter === x[0] ? 'on' : ''}"><b>${x[1]}</b><span>${x[2]}</span></button>`).join('')}
     </div>
     <div class="sub" style="margin-top:8px"><b>Ready · no Enroll#</b> = she passed and her certificate can print, but she is not yet linked to a student in Transform, so her DOB and left-student status could not be checked. Tap her and choose the right student. <b>Not eligible</b> shows the reason on each row.</div>
     ${S.auto && S.auto.length ? `<div class="note mid">${S.auto.length} unlinked rows have a 96%+ match in the student list. <button class="btn sm ok" id="cAuto" ${S.busy ? 'disabled' : ''}>Link all ${S.auto.length}</button> <button class="btn sm" id="cAutoSee">See them</button></div>` : ''}
@@ -223,6 +223,7 @@ function filtered(){
       if(S.filter === 'ready' && !canPrint(r)) return false;
       if(S.filter === 'nodob' && !(canPrint(r) && !r.dob)) return false;
       if(['match', 'fail', 'left'].includes(S.filter) && st !== S.filter) return false;
+      if(S.filter === 'hint' && !r.leftHint) return false;
     }
     const hay = (r.name + ' ' + r.father + ' ' + r.roll + ' ' + r.enroll + ' ' + r.reg).toLowerCase();
     return words.every(w => hay.includes(w));
@@ -234,7 +235,7 @@ function paintList(){
   const lab = { ready:['t-ready', 'Ready'], match:['t-match', 'Not linked'], fail:['t-fail', 'Not eligible'], left:['t-left', 'Left'] };
   box.innerHTML = (L.length ? '' : '<div class="sub">Nobody here.</div>') + L.slice(0, max).map(r => {
     const st = status(r), t = st === 'match' && canPrint(r) ? ['t-match', 'Ready · no Enroll#'] : lab[st];
-    return `<div class="it ${r.struck ? 'struck' : ''}" data-row="${r.row}"><div class="tx"><b>${esc(r.name)}</b><small>D/o ${esc(r.father)} · Roll ${esc(r.roll || '—')} · ${esc(r.marks || '—')} · ${esc(r.grade || '—')}${r.enroll ? ' · ' + esc(r.enroll) : ''}${r.pcs ? ' · ' + esc(r.pcs) : ''}${r.pstatus ? ' · Portal: ' + esc(r.pstatus) : ''}</small>${r.remarks ? `<small>Remarks: ${esc(r.remarks)}</small>` : ''}${st === 'fail' ? `<small style="color:var(--bad);font-weight:700">Not eligible: ${esc(whyNot(r))}</small>` : ''}${st === 'left' ? `<small style="color:var(--muted);font-weight:700">${esc(r.how || 'Struck through')}</small>` : ''}</div>${canPrint(r) && !r.dob ? '<span class="tag t-warn">No DOB</span>' : ''}<span class="tag ${t[0]}">${t[1]}</span></div>`;
+    return `<div class="it ${r.struck ? 'struck' : ''}" data-row="${r.row}"><div class="tx"><b>${esc(r.name)}</b><small>D/o ${esc(r.father)} · Roll ${esc(r.roll || '—')} · ${esc(r.marks || '—')} · ${esc(r.grade || '—')}${r.enroll ? ' · ' + esc(r.enroll) : ''}${r.pcs ? ' · ' + esc(r.pcs) : ''}${r.pstatus ? ' · Portal: ' + esc(r.pstatus) : ''}</small>${r.remarks ? `<small>Remarks: ${esc(r.remarks)}</small>` : ''}${st === 'fail' ? `<small style="color:var(--bad);font-weight:700">Not eligible: ${esc(whyNot(r))}</small>` : ''}${st === 'left' ? `<small style="color:var(--muted);font-weight:700">${esc(r.how || 'Struck through')}</small>` : ''}${r.leftHint ? `<small style="color:var(--mid);font-weight:700">Possible left student: ${esc(r.leftHint)}</small>` : ''}</div>${canPrint(r) && !r.dob ? '<span class="tag t-warn">No DOB</span>' : ''}<span class="tag ${t[0]}">${t[1]}</span></div>`;
   }).join('') + (L.length > max ? `<div class="sub">${L.length - max} more — search to narrow.</div>` : '');
 }
 
@@ -274,6 +275,7 @@ function paintEd(){
   ed.innerHTML = `<div class="pn">
     <div style="display:flex;gap:8px;align-items:center"><h3 style="flex:1">${r ? esc(r.name) + ` <small class="sub">row ${r.row}</small>` : 'Student not in the gazette'}</h3><button class="btn sm" id="eClose">Close</button></div>
     ${r && status(r) === 'fail' ? `<div class="note bad">Not eligible: ${esc(whyNot(r))}</div>` : ''}
+    ${r && r.leftHint ? `<div class="note mid">Possible left student: ${esc(r.leftHint)}. If it is her, press <b>Strike through</b>.</div>` : ''}
     ${r ? `<div class="sub">${esc(r.how || '')}${r.pstatus ? ' · Portal status: ' + esc(r.pstatus) : ''}${r.pos ? ' · Board position ' + esc(r.pos) : ''}${r.remarks ? ' · Remarks: ' + esc(r.remarks) : ''}</div>` : ''}
     ${E.err ? `<div class="note bad">${esc(E.err)}</div>` : ''}${E.msg ? `<div class="note ok">${esc(E.msg)}</div>` : ''}
     <div class="sec">Certificate</div>
@@ -316,7 +318,7 @@ async function saveEd(){
 async function strikeEd(){
   const r = E.r, on = !r.struck;
   if(on && !confirm('Strike through ' + r.name + '? She gets no certificate.')) return;
-  try{ await api({ action:'pc_strike', sheet:S.data.sheet, row:r.row, roll:r.roll, name:r.name, father:r.father, on }, 60000); r.struck = on; r.how = on ? 'Left / no match (struck)' : (r.enroll ? 'Chosen by hand (app)' : 'Not found in Transform'); prep(); findAuto(); E.msg = on ? 'Struck through.' : 'Strike-through removed.'; }
+  try{ await api({ action:'pc_strike', sheet:S.data.sheet, row:r.row, roll:r.roll, name:r.name, father:r.father, on }, 60000); r.struck = on; if(on) r.leftHint = ''; r.how = on ? 'Left / no match (struck)' : (r.enroll ? 'Chosen by hand (app)' : 'Not found in Transform'); prep(); findAuto(); E.msg = on ? 'Struck through.' : 'Strike-through removed.'; }
   catch(e){ E.err = e.message; }
   paintEd(); paintStats();
 }
