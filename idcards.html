@@ -56,26 +56,13 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 dialog .in{padding:16px}
 textarea{width:100%;min-height:70px;border:1.5px solid var(--line);border-radius:12px;padding:8px;background:var(--surface);color:var(--ink);font:inherit}
 .hidden{display:none!important}
-#printArea{display:none}
-@media print{
-  header,main,dialog{display:none!important}
-  html,body{background:#fff!important;padding:0;margin:0}
-  #printArea{display:block}
-  .pg{page-break-after:always;break-after:page;display:grid;justify-content:center;align-content:start}
-  .pg:last-child{page-break-after:auto;break-after:auto}
-  .pg svg{display:block}
-  .pg.sheet{grid-template-columns:86.4mm 86.4mm;column-gap:4mm;row-gap:1.5mm;padding-top:4mm}
-  .pg.sheet svg{width:86.4mm;height:55.9mm;outline:.2mm solid #bbb}
-  .pg.cr80 svg{width:85.6mm;height:54mm}
-  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-}
+@font-face{font-family:'JCWCalibri';font-weight:700;src:local('Calibri Bold'),local('Calibri-Bold'),url(idcard/Carlito-Bold.woff2) format('woff2')}
 </style>
-<style id="pageSize">@page{size:A4;margin:0}</style>
+<style>@page{size:7.2in 11.2in;margin:0}</style>
 </head>
 <body>
 <header><div class="in"><img src="jcw-logo.png" alt=""><h1>Student ID cards · 1st year<small>From Transform-ALL-COLLEGE-STRENGTH · same design as the printed cards</small></h1><a href="./">← App</a></div></header>
 <main id="main"></main>
-<div id="printArea"></div>
 <dialog id="dlg"><div class="in" id="dlgIn"></div></dialog>
 <script>
 const API = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm7d7-UKg0W-OoWAiuRBHe4mjlRgMQXIHuLm6zi--i/exec';
@@ -130,7 +117,7 @@ function detectYear(list){
 }
 const year = () => Number(CFG.year) || S.detected || detectYear(S.list);
 const validOf = y => CFG.valid[y] || ('31-08-' + (Number(y) + 2));
-const signOf = y => SIGNS[y] || (String(y) === '2026' ? 'idcard/principal-sign.png' : '');
+const signOf = y => SIGNS[y] || (String(y) === '2026' ? 'idcard/principal-sign.png' : '');   // principal-sign.png = the picture on the shop's cards
 function sessionOf(){ const y = year(); return { label: y + '-' + String(y + 2).slice(-2), valid: validOf(y) }; }
 function cardData(st){
   const e = EDIT[st.roll] || {}, mp = CFG.map[progKey(st.program)] || {};
@@ -145,55 +132,44 @@ function cardData(st){
   };
 }
 
-/* ---------- drawing (1020 x 660 = the printed card at 300 dpi) ---------- */
-const FONT_T = "'Oswald','Arial Narrow','Impact',sans-serif", FONT_B = "Calibri,Carlito,'Open Sans','Segoe UI',Arial,sans-serif";
+/* ---------- drawing: an exact copy of the shop's sheet (Section E.cdr) ----------
+   idcard/sheet.svg = page 1 of the shop's PDF (518.4 x 806.4 pt = 7.2 x 11.2 in) with only the student details,
+   photos and signatures taken out. Everything else (cards, edges, logos, colours, labels) is the shop's own drawing.
+   The details are written back at the same points (pt) with the same font (Calibri Bold; Carlito where Calibri is missing). */
+const PAGE_W = 518.4, PAGE_H = 806.4, FRONT_X = 0.131, BACK_X = 273.4, CARD_W = 244.8, CARD_H = 158.4;
+const ROW_Y = [0.02, 158.42, 316.82, 475.22, 633.61];
+const GEO = [{"base": [92.2637, 102.9547, 113.6456, 124.3362, 135.0271, 145.718], "photo": [174.9529, 59.3018, 45.5139, 66.0289], "frame": [175.2653, 59.6166, 220.1545, 125.0155], "signBox": [173.3034, 129.2252, 48.8134, 12.2975], "signClip": [170.6757, 129.4067, 224.7443, 141.3411], "sess": [[28.2447, 90.5604, 33.9012, 118.8794], [301.089, 90.5604, 306.7455, 118.8794]], "valid": [312.9491, 104.6907], "vbbox": [312.9491, 98.4897, 389.3215, 106.7577]}, {"base": [250.8797, 261.5706, 272.2615, 282.9521, 293.6431, 304.334], "photo": [174.9529, 217.9175, 45.5139, 66.0289], "frame": [175.2653, 218.2326, 220.1545, 283.6315], "signBox": [173.3034, 287.8412, 48.8134, 12.2975], "signClip": [170.6757, 288.0227, 224.7443, 299.9571], "sess": [[28.2447, 249.1765, 33.9012, 277.4954], [301.089, 248.9604, 306.7455, 277.2794]], "valid": [312.9491, 263.0906], "vbbox": [312.9491, 256.8896, 389.3215, 265.1576]}, {"base": [409.4957, 420.1866, 430.8775, 441.5681, 452.259, 462.9499], "photo": [174.9529, 376.5337, 45.5139, 66.0289], "frame": [175.2653, 376.8486, 220.1545, 442.2475], "signBox": [173.3034, 446.4572, 48.8134, 12.2975], "signClip": [170.6757, 446.6387, 224.7443, 458.5731], "sess": [[28.2447, 407.7924, 33.9012, 436.1114], [301.089, 407.3604, 306.7455, 435.6794]], "valid": [312.9491, 421.4906], "vbbox": [312.9491, 415.2896, 389.3215, 423.5576]}, {"base": [568.1117, 578.8026, 589.4935, 600.1841, 610.875, 621.5659], "photo": [174.9529, 535.1497, 45.5139, 66.0289], "frame": [175.2653, 535.4646, 220.1545, 600.8635], "signBox": [173.3034, 605.0731, 48.8134, 12.2975], "signClip": [170.6757, 605.2548, 224.7443, 617.1891], "sess": [[28.2447, 566.4084, 33.9012, 594.7274], [301.089, 565.7604, 306.7455, 594.0794]], "valid": [312.9491, 579.8906], "vbbox": [312.9491, 573.6896, 389.3215, 581.9576]}, {"base": [726.7277, 737.4186, 748.1095, 758.8001, 769.491, 780.1819], "photo": [174.9529, 693.7657, 45.5139, 66.0289], "frame": [175.2653, 694.0806, 220.1545, 759.4795], "signBox": [173.3034, 763.6891, 48.8134, 12.2975], "signClip": [170.6757, 763.8707, 224.7443, 775.8051], "sess": [[28.2447, 725.0244, 33.9012, 753.3434], [301.089, 724.1604, 306.7455, 752.4794]], "valid": [312.9491, 738.2906], "vbbox": [312.9491, 732.0897, 389.3215, 740.3577]}];
+const TPL_SESSION = '2026-28', TPL_VALID = '31-08-2028', VALUE_X = 71.1196, VALUE_MAX = 102, DATE_DX = 39.344;
+const FONT_B = "'JCWCalibri',Calibri,Carlito,sans-serif";
 const cvs = document.createElement('canvas').getContext('2d');
-function fit(text, size, max, family = FONT_B){ cvs.font = `700 ${size}px ${family}`; const w = cvs.measureText(text).width; return w > max ? ` textLength="${max}" lengthAdjust="spacingAndGlyphs"` : ''; }
+function fit(text, size, max){ cvs.font = `700 ${size}px ${FONT_B}`; return cvs.measureText(text).width > max ? ` textLength="${max}" lengthAdjust="spacingAndGlyphs"` : ''; }
 let uid = 0;
-function frame(id, pillX, inner){
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 660" preserveAspectRatio="xMidYMid slice">
-  <defs><clipPath id="c${id}"><rect width="1020" height="660"/></clipPath></defs>
-  <g clip-path="url(#c${id})">
-    <rect width="1020" height="660" fill="#fff"/>
-    <image href="idcard/campus.jpg" width="1020" height="660" preserveAspectRatio="xMidYMid slice"/>
-    <rect width="1020" height="660" fill="#F8FAFF" opacity=".8"/>
-    <polygon points="0,213 1020,439 1020,660 0,660" fill="#FCC900"/>
-    <polygon points="0,233 1020,459 1020,660 0,660" fill="#6B1315"/>
-    <image href="idcard/uop-logo.png" x="60" y="46" width="148" height="150"/>
-    <image href="idcard/jcw-crest.png" x="802" y="46" width="168" height="170"/>
-    <text x="516" y="118" text-anchor="middle" font-family="${FONT_T}" font-weight="700" font-size="68" fill="#6B1315" textLength="588" lengthAdjust="spacingAndGlyphs">JINNAH COLLEGE FOR WOMEN</text>
-    <text x="510" y="162" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-weight="700" font-size="30" fill="#111" textLength="404" lengthAdjust="spacingAndGlyphs">UNIVERSITY OF PESHAWAR</text>
-    ${inner.under || ''}
-    <rect x="${pillX}" y="213" width="84" height="520" rx="42" fill="#fff"/>
-    <g transform="translate(${pillX + 40},437) rotate(-90)" font-family="${FONT_B}" font-weight="700" fill="#111" text-anchor="middle">
-      <text y="0" font-size="30" textLength="356" lengthAdjust="spacingAndGlyphs">STUDENT IDENTITY CARD</text>
-      <text y="31" font-size="30">${esc(inner.session)}</text>
-    </g>
-    ${inner.over}
-    <rect x="0" y="657" width="1020" height="3" fill="#D1D3D4"/>
-  </g></svg>`;
+/* the student's details on card slot k (0-4) of a page, front and back */
+function slot(k, d){
+  const g = GEO[k], id = 'k' + (++uid), F = g.frame, P = g.photo, SC = g.signClip, SB = g.signBox, r0 = 1.8335;
+  const vals = [d.name, d.father, d.cls, d.roll, d.section, d.group];
+  let o = `<g font-family="${FONT_B}" font-weight="700" font-size="7.982" fill="#fff" style="font-kerning:normal">` +
+    vals.map((v, i) => `<text x="${VALUE_X}" y="${g.base[i]}"${fit(v, 7.982, VALUE_MAX)}>${esc(v)}</text>`).join('') + '</g>';
+  const rr = `M${F[0] + r0} ${F[1]}H${F[2] - r0}A${r0} ${r0} 0 0 1 ${F[2]} ${F[1] + r0}V${F[3] - r0}A${r0} ${r0} 0 0 1 ${F[2] - r0} ${F[3]}H${F[0] + r0}A${r0} ${r0} 0 0 1 ${F[0]} ${F[3] - r0}V${F[1] + r0}A${r0} ${r0} 0 0 1 ${F[0] + r0} ${F[1]}Z`;
+  if(d.photo) o += `<clipPath id="p${id}"><path d="${rr}"/></clipPath><image href="${esc(d.photo)}" x="${P[0]}" y="${P[1]}" width="${P[2]}" height="${P[3]}" preserveAspectRatio="xMidYMid slice" clip-path="url(#p${id})"/><path d="${rr}" fill="none" stroke="#231F20" stroke-width=".5"/>`;
+  if(d.sign) o += `<clipPath id="s${id}"><rect x="${SC[0]}" y="${SC[1]}" width="${SC[2] - SC[0]}" height="${SC[3] - SC[1]}"/></clipPath><image href="${esc(d.sign)}" x="${SB[0]}" y="${SB[1]}" width="${SB[2]}" height="${SB[3]}" preserveAspectRatio="xMidYMid meet" clip-path="url(#s${id})"/>`;
+  if(d.session !== TPL_SESSION) g.sess.forEach(r => {
+    o += `<rect x="${r[0] - .3}" y="${r[1] - .4}" width="${r[2] - r[0] + .6}" height="${r[3] - r[1] + .8}" fill="#fff"/>` +
+      `<text transform="translate(${r[2] - .06} ${r[3] + .17}) rotate(-90)" font-family="${FONT_B}" font-weight="700" font-size="8.11" fill="#000" textLength="28.87" lengthAdjust="spacingAndGlyphs">${esc(d.session)}</text>`;
+  });
+  if(d.valid !== TPL_VALID){
+    const x = g.valid[0] + DATE_DX, y = g.valid[1], b = g.vbbox;
+    o += `<rect x="${x - .3}" y="${b[1] - .2}" width="${b[2] - x + .55}" height="${b[3] - b[1] + .4}" fill="#fff"/>` +
+      `<text transform="translate(${x} ${y}) scale(.9594 1)" font-family="${FONT_B}" font-weight="700" font-size="8.268" fill="#000">${esc(d.valid)}</text>`;
+  }
+  return o;
 }
-function front(d){
-  const id = 'f' + (++uid), L = [['Name', d.name], ['F.Name', d.father], ['Class', d.cls], ['Roll#', d.roll], ['Section', d.section], ['Group', d.group]];
-  const rows = L.map((r, i) => { const y = 384 + i * 44.4; return `<text x="173" y="${y}">${r[0]}</text><text x="297" y="${y}"${fit(r[1], 28, 420)}>${esc(r[1])}</text>`; }).join('');
-  const photo = d.photo
-    ? `<clipPath id="p${id}"><rect x="730" y="248" width="188" height="273" rx="14"/></clipPath><rect x="730" y="248" width="188" height="273" rx="14" fill="#fff"/><image href="${esc(d.photo)}" x="730" y="248" width="188" height="273" preserveAspectRatio="xMidYMid slice" clip-path="url(#p${id})"/>`
-    : `<rect x="730" y="248" width="188" height="273" rx="14" fill="#fff"/><text x="824" y="392" text-anchor="middle" font-family="${FONT_B}" font-weight="700" font-size="24" fill="#999">PHOTO</text>`;
-  return frame(id, 67, { session: d.session, over: `
-    <g font-family="${FONT_B}" font-weight="700" font-size="28" fill="#fff">${rows}</g>
-    ${photo}<rect x="730" y="248" width="188" height="273" rx="14" fill="none" stroke="#231F20" stroke-width="3"/>
-    <rect x="704" y="528" width="240" height="62" rx="4" fill="#fff"/>
-    ${d.sign ? `<image href="${esc(d.sign)}" x="706" y="529" width="236" height="60" preserveAspectRatio="xMidYMid meet"/>` : ''}
-    <text x="823" y="611" text-anchor="middle" font-family="${FONT_B}" font-weight="700" font-size="26" fill="#fff">Principal Signature</text>` });
+/* screen preview of one card (front or back), cut out of row 1 of the sheet */
+function cardView(d, backSide){
+  const x = (backSide ? BACK_X : FRONT_X) - .2;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x} ${ROW_Y[0] - .2} ${CARD_W + .4} ${CARD_H + .2}"><rect x="${x}" y="-1" width="${CARD_W + 1}" height="${CARD_H + 2}" fill="#fff"/><image href="idcard/sheet.svg" width="${PAGE_W}" height="${PAGE_H}"/>${slot(0, d)}</svg>`;
 }
-function back(d){
-  const id = 'b' + (++uid);
-  const rules = CFG.rules.filter(Boolean).slice(0, 4).map((t, i) => `<text x="567" y="${516 + i * 40}"${fit(t, 27, 800)}>${esc(t)}</text>`).join('');
-  return frame(id, 62, { session: d.session,
-    under: `<rect x="110" y="350" width="390" height="112" rx="56" fill="#fff"/>`,
-    over: `<g font-family="${FONT_B}" font-weight="700" font-size="30" fill="#231F20"><text x="165" y="392"${fit('Ph No.: ' + CFG.phone, 30, 320)}>Ph No.: ${esc(CFG.phone)}</text><text x="165" y="436"${fit('Valid up to: ' + d.valid, 30, 320)}>Valid up to: ${esc(d.valid)}</text></g>
-    <g font-family="${FONT_B}" font-weight="700" font-size="27" fill="#fff" text-anchor="middle">${rules}</g>` });
-}
+const front = d => cardView(d, false), back = d => cardView(d, true);
 
 /* ---------- students ---------- */
 async function load(){
@@ -240,28 +216,95 @@ async function getPhotos(sts){
   S.busy = ''; S.prog = 0;
 }
 
-/* ---------- print ---------- */
-async function doPrint(){
+/* ---------- PDF: the shop's own page (vector, exact 518.4 x 806.4 pt) + the students' details ---------- */
+const PDFLIB = 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js', FONTKIT = 'https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js';
+const loadScript = src => new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Could not load ' + src.split('/').pop() + ' (internet needed the first time).')); document.head.appendChild(s); });
+async function makePdf(){
   const sts = chosen(); if(!sts.length) return;
-  if(sts.length > 400 && !confirm(sts.length + ' cards in one print is heavy for a phone. Continue?')) return;
-  await getPhotos(sts); render();
-  if(document.fonts && document.fonts.ready) await document.fonts.ready;
-  const D = sts.map(cardData), L = S.layout; let html = '';
-  if(L === 'cr80'){ html = D.map(d => `<div class="pg cr80">${front(d)}</div><div class="pg cr80">${back(d)}</div>`).join(''); }
-  else if(L === 'duplex'){
-    for(let i = 0; i < D.length; i += 10){
-      const part = D.slice(i, i + 10);
-      html += `<div class="pg sheet">${part.map(front).join('')}</div>`;
-      // backs: columns swapped so each back lands behind its front when the sheet is turned over (long edge)
-      const rows = []; for(let r = 0; r < part.length; r += 2) rows.push(back(part[r + 1] || part[r]).replace('<svg', part[r + 1] ? '<svg' : '<svg style="visibility:hidden"') + back(part[r]));
-      html += `<div class="pg sheet">${rows.join('')}</div>`;
+  S.err = ''; S.msg = '';
+  try{
+    await getPhotos(sts);
+    S.busy = 'Making the PDF…'; S.prog = 0; render();
+    if(!window.PDFLib) await loadScript(PDFLIB);
+    if(!window.fontkit) await loadScript(FONTKIT);
+    const { PDFDocument, cmyk, pushGraphicsState, popGraphicsState, concatTransformationMatrix, moveTo, lineTo, appendBezierCurve, closePath, clip, endPath, rectangle, stroke, setLineWidth, setStrokingCmykColor } = PDFLib;
+    const [tplBytes, fontBytes] = await Promise.all(['idcard/sheet-template.pdf', 'idcard/Carlito-Bold.ttf'].map(u => fetch(u).then(r => { if(!r.ok) throw new Error(u + ' missing'); return r.arrayBuffer(); })));
+    const doc = await PDFDocument.create(); doc.registerFontkit(window.fontkit);
+    const font = await doc.embedFont(fontBytes, { subset: true }), chars = new Set(font.getCharacterSet());
+    const clean = t => [...String(t || '')].map(c => chars.has(c.codePointAt(0)) ? c : '?').join('');
+    const [tpl] = await doc.embedPdf(tplBytes, [0]);
+    /* text with the font's kerning (CorelDRAW kerns too): one glyph at a time at its kerned place */
+    const fk = font.embedder && font.embedder.font;
+    const runOf = (t, size) => { try{ const r = fk.layout(t), k = size / fk.unitsPerEm; let x = 0;
+        const parts = r.glyphs.map((g, i) => { const p = { c: String.fromCodePoint(...g.codePoints), x }; x += r.positions[i].xAdvance * k; return p; });
+        return parts.every(p => [...p.c].length === 1) ? { parts, w: x } : null; }catch(e){ return null; } };
+    const widthOf = (t, size) => { const r = runOf(t, size); return r ? r.w : font.widthOfTextAtSize(t, size); };
+    const say = (page, t, size, color) => { const r = runOf(t, size);
+      if(!r) return page.drawText(t, { x: 0, y: 0, size, font, color });
+      r.parts.forEach(p => { if(p.c.trim()) page.drawText(p.c, { x: p.x, y: 0, size, font, color }); }); };
+    const WHITE = cmyk(0, 0, 0, 0), BLACK = cmyk(1, 1, 1, 1), Y = t => PAGE_H - t, cache = {};
+    async function img(src){
+      if(!src) return null; if(cache[src]) return cache[src];
+      const b = new Uint8Array(await fetch(src).then(r => r.arrayBuffer()));
+      return cache[src] = (b[0] === 0x89 ? await doc.embedPng(b) : await doc.embedJpg(b));
     }
-  } else { for(let i = 0; i < D.length; i += 5) html += `<div class="pg sheet">${D.slice(i, i + 5).map(d => front(d) + back(d)).join('')}</div>`; }
-  $('#pageSize').textContent = L === 'cr80' ? '@page{size:85.6mm 54mm;margin:0}' : '@page{size:A4;margin:0}';
-  $('#printArea').innerHTML = html;
-  await Promise.all([...document.querySelectorAll('#printArea image')].map(im => new Promise(r => setTimeout(r, 30))));
-  S.lastPrinted = sts.map(st => st.roll);
-  setTimeout(() => { window.print(); render(); }, 400);
+    const rr = (F, r0) => { const x0 = F[0], x1 = F[2], y0 = Y(F[3]), y1 = Y(F[1]), k = r0 * 0.5523;
+      return [moveTo(x0 + r0, y0), lineTo(x1 - r0, y0), appendBezierCurve(x1 - r0 + k, y0, x1, y0 + r0 - k, x1, y0 + r0), lineTo(x1, y1 - r0),
+        appendBezierCurve(x1, y1 - r0 + k, x1 - r0 + k, y1, x1 - r0, y1), lineTo(x0 + r0, y1), appendBezierCurve(x0 + r0 - k, y1, x0, y1 - r0 + k, x0, y1 - r0),
+        lineTo(x0, y0 + r0), appendBezierCurve(x0, y0 + r0 - k, x0 + r0 - k, y0, x0 + r0, y0), closePath()]; };
+    const D = sts.map(cardData);
+    for(let i = 0; i < D.length; i += 5){
+      const part = D.slice(i, i + 5), page = doc.addPage([PAGE_W, PAGE_H]);
+      page.drawPage(tpl, { x: 0, y: 0, width: PAGE_W, height: PAGE_H });
+      if(part.length < 5) page.drawRectangle({ x: 0, y: 0, width: PAGE_W, height: Y(ROW_Y[part.length] + .12), color: WHITE });
+      for(let k = 0; k < part.length; k++){
+        const d = part[k], g = GEO[k];
+        [d.name, d.father, d.cls, d.roll, d.section, d.group].forEach((v, n) => {
+          v = clean(v); const w = widthOf(v, 7.982), sx = w > VALUE_MAX ? VALUE_MAX / w : 1;
+          page.pushOperators(pushGraphicsState(), concatTransformationMatrix(sx, 0, 0, 1, VALUE_X, Y(g.base[n])));
+          say(page, v, 7.982, WHITE);
+          page.pushOperators(popGraphicsState());
+        });
+        const ph = await img(d.photo).catch(() => null);
+        if(ph){
+          const P = g.photo;
+          page.pushOperators(pushGraphicsState(), ...rr(g.frame, 1.8335), clip(), endPath());
+          page.drawImage(ph, { x: P[0], y: Y(P[1] + P[3]), width: P[2], height: P[3] });
+          page.pushOperators(popGraphicsState(), pushGraphicsState(), setStrokingCmykColor(0, 0, 0, 1), setLineWidth(.5), ...rr(g.frame, 1.8335), stroke(), popGraphicsState());
+        }
+        const sg = await img(d.sign).catch(() => null);
+        if(sg){
+          const C = g.signClip, B = g.signBox, r = Math.min(B[2] / sg.width, B[3] / sg.height), w = sg.width * r, h = sg.height * r;
+          page.pushOperators(pushGraphicsState(), rectangle(C[0], Y(C[3]), C[2] - C[0], C[3] - C[1]), clip(), endPath());
+          page.drawImage(sg, { x: B[0] + (B[2] - w) / 2, y: Y(B[1] + B[3]) + (B[3] - h) / 2, width: w, height: h });
+          page.pushOperators(popGraphicsState());
+        }
+        if(d.session !== TPL_SESSION) g.sess.forEach(r => {
+          const t = clean(d.session), sx = 28.87 / widthOf(t, 8.11);
+          page.drawRectangle({ x: r[0] - .3, y: Y(r[3] + .4), width: r[2] - r[0] + .6, height: r[3] - r[1] + .8, color: WHITE });
+          page.pushOperators(pushGraphicsState(), concatTransformationMatrix(0, sx, -1, 0, r[2] - .06, Y(r[3] + .17)));
+          say(page, t, 8.11, BLACK);
+          page.pushOperators(popGraphicsState());
+        });
+        if(d.valid !== TPL_VALID){
+          const x = g.valid[0] + DATE_DX, b = g.vbbox;
+          page.drawRectangle({ x: x - .3, y: Y(b[3] + .2), width: b[2] - x + .55, height: b[3] - b[1] + .4, color: WHITE });
+          page.pushOperators(pushGraphicsState(), concatTransformationMatrix(.9594, 0, 0, 1, x, Y(g.valid[1])));
+          say(page, clean(d.valid), 8.268, BLACK);
+          page.pushOperators(popGraphicsState());
+        }
+      }
+      S.prog = (i + 5) / D.length; paintBusy();
+    }
+    doc.setTitle('JCW Student ID Cards'); doc.setCreator('JCW attendance app');
+    const blob = new Blob([await doc.save()], { type: 'application/pdf' }), url = URL.createObjectURL(blob);
+    const f = S.f, name = 'ID cards ' + (f.section || f.program || 'students').replace(/[^\w .-]+/g, ' ').trim() + ' (' + sts.length + ').pdf';
+    const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    S.lastPrinted = sts.map(st => st.roll);
+    S.msg = name + ' is ready (' + Math.ceil(sts.length / 5) + ' page' + (sts.length > 5 ? 's' : '') + '). Print it at Actual size / 100%, or send it to the card shop.';
+  }catch(e){ S.err = 'PDF not made: ' + e.message; }
+  S.busy = ''; S.prog = 0; render();
 }
 async function markPrinted(){
   const rolls = S.lastPrinted || []; if(!rolls.length) return;
@@ -335,12 +378,9 @@ function render(){
     </tbody></table></div>${list.length > shown.length ? `<div class="sub" style="margin-top:6px">Showing the first ${shown.length} of ${list.length}; use the filters.</div>` : ''}
   </section>
   <section class="card"><h2>2. Print</h2>
-    <div class="sub"><b>${sel.length}</b> card${sel.length === 1 ? '' : 's'} ticked. In the print window choose your printer, or <b>Save as PDF</b> to send to the card shop. Set <b>Margins: None</b> and <b>Scale: 100%</b>, and turn on <b>Background graphics</b>.</div>
-    <div class="grid"><label class="f">Layout<select id="lay">
-      <option value="sheet" ${S.layout === 'sheet' ? 'selected' : ''}>A4 · front and back side by side (5 per page, like the shop's sheet)</option>
-      <option value="duplex" ${S.layout === 'duplex' ? 'selected' : ''}>A4 two-sided · 10 fronts, then their 10 backs</option>
-      <option value="cr80" ${S.layout === 'cr80' ? 'selected' : ''}>PVC card printer · one card per page (85.6 × 54 mm)</option></select></label></div>
-    <div class="acts"><button class="btn pri" id="go" ${sel.length && !S.busy ? '' : 'disabled'}>Print ${sel.length || ''} card${sel.length === 1 ? '' : 's'}</button>
+    <div class="sub"><b>${sel.length}</b> card${sel.length === 1 ? '' : 's'} ticked. The PDF downloads to this device; send it to the card shop or print it.</div>
+    <div class="note mid">The PDF is the shop’s own Section E page: 7.2 × 11.2 in (518.4 × 806.4 pt), 5 cards per page, front left and back right, same card size, positions and edges. Only the student details, photo, principal’s sign and (when changed) session and valid date are written on it. Print it at <b>Actual size / 100%</b>, never “Fit to page”.</div>
+    <div class="acts"><button class="btn pri" id="go" ${sel.length && !S.busy ? '' : 'disabled'}>Make PDF of ${sel.length || ''} card${sel.length === 1 ? '' : 's'}</button>
       ${S.lastPrinted ? `<button class="btn" id="mark">Mark these ${S.lastPrinted.length} as printed</button>` : ''}</div>
     <div id="busy" class="${S.busy ? '' : 'hidden'}"><div class="bar"><i style="width:${Math.round(S.prog * 100)}%"></i></div><span class="sub">${esc(S.busy)}</span></div>
   </section>
@@ -389,8 +429,7 @@ function render(){
   $('#reload').onclick = () => { S.msg = ''; load(); };
   m.querySelectorAll('input[data-r]').forEach(c => c.onchange = () => { c.checked ? S.sel.add(c.dataset.r) : S.sel.delete(c.dataset.r); render(); });
   m.querySelectorAll('[data-e]').forEach(b => b.onclick = () => openEdit(b.dataset.e));
-  $('#lay').onchange = e => { S.layout = e.target.value; ls.set('idc_layout', S.layout); };
-  $('#go').onclick = () => { S.msg = ''; S.err = ''; doPrint(); };
+  $('#go').onclick = makePdf;
   if($('#mark')) $('#mark').onclick = markPrinted;
   $('#lp').onclick = async () => { await getPhotos(prevList); render(); };
   if($('#more')) $('#more').onclick = () => { S.show += 24; render(); };
@@ -402,7 +441,6 @@ function render(){
   };
   $('#cDef').onclick = () => { CFG = mergeCfg({ year: CFG.year, valid: CFG.valid }); ls.set('idc_cfg', CFG); api({ action:'idc_settings', cfg: CFG }).catch(() => {}); render(); };
 }
-window.addEventListener('afterprint', () => { $('#printArea').innerHTML = ''; });
 render(); if(user && pass && ls.get('admin', false) === true){ const c = ls.get('idc_cache', null); if(c) S.list = c.list; load(); }
 </script>
 </body>
