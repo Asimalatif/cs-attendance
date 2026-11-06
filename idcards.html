@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#6B3423">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@700&family=Open+Sans:wght@700&display=swap" rel="stylesheet">
+<title>JCW Student ID Cards</title>
+<style>
+:root{--bg:#F7EDEA;--surface:#fff;--surface2:#FBEDEA;--ink:#2B1912;--muted:#7C6159;--line:#E2C0B8;--brown:#6B3423;--tea:#E7B7AE;--good:#0E8A5F;--good-bg:#E3F4EC;--bad:#C0392B;--bad-bg:#FDE3E1;--mid:#B4740E;--mid-bg:#FFF2D6}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1A110F;--surface:#261915;--surface2:#30201B;--ink:#F6E9E5;--muted:#C4A8A0;--line:#4A3029;--tea:#8A5A50;--good-bg:#14302A;--bad-bg:#3A1C1F;--mid-bg:#3A2F14}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;padding-bottom:40px}
+button,select,input{font:inherit;color:inherit}
+header{background:linear-gradient(120deg,#4A2418,#8A4A35);color:#fff;padding:calc(12px + env(safe-area-inset-top,0px)) 16px 14px}
+header .in{max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:12px}
+header img{width:44px;height:44px;border-radius:50%;background:#fff;padding:3px;flex:none}
+header h1{margin:0;font-size:19px;line-height:1.2}
+header small{display:block;opacity:.85;font-size:12.5px;font-weight:400}
+header a{margin-left:auto;color:#fff;text-decoration:none;font-weight:700;font-size:14px;background:rgba(255,255,255,.14);padding:7px 12px;border-radius:999px;white-space:nowrap}
+main{max-width:1100px;margin:0 auto;padding:16px}
+.card{background:var(--surface);border:1.5px solid var(--line);border-top:5px solid var(--brown);border-radius:20px;padding:16px;margin-bottom:16px}
+.card h2{margin:0 0 4px;font-size:17px;color:var(--brown)}
+@media(prefers-color-scheme:dark){.card h2{color:var(--tea)}}
+.sub{color:var(--muted);font-size:13.5px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:10px;margin-top:12px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:700;color:var(--muted)}
+label.f input,label.f select{height:44px;border:1.5px solid var(--line);border-radius:12px;padding:0 10px;background:var(--surface);font-size:15px;font-weight:600;color:var(--ink);width:100%}
+label.c{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600}
+.btn{height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-weight:800;padding:0 14px;cursor:pointer;color:var(--ink)}
+.btn.pri{background:linear-gradient(180deg,#8A4A35,#6B3423);border-color:#6B3423;color:#fff}
+.btn.sm{height:34px;padding:0 10px;font-size:13px;border-radius:10px}
+.btn:disabled{opacity:.5;cursor:default}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.bar{height:10px;border-radius:999px;background:var(--surface2);border:1px solid var(--line);overflow:hidden;margin:10px 0 4px}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#C2766A,#6B3423);transition:width .2s}
+.note{border-radius:12px;padding:10px 12px;font-size:13.5px;margin-top:10px}
+.note.ok{background:var(--good-bg);color:var(--good)}.note.bad{background:var(--bad-bg);color:var(--bad)}.note.mid{background:var(--mid-bg);color:var(--mid)}
+.tw{overflow:auto;max-height:420px;margin-top:10px;border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{background:#6B3423;color:#fff;text-align:left;padding:7px 8px;white-space:nowrap;position:sticky;top:0;z-index:1}
+td{padding:5px 8px;border-top:1px solid var(--line);white-space:nowrap}
+tr:nth-child(even) td{background:var(--surface2)}
+td.tag span{font-size:11.5px;font-weight:700;padding:2px 7px;border-radius:999px;background:var(--good-bg);color:var(--good)}
+.prev{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(330px,100%),1fr));gap:12px;margin-top:12px}
+.prev .pair{display:flex;flex-direction:column;gap:6px;background:var(--surface2);border:1px solid var(--line);border-radius:14px;padding:8px}
+.prev svg{width:100%;height:auto;display:block;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.18);cursor:pointer}
+.prev .who{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;font-weight:700}
+dialog{border:none;border-radius:18px;padding:0;max-width:min(560px,94vw);width:100%;background:var(--surface);color:var(--ink)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog .in{padding:16px}
+textarea{width:100%;min-height:70px;border:1.5px solid var(--line);border-radius:12px;padding:8px;background:var(--surface);color:var(--ink);font:inherit}
+.hidden{display:none!important}
+#printArea{display:none}
+@media print{
+  header,main,dialog{display:none!important}
+  html,body{background:#fff!important;padding:0;margin:0}
+  #printArea{display:block}
+  .pg{page-break-after:always;break-after:page;display:grid;justify-content:center;align-content:start}
+  .pg:last-child{page-break-after:auto;break-after:auto}
+  .pg svg{display:block}
+  .pg.sheet{grid-template-columns:86.4mm 86.4mm;column-gap:4mm;row-gap:1.5mm;padding-top:4mm}
+  .pg.sheet svg{width:86.4mm;height:55.9mm;outline:.2mm solid #bbb}
+  .pg.cr80 svg{width:85.6mm;height:54mm}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+<style id="pageSize">@page{size:A4;margin:0}</style>
+</head>
+<body>
+<header><div class="in"><img src="jcw-logo.png" alt=""><h1>Student ID cards · 1st year<small>From Transform-ALL-COLLEGE-STRENGTH · same design as the printed cards</small></h1><a href="./">← App</a></div></header>
+<main id="main"></main>
+<div id="printArea"></div>
+<dialog id="dlg"><div class="in" id="dlgIn"></div></dialog>
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm7d7-UKg0W-OoWAiuRBHe4mjlRgMQXIHuLm6zi--i/exec';
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const ls = { get(k, d){ try{ const v = localStorage.getItem('csa2_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } }, set(k, v){ try{ localStorage.setItem('csa2_' + k, JSON.stringify(v)); }catch(e){} } };
+const user = ls.get('user', ''), pass = ls.get('pass', '');
+
+/* ---------- card settings (admin can change them under "Card settings") ---------- */
+const DEF = {
+  phone: '091-5610909', year: 0, valid: {},          // year = session start (2026 -> 2026-28); valid = { '2026': '31-08-2028' }
+  rules: ['Student must display this card while in college.', 'This card is non-transferable.', 'If this card is lost, report to the college office immediately.'],
+  map: {   // Program column of Transform (without "(JCW)") -> Class and Group printed on the card
+    'Pre-Medical':     { cls: 'FSC', group: 'Pre-Medical' },
+    'Pre-Engineering': { cls: 'FSC', group: 'Pre-Engineering' },
+    'FCS':             { cls: 'FSC', group: 'GENERAL / COMPUTER SCIENCE' },
+    'F.A':             { cls: 'F.A', group: 'Humanities' }
+  }
+};
+function mergeCfg(c){ c = c || {}; const o = Object.assign({}, DEF, c); o.map = Object.assign({}, DEF.map, c.map || {}); o.valid = Object.assign({}, c.valid || {}); if(!Array.isArray(o.rules) || !o.rules.length) o.rules = DEF.rules.slice(); return o; }
+let CFG = mergeCfg(ls.get('idc_cfg', {}));
+let SIGNS = {};                              // { '2026': dataURL } principal sign + stamp of each session, from Drive
+let EDIT = ls.get('idc_edit', {});           // per student changes for the card only: { roll: { name, father, cls, section, group, photo } }
+
+let S = { list: null, loading: false, err: '', f: ls.get('idc_f', { year: '', program: '', section: '', q: '', notPrinted: false, status: 'enrolled' }),
+  sel: new Set(), photos: {}, busy: '', prog: 0, layout: ls.get('idc_layout', 'sheet'), lastPrinted: null, show: 24, detected: 0 };
+
+async function api(payload, ms = 300000){
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms);
+  try{
+    const r = await fetch(API, { method:'POST', body:JSON.stringify({ username:user, password:pass, ...payload }), signal:ctl.signal, redirect:'follow' });
+    const txt = await r.text(); let j; try{ j = JSON.parse(txt); }catch(e){ throw new Error('The server sent a web page instead of data. Check the deployment.'); }
+    if(j && j.error === 'UNKNOWN_ACTION') throw new Error('The server does not know ID cards yet: add IdCards.gs and its doPost line, then deploy a new version.');
+    if(j && j.error === 'BAD_LOGIN') throw new Error('Your saved login was refused. Open the app, sign out and sign in again.');
+    if(j && j.ok === false) throw new Error(j.error || 'Server error');
+    return j;
+  }catch(e){
+    if(e.name === 'AbortError') throw new Error('The server took too long. Try again.');
+    if(e instanceof TypeError) throw new Error(navigator.onLine ? 'The Apps Script server did not answer. In Apps Script run idcAuthorize once and press Allow, then deploy a new version.' : 'No internet.');
+    throw e;
+  }finally{ clearTimeout(t); }
+}
+
+/* ---------- what goes on a card ---------- */
+const progKey = p => String(p || '').replace(/\(.*?\)/g, '').trim();
+/* session year of this year's 1st year: the Enroll# prefix most students have (JCW-F26-… -> 2026) */
+function detectYear(list){
+  const n = {}; (list || []).forEach(st => { const m = String(st.roll).match(/-F(\d{2})-/i); if(m) n[m[1]] = (n[m[1]] || 0) + 1; });
+  const k = Object.keys(n).sort((a, b) => n[b] - n[a])[0];
+  if(k) return 2000 + Number(k);
+  const d = new Date(); return d.getMonth() >= 6 ? d.getFullYear() : d.getFullYear() - 1;
+}
+const year = () => Number(CFG.year) || S.detected || detectYear(S.list);
+const validOf = y => CFG.valid[y] || ('31-08-' + (Number(y) + 2));
+const signOf = y => SIGNS[y] || (String(y) === '2026' ? 'idcard/principal-sign.png' : '');
+function sessionOf(){ const y = year(); return { label: y + '-' + String(y + 2).slice(-2), valid: validOf(y) }; }
+function cardData(st){
+  const e = EDIT[st.roll] || {}, mp = CFG.map[progKey(st.program)] || {};
+  let sec = st.section || st.pcs || '';
+  if(/\s/.test(sec)) sec = sec.trim().split(/\s+/).pop();
+  const ses = sessionOf(st);
+  return {
+    roll: st.roll, name: (e.name || st.name || '').toUpperCase(), father: (e.father || st.father || '').toUpperCase(),
+    cls: e.cls || mp.cls || progKey(st.program), section: e.section || sec,
+    group: e.group || mp.group || (st.group && !/^null$/i.test(st.group) ? st.group : progKey(st.program)),
+    photo: e.photo || S.photos[st.roll] || '', session: e.session || ses.label, valid: e.valid || ses.valid, sign: signOf(year())
+  };
+}
+
+/* ---------- drawing (1020 x 660 = the printed card at 300 dpi) ---------- */
+const FONT_T = "'Oswald','Arial Narrow','Impact',sans-serif", FONT_B = "Calibri,Carlito,'Open Sans','Segoe UI',Arial,sans-serif";
+const cvs = document.createElement('canvas').getContext('2d');
+function fit(text, size, max, family = FONT_B){ cvs.font = `700 ${size}px ${family}`; const w = cvs.measureText(text).width; return w > max ? ` textLength="${max}" lengthAdjust="spacingAndGlyphs"` : ''; }
+let uid = 0;
+function frame(id, pillX, inner){
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 660" preserveAspectRatio="xMidYMid slice">
+  <defs><clipPath id="c${id}"><rect width="1020" height="660"/></clipPath></defs>
+  <g clip-path="url(#c${id})">
+    <rect width="1020" height="660" fill="#fff"/>
+    <image href="idcard/campus.jpg" width="1020" height="660" preserveAspectRatio="xMidYMid slice"/>
+    <rect width="1020" height="660" fill="#F8FAFF" opacity=".8"/>
+    <polygon points="0,213 1020,439 1020,660 0,660" fill="#FCC900"/>
+    <polygon points="0,233 1020,459 1020,660 0,660" fill="#6B1315"/>
+    <image href="idcard/uop-logo.png" x="60" y="46" width="148" height="150"/>
+    <image href="idcard/jcw-crest.png" x="802" y="46" width="168" height="170"/>
+    <text x="516" y="118" text-anchor="middle" font-family="${FONT_T}" font-weight="700" font-size="68" fill="#6B1315" textLength="588" lengthAdjust="spacingAndGlyphs">JINNAH COLLEGE FOR WOMEN</text>
+    <text x="510" y="162" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-weight="700" font-size="30" fill="#111" textLength="404" lengthAdjust="spacingAndGlyphs">UNIVERSITY OF PESHAWAR</text>
+    ${inner.under || ''}
+    <rect x="${pillX}" y="213" width="84" height="520" rx="42" fill="#fff"/>
+    <g transform="translate(${pillX + 40},437) rotate(-90)" font-family="${FONT_B}" font-weight="700" fill="#111" text-anchor="middle">
+      <text y="0" font-size="30" textLength="356" lengthAdjust="spacingAndGlyphs">STUDENT IDENTITY CARD</text>
+      <text y="31" font-size="30">${esc(inner.session)}</text>
+    </g>
+    ${inner.over}
+    <rect x="0" y="657" width="1020" height="3" fill="#D1D3D4"/>
+  </g></svg>`;
+}
+function front(d){
+  const id = 'f' + (++uid), L = [['Name', d.name], ['F.Name', d.father], ['Class', d.cls], ['Roll#', d.roll], ['Section', d.section], ['Group', d.group]];
+  const rows = L.map((r, i) => { const y = 384 + i * 44.4; return `<text x="173" y="${y}">${r[0]}</text><text x="297" y="${y}"${fit(r[1], 28, 420)}>${esc(r[1])}</text>`; }).join('');
+  const photo = d.photo
+    ? `<clipPath id="p${id}"><rect x="730" y="248" width="188" height="273" rx="14"/></clipPath><rect x="730" y="248" width="188" height="273" rx="14" fill="#fff"/><image href="${esc(d.photo)}" x="730" y="248" width="188" height="273" preserveAspectRatio="xMidYMid slice" clip-path="url(#p${id})"/>`
+    : `<rect x="730" y="248" width="188" height="273" rx="14" fill="#fff"/><text x="824" y="392" text-anchor="middle" font-family="${FONT_B}" font-weight="700" font-size="24" fill="#999">PHOTO</text>`;
+  return frame(id, 67, { session: d.session, over: `
+    <g font-family="${FONT_B}" font-weight="700" font-size="28" fill="#fff">${rows}</g>
+    ${photo}<rect x="730" y="248" width="188" height="273" rx="14" fill="none" stroke="#231F20" stroke-width="3"/>
+    <rect x="704" y="528" width="240" height="62" rx="4" fill="#fff"/>
+    ${d.sign ? `<image href="${esc(d.sign)}" x="706" y="529" width="236" height="60" preserveAspectRatio="xMidYMid meet"/>` : ''}
+    <text x="823" y="611" text-anchor="middle" font-family="${FONT_B}" font-weight="700" font-size="26" fill="#fff">Principal Signature</text>` });
+}
+function back(d){
+  const id = 'b' + (++uid);
+  const rules = CFG.rules.filter(Boolean).slice(0, 4).map((t, i) => `<text x="567" y="${516 + i * 40}"${fit(t, 27, 800)}>${esc(t)}</text>`).join('');
+  return frame(id, 62, { session: d.session,
+    under: `<rect x="110" y="350" width="390" height="112" rx="56" fill="#fff"/>`,
+    over: `<g font-family="${FONT_B}" font-weight="700" font-size="30" fill="#231F20"><text x="165" y="392"${fit('Ph No.: ' + CFG.phone, 30, 320)}>Ph No.: ${esc(CFG.phone)}</text><text x="165" y="436"${fit('Valid up to: ' + d.valid, 30, 320)}>Valid up to: ${esc(d.valid)}</text></g>
+    <g font-family="${FONT_B}" font-weight="700" font-size="27" fill="#fff" text-anchor="middle">${rules}</g>` });
+}
+
+/* ---------- students ---------- */
+async function load(){
+  S.loading = true; S.err = ''; render();
+  try{
+    const j = await api({ action:'idc_list' }); S.list = j.list || []; SIGNS = j.signs || {};
+    CFG = mergeCfg(j.cfg && Object.keys(j.cfg).length ? j.cfg : ls.get('idc_cfg', {})); ls.set('idc_cfg', CFG);
+    ls.set('idc_cache', { at: j.at, list: S.list });
+  }
+  catch(e){ S.err = e.message; const c = ls.get('idc_cache', null); if(c && !S.list) S.list = c.list; }
+  S.detected = detectYear(S.list);
+  if(Number(CFG.year) && Number(CFG.year) < S.detected) CFG.year = 0;     // a new session has started: move to it by itself
+  S.loading = false; render();
+}
+function filtered(){
+  if(!S.list) return [];
+  const f = S.f, q = f.q.trim().toLowerCase();
+  return S.list.filter(st =>
+    (!f.program || st.program === f.program) && (!f.section || (st.pcs || st.section) === f.section) &&
+    (f.status !== 'enrolled' || !st.status || /enrol/i.test(st.status)) && (!f.notPrinted || !st.printed) &&
+    (!q || (st.roll + ' ' + st.name + ' ' + st.father).toLowerCase().includes(q)));
+}
+const uniq = (arr, key) => [...new Set(arr.map(x => x[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric:true }));
+const chosen = () => S.list ? S.list.filter(st => S.sel.has(st.roll)) : [];
+
+/* photos: fetched from the server 8 at a time and made smaller on this device */
+function shrink(src){
+  return new Promise(res => { if(!src) return res(''); const im = new Image(); im.onload = () => {
+      const W = 376, H = 546, c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
+      const r = Math.max(W / im.width, H / im.height), w = im.width * r, h = im.height * r;
+      x.fillStyle = '#fff'; x.fillRect(0, 0, W, H); x.drawImage(im, (W - w) / 2, (H - h) / 2, w, h);
+      try{ res(c.toDataURL('image/jpeg', .9)); }catch(e){ res(src); } };
+    im.onerror = () => res(''); im.src = src; });
+}
+async function getPhotos(sts){
+  const need = sts.filter(st => !(st.roll in S.photos) && !(EDIT[st.roll] || {}).photo && st.pic);
+  for(let i = 0; i < need.length; i += 8){
+    S.busy = `Photos ${Math.min(i + 8, need.length)} of ${need.length}…`; S.prog = (i + 8) / need.length; paintBusy();
+    try{
+      const j = await api({ action:'idc_photos', items: need.slice(i, i + 8).map(st => ({ roll: st.roll, pic: st.pic })) }, 120000);
+      for(const roll of Object.keys(j.photos || {})) S.photos[roll] = await shrink(j.photos[roll]);
+    }catch(e){ need.slice(i, i + 8).forEach(st => { if(!(st.roll in S.photos)) S.photos[st.roll] = ''; }); S.err = 'Some photos did not load: ' + e.message; }
+  }
+  S.busy = ''; S.prog = 0;
+}
+
+/* ---------- print ---------- */
+async function doPrint(){
+  const sts = chosen(); if(!sts.length) return;
+  if(sts.length > 400 && !confirm(sts.length + ' cards in one print is heavy for a phone. Continue?')) return;
+  await getPhotos(sts); render();
+  if(document.fonts && document.fonts.ready) await document.fonts.ready;
+  const D = sts.map(cardData), L = S.layout; let html = '';
+  if(L === 'cr80'){ html = D.map(d => `<div class="pg cr80">${front(d)}</div><div class="pg cr80">${back(d)}</div>`).join(''); }
+  else if(L === 'duplex'){
+    for(let i = 0; i < D.length; i += 10){
+      const part = D.slice(i, i + 10);
+      html += `<div class="pg sheet">${part.map(front).join('')}</div>`;
+      // backs: columns swapped so each back lands behind its front when the sheet is turned over (long edge)
+      const rows = []; for(let r = 0; r < part.length; r += 2) rows.push(back(part[r + 1] || part[r]).replace('<svg', part[r + 1] ? '<svg' : '<svg style="visibility:hidden"') + back(part[r]));
+      html += `<div class="pg sheet">${rows.join('')}</div>`;
+    }
+  } else { for(let i = 0; i < D.length; i += 5) html += `<div class="pg sheet">${D.slice(i, i + 5).map(d => front(d) + back(d)).join('')}</div>`; }
+  $('#pageSize').textContent = L === 'cr80' ? '@page{size:85.6mm 54mm;margin:0}' : '@page{size:A4;margin:0}';
+  $('#printArea').innerHTML = html;
+  await Promise.all([...document.querySelectorAll('#printArea image')].map(im => new Promise(r => setTimeout(r, 30))));
+  S.lastPrinted = sts.map(st => st.roll);
+  setTimeout(() => { window.print(); render(); }, 400);
+}
+async function markPrinted(){
+  const rolls = S.lastPrinted || []; if(!rolls.length) return;
+  S.busy = 'Saving…'; render();
+  try{ const j = await api({ action:'idc_mark', rolls }); S.list.forEach(st => { if(rolls.includes(st.roll)) st.printed = j.at; }); S.lastPrinted = null; S.msg = rolls.length + ' cards marked as printed in “ID Cards Printed”.'; }
+  catch(e){ S.err = e.message; }
+  S.busy = ''; render();
+}
+
+/* ---------- edit one card (only the card, the sheet is not changed) ---------- */
+function openEdit(roll){
+  const st = S.list.find(x => x.roll === roll); if(!st) return;
+  const d = cardData(st), e = EDIT[roll] || {};
+  $('#dlgIn').innerHTML = `<h2 style="margin:0 0 4px;color:var(--brown);font-size:17px">${esc(st.roll)} · ${esc(st.name)}</h2>
+    <div class="sub">Changes here are for the card only. To fix the student's record use Admissions.</div>
+    <div class="grid">${[['name','Name'],['father','Father name'],['cls','Class'],['section','Section'],['group','Group'],['session','Session (side)'],['valid','Valid up to']].map(([k, l]) =>
+      `<label class="f">${l}<input data-k="${k}" value="${esc(e[k] || '')}" placeholder="${esc(d[k])}"></label>`).join('')}
+      <label class="f">Photo from this device<input type="file" id="ePic" accept="image/*"></label></div>
+    <div class="acts"><button class="btn pri" id="eSave">Save</button>${Object.keys(e).length ? '<button class="btn" id="eReset">Undo all changes</button>' : ''}<button class="btn" id="eClose">Close</button></div>`;
+  const dlg = $('#dlg'); dlg.showModal();
+  let pic = e.photo || '';
+  $('#ePic').onchange = ev => { const f = ev.target.files[0]; if(!f) return; const r = new FileReader(); r.onload = async () => { pic = await shrink(r.result); }; r.readAsDataURL(f); };
+  $('#eClose').onclick = () => dlg.close();
+  if($('#eReset')) $('#eReset').onclick = () => { delete EDIT[roll]; ls.set('idc_edit', EDIT); dlg.close(); render(); };
+  $('#eSave').onclick = () => {
+    const n = {}; document.querySelectorAll('#dlgIn input[data-k]').forEach(i => { if(i.value.trim()) n[i.dataset.k] = i.value.trim(); });
+    if(pic) n.photo = pic;
+    if(Object.keys(n).length) EDIT[roll] = n; else delete EDIT[roll];
+    ls.set('idc_edit', EDIT); dlg.close(); render();
+  };
+}
+
+/* ---------- screen ---------- */
+function paintBusy(){ const b = $('#busy'); if(b){ b.classList.toggle('hidden', !S.busy); b.querySelector('span').textContent = S.busy; b.querySelector('i').style.width = Math.round(Math.min(1, S.prog) * 100) + '%'; } }
+function render(){
+  const m = $('#main');
+  if(!user || !pass){ m.innerHTML = `<div class="card"><h2>Sign in first</h2><div class="sub">Open the attendance app and sign in with the admin login, then come back.</div><div class="acts"><a class="btn pri" href="./" style="display:inline-flex;align-items:center;text-decoration:none">Open the app</a></div></div>`; return; }
+  if(ls.get('admin', false) !== true){ m.innerHTML = `<div class="card"><h2>Admin only</h2><div class="sub">Student ID cards are made by the admin.</div></div>`; return; }
+  if(!S.list){ m.innerHTML = `<div class="card"><h2>Loading students…</h2><div class="sub">${S.loading ? 'Reading Transform-ALL-COLLEGE-STRENGTH.' : ''}</div>${S.err ? `<div class="note bad">${esc(S.err)}</div><div class="acts"><button class="btn pri" id="re">Try again</button></div>` : ''}</div>`; if($('#re')) $('#re').onclick = load; return; }
+  const f = S.f, all = S.list, list = filtered(), sel = chosen(), shown = list.slice(0, 600);
+  const secs = uniq(all.filter(st => (!f.program || st.program === f.program)).map(st => ({ s: st.pcs || st.section })), 's');
+  const opt = (arr, v, none) => `<option value="">${none}</option>` + arr.map(x => `<option ${x === v ? 'selected' : ''}>${esc(x)}</option>`).join('');
+  const prevList = (sel.length ? sel : list).slice(0, S.show), Y = year(), ses = sessionOf(), sign = signOf(Y);
+  m.innerHTML = `
+  <section class="card"><h2>Session ${esc(ses.label)} · valid up to ${esc(ses.valid)}</h2>
+    <div class="sub">Set these once every year before printing. The principal's sign and stamp go under the student's photo.</div>
+    <div class="grid">
+      <label class="f">Session start year<input id="yY" inputmode="numeric" maxlength="4" value="${esc(S.dY || Y)}"></label>
+      <label class="f">Valid up to (dd-mm-yyyy)<input id="yV" value="${esc(S.dV || ses.valid)}"></label>
+      <label class="f">Principal sign + stamp (picture)<input type="file" id="ySign" accept="image/*"></label>
+    </div>
+    <div class="acts" style="align-items:center"><button class="btn pri" id="ySave">Save session</button>
+      ${sign ? `<span class="sub">Now on the cards:</span><img src="${esc(sign)}" alt="" style="height:44px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:2px">` : ''}</div>
+    ${!SIGNS[Y] ? `<div class="note ${sign ? 'mid' : 'bad'}">${sign ? 'Using the signature copied from the shop’s cards. Upload this year’s principal sign and stamp (cut close, white background) to be sure.' : `No principal sign and stamp for ${Y} yet. Upload it above; until then the box under the photo stays empty.`}</div>` : ''}
+    ${Y < S.detected ? `<div class="note mid">Most 1st year Enroll# are JCW-F${String(S.detected).slice(-2)}-…, but the session is set to ${Y}.</div>` : ''}
+  </section>
+  <section class="card"><h2>1. Choose students</h2>
+    <div class="sub">${all.length} 1st year students in the strength sheet (2nd year is not listed). Tick the students (or a whole section) whose cards you want to print.</div>
+    <div class="grid">
+      <label class="f">Program<select id="fProg">${opt(uniq(all, 'program'), f.program, 'All programs')}</select></label>
+      <label class="f">Section<select id="fSec">${opt(secs, f.section, 'All sections')}</select></label>
+      <label class="f">Search<input id="fQ" value="${esc(f.q)}" placeholder="Name, father or Enroll#"></label>
+    </div>
+    <div class="acts"><label class="c"><input type="checkbox" id="fNP" ${f.notPrinted ? 'checked' : ''}> Not printed yet only</label>
+      <label class="c"><input type="checkbox" id="fEn" ${f.status === 'enrolled' ? 'checked' : ''}> Enrolled only</label>
+      <button class="btn sm" id="selAll">Tick all ${list.length}</button><button class="btn sm" id="selNone" ${sel.length ? '' : 'disabled'}>Untick all</button>
+      <button class="btn sm" id="reload">Reload sheet</button></div>
+    ${S.err ? `<div class="note bad">${esc(S.err)}</div>` : ''}${S.msg ? `<div class="note ok">${esc(S.msg)}</div>` : ''}
+    <div class="tw"><table><thead><tr><th></th><th>Enroll#</th><th>Name</th><th>Father</th><th>Class</th><th>Section</th><th>Photo</th><th>Printed</th><th></th></tr></thead><tbody>
+      ${shown.map(st => `<tr><td><input type="checkbox" data-r="${esc(st.roll)}" ${S.sel.has(st.roll) ? 'checked' : ''}></td><td>${esc(st.roll)}</td><td>${esc(st.name)}${EDIT[st.roll] ? ' ✎' : ''}</td><td>${esc(st.father)}</td><td>${esc(st.cls)}</td><td>${esc(st.pcs || st.section)}</td><td>${st.pic || (EDIT[st.roll] || {}).photo ? '✓' : '<span style="color:var(--bad)">none</span>'}</td><td class="tag">${st.printed ? `<span>${esc(st.printed)}</span>` : ''}</td><td><button class="btn sm" data-e="${esc(st.roll)}">Edit</button></td></tr>`).join('')}
+    </tbody></table></div>${list.length > shown.length ? `<div class="sub" style="margin-top:6px">Showing the first ${shown.length} of ${list.length}; use the filters.</div>` : ''}
+  </section>
+  <section class="card"><h2>2. Print</h2>
+    <div class="sub"><b>${sel.length}</b> card${sel.length === 1 ? '' : 's'} ticked. In the print window choose your printer, or <b>Save as PDF</b> to send to the card shop. Set <b>Margins: None</b> and <b>Scale: 100%</b>, and turn on <b>Background graphics</b>.</div>
+    <div class="grid"><label class="f">Layout<select id="lay">
+      <option value="sheet" ${S.layout === 'sheet' ? 'selected' : ''}>A4 · front and back side by side (5 per page, like the shop's sheet)</option>
+      <option value="duplex" ${S.layout === 'duplex' ? 'selected' : ''}>A4 two-sided · 10 fronts, then their 10 backs</option>
+      <option value="cr80" ${S.layout === 'cr80' ? 'selected' : ''}>PVC card printer · one card per page (85.6 × 54 mm)</option></select></label></div>
+    <div class="acts"><button class="btn pri" id="go" ${sel.length && !S.busy ? '' : 'disabled'}>Print ${sel.length || ''} card${sel.length === 1 ? '' : 's'}</button>
+      ${S.lastPrinted ? `<button class="btn" id="mark">Mark these ${S.lastPrinted.length} as printed</button>` : ''}</div>
+    <div id="busy" class="${S.busy ? '' : 'hidden'}"><div class="bar"><i style="width:${Math.round(S.prog * 100)}%"></i></div><span class="sub">${esc(S.busy)}</span></div>
+  </section>
+  <section class="card"><h2>Preview</h2>
+    <div class="sub">${sel.length ? 'Ticked students' : 'First students of the list'}. Tap a card to change what is printed on it. Photos load when you press <b>Load photos</b> or Print.</div>
+    <div class="acts"><button class="btn sm" id="lp" ${S.busy ? 'disabled' : ''}>Load photos</button></div>
+    <div class="prev">${prevList.map(st => { const d = cardData(st); return `<div class="pair"><div class="who"><span>${esc(st.roll)}</span><span>${esc(st.pcs || st.section)}</span></div><div data-e="${esc(st.roll)}">${front(d)}</div><div data-e="${esc(st.roll)}">${back(d)}</div></div>`; }).join('')}</div>
+    ${(sel.length ? sel : list).length > S.show ? `<div class="acts"><button class="btn sm" id="more">Show more</button></div>` : ''}
+  </section>
+  <section class="card"><details><summary style="font-weight:800;color:var(--brown);cursor:pointer">Card settings</summary>
+    <div class="grid"><label class="f">Phone (back)<input id="cPh" value="${esc(CFG.phone)}"></label></div>
+    <label class="f" style="margin-top:10px">Back lines (one per line)<textarea id="cRu">${esc(CFG.rules.join('\n'))}</textarea></label>
+    <div class="tw" style="max-height:none"><table><thead><tr><th>Program (sheet)</th><th>Class on card</th><th>Group on card</th></tr></thead><tbody>
+      ${uniq(all.map(st => ({ p: progKey(st.program) })), 'p').concat(Object.keys(CFG.map)).filter((v, i, a) => a.indexOf(v) === i).map(p => { const v = CFG.map[p] || {}; return `<tr><td>${esc(p)}</td><td><input data-mc="${esc(p)}" value="${esc(v.cls || '')}" style="width:100%;height:32px"></td><td><input data-mg="${esc(p)}" value="${esc(v.group || '')}" style="width:100%;height:32px"></td></tr>`; }).join('')}
+    </tbody></table></div>
+    <div class="acts"><button class="btn pri" id="cSave">Save settings</button><button class="btn" id="cDef">Back to the original</button></div>
+  </details></section>`;
+
+  const setF = (k, v) => { S.f[k] = v; ls.set('idc_f', S.f); S.show = 24; render(); };
+  $('#yV').onchange = e => { S.dV = e.target.value.trim(); };
+  $('#yY').onchange = e => { const y = Number(e.target.value); S.dY = e.target.value.trim(); if(y > 2000) $('#yV').value = S.dV = validOf(y); };
+  $('#ySign').onchange = ev => { const fl = ev.target.files[0]; if(!fl) return; const r = new FileReader(); r.onload = () => { const im = new Image(); im.onload = () => {
+      const k = Math.min(1, 900 / im.width), c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
+      c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); S.newSign = c.toDataURL('image/png'); S.msg = 'Picture ready: press Save session.'; render(); }; im.src = r.result; }; r.readAsDataURL(fl); };
+  $('#ySave').onclick = async () => {
+    const y = Number($('#yY').value), v = $('#yV').value.trim();
+    if(!(y > 2000 && y < 2100)) { S.err = 'Session start year looks wrong.'; return render(); }
+    if(!/^\d{2}-\d{2}-\d{4}$/.test(v)) { S.err = 'Valid up to must look like 31-08-' + (y + 2) + '.'; return render(); }
+    CFG.year = y === S.detected ? 0 : y; CFG.valid[y] = v; ls.set('idc_cfg', CFG);
+    S.busy = 'Saving session…'; S.err = ''; render();
+    try{
+      await api({ action:'idc_settings', cfg: CFG });
+      if(S.newSign){ await api({ action:'idc_sign', year: y, data: S.newSign }); SIGNS[y] = S.newSign; S.newSign = ''; }
+      S.dY = S.dV = '';
+      S.msg = 'Session ' + y + ' saved' + (SIGNS[y] ? ' with the principal sign and stamp.' : '.');
+    }catch(e){ S.err = e.message; }
+    S.busy = ''; render();
+  };
+  $('#fProg').onchange = e => { S.f.section = ''; setF('program', e.target.value); };
+  $('#fSec').onchange = e => setF('section', e.target.value);
+  $('#fQ').onchange = e => setF('q', e.target.value);
+  $('#fNP').onchange = e => setF('notPrinted', e.target.checked);
+  $('#fEn').onchange = e => setF('status', e.target.checked ? 'enrolled' : 'all');
+  $('#selAll').onclick = () => { list.forEach(st => S.sel.add(st.roll)); render(); };
+  $('#selNone').onclick = () => { S.sel.clear(); render(); };
+  $('#reload').onclick = () => { S.msg = ''; load(); };
+  m.querySelectorAll('input[data-r]').forEach(c => c.onchange = () => { c.checked ? S.sel.add(c.dataset.r) : S.sel.delete(c.dataset.r); render(); });
+  m.querySelectorAll('[data-e]').forEach(b => b.onclick = () => openEdit(b.dataset.e));
+  $('#lay').onchange = e => { S.layout = e.target.value; ls.set('idc_layout', S.layout); };
+  $('#go').onclick = () => { S.msg = ''; S.err = ''; doPrint(); };
+  if($('#mark')) $('#mark').onclick = markPrinted;
+  $('#lp').onclick = async () => { await getPhotos(prevList); render(); };
+  if($('#more')) $('#more').onclick = () => { S.show += 24; render(); };
+  $('#cSave').onclick = () => {
+    const map = {}; m.querySelectorAll('input[data-mc]').forEach(i => { const p = i.dataset.mc, g = m.querySelector(`input[data-mg="${CSS.escape(p)}"]`).value.trim(); if(i.value.trim() || g) map[p] = { cls: i.value.trim(), group: g }; });
+    CFG = mergeCfg(Object.assign({}, CFG, { phone: $('#cPh').value.trim(), rules: $('#cRu').value.split('\n').map(s => s.trim()).filter(Boolean), map }));
+    ls.set('idc_cfg', CFG); render();
+    api({ action:'idc_settings', cfg: CFG }).catch(e => { S.err = 'Saved on this device only: ' + e.message; render(); });
+  };
+  $('#cDef').onclick = () => { CFG = mergeCfg({ year: CFG.year, valid: CFG.valid }); ls.set('idc_cfg', CFG); api({ action:'idc_settings', cfg: CFG }).catch(() => {}); render(); };
+}
+window.addEventListener('afterprint', () => { $('#printArea').innerHTML = ''; });
+render(); if(user && pass && ls.get('admin', false) === true){ const c = ls.get('idc_cache', null); if(c) S.list = c.list; load(); }
+</script>
+</body>
+</html>
