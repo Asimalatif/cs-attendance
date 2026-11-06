@@ -26,7 +26,7 @@ var IDC_CFG = {
 
 function idcAuthorize() {
   SpreadsheetApp.openById(IDC_CFG.USERS).getName();
-  DriveApp.getRootFolder().getName();
+  idcFolder_().getName();                                     // makes the "JCW ID Cards" folder (needs full Drive permission)
   UrlFetchApp.fetch('https://www.google.com', { muteHttpExceptions: true });
   Logger.log('ID cards: permissions OK. Now Deploy → Manage deployments → Edit → New version.');
 }
@@ -95,7 +95,10 @@ function idcFolder_() {
 function idcSignName_(year) { return 'Principal sign and stamp ' + year + '.png'; }
 /** { '2026': dataURL, ... } for every year that has a picture */
 function idcSigns_() {
-  var out = {}, files = idcFolder_().getFiles();
+  var out = {}, it;
+  try { it = DriveApp.getFoldersByName(IDC_CFG.SIGN_FOLDER); } catch (e) { return out; }
+  if (!it.hasNext()) return out;                             // no picture uploaded yet: the folder is made on the first upload
+  var files = it.next().getFiles();
   while (files.hasNext()) {
     var f = files.next(), m = f.getName().match(/^Principal sign and stamp (\d{4})\./);
     if (!m) continue;
