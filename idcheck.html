@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#6B1315">
+<meta name="robots" content="noindex">
+<link rel="icon" href="icon-192.png">
+<title>Check your ID card · Jinnah College for Women</title>
+<style>
+@font-face{font-family:'JCWCalibri';font-weight:700;src:local('Calibri Bold'),local('Calibri-Bold'),url(idcard/Carlito-Bold.woff2) format('woff2')}
+:root{--bg:#F7EDEA;--surface:#fff;--ink:#2B1912;--muted:#7C6159;--line:#E2C0B8;--main:#6B1315;--good:#0E8A5F;--good-bg:#E3F4EC;--bad:#C0392B;--bad-bg:#FDE3E1;--mid:#9A6206;--mid-bg:#FFF2D6}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;padding-bottom:40px}
+button,input,textarea{font:inherit;color:inherit}
+header{background:linear-gradient(120deg,#4A0D0F,#8A2A2D);color:#fff;padding:calc(14px + env(safe-area-inset-top,0px)) 16px 16px}
+header .in{max-width:640px;margin:0 auto;display:flex;gap:12px;align-items:center}
+header img{width:46px;height:46px;border-radius:50%;background:#fff;padding:3px}
+header h1{margin:0;font-size:20px;line-height:1.2}header small{display:block;opacity:.85;font-size:13px}
+main{max-width:640px;margin:0 auto;padding:16px}
+.card{background:var(--surface);border:1.5px solid var(--line);border-top:5px solid var(--main);border-radius:18px;padding:16px;margin-bottom:14px}
+h2{margin:0 0 6px;font-size:18px;color:var(--main)}
+.sub{color:var(--muted);font-size:14px}
+label{display:flex;flex-direction:column;gap:4px;font-size:14px;font-weight:700;color:var(--muted);margin-top:12px}
+input,textarea{height:48px;border:1.5px solid var(--line);border-radius:12px;padding:0 12px;background:#fff;font-size:16px;font-weight:600;width:100%}
+textarea{height:auto;min-height:80px;padding:10px 12px;font-weight:500}
+.btn{min-height:48px;border-radius:12px;border:1.5px solid var(--line);background:#fff;font-weight:800;padding:0 16px;cursor:pointer;font-size:16px}
+.btn.pri{background:linear-gradient(180deg,#8A2A2D,#6B1315);border-color:#6B1315;color:#fff}
+.btn.good{background:var(--good);border-color:var(--good);color:#fff}
+.btn:disabled{opacity:.5}
+.acts{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.acts .btn{flex:1;min-width:150px}
+.note{border-radius:12px;padding:10px 12px;font-size:14.5px;margin-top:12px}
+.ok{background:var(--good-bg);color:var(--good)}.bad{background:var(--bad-bg);color:var(--bad)}.mid{background:var(--mid-bg);color:var(--mid)}
+.cards svg{width:100%;height:auto;display:block;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.2);margin-top:10px}
+.ed{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;margin-top:10px}
+.ed canvas{width:150px;height:218px;border-radius:10px;border:2px solid #231F20;touch-action:none;background:#eee}
+.ed .side{flex:1;min-width:160px;display:flex;flex-direction:column;gap:8px}
+.ed .side .btn{min-height:40px;font-size:14px}
+.hidden{display:none!important}
+ul{margin:6px 0 0;padding-left:20px}
+</style>
+</head>
+<body>
+<header><div class="in"><img src="jcw-logo.png" alt=""><h1>Check your college ID card<small>Jinnah College for Women · 1st year</small></h1></div></header>
+<main id="main"></main>
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm7d7-UKg0W-OoWAiuRBHe4mjlRgMQXIHuLm6zi--i/exec';
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+/* one request at a time; if the college server is busy (many students at once) wait a few seconds and try again */
+let BUSY = false;
+async function api(payload){
+  for(let t = 0; t < 4; t++){
+    try{
+      const r = await fetch(API, { method:'POST', body: JSON.stringify(payload), redirect:'follow' });
+      const j = JSON.parse(await r.text());
+      if(j.ok === false && /busy/i.test(j.error || '') && t < 3){ await sleep(3000 + Math.random() * 5000); continue; }
+      if(j.ok === false) throw Object.assign(new Error(j.error || 'Error'), { final: true });
+      return j;
+    }catch(e){
+      if(e.final) throw e;
+      if(!navigator.onLine) throw new Error('No internet. Connect and try again.');
+      if(t === 3) throw new Error('The college server is busy. Please try again after a few minutes.');
+      await sleep(3000 + Math.random() * 5000);
+    }
+  }
+}
+const PAGE_W = 518.4, PAGE_H = 806.4, FRONT_X = 0.131, BACK_X = 273.4, CARD_W = 244.8, CARD_H = 158.4;
+const ROW_Y = [0.02, 158.42, 316.82, 475.22, 633.61];
+const GEO = [{"base": [92.2637, 102.9547, 113.6456, 124.3362, 135.0271, 145.718], "photo": [174.9529, 59.3018, 45.5139, 66.0289], "frame": [175.2653, 59.6166, 220.1545, 125.0155], "signBox": [173.3034, 129.2252, 48.8134, 12.2975], "signClip": [170.6757, 129.4067, 224.7443, 141.3411], "sess": [[28.2447, 90.5604, 33.9012, 118.8794], [301.089, 90.5604, 306.7455, 118.8794]], "valid": [312.9491, 104.6907], "vbbox": [312.9491, 98.4897, 389.3215, 106.7577]}];
+const TPL_SESSION = '2026-28', TPL_VALID = '31-08-2028', VALUE_X = 71.1196, VALUE_MAX = [102, 102, 102, 102, 97, 90], DATE_DX = 39.344;   // last two rows stop before the sign box and "Principal Signature"
+const FONT_B = "'JCWCalibri',Calibri,Carlito,sans-serif";
+const cvs = document.createElement('canvas').getContext('2d');
+const textW = (t, size) => { cvs.font = `700 ${size}px ${FONT_B}`; return cvs.measureText(t).width; };
+function fit(text, size, max){ return textW(text, size) > max ? ` textLength="${max}" lengthAdjust="spacingAndGlyphs"` : ''; }
+let uid = 0;
+function slot(k, d){
+  const g = GEO[k], id = 'k' + (++uid), F = g.frame, P = g.photo, SC = g.signClip, SB = g.signBox, r0 = 1.8335;
+  const vals = [d.name, d.father, d.cls, d.roll, d.section, d.group];
+  let o = `<g font-family="${FONT_B}" font-weight="700" font-size="7.982" fill="#fff" style="font-kerning:normal">` +
+    vals.map((v, i) => `<text x="${VALUE_X}" y="${g.base[i]}"${fit(v, 7.982, VALUE_MAX[i])}>${esc(v)}</text>`).join('') + '</g>';
+  const rr = `M${F[0] + r0} ${F[1]}H${F[2] - r0}A${r0} ${r0} 0 0 1 ${F[2]} ${F[1] + r0}V${F[3] - r0}A${r0} ${r0} 0 0 1 ${F[2] - r0} ${F[3]}H${F[0] + r0}A${r0} ${r0} 0 0 1 ${F[0]} ${F[3] - r0}V${F[1] + r0}A${r0} ${r0} 0 0 1 ${F[0] + r0} ${F[1]}Z`;
+  if(!d.photo) o += `<path d="${rr}" fill="#fff" stroke="#231F20" stroke-width=".5"/>`;
+  if(d.photo) o += `<clipPath id="p${id}"><path d="${rr}"/></clipPath><image href="${esc(d.photo)}" x="${P[0]}" y="${P[1]}" width="${P[2]}" height="${P[3]}" preserveAspectRatio="xMidYMid slice" clip-path="url(#p${id})"/><path d="${rr}" fill="none" stroke="#231F20" stroke-width=".5"/>`;
+  if(d.sign) o += `<clipPath id="s${id}"><rect x="${SC[0]}" y="${SC[1]}" width="${SC[2] - SC[0]}" height="${SC[3] - SC[1]}"/></clipPath><image href="${esc(d.sign)}" x="${SB[0]}" y="${SB[1]}" width="${SB[2]}" height="${SB[3]}" preserveAspectRatio="xMidYMid meet" clip-path="url(#s${id})"/>`;
+  if(d.session !== TPL_SESSION) g.sess.forEach(r => {
+    o += `<rect x="${r[0] - .3}" y="${r[1] - .4}" width="${r[2] - r[0] + .6}" height="${r[3] - r[1] + .8}" fill="#fff"/>` +
+      `<text transform="translate(${r[2] - .06} ${r[3] + .17}) rotate(-90)" font-family="${FONT_B}" font-weight="700" font-size="8.11" fill="#000" textLength="28.87" lengthAdjust="spacingAndGlyphs">${esc(d.session)}</text>`;
+  });
+  if(d.valid !== TPL_VALID){
+    const x = g.valid[0] + DATE_DX, y = g.valid[1], b = g.vbbox;
+    o += `<rect x="${x - .3}" y="${b[1] - .2}" width="${b[2] - x + .55}" height="${b[3] - b[1] + .4}" fill="#fff"/>` +
+      `<text transform="translate(${x} ${y}) scale(.9594 1)" font-family="${FONT_B}" font-weight="700" font-size="8.268" fill="#000">${esc(d.valid)}</text>`;
+  }
+  return o;
+}
+function originalView(d, backSide){
+  const x = (backSide ? BACK_X : FRONT_X) - .2;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x} ${ROW_Y[0] - .2} ${CARD_W + .4} ${CARD_H + .2}"><rect x="${x}" y="-1" width="${CARD_W + 1}" height="${CARD_H + 2}" fill="#fff"/><image href="idcard/sheet.svg" width="${PAGE_W}" height="${PAGE_H}"/>${slot(0, d)}</svg>`;
+}
+const DEF_MAP = { 'Pre-Medical': { cls: 'FSC', group: 'Pre-Medical' }, 'Pre-Engineering': { cls: 'FSC', group: 'Pre-Engineering' }, 'FCS': { cls: 'FSC', group: 'GENERAL / COMPUTER SCIENCE' }, 'F.A': { cls: 'F.A', group: 'Humanities' } };
+const progKey = p => String(p || '').replace(/\(.*?\)/g, '').trim();
+const secOf = st => { const t = String(st.pcs || '').trim().split(/\s+/).pop() || ''; return /^[A-Za-z]{0,3}\d{1,2}$/.test(t) ? t.toUpperCase() : (st.section || t); };
+function cardData(R){
+  const st = R.st, cfg = R.cfg || {}, mp = Object.assign({}, DEF_MAP, cfg.map || {})[progKey(st.program)] || {};
+  const m = String(st.roll).match(/-F(\d{2})-/i), y = m ? 2000 + Number(m[1]) : new Date().getFullYear();
+  const cy = Number(cfg.year) || y;
+  return { roll: st.roll, name: String(st.name || '').toUpperCase(), father: String(st.father || '').toUpperCase(), cls: mp.cls || progKey(st.program),
+    section: secOf(st), group: mp.group || progKey(st.program), photo: R.photo || '', session: cy + '-' + String(cy + 2).slice(-2),
+    valid: (cfg.valid || {})[cy] || ('31-08-' + (cy + 2)), sign: R.sign || (cy === 2026 ? 'idcard/principal-sign.png' : '') };
+}
+const FRAME_AR = 45.5139 / 66.0289;
+const loadImg = src => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('bad')); im.src = src; });
+
+let S = { step: 'login', roll: '', key: '', R: null, err: '', busy: false, photo: '' };
+function render(){
+  const m = $('#main');
+  if(S.step === 'login'){
+    m.innerHTML = `<section class="card"><h2>See your card before it is printed</h2>
+      <div class="sub">Check your name, father’s name, class, section and photo. If something is wrong, you can send the right one here.</div>
+      <label>Your Enroll#<input id="lr" placeholder="JCW-F26-1032" autocomplete="off" autocapitalize="characters" value="${esc(S.roll)}"></label>
+      <label>Your father’s first name<input id="lk" placeholder="e.g. Nasir" autocomplete="off" value="${esc(S.key)}"></label>
+      <div class="sub" style="margin-top:6px">Or the last 4 digits of the mobile number you gave the college.</div>
+      ${S.err ? `<div class="note bad">${esc(S.err)}</div>` : ''}
+      <div class="acts"><button class="btn pri" id="lgo" ${S.busy ? 'disabled' : ''}>${S.busy ? 'Please wait…' : 'Show my card'}</button></div></section>`;
+    $('#lgo').onclick = find; $('#lk').onkeydown = e => { if(e.key === 'Enter') find(); };
+    return;
+  }
+  const R = S.R, d = cardData(R), last = R.last;
+  if(S.step === 'card'){
+    m.innerHTML = `<section class="card"><h2>Your card</h2>
+      ${last ? `<div class="note ${last.status === 'Pending' ? 'mid' : last.status === 'Rejected' ? 'bad' : 'ok'}">${last.status === 'Pending' ? `You sent a correction on ${esc(last.when)}. The college office will check it. You can send again to change it.` : last.status === 'Confirmed' ? `You confirmed your card on ${esc(last.when)}.` : last.status === 'Approved' ? `Your correction was approved. The card below shows it.` : last.status === 'Rejected' ? 'Your last correction was not accepted. Please visit the college office, or send it again clearly.' : ''}</div>` : ''}
+      <div class="cards">${originalView(d, false)}${originalView(d, true)}</div>
+      ${!R.photo ? '<div class="note bad">We have no photo of you. Please send one: tap “Something is wrong”.</div>' : ''}
+      <div class="sub" style="margin-top:10px">Is everything on your card correct?</div>
+      ${S.err ? `<div class="note bad">${esc(S.err)}</div>` : ''}
+      <div class="acts"><button class="btn good" id="yes" ${S.busy || !R.photo ? 'disabled' : ''}>✓ Everything is correct</button><button class="btn" id="no">✎ Something is wrong</button></div>
+      <div class="acts"><button class="btn" id="out">Not me / exit</button></div></section>`;
+    $('#yes').onclick = () => send({ allOk: true });
+    $('#no').onclick = () => { S.step = 'fix'; S.err = ''; render(); };
+    $('#out').onclick = () => { S = { step: 'login', roll: '', key: '', R: null, err: '', busy: false, photo: '' }; render(); };
+    return;
+  }
+  if(S.step === 'fix'){
+    m.innerHTML = `<section class="card"><h2>What is wrong?</h2>
+      <div class="sub">Change only what is wrong. Write names exactly as on your matric certificate.</div>
+      <label>Your name<input id="fn" value="${esc(S.fv ? S.fv.name : R.st.name)}"></label>
+      <label>Father’s name<input id="ff" value="${esc(S.fv ? S.fv.father : R.st.father)}"></label>
+      <label>Anything else (class, section, group…)<textarea id="fo" placeholder="e.g. I am in section H2, not H1">${esc(S.fv ? S.fv.note : '')}</textarea></label>
+      <label>New photo ${R.photo ? '(only if your photo is wrong or unclear)' : '(needed)'}</label>
+      <div class="sub">A clear, recent photo: face to the front, plain light background, no filters or sunglasses. You can take it now with the camera.</div>
+      <input type="file" id="fp" accept="image/*" style="height:auto;padding:10px;margin-top:6px">
+      <div class="ed ${S.photo ? '' : 'hidden'}" id="ed"><canvas id="pc" width="376" height="${Math.round(376 / FRAME_AR)}"></canvas>
+        <div class="side"><div class="sub">Drag the photo and zoom so your face fills the frame.</div>
+          <button class="btn" id="pL">⟲ Rotate</button><button class="btn" id="pR">Rotate ⟳</button>
+          <label style="margin:0">Zoom<input type="range" id="pZ" min="1" max="4" step="0.01" value="1" style="height:32px;padding:0"></label></div></div>
+      ${S.err ? `<div class="note bad">${esc(S.err)}</div>` : ''}
+      <div class="acts"><button class="btn pri" id="fs" ${S.busy ? 'disabled' : ''}>${S.busy ? 'Sending…' : 'Send to college'}</button><button class="btn" id="fb">Back</button></div></section>`;
+    $('#fb').onclick = () => { S.step = 'card'; S.err = ''; render(); };
+    editor();
+    $('#fs').onclick = () => {
+      const name = $('#fn').value.trim(), father = $('#ff').value.trim(), note = $('#fo').value.trim(); S.fv = { name, father, note };
+      const p = { name: name.toUpperCase() !== String(R.st.name).toUpperCase() ? name : '', father: father.toUpperCase() !== String(R.st.father).toUpperCase() ? father : '', note, photo: E.im ? $('#pc').toDataURL('image/jpeg', .85) : '' };
+      if(!p.name && !p.father && !p.note && !p.photo){ S.err = 'You have not changed anything.'; return render(); }
+      send(p);
+    };
+    return;
+  }
+  if(S.step === 'done'){
+    m.innerHTML = `<section class="card"><h2>${S.done === 'Confirmed' ? 'Thank you!' : 'Sent to the college'}</h2>
+      <div class="note ok">${S.done === 'Confirmed' ? 'You confirmed that your card is correct. It will be printed like this.' : 'Your correction was sent. The college office will check it before printing. You can open this page again later to see your card.'}</div>
+      <div class="acts"><button class="btn" id="again">Done</button></div></section>`;
+    $('#again').onclick = () => { S = { step: 'login', roll: '', key: '', R: null, err: '', busy: false, photo: '' }; render(); };
+  }
+}
+let E = { im: null, rot: 0, z: 1, px: 0, py: 0 };
+function editor(){
+  const cv = $('#pc'), x = cv.getContext('2d');
+  function draw(){
+    x.fillStyle = '#fff'; x.fillRect(0, 0, cv.width, cv.height); if(!E.im) return;
+    const sw = E.rot % 180 ? E.im.naturalHeight : E.im.naturalWidth, sh = E.rot % 180 ? E.im.naturalWidth : E.im.naturalHeight, k = Math.max(cv.width / sw, cv.height / sh) * E.z;
+    x.save(); x.translate(cv.width / 2 + E.px, cv.height / 2 + E.py); x.rotate(E.rot * Math.PI / 180); x.scale(k, k); x.drawImage(E.im, -E.im.naturalWidth / 2, -E.im.naturalHeight / 2); x.restore();
+  }
+  draw();
+  $('#fp').onchange = ev => { const f = ev.target.files[0]; if(!f) return; const rd = new FileReader();
+    rd.onload = async () => { try{ E = { im: await loadImg(rd.result), rot: 0, z: 1, px: 0, py: 0 }; S.photo = 'yes'; $('#ed').classList.remove('hidden'); $('#pZ').value = 1; draw(); }catch(e){ alert('This picture could not be opened. Try another.'); } };
+    rd.readAsDataURL(f); };
+  $('#pL').onclick = () => { E.rot = (E.rot + 270) % 360; E.px = E.py = 0; draw(); };
+  $('#pR').onclick = () => { E.rot = (E.rot + 90) % 360; E.px = E.py = 0; draw(); };
+  $('#pZ').oninput = e => { E.z = Number(e.target.value); draw(); };
+  let drag = null;
+  cv.onpointerdown = e => { drag = { x: e.clientX, y: e.clientY, px: E.px, py: E.py }; cv.setPointerCapture(e.pointerId); };
+  cv.onpointermove = e => { if(!drag) return; const s = cv.width / cv.getBoundingClientRect().width; E.px = drag.px + (e.clientX - drag.x) * s; E.py = drag.py + (e.clientY - drag.y) * s; draw(); };
+  cv.onpointerup = cv.onpointercancel = () => { drag = null; };
+}
+async function find(){
+  if(BUSY) return;
+  S.roll = $('#lr').value.trim(); S.key = $('#lk').value.trim(); S.err = '';
+  if(!S.roll || !S.key){ S.err = 'Write your Enroll# and your father’s first name.'; return render(); }
+  BUSY = S.busy = true; render();
+  try{ S.R = await api({ action: 'idp_find', roll: S.roll, key: S.key }); S.roll = S.R.st.roll; S.step = 'card'; }
+  catch(e){ S.err = e.message; }
+  BUSY = S.busy = false; render();
+}
+async function send(p){
+  if(BUSY) return;
+  BUSY = S.busy = true; S.err = ''; render();
+  try{ const j = await api(Object.assign({ action: 'idp_send', roll: S.roll, key: S.key }, p)); S.done = j.status; S.step = 'done'; E = { im: null, rot: 0, z: 1, px: 0, py: 0 }; S.photo = ''; S.fv = null; }
+  catch(e){ S.err = e.message; }
+  BUSY = S.busy = false; render();
+}
+render();
+</script>
+</body>
+</html>

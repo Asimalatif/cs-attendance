@@ -61,14 +61,6 @@ textarea{width:100%;min-height:70px;border:1.5px solid var(--line);border-radius
 .ed{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
 .ed canvas{width:240px;height:348px;border-radius:10px;border:2px solid #231F20;touch-action:none;cursor:grab;background:#eee}
 .ed .side{flex:1;min-width:200px;display:flex;flex-direction:column;gap:8px}
-.designs{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(230px,100%),1fr));gap:10px;margin-top:10px}
-.designs button{border:2px solid var(--line);border-radius:14px;background:var(--surface);padding:6px;cursor:pointer;text-align:left;font-weight:700;font-size:13px;color:var(--ink)}
-.designs button.on{border-color:var(--brown);box-shadow:0 0 0 3px var(--tea)}
-.designs svg{width:100%;height:auto;display:block;border-radius:6px;margin-bottom:4px}
-.themes{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-.themes button{display:flex;align-items:center;gap:6px;border:2px solid var(--line);border-radius:999px;background:var(--surface);padding:5px 10px 5px 6px;cursor:pointer;font-weight:700;font-size:12.5px;color:var(--ink)}
-.themes button.on{border-color:var(--brown);box-shadow:0 0 0 3px var(--tea)}
-.themes i{width:22px;height:22px;border-radius:50%;display:inline-block;border:2px solid #fff;box-shadow:0 0 0 1px #0002}
 td .bad{color:var(--bad);font-weight:700}td .mid{color:var(--mid);font-weight:700}
 @font-face{font-family:'JCWCalibri';font-weight:700;src:local('Calibri Bold'),local('Calibri-Bold'),url(idcard/Carlito-Bold.woff2) format('woff2')}
 </style>
@@ -87,7 +79,6 @@ const user = ls.get('user', ''), pass = ls.get('pass', '');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const LIST_FRESH_H = 12;            // the student list is read from the sheet at most every 12 hours (or on "Reload sheet")
 const PHOTO_BATCH = 12;             // photos per server call (one call at a time)
-const PDF_PART = 200;               // cards per PDF file (40 pages), so phones do not run out of memory
 
 /* ---------- card settings ---------- */
 const DEF = {
@@ -105,8 +96,7 @@ let CFG = mergeCfg(ls.get('idc_cfg', {}));
 let SIGNS = {};
 let EDIT = ls.get('idc_edit', {});
 let S = { list: null, at: '', loading: false, err: '', msg: '', f: Object.assign({ program: '', section: '', q: '', notPrinted: false, status: 'enrolled', photo: '', ticked: false }, ls.get('idc_f', {})),
-  sel: new Set(), busy: '', prog: 0, cancel: false, lastPrinted: null, show: 12, detected: 0, parts: null,
-  design: Object.assign({ id: 'original', theme: 'maroon' }, ls.get('idc_design', {})) };
+  sel: new Set(), busy: '', prog: 0, cancel: false, lastPrinted: null, show: 12, detected: 0, check: {}, reqs: null, reqFrom: 0, reqTotal: 0 };
 
 async function api(payload, ms = 300000){
   const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms);
@@ -219,7 +209,7 @@ function cardData(st, photo){
 const PAGE_W = 518.4, PAGE_H = 806.4, FRONT_X = 0.131, BACK_X = 273.4, CARD_W = 244.8, CARD_H = 158.4;
 const ROW_Y = [0.02, 158.42, 316.82, 475.22, 633.61];
 const GEO = [{"base": [92.2637, 102.9547, 113.6456, 124.3362, 135.0271, 145.718], "photo": [174.9529, 59.3018, 45.5139, 66.0289], "frame": [175.2653, 59.6166, 220.1545, 125.0155], "signBox": [173.3034, 129.2252, 48.8134, 12.2975], "signClip": [170.6757, 129.4067, 224.7443, 141.3411], "sess": [[28.2447, 90.5604, 33.9012, 118.8794], [301.089, 90.5604, 306.7455, 118.8794]], "valid": [312.9491, 104.6907], "vbbox": [312.9491, 98.4897, 389.3215, 106.7577]}, {"base": [250.8797, 261.5706, 272.2615, 282.9521, 293.6431, 304.334], "photo": [174.9529, 217.9175, 45.5139, 66.0289], "frame": [175.2653, 218.2326, 220.1545, 283.6315], "signBox": [173.3034, 287.8412, 48.8134, 12.2975], "signClip": [170.6757, 288.0227, 224.7443, 299.9571], "sess": [[28.2447, 249.1765, 33.9012, 277.4954], [301.089, 248.9604, 306.7455, 277.2794]], "valid": [312.9491, 263.0906], "vbbox": [312.9491, 256.8896, 389.3215, 265.1576]}, {"base": [409.4957, 420.1866, 430.8775, 441.5681, 452.259, 462.9499], "photo": [174.9529, 376.5337, 45.5139, 66.0289], "frame": [175.2653, 376.8486, 220.1545, 442.2475], "signBox": [173.3034, 446.4572, 48.8134, 12.2975], "signClip": [170.6757, 446.6387, 224.7443, 458.5731], "sess": [[28.2447, 407.7924, 33.9012, 436.1114], [301.089, 407.3604, 306.7455, 435.6794]], "valid": [312.9491, 421.4906], "vbbox": [312.9491, 415.2896, 389.3215, 423.5576]}, {"base": [568.1117, 578.8026, 589.4935, 600.1841, 610.875, 621.5659], "photo": [174.9529, 535.1497, 45.5139, 66.0289], "frame": [175.2653, 535.4646, 220.1545, 600.8635], "signBox": [173.3034, 605.0731, 48.8134, 12.2975], "signClip": [170.6757, 605.2548, 224.7443, 617.1891], "sess": [[28.2447, 566.4084, 33.9012, 594.7274], [301.089, 565.7604, 306.7455, 594.0794]], "valid": [312.9491, 579.8906], "vbbox": [312.9491, 573.6896, 389.3215, 581.9576]}, {"base": [726.7277, 737.4186, 748.1095, 758.8001, 769.491, 780.1819], "photo": [174.9529, 693.7657, 45.5139, 66.0289], "frame": [175.2653, 694.0806, 220.1545, 759.4795], "signBox": [173.3034, 763.6891, 48.8134, 12.2975], "signClip": [170.6757, 763.8707, 224.7443, 775.8051], "sess": [[28.2447, 725.0244, 33.9012, 753.3434], [301.089, 724.1604, 306.7455, 752.4794]], "valid": [312.9491, 738.2906], "vbbox": [312.9491, 732.0897, 389.3215, 740.3577]}];
-const TPL_SESSION = '2026-28', TPL_VALID = '31-08-2028', VALUE_X = 71.1196, VALUE_MAX = 102, DATE_DX = 39.344;
+const TPL_SESSION = '2026-28', TPL_VALID = '31-08-2028', VALUE_X = 71.1196, VALUE_MAX = [102, 102, 102, 102, 97, 90], DATE_DX = 39.344;   // last two rows stop before the sign box and "Principal Signature"
 const FONT_B = "'JCWCalibri',Calibri,Carlito,sans-serif";
 const cvs = document.createElement('canvas').getContext('2d');
 const textW = (t, size) => { cvs.font = `700 ${size}px ${FONT_B}`; return cvs.measureText(t).width; };
@@ -229,7 +219,7 @@ function slot(k, d){
   const g = GEO[k], id = 'k' + (++uid), F = g.frame, P = g.photo, SC = g.signClip, SB = g.signBox, r0 = 1.8335;
   const vals = [d.name, d.father, d.cls, d.roll, d.section, d.group];
   let o = `<g font-family="${FONT_B}" font-weight="700" font-size="7.982" fill="#fff" style="font-kerning:normal">` +
-    vals.map((v, i) => `<text x="${VALUE_X}" y="${g.base[i]}"${fit(v, 7.982, VALUE_MAX)}>${esc(v)}</text>`).join('') + '</g>';
+    vals.map((v, i) => `<text x="${VALUE_X}" y="${g.base[i]}"${fit(v, 7.982, VALUE_MAX[i])}>${esc(v)}</text>`).join('') + '</g>';
   const rr = `M${F[0] + r0} ${F[1]}H${F[2] - r0}A${r0} ${r0} 0 0 1 ${F[2]} ${F[1] + r0}V${F[3] - r0}A${r0} ${r0} 0 0 1 ${F[2] - r0} ${F[3]}H${F[0] + r0}A${r0} ${r0} 0 0 1 ${F[0]} ${F[3] - r0}V${F[1] + r0}A${r0} ${r0} 0 0 1 ${F[0] + r0} ${F[1]}Z`;
   if(!d.photo) o += `<path d="${rr}" fill="#fff" stroke="#231F20" stroke-width=".5"/>`;
   if(d.photo) o += `<clipPath id="p${id}"><path d="${rr}"/></clipPath><image href="${esc(d.photo)}" x="${P[0]}" y="${P[1]}" width="${P[2]}" height="${P[3]}" preserveAspectRatio="xMidYMid slice" clip-path="url(#p${id})"/><path d="${rr}" fill="none" stroke="#231F20" stroke-width=".5"/>`;
@@ -250,102 +240,19 @@ function originalView(d, backSide){
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x} ${ROW_Y[0] - .2} ${CARD_W + .4} ${CARD_H + .2}"><rect x="${x}" y="-1" width="${CARD_W + 1}" height="${CARD_H + 2}" fill="#fff"/><image href="idcard/sheet.svg" width="${PAGE_W}" height="${PAGE_H}"/>${slot(0, d)}</svg>`;
 }
 
-/* ---------- other designs: drawn from simple shapes, same card size and same sheet (5 per page, front | back) ---------- */
-const THEMES = [
-  { id: 'maroon',  name: 'Maroon & gold',    main: '#6B1315', accent: '#FCC900', light: '#FBF4EC', ink: '#1F1A17', muted: '#6B5B55' },
-  { id: 'navy',    name: 'Navy & sky',       main: '#13315C', accent: '#5FA8D3', light: '#EEF4FA', ink: '#14202E', muted: '#55657A' },
-  { id: 'green',   name: 'Emerald & gold',   main: '#0B5D3B', accent: '#E2B93B', light: '#EEF7F1', ink: '#13241B', muted: '#4F6A5C' },
-  { id: 'purple',  name: 'Royal purple',     main: '#4B2A7B', accent: '#E9A23B', light: '#F4EFFA', ink: '#211631', muted: '#66597A' },
-  { id: 'teal',    name: 'Teal & coral',     main: '#0F6E6E', accent: '#F07B5A', light: '#EAF6F5', ink: '#132626', muted: '#4D6B6B' },
-  { id: 'charcoal',name: 'Charcoal & orange',main: '#2E2E33', accent: '#F28C28', light: '#F4F4F5', ink: '#1B1B1F', muted: '#5E5E66' }
-];
-const DESIGNS = [
-  { id: 'original', name: 'Shop’s Section E card (exact copy)' },
-  { id: 'modern',   name: 'Modern · header band' },
-  { id: 'classic',  name: 'Classic · side stripe' }
-];
-const theme = () => THEMES.find(t => t.id === S.design.theme) || THEMES[0];
-const LABELS = ['Name', 'F.Name', 'Class', 'Roll#', 'Section', 'Group'];
-const W = CARD_W, H = CARD_H;
-const T = (x, y, text, s, fill, o = {}) => Object.assign({ t: 'text', x, y, text: String(text || ''), s, fill }, o);
-const Rc = (x, y, w, h, o) => Object.assign({ t: 'rect', x, y, w, h }, o);
-const Im = (src, x, y, w, h, o) => Object.assign({ t: 'img', src, x, y, w, h }, o);
-function designPrims(id, back, d, th){
-  const rules = CFG.rules.filter(Boolean).slice(0, 4), P = [];
-  if(id === 'modern'){
-    P.push(Rc(0, 0, W, H, { fill: th.light }), Im('idcard/campus.jpg', 0, 0, W, H, { fit: 'cover', op: .1 }));
-    const hh = back ? 30 : 42;
-    P.push(Rc(0, 0, W, hh, { fill: th.main }), Rc(0, hh, W, 2.4, { fill: th.accent }));
-    const L = back ? 24 : 32;
-    P.push(Rc(6, (hh - L) / 2, L, L, { r: L / 2, fill: '#fff' }), Im('idcard/uop-logo.png', 7, (hh - L) / 2 + 1, L - 2, L - 2, { fit: 'contain' }));
-    P.push(Rc(W - 6 - L, (hh - L) / 2, L, L, { r: L / 2, fill: '#fff' }), Im('idcard/jcw-crest.png', W - 6 - L + .5, (hh - L) / 2 + .5, L - 1, L - 1, { fit: 'contain' }));
-    P.push(T(W / 2, back ? 16.5 : 22, 'JINNAH COLLEGE FOR WOMEN', back ? 10.5 : 13.2, '#fff', { a: 'middle', max: back ? 170 : 158 }),
-           T(W / 2, back ? 25.5 : 33.5, 'UNIVERSITY OF PESHAWAR', back ? 5.8 : 7, th.accent, { a: 'middle' }));
-    if(!back){
-      P.push(Rc(10, 52, 58, 80, { r: 5, fill: '#fff', stroke: th.main, sw: 1.2 }), Im(d.photo, 11.2, 53.2, 55.6, 77.6, { fit: 'cover', r: 4, photo: 1 }));
-      P.push(Rc(10, 134.5, 58, 12.5, { r: 2, fill: '#fff' }), Im(d.sign, 10.5, 135, 57, 11.5, { fit: 'contain' }), T(39, 150, 'Principal Signature', 4.9, th.main, { a: 'middle' }));
-      P.push(T(78, 58, 'STUDENT IDENTITY CARD', 8.2, th.main), Rc(78, 61, 66, 1.2, { fill: th.accent }));
-      [d.name, d.father, d.cls, d.roll, d.section, d.group].forEach((v, i) => P.push(T(78, 74 + 11.2 * i, LABELS[i], 6.4, th.muted), T(113, 74 + 11.2 * i, v, 7.4, th.ink, { max: 124 })));
-      P.push(Rc(0, 152, W, 6.4, { fill: th.main }), T(78, 156.6, 'Session ' + d.session, 5.2, '#fff'), T(W - 8, 156.6, 'Valid up to: ' + d.valid, 5.2, '#fff', { a: 'end' }));
-    } else {
-      P.push(Rc(22, 42, W - 44, 30, { r: 15, fill: '#fff', stroke: th.main, sw: .8 }),
-             T(W / 2, 54.5, 'Ph No.: ' + CFG.phone, 8, th.ink, { a: 'middle' }), T(W / 2, 66, 'Valid up to: ' + d.valid, 8, th.ink, { a: 'middle' }));
-      rules.forEach((t, i) => P.push(T(W / 2, 90 + 13 * i, t, 6.9, th.main, { a: 'middle', max: 228 })));
-      P.push(Rc(0, 152, W, 6.4, { fill: th.main }), T(W / 2, 156.6, 'STUDENT IDENTITY CARD  ·  SESSION ' + d.session, 5.2, '#fff', { a: 'middle' }));
-    }
-  } else {   // classic
-    P.push(Rc(0, 0, W, H, { fill: '#fff' }), Im('idcard/campus.jpg', 0, 0, W, H, { fit: 'cover', op: .07 }));
-    P.push(Rc(0, 0, 44, H, { fill: th.main }), Rc(44, 0, 2.2, H, { fill: th.accent }));
-    P.push(Rc(6, 6, 32, 32, { r: 16, fill: '#fff' }), Im(back ? 'idcard/uop-logo.png' : 'idcard/jcw-crest.png', 7, 7, 30, 30, { fit: 'contain' }));
-    P.push(T(25, 150, 'STUDENT IDENTITY CARD', 8.6, '#fff', { rot: -90, max: 104 }), T(37, 150, 'SESSION ' + d.session, 6.6, th.accent, { rot: -90 }));
-    P.push(T(54, 19, 'JINNAH COLLEGE FOR WOMEN', 12.6, th.main, { max: 150 }), T(54, 29, 'UNIVERSITY OF PESHAWAR', 6.8, th.ink),
-           Im(back ? 'idcard/jcw-crest.png' : 'idcard/uop-logo.png', 208, 4, 32, 32, { fit: 'contain' }), Rc(54, 34, 150, 1.4, { fill: th.accent }));
-    if(!back){
-      P.push(Rc(178, 42, 58, 80, { r: 3, fill: '#fff', stroke: th.main, sw: 1 }), Im(d.photo, 179, 43, 56, 78, { fit: 'cover', r: 2.5, photo: 1 }));
-      P.push(Rc(176, 125.5, 62, 14, { fill: '#fff' }), Im(d.sign, 177, 126, 60, 13, { fit: 'contain' }), T(207, 147.5, 'Principal Signature', 5.2, th.main, { a: 'middle' }));
-      [d.name, d.father, d.cls, d.roll, d.section, d.group].forEach((v, i) => P.push(T(54, 56 + 12.4 * i, LABELS[i], 6.6, th.main), T(90, 56 + 12.4 * i, v, 7.4, th.ink, { max: 84 })));
-    } else {
-      P.push(Rc(54, 44, 182, 30, { r: 4, fill: th.light, stroke: th.main, sw: .7 }),
-             T(62, 56, 'Ph No.: ' + CFG.phone, 8, th.ink), T(62, 67.5, 'Valid up to: ' + d.valid, 8, th.ink));
-      rules.forEach((t, i) => P.push(T(145, 93 + 13 * i, t, 6.8, th.main, { a: 'middle', max: 184 })));
-    }
-    P.push(Rc(46, 153, W - 46, 5.4, { fill: th.main }));
-  }
-  return P;
-}
-function primsSVG(P){
-  return P.map(p => {
-    if(p.t === 'rect') return `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}"${p.r ? ` rx="${p.r}"` : ''} fill="${p.fill || 'none'}"${p.stroke ? ` stroke="${p.stroke}" stroke-width="${p.sw || 1}"` : ''}${p.op != null ? ` opacity="${p.op}"` : ''}/>`;
-    if(p.t === 'text'){
-      const w = textW(p.text, p.s), len = p.max && w > p.max ? ` textLength="${p.max}" lengthAdjust="spacingAndGlyphs"` : '';
-      const tr = p.rot ? ` transform="translate(${p.x} ${p.y}) rotate(${p.rot})"` : '', xy = p.rot ? 'x="0" y="0"' : `x="${p.x}" y="${p.y}"`;
-      return `<text ${xy}${tr} font-family="${FONT_B}" font-weight="700" font-size="${p.s}" fill="${p.fill}"${p.a ? ` text-anchor="${p.a}"` : ''}${len}>${esc(p.text)}</text>`;
-    }
-    if(p.t === 'img'){
-      if(!p.src) return p.photo ? `<text x="${p.x + p.w / 2}" y="${p.y + p.h / 2 + 2}" text-anchor="middle" font-family="${FONT_B}" font-weight="700" font-size="6" fill="#aaa">PHOTO</text>` : '';
-      const id = 'c' + (++uid), clip = p.r ? `<clipPath id="${id}"><rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="${p.r}"/></clipPath>` : '';
-      return `${clip}<image href="${esc(p.src)}" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" preserveAspectRatio="xMidYMid ${p.fit === 'cover' ? 'slice' : 'meet'}"${p.op != null ? ` opacity="${p.op}"` : ''}${p.r ? ` clip-path="url(#${id})"` : ''}/>`;
-    }
-    return '';
-  }).join('');
-}
-function cardSVG(d, back, designId = S.design.id, th = theme()){
-  if(designId === 'original') return originalView(d, back);
-  const cid = ++uid;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-.2 -.2 ${W + .4} ${H + .4}"><clipPath id="cc${cid}"><rect width="${W}" height="${H}"/></clipPath><g clip-path="url(#cc${cid})">${primsSVG(designPrims(designId, back, d, th))}</g><rect width="${W}" height="${H}" fill="none" stroke="#D1D3D4" stroke-width=".216"/></svg>`;
-}
+const cardSVG = (d, back) => originalView(d, back);
 
 /* ---------- students ---------- */
 async function load(force){
   const c = ls.get('idc_cache', null);
   if(!force && c && c.list && (Date.now() - new Date(c.at).getTime()) < LIST_FRESH_H * 3600e3){
-    S.list = c.list; S.at = c.at; SIGNS = c.signs || {}; CFG = mergeCfg(c.cfg || ls.get('idc_cfg', {}));
+    S.list = c.list; S.at = c.at; SIGNS = c.signs || {}; S.check = c.check || {}; CFG = mergeCfg(c.cfg || ls.get('idc_cfg', {}));
   } else {
     S.loading = true; S.err = ''; render();
     try{
-      const j = await api({ action:'idc_list' }); S.list = j.list || []; S.at = j.at; SIGNS = j.signs || {};
+      const j = await api({ action:'idc_list' }); S.list = j.list || []; S.at = j.at; SIGNS = j.signs || {}; S.check = j.check || {};
       CFG = mergeCfg(j.cfg && Object.keys(j.cfg).length ? j.cfg : ls.get('idc_cfg', {})); ls.set('idc_cfg', CFG);
-      if(!ls.set('idc_cache', { at: j.at, list: S.list, cfg: j.cfg || {}, signs: SIGNS })) ls.set('idc_cache', { at: j.at, list: S.list, cfg: j.cfg || {}, signs: {} });
+      if(!ls.set('idc_cache', { at: j.at, list: S.list, cfg: j.cfg || {}, signs: SIGNS, check: S.check })) ls.set('idc_cache', { at: j.at, list: S.list, cfg: j.cfg || {}, signs: {}, check: S.check });
     }catch(e){ S.err = e.message; if(c && c.list && !S.list){ S.list = c.list; S.at = c.at; SIGNS = c.signs || {}; } }
     S.loading = false;
   }
@@ -379,141 +286,128 @@ function findMany(text){
   return { hit, miss, n: toks.length };
 }
 
-/* ---------- PDF ---------- */
-const PDFLIB = 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js', FONTKIT = 'https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js';
+/* ---------- PDF: one file, or one file per section (zipped) ---------- */
+const PDFLIB = 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js', FONTKIT = 'https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js', JSZIP = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
 const loadScript = src => new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Could not load ' + src.split('/').pop() + ' (internet needed the first time).')); document.head.appendChild(s); });
-let ASSETS = null;
-async function makePdf(sts, label){
+const ASSETS = {};
+const getBytes = async u => ASSETS[u] || (ASSETS[u] = await fetch(u).then(r => { if(!r.ok) throw new Error(u + ' missing'); return r.arrayBuffer(); }));
+const bySection = sts => sts.slice().sort((a, b) => (a.pcs || a.section || '').localeCompare(b.pcs || b.section || '', undefined, { numeric: true }) || a.roll.localeCompare(b.roll, undefined, { numeric: true }));
+const fileSafe = t => String(t || '').replace(/[^\w .()-]+/g, ' ').replace(/\s+/g, ' ').trim();
+function saveFile(blob, name){ const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 120000); }
+/* one PDF (Uint8Array) for these students: the shop's Section E page, 5 per page */
+async function buildPdf(sts, step){
+  const L = PDFLib, { PDFDocument, cmyk, pushGraphicsState, popGraphicsState, concatTransformationMatrix, moveTo, lineTo, appendBezierCurve, closePath, clip, endPath, rectangle, stroke, setLineWidth, setStrokingCmykColor } = L;
+  const doc = await PDFDocument.create(); doc.registerFontkit(window.fontkit);
+  const font = await doc.embedFont(await getBytes('idcard/Carlito-Bold.ttf'), { subset: true }), chars = new Set(font.getCharacterSet());
+  const clean = t => [...String(t || '')].map(c => chars.has(c.codePointAt(0)) ? c : '?').join('');
+  const [tpl] = await doc.embedPdf(await getBytes('idcard/sheet-template.pdf'), [0]);
+  const fk = font.embedder && font.embedder.font;
+  const runOf = (t, size) => { try{ const r = fk.layout(t), k = size / fk.unitsPerEm; let x = 0;
+      const parts = r.glyphs.map((g, i) => { const p = { c: String.fromCodePoint(...g.codePoints), x }; x += r.positions[i].xAdvance * k; return p; });
+      return parts.every(p => [...p.c].length === 1) ? { parts, w: x } : null; }catch(e){ return null; } };
+  const widthOf = (t, size) => { const r = runOf(t, size); return r ? r.w : font.widthOfTextAtSize(t, size); };
+  const say = (page, t, size, color) => { const r = runOf(t, size);
+    if(!r) return page.drawText(t, { x: 0, y: 0, size, font, color });
+    r.parts.forEach(p => { if(p.c.trim()) page.drawText(p.c, { x: p.x, y: 0, size, font, color }); }); };
+  const WHITE = cmyk(0, 0, 0, 0), BLACK = cmyk(1, 1, 1, 1), Y = t => PAGE_H - t, cache = {};
+  async function img(src){
+    if(!src) return null; if(cache[src]) return cache[src];
+    const b = new Uint8Array(src.startsWith('data:') ? await fetch(src).then(r => r.arrayBuffer()) : await getBytes(src));
+    const im = b[0] === 0x89 ? await doc.embedPng(b) : await doc.embedJpg(b);
+    if(!src.startsWith('data:') || src.length < 200000) cache[src] = im;
+    return im;
+  }
+  const rr = (F, r0) => { const x0 = F[0], x1 = F[2], y0 = Y(F[3]), y1 = Y(F[1]), k = r0 * 0.5523;
+    return [moveTo(x0 + r0, y0), lineTo(x1 - r0, y0), appendBezierCurve(x1 - r0 + k, y0, x1, y0 + r0 - k, x1, y0 + r0), lineTo(x1, y1 - r0),
+      appendBezierCurve(x1, y1 - r0 + k, x1 - r0 + k, y1, x1 - r0, y1), lineTo(x0 + r0, y1), appendBezierCurve(x0 + r0 - k, y1, x0, y1 - r0 + k, x0, y1 - r0),
+      lineTo(x0, y0 + r0), appendBezierCurve(x0, y0 + r0 - k, x0 + r0 - k, y0, x0 + r0, y0), closePath()]; };
+  for(let i = 0; i < sts.length; i += 5){
+    if(S.cancel) throw new Error('stopped');
+    const part = sts.slice(i, i + 5), page = doc.addPage([PAGE_W, PAGE_H]);
+    page.drawPage(tpl, { x: 0, y: 0, width: PAGE_W, height: PAGE_H });
+    if(part.length < 5) page.drawRectangle({ x: 0, y: 0, width: PAGE_W, height: Y(ROW_Y[part.length] + .12), color: WHITE });
+    for(let k = 0; k < part.length; k++){
+      const d = cardData(part[k], await cardPhoto(part[k])), g = GEO[k];
+      [d.name, d.father, d.cls, d.roll, d.section, d.group].forEach((v, n) => {
+        v = clean(v); const w = widthOf(v, 7.982), sx = w > VALUE_MAX[n] ? VALUE_MAX[n] / w : 1;
+        page.pushOperators(pushGraphicsState(), concatTransformationMatrix(sx, 0, 0, 1, VALUE_X, Y(g.base[n])));
+        say(page, v, 7.982, WHITE);
+        page.pushOperators(popGraphicsState());
+      });
+      const ph = await img(d.photo).catch(() => null);
+      if(!ph){
+        page.pushOperators(pushGraphicsState(), L.setFillingCmykColor(0, 0, 0, 0), ...rr(g.frame, 1.8335), L.fill(), popGraphicsState(),
+          pushGraphicsState(), setStrokingCmykColor(0, 0, 0, 1), setLineWidth(.5), ...rr(g.frame, 1.8335), stroke(), popGraphicsState());
+      } else {
+        const P = g.photo;
+        page.pushOperators(pushGraphicsState(), ...rr(g.frame, 1.8335), clip(), endPath());
+        page.drawImage(ph, { x: P[0], y: Y(P[1] + P[3]), width: P[2], height: P[3] });
+        page.pushOperators(popGraphicsState(), pushGraphicsState(), setStrokingCmykColor(0, 0, 0, 1), setLineWidth(.5), ...rr(g.frame, 1.8335), stroke(), popGraphicsState());
+      }
+      const sg = await img(d.sign).catch(() => null);
+      if(sg){
+        const C = g.signClip, B = g.signBox, r = Math.min(B[2] / sg.width, B[3] / sg.height), w = sg.width * r, h = sg.height * r;
+        page.pushOperators(pushGraphicsState(), rectangle(C[0], Y(C[3]), C[2] - C[0], C[3] - C[1]), clip(), endPath());
+        page.drawImage(sg, { x: B[0] + (B[2] - w) / 2, y: Y(B[1] + B[3]) + (B[3] - h) / 2, width: w, height: h });
+        page.pushOperators(popGraphicsState());
+      }
+      if(d.session !== TPL_SESSION) g.sess.forEach(r => {
+        const t = clean(d.session), sx = 28.87 / widthOf(t, 8.11);
+        page.drawRectangle({ x: r[0] - .3, y: Y(r[3] + .4), width: r[2] - r[0] + .6, height: r[3] - r[1] + .8, color: WHITE });
+        page.pushOperators(pushGraphicsState(), concatTransformationMatrix(0, sx, -1, 0, r[2] - .06, Y(r[3] + .17)));
+        say(page, t, 8.11, BLACK);
+        page.pushOperators(popGraphicsState());
+      });
+      if(d.valid !== TPL_VALID){
+        const x = g.valid[0] + DATE_DX, b = g.vbbox;
+        page.drawRectangle({ x: x - .3, y: Y(b[3] + .2), width: b[2] - x + .55, height: b[3] - b[1] + .4, color: WHITE });
+        page.pushOperators(pushGraphicsState(), concatTransformationMatrix(.9594, 0, 0, 1, x, Y(g.valid[1])));
+        say(page, clean(d.valid), 8.268, BLACK);
+        page.pushOperators(popGraphicsState());
+      }
+    }
+    step(part.length);
+    await sleep(0);
+  }
+  doc.setTitle('JCW Student ID Cards'); doc.setCreator('JCW attendance app');
+  return doc.save();
+}
+/* mode: 'one' = one PDF, 'zip' = one PDF per section in a ZIP file */
+async function makePdf(sts, mode, label){
   if(!sts.length) return;
+  sts = bySection(sts);
   S.err = ''; S.msg = ''; S.busy = 'Getting photos…'; render();
   try{
     await fetchPhotos(sts);
     S.busy = 'Making the PDF…'; S.prog = 0; render();
     if(!window.PDFLib) await loadScript(PDFLIB);
     if(!window.fontkit) await loadScript(FONTKIT);
-    const L = PDFLib, { PDFDocument, cmyk, rgb, pushGraphicsState, popGraphicsState, concatTransformationMatrix, moveTo, lineTo, appendBezierCurve, closePath, clip, endPath, rectangle, stroke, setLineWidth, setStrokingCmykColor } = L;
-    const id = S.design.id, th = theme();
-    if(!ASSETS) ASSETS = {};
-    const getBytes = async u => ASSETS[u] || (ASSETS[u] = await fetch(u).then(r => { if(!r.ok) throw new Error(u + ' missing'); return r.arrayBuffer(); }));
-    const doc = await PDFDocument.create(); doc.registerFontkit(window.fontkit);
-    const font = await doc.embedFont(await getBytes('idcard/Carlito-Bold.ttf'), { subset: true }), chars = new Set(font.getCharacterSet());
-    const clean = t => [...String(t || '')].map(c => chars.has(c.codePointAt(0)) ? c : '?').join('');
-    const tpl = id === 'original' ? (await doc.embedPdf(await getBytes('idcard/sheet-template.pdf'), [0]))[0] : null;
-    const fk = font.embedder && font.embedder.font;
-    const runOf = (t, size) => { try{ const r = fk.layout(t), k = size / fk.unitsPerEm; let x = 0;
-        const parts = r.glyphs.map((g, i) => { const p = { c: String.fromCodePoint(...g.codePoints), x }; x += r.positions[i].xAdvance * k; return p; });
-        return parts.every(p => [...p.c].length === 1) ? { parts, w: x } : null; }catch(e){ return null; } };
-    const widthOf = (t, size) => { const r = runOf(t, size); return r ? r.w : font.widthOfTextAtSize(t, size); };
-    const say = (page, t, size, color) => { const r = runOf(t, size);
-      if(!r) return page.drawText(t, { x: 0, y: 0, size, font, color });
-      r.parts.forEach(p => { if(p.c.trim()) page.drawText(p.c, { x: p.x, y: 0, size, font, color }); }); };
-    const hex = h => { h = h.replace('#', ''); if(h.length === 3) h = h.replace(/./g, c => c + c); const n = parseInt(h, 16); return rgb((n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255); };
-    const WHITE = cmyk(0, 0, 0, 0), BLACK = cmyk(1, 1, 1, 1), Y = t => PAGE_H - t, cache = {};
-    async function img(src){
-      if(!src) return null; if(cache[src]) return cache[src];
-      const b = new Uint8Array(src.startsWith('data:') ? await fetch(src).then(r => r.arrayBuffer()) : await getBytes(src));
-      const im = b[0] === 0x89 ? await doc.embedPng(b) : await doc.embedJpg(b);
-      if(!src.startsWith('data:') || src.length < 200000) cache[src] = im;
-      return im;
+    let done = 0;
+    const step = n => { done += n; S.prog = done / sts.length; S.busy = `Making the PDF: ${done} of ${sts.length} cards…`; paintBusy(); };
+    let name;
+    if(mode === 'zip'){
+      if(!window.JSZip) await loadScript(JSZIP);
+      const zip = new JSZip(), groups = {};
+      sts.forEach(st => (groups[st.pcs || st.section || 'No section'] = groups[st.pcs || st.section || 'No section'] || []).push(st));
+      for(const sec of Object.keys(groups)) zip.file(fileSafe('ID cards ' + sec + ' (' + groups[sec].length + ')') + '.pdf', await buildPdf(groups[sec], step));
+      S.busy = 'Packing the ZIP file…'; paintBusy();
+      name = fileSafe('ID cards ' + (label || 'section-wise') + ' (' + Object.keys(groups).length + ' sections)') + '.zip';
+      saveFile(await zip.generateAsync({ type: 'blob', compression: 'STORE' }), name);
+    } else {
+      name = fileSafe('ID cards ' + (label || S.f.section || S.f.program || 'students') + ' (' + sts.length + ')') + '.pdf';
+      saveFile(new Blob([await buildPdf(sts, step)], { type: 'application/pdf' }), name);
     }
-    // rounded rectangle path, top-down coordinates [x0, y0, x1, y1]
-    const rr = (F, r0) => { const x0 = F[0], x1 = F[2], y0 = Y(F[3]), y1 = Y(F[1]), k = r0 * 0.5523;
-      if(!r0) return [rectangle(x0, y0, x1 - x0, y1 - y0)];
-      return [moveTo(x0 + r0, y0), lineTo(x1 - r0, y0), appendBezierCurve(x1 - r0 + k, y0, x1, y0 + r0 - k, x1, y0 + r0), lineTo(x1, y1 - r0),
-        appendBezierCurve(x1, y1 - r0 + k, x1 - r0 + k, y1, x1 - r0, y1), lineTo(x0 + r0, y1), appendBezierCurve(x0 + r0 - k, y1, x0, y1 - r0 + k, x0, y1 - r0),
-        lineTo(x0, y0 + r0), appendBezierCurve(x0, y0 + r0 - k, x0 + r0 - k, y0, x0 + r0, y0), closePath()]; };
-    async function drawPrims(page, P, ox, oy){
-      page.pushOperators(pushGraphicsState(), ...rr([ox, oy, ox + W, oy + H], 0), clip(), endPath());
-      for(const p of P){
-        if(p.t === 'rect'){
-          const F = [ox + p.x, oy + p.y, ox + p.x + p.w, oy + p.y + p.h];
-          if(p.fill){ page.pushOperators(pushGraphicsState(), ...rr(F, p.r || 0), clip(), endPath()); page.drawRectangle({ x: F[0], y: Y(F[3]), width: p.w, height: p.h, color: hex(p.fill), opacity: p.op != null ? p.op : 1 }); page.pushOperators(popGraphicsState()); }
-          if(p.stroke){ const c = hex(p.stroke); page.pushOperators(pushGraphicsState(), L.setStrokingRgbColor(c.red, c.green, c.blue), setLineWidth(p.sw || 1), ...rr(F, p.r || 0), stroke(), popGraphicsState()); }
-        } else if(p.t === 'text'){
-          const t = clean(p.text); if(!t) continue;
-          const w = widthOf(t, p.s), sx = p.max && w > p.max ? p.max / w : 1, ww = w * sx;
-          const dx = p.a === 'middle' ? -ww / 2 : p.a === 'end' ? -ww : 0;
-          if(p.rot) page.pushOperators(pushGraphicsState(), concatTransformationMatrix(0, sx, -1, 0, ox + p.x, Y(oy + p.y) + dx));
-          else page.pushOperators(pushGraphicsState(), concatTransformationMatrix(sx, 0, 0, 1, ox + p.x + dx, Y(oy + p.y)));
-          say(page, t, p.s, hex(p.fill)); page.pushOperators(popGraphicsState());
-        } else if(p.t === 'img'){
-          const im = await img(p.src).catch(() => null); if(!im) continue;
-          const F = [ox + p.x, oy + p.y, ox + p.x + p.w, oy + p.y + p.h];
-          const r = p.fit === 'cover' ? Math.max(p.w / im.width, p.h / im.height) : Math.min(p.w / im.width, p.h / im.height), w = im.width * r, h = im.height * r;
-          page.pushOperators(pushGraphicsState(), ...rr(F, p.r || 0), clip(), endPath());
-          page.drawImage(im, { x: F[0] + (p.w - w) / 2, y: Y(F[3]) + (p.h - h) / 2, width: w, height: h, opacity: p.op != null ? p.op : 1 });
-          page.pushOperators(popGraphicsState());
-        }
-      }
-      page.pushOperators(popGraphicsState(), pushGraphicsState(), L.setStrokingRgbColor(.82, .827, .831), setLineWidth(.216), ...rr([ox, oy, ox + W, oy + H], 0), stroke(), popGraphicsState());
-    }
-    for(let i = 0; i < sts.length; i += 5){
-      if(S.cancel) throw new Error('stopped');
-      const part = sts.slice(i, i + 5), page = doc.addPage([PAGE_W, PAGE_H]);
-      if(tpl){
-        page.drawPage(tpl, { x: 0, y: 0, width: PAGE_W, height: PAGE_H });
-        if(part.length < 5) page.drawRectangle({ x: 0, y: 0, width: PAGE_W, height: Y(ROW_Y[part.length] + .12), color: WHITE });
-      }
-      for(let k = 0; k < part.length; k++){
-        const d = cardData(part[k], await cardPhoto(part[k])), g = GEO[k];
-        if(!tpl){ await drawPrims(page, designPrims(id, false, d, th), FRONT_X, ROW_Y[k]); await drawPrims(page, designPrims(id, true, d, th), BACK_X, ROW_Y[k]); continue; }
-        [d.name, d.father, d.cls, d.roll, d.section, d.group].forEach((v, n) => {
-          v = clean(v); const w = widthOf(v, 7.982), sx = w > VALUE_MAX ? VALUE_MAX / w : 1;
-          page.pushOperators(pushGraphicsState(), concatTransformationMatrix(sx, 0, 0, 1, VALUE_X, Y(g.base[n])));
-          say(page, v, 7.982, WHITE);
-          page.pushOperators(popGraphicsState());
-        });
-        const ph = await img(d.photo).catch(() => null);
-        if(!ph){
-          page.pushOperators(pushGraphicsState(), L.setFillingCmykColor(0, 0, 0, 0), ...rr(g.frame, 1.8335), L.fill(), popGraphicsState(),
-            pushGraphicsState(), setStrokingCmykColor(0, 0, 0, 1), setLineWidth(.5), ...rr(g.frame, 1.8335), stroke(), popGraphicsState());
-        } else {
-          const P = g.photo;
-          page.pushOperators(pushGraphicsState(), ...rr(g.frame, 1.8335), clip(), endPath());
-          page.drawImage(ph, { x: P[0], y: Y(P[1] + P[3]), width: P[2], height: P[3] });
-          page.pushOperators(popGraphicsState(), pushGraphicsState(), setStrokingCmykColor(0, 0, 0, 1), setLineWidth(.5), ...rr(g.frame, 1.8335), stroke(), popGraphicsState());
-        }
-        const sg = await img(d.sign).catch(() => null);
-        if(sg){
-          const C = g.signClip, B = g.signBox, r = Math.min(B[2] / sg.width, B[3] / sg.height), w = sg.width * r, h = sg.height * r;
-          page.pushOperators(pushGraphicsState(), rectangle(C[0], Y(C[3]), C[2] - C[0], C[3] - C[1]), clip(), endPath());
-          page.drawImage(sg, { x: B[0] + (B[2] - w) / 2, y: Y(B[1] + B[3]) + (B[3] - h) / 2, width: w, height: h });
-          page.pushOperators(popGraphicsState());
-        }
-        if(d.session !== TPL_SESSION) g.sess.forEach(r => {
-          const t = clean(d.session), sx = 28.87 / widthOf(t, 8.11);
-          page.drawRectangle({ x: r[0] - .3, y: Y(r[3] + .4), width: r[2] - r[0] + .6, height: r[3] - r[1] + .8, color: WHITE });
-          page.pushOperators(pushGraphicsState(), concatTransformationMatrix(0, sx, -1, 0, r[2] - .06, Y(r[3] + .17)));
-          say(page, t, 8.11, BLACK);
-          page.pushOperators(popGraphicsState());
-        });
-        if(d.valid !== TPL_VALID){
-          const x = g.valid[0] + DATE_DX, b = g.vbbox;
-          page.drawRectangle({ x: x - .3, y: Y(b[3] + .2), width: b[2] - x + .55, height: b[3] - b[1] + .4, color: WHITE });
-          page.pushOperators(pushGraphicsState(), concatTransformationMatrix(.9594, 0, 0, 1, x, Y(g.valid[1])));
-          say(page, clean(d.valid), 8.268, BLACK);
-          page.pushOperators(popGraphicsState());
-        }
-      }
-      S.prog = (i + 5) / sts.length; S.busy = `Making the PDF: page ${i / 5 + 1} of ${Math.ceil(sts.length / 5)}…`; paintBusy();
-      await sleep(0);
-    }
-    doc.setTitle('JCW Student ID Cards'); doc.setCreator('JCW attendance app');
-    const blob = new Blob([await doc.save()], { type: 'application/pdf' }), url = URL.createObjectURL(blob);
-    const f = S.f, name = 'ID cards ' + (label || f.section || f.program || 'students').replace(/[^\w .-]+/g, ' ').trim() + ' (' + sts.length + ').pdf';
-    const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 120000);
     S.lastPrinted = sts.map(st => st.roll);
     const miss = sts.filter(st => photoState(st) !== 'ready').length;
-    S.msg = name + ' is ready (' + Math.ceil(sts.length / 5) + ' page' + (sts.length > 5 ? 's' : '') + ').' + (miss ? ' ' + miss + ' card' + (miss > 1 ? 's have' : ' has') + ' no photo.' : '') + ' Print at Actual size / 100%.';
+    S.msg = name + ' is ready.' + (miss ? ' ' + miss + ' card' + (miss > 1 ? 's have' : ' has') + ' no photo.' : '') + ' Print at Actual size / 100%.';
   }catch(e){ S.err = e.message === 'stopped' ? 'Stopped.' : 'PDF not made: ' + e.message; }
   S.busy = ''; S.prog = 0; render();
 }
-function startPdf(){
-  const sts = chosen(); if(!sts.length) return;
-  if(sts.length <= PDF_PART){ S.parts = null; return makePdf(sts); }
-  S.parts = []; for(let i = 0; i < sts.length; i += PDF_PART) S.parts.push([i, Math.min(i + PDF_PART, sts.length)]);
-  render();
+async function loadReqs(from){
+  S.busy = 'Reading requests…'; S.err = ''; render();
+  try{ const j = await api({ action: 'idc_reqs', status: 'Pending', from, n: 20 }); S.reqs = j.items || []; S.reqFrom = from; S.reqTotal = j.total || 0; }
+  catch(e){ S.err = e.message; }
+  S.busy = ''; render();
 }
 async function markPrinted(){
   const rolls = S.lastPrinted || []; if(!rolls.length) return;
@@ -641,7 +535,11 @@ function render(){
   const opt = (arr, v, none) => `<option value="">${none}</option>` + arr.map(x => `<option ${x === v ? 'selected' : ''}>${esc(x)}</option>`).join('');
   const prevList = (sel.length ? sel : list).slice(0, S.show), Y = year(), ses = sessionOf(), sign = signOf(Y);
   const cnt = { none: 0, failed: 0, pending: 0, ready: 0 }; all.forEach(st => cnt[photoState(st)]++);
-  const own = all.filter(st => st.own).length, th = theme(), demo = cardData(all[0] || { roll: 'JCW-F26-0000', name: 'Student Name', father: 'Father Name', program: 'Pre-Medical' });
+  const own = all.filter(st => st.own).length;
+  const chkN = { Confirmed: 0, Pending: 0, Approved: 0, Rejected: 0, none: 0 }, bySec = {};
+  all.forEach(st => { const k = chkN[st.chk] != null ? st.chk : 'none'; chkN[k]++; const sc = st.pcs || st.section || '-'; const b = bySec[sc] = bySec[sc] || { n: 0, Confirmed: 0, Pending: 0, Approved: 0, Rejected: 0, none: 0 }; b.n++; b[k]++; });
+  const sectionsSel = {}; sel.forEach(st => { const sc = st.pcs || st.section || 'No section'; sectionsSel[sc] = (sectionsSel[sc] || 0) + 1; });
+  const link = new URL('idcheck.html', location.href).href, chk = S.check || {};
   m.innerHTML = `
   <section class="card"><h2>Session ${esc(ses.label)} · valid up to ${esc(ses.valid)}</h2>
     <div class="sub">Set these once every year before printing. The principal's sign and stamp go under the student's photo.</div>
@@ -654,10 +552,36 @@ function render(){
       ${sign ? `<span class="sub">Now on the cards:</span><img src="${esc(sign)}" alt="" style="height:44px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:2px">` : ''}</div>
     ${!SIGNS[Y] ? `<div class="note ${sign ? 'mid' : 'bad'}">${sign ? 'Using the signature copied from the shop’s cards. Upload this year’s principal sign and stamp to be sure.' : `No principal sign and stamp for ${Y} yet. Upload it above; until then the box under the photo stays empty.`}</div>` : ''}
   </section>
-  <section class="card"><h2>Card design</h2>
-    <div class="sub">The first one is the shop’s card exactly. The others use the same card size and the same sheet (7.2 × 11.2 in, 5 per page, front | back) and come in colour schemes.</div>
-    <div class="designs">${DESIGNS.map(ds => `<button data-ds="${ds.id}" class="${S.design.id === ds.id ? 'on' : ''}">${cardSVG(demo, false, ds.id, th)}${esc(ds.name)}</button>`).join('')}</div>
-    ${S.design.id !== 'original' ? `<div class="themes">${THEMES.map(t => `<button data-th="${t.id}" class="${t.id === th.id ? 'on' : ''}"><i style="background:linear-gradient(135deg,${t.main} 55%,${t.accent} 55%)"></i>${esc(t.name)}</button>`).join('')}</div>` : ''}
+  <section class="card"><h2>Students check their own card</h2>
+    <div class="sub">Each student opens the link, enters her Enroll# and her father’s first name (or the last 4 digits of the mobile number in the college record), sees her card and either confirms it or sends the right name / father name / a new photo. You approve or reject here; approved names go into Transform-ALL-COLLEGE-STRENGTH and approved photos become her card photo.</div>
+    <div class="grid"><label class="f">Link for students<input readonly value="${esc(link)}" onclick="this.select()"></label>
+      <label class="f">Last date (optional)<input type="date" id="ckUntil" value="${esc(chk.until || '')}"></label></div>
+    <div class="acts"><label class="c"><input type="checkbox" id="ckOpen" ${chk.open ? 'checked' : ''}> Open for students</label><button class="btn sm pri" id="ckSave">Save</button>
+      <button class="btn sm" id="ckCopy">Copy WhatsApp message</button></div>
+    <div class="chips">
+      <div class="chip good"><b>${chkN.Confirmed}</b>confirmed correct</div>
+      <div class="chip mid"><b>${chkN.Pending}</b>waiting for you</div>
+      <div class="chip"><b>${chkN.Approved}</b>approved</div>
+      <div class="chip"><b>${chkN.Rejected}</b>rejected</div>
+      <div class="chip bad"><b>${chkN.none}</b>not checked yet</div>
+    </div>
+    <details style="margin-top:10px"><summary style="font-weight:700;cursor:pointer">Section-wise</summary>
+      <div class="tw"><table><thead><tr><th>Section</th><th>Students</th><th>Confirmed</th><th>Waiting</th><th>Approved</th><th>Not checked</th></tr></thead><tbody>
+      ${Object.keys(bySec).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map(k => { const b = bySec[k]; return `<tr><td>${esc(k)}</td><td>${b.n}</td><td>${b.Confirmed}</td><td>${b.Pending}</td><td>${b.Approved}</td><td>${b.none ? `<span class="bad">${b.none}</span>` : 0}</td></tr>`; }).join('')}
+      </tbody></table></div>
+      <div class="acts"><button class="btn sm" id="ckCsv">Download not-checked list (CSV)</button></div></details>
+    <div class="acts"><button class="btn pri" id="rqOpen" ${S.busy ? 'disabled' : ''}>Review waiting requests (${chkN.Pending})</button></div>
+    ${S.reqs ? `<div id="rqList">${S.reqs.length ? S.reqs.map((q, i) => `<div class="chip" style="margin-top:10px;font-weight:400;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">
+        <div style="display:flex;gap:6px"><div style="text-align:center"><div class="sub">now</div><img data-cur="${esc(q.roll)}" style="width:70px;height:101px;object-fit:cover;border-radius:6px;background:#eee"></div>
+          ${q.photo ? `<div style="text-align:center"><div class="sub">new</div><img src="${esc(q.photo)}" style="width:70px;height:101px;object-fit:cover;border-radius:6px;border:2px solid var(--good)"></div>` : ''}</div>
+        <div style="flex:1;min-width:220px"><b>${esc(q.roll)}</b> · ${esc(q.oldName)} <span class="sub">· ${esc(q.when)}</span>
+          ${q.name ? `<label class="c"><input type="checkbox" data-qn="${i}" checked> Name: <s>${esc(q.oldName)}</s> → <b>${esc(q.name)}</b></label>` : ''}
+          ${q.father ? `<label class="c"><input type="checkbox" data-qf="${i}" checked> Father: <s>${esc(q.oldFather)}</s> → <b>${esc(q.father)}</b></label>` : ''}
+          ${q.photo ? `<label class="c"><input type="checkbox" data-qp="${i}" checked> Use the new photo</label>` : ''}
+          ${q.note ? `<div class="note mid" style="margin-top:6px">${esc(q.note)}</div>` : ''}
+          <div class="acts" style="margin-top:6px"><button class="btn sm pri" data-qa="${i}">Approve</button><input data-qr="${i}" placeholder="Reason if rejected" style="height:34px;border:1.5px solid var(--line);border-radius:10px;padding:0 8px;background:var(--surface)"><button class="btn sm" data-qx="${i}">Reject</button></div></div></div>`).join('') : '<div class="note ok">Nothing waiting.</div>'}
+      ${S.reqs.length > 1 ? `<div class="acts"><button class="btn sm pri" id="rqAll">Approve all ${S.reqs.length} shown (ticked parts)</button></div>` : ''}
+      ${S.reqTotal > S.reqFrom + S.reqs.length ? `<div class="sub">${S.reqTotal} waiting in all; approve or reject these to see the next ones.</div>` : ''}</div>` : ''}
   </section>
   <section class="card"><h2>Photos</h2>
     <div class="sub">Photos are read from Drive once and then kept on this device, so the next PDFs are fast and the server is not called again.</div>
@@ -693,12 +617,13 @@ function render(){
       ${shown.map(st => { const p = photoState(st); return `<tr><td><input type="checkbox" data-r="${esc(st.roll)}" ${S.sel.has(st.roll) ? 'checked' : ''}></td><td>${esc(st.roll)}</td><td>${esc(st.name)}${EDIT[st.roll] ? ' ✎' : ''}</td><td>${esc(st.father)}</td><td>${esc(st.pcs || st.section)}</td><td>${p === 'ready' ? '✓' + (st.own ? ' (app)' : '') : p === 'pending' ? '<span class="mid">not read</span>' : `<span class="bad">${p === 'none' ? 'none' : 'broken'}</span>`}</td><td class="tag">${st.printed ? `<span>${esc(st.printed)}</span>` : ''}</td><td><button class="btn sm" data-p="${esc(st.roll)}">Photo</button> <button class="btn sm" data-e="${esc(st.roll)}">Edit</button></td></tr>`; }).join('')}
     </tbody></table></div>${list.length > shown.length ? `<div class="sub" style="margin-top:6px">Showing the first ${shown.length} of ${list.length}; use the filters or search.</div>` : ''}
   </section>
-  <section class="card"><h2>2. Make the PDF</h2>
-    <div class="sub"><b>${sel.length}</b> card${sel.length === 1 ? '' : 's'} ticked. Page 7.2 × 11.2 in (518.4 × 806.4 pt), 5 cards per page, front left and back right, no margins, like the shop’s Section E file. Print at <b>Actual size / 100%</b>, never “Fit to page”.${sel.length > PDF_PART ? ` More than ${PDF_PART} cards are made as several files.` : ''}</div>
-    <div class="acts"><button class="btn pri" id="go" ${sel.length && !S.busy ? '' : 'disabled'}>Make PDF of ${sel.length || ''} card${sel.length === 1 ? '' : 's'}</button>
+  <section class="card"><h2>2. Download</h2>
+    <div class="sub"><b>${sel.length}</b> card${sel.length === 1 ? '' : 's'} ticked in <b>${Object.keys(sectionsSel).length}</b> section${Object.keys(sectionsSel).length === 1 ? '' : 's'} (to tick everyone: All programs, All sections, <b>Tick all</b>). Cards are in section order, then Enroll#. Page 7.2 × 11.2 in, 5 cards per page, like the shop’s Section E file. Print at <b>Actual size / 100%</b>.${sel.length > 600 ? ' A complete PDF this big is best made on a laptop.' : ''}</div>
+    <div class="acts"><button class="btn pri" id="go" ${sel.length && !S.busy ? '' : 'disabled'}>Complete PDF (${sel.length} cards, ${Math.ceil(sel.length / 5)} pages)</button>
+      <button class="btn pri" id="goZip" ${Object.keys(sectionsSel).length > 1 && !S.busy ? '' : 'disabled'}>Section-wise: ${Object.keys(sectionsSel).length} PDFs in one ZIP</button>
       ${S.busy ? '<button class="btn" id="stop">Stop</button>' : ''}
       ${S.lastPrinted ? `<button class="btn" id="mark">Mark these ${S.lastPrinted.length} as printed</button>` : ''}</div>
-    ${S.parts ? `<div class="acts">${S.parts.map(([a, b], i) => `<button class="btn sm" data-part="${i}" ${S.busy ? 'disabled' : ''}>File ${i + 1}: cards ${a + 1}–${b}</button>`).join('')}</div>` : ''}
+    ${Object.keys(sectionsSel).length > 1 ? `<div class="sub" style="margin-top:10px">Or one section at a time:</div><div class="acts" style="margin-top:6px">${Object.keys(sectionsSel).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map(k => `<button class="btn sm" data-secpdf="${esc(k)}" ${S.busy ? 'disabled' : ''}>${esc(k)} (${sectionsSel[k]})</button>`).join('')}</div>` : ''}
     <div id="busy" class="${S.busy ? '' : 'hidden'}"><div class="bar"><i style="width:${Math.round(S.prog * 100)}%"></i></div><span class="sub">${esc(S.busy)}</span></div>
   </section>
   <section class="card"><h2>Preview</h2>
@@ -725,15 +650,35 @@ function render(){
   $('#fEn').onchange = e => setF('status', e.target.checked ? 'enrolled' : 'all');
   $('#findMany').onclick = openFind;
   $('#selAll').onclick = () => { list.forEach(st => S.sel.add(st.roll)); render(); };
-  $('#selNone').onclick = () => { S.sel.clear(); S.parts = null; if(S.f.ticked) S.f.ticked = false; render(); };
+  $('#selNone').onclick = () => { S.sel.clear(); if(S.f.ticked) S.f.ticked = false; render(); };
   $('#reload').onclick = () => { S.msg = ''; load(true); };
-  m.querySelectorAll('input[data-r]').forEach(c => c.onchange = () => { c.checked ? S.sel.add(c.dataset.r) : S.sel.delete(c.dataset.r); S.parts = null; render(); });
+  m.querySelectorAll('input[data-r]').forEach(c => c.onchange = () => { c.checked ? S.sel.add(c.dataset.r) : S.sel.delete(c.dataset.r); render(); });
   m.querySelectorAll('[data-e]').forEach(b => b.onclick = () => openEdit(b.dataset.e));
   m.querySelectorAll('[data-p]').forEach(b => b.onclick = () => openPhoto(b.dataset.p));
-  m.querySelectorAll('[data-ds]').forEach(b => b.onclick = () => { S.design.id = b.dataset.ds; ls.set('idc_design', S.design); render(); });
-  m.querySelectorAll('[data-th]').forEach(b => b.onclick = () => { S.design.theme = b.dataset.th; ls.set('idc_design', S.design); render(); });
-  m.querySelectorAll('[data-part]').forEach(b => b.onclick = () => { const [a, z] = S.parts[Number(b.dataset.part)]; makePdf(chosen().slice(a, z), `part ${Number(b.dataset.part) + 1}`); });
-  $('#go').onclick = startPdf;
+  m.querySelectorAll('[data-secpdf]').forEach(b => b.onclick = () => makePdf(sel.filter(st => (st.pcs || st.section || 'No section') === b.dataset.secpdf), 'one', b.dataset.secpdf));
+  $('#go').onclick = () => makePdf(sel, 'one', S.f.section || (Object.keys(sectionsSel).length === 1 ? Object.keys(sectionsSel)[0] : 'complete'));
+  $('#goZip').onclick = () => makePdf(sel, 'zip');
+  /* students' own check */
+  $('#ckSave').onclick = async () => { const c = { open: $('#ckOpen').checked, until: $('#ckUntil').value }; S.busy = 'Saving…'; render();
+    try{ await api({ action: 'idc_check_set', check: c }); S.check = c; ls.set('idc_cache', Object.assign(ls.get('idc_cache', {}), { check: c })); S.msg = c.open ? 'Students can now check their cards' + (c.until ? ' until ' + c.until : '') + '.' : 'Closed for students.'; }catch(e){ S.err = e.message; }
+    S.busy = ''; render(); };
+  $('#ckCopy').onclick = () => { const t = `Dear students, please check your college ID card before it is printed.\n\nOpen: ${link}\nEnter your Enroll# (like JCW-F26-1032) and your father's first name.\nIf your name, father's name or photo is wrong, send the correct one there (a clear photo, face in front, plain background).${chk.until ? '\nLast date: ' + chk.until : ''}\n\nJinnah College for Women`;
+    (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { S.msg = 'Message copied: paste it in the section WhatsApp groups.'; render(); }).catch(() => prompt('Copy this message:', t)); };
+  $('#ckCsv').onclick = () => csvDownload([['Section', 'Enroll#', 'Student Name', 'Father Name']].concat(bySection(all.filter(st => !st.chk)).map(st => [st.pcs || st.section, st.roll, st.name, st.father])), 'Not checked ID cards.csv');
+  $('#rqOpen').onclick = () => loadReqs(0);
+  const decide = async (ids, approve) => {
+    const items = ids.map(i => ({ row: S.reqs[i].row, approve, reason: (m.querySelector(`[data-qr="${i}"]`) || {}).value || '',
+      name: !!(m.querySelector(`[data-qn="${i}"]`) || {}).checked, father: !!(m.querySelector(`[data-qf="${i}"]`) || {}).checked, photo: !!(m.querySelector(`[data-qp="${i}"]`) || {}).checked }));
+    S.busy = 'Saving decisions…'; render();
+    try{ const j = await api({ action: 'idc_req_do', items }); S.msg = j.n + (approve ? ' approved.' : ' rejected.'); S.busy = ''; await load(true); await loadReqs(0); }
+    catch(e){ S.err = e.message; S.busy = ''; render(); }
+  };
+  m.querySelectorAll('[data-qa]').forEach(b => b.onclick = () => decide([Number(b.dataset.qa)], true));
+  m.querySelectorAll('[data-qx]').forEach(b => b.onclick = () => decide([Number(b.dataset.qx)], false));
+  if($('#rqAll')) $('#rqAll').onclick = () => decide(S.reqs.map((_, i) => i), true);
+  const curImgs = [...m.querySelectorAll('img[data-cur]')];
+  if(curImgs.length) (async () => { const sts = curImgs.map(im => all.find(x => x.roll === im.dataset.cur)).filter(Boolean); if(!S.busy) await fetchPhotos(sts);
+    for(const im of curImgs){ const st = all.find(x => x.roll === im.dataset.cur); const p = st && await cardPhoto(st); if(p && document.body.contains(im)) im.src = p; } })();
   if($('#stop')) $('#stop').onclick = () => { S.cancel = true; };
   if($('#mark')) $('#mark').onclick = markPrinted;
   if($('#more')) $('#more').onclick = () => { S.show += 12; render(); };
