@@ -1,5 +1,5 @@
 // Bump VERSION every time you change index.html so phones pick up the update.
-const VERSION = 'csa-v91';
+const VERSION = 'csa-v92';
 const CORE = ['./', './index.html', './admission.html', './grandtest.html', './detention.html', './board.html', './boardparse.js', './certificates.html', './idcards.html', './idcard/sheet.svg', './idcard/sheet-template.pdf', './idcard/Carlito-Bold.ttf', './idcard/Carlito-Bold.woff2', './idcard/principal-sign.png', './idcheck.html', './manifest.json', './icon-192.png', './jcw-logo.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
