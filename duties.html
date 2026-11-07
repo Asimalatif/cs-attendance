@@ -320,6 +320,13 @@ function stdName(n){
   return n;
 }
 const contactOf = name => nameIndex().ct[nkey(name)] || null;
+/** the teacher(s) behind one written name. A standard name "Ms. Naila Gul + Ms. Hina Gul" = two teachers written together. */
+function stdList(n){
+  const v = String(stdName(n));
+  if(!v.includes('+')) return [v];
+  const ct = nameIndex().ct;
+  return v.split(/\s*\+\s*/).map(x => cleanName(x)).filter(x => nkey(x).length >= 2).map(x => ct[nkey(x)] ? ct[nkey(x)].name : x);
+}
 
 
 /* =====================================================================
@@ -361,7 +368,7 @@ function compute(){
     const seen = new Set(), staff = [];
     splitStaff(r.staff).forEach(n => {
       const k = nkey(n); (variants[k] = variants[k] || { k, names:new Set(), n:0 }).names.add(n); variants[k].n++;
-      const s = stdName(n), sk = nkey(s) || s; if(seen.has(sk)) return; seen.add(sk); staff.push(s);
+      stdList(n).forEach(s => { const sk = nkey(s) || s; if(seen.has(sk)) return; seen.add(sk); staff.push(s); });
     });
     if(r.staff && !r.room) check.noRoom.push(i);
     if(!r.staff && (r.room || r.cls)) check.noStaff.push(i);
@@ -422,7 +429,7 @@ function render(){
     const c = compute(), probs = c.clashes.length + c.check.noRoom.length + c.check.noDate.length;
     h += `<section class="card"><h2>${esc(EX.title || 'Duty list')}</h2>
       <div class="chips"><div class="chip"><b>${c.L.teacher.length}</b>teachers</div><div class="chip"><b>${c.duties}</b>duties</div><div class="chip"><b>${c.L.room.length}</b>rooms</div><div class="chip"><b>${c.L.class.length}</b>classes</div><div class="chip"><b>${c.dates.length}</b>days${c.dates.length ? '<br><span class="muted" style="font-weight:600">' + esc(fmtIso(c.dates[0])) + ' – ' + esc(fmtIso(c.dates[c.dates.length - 1])) + '</span>' : ''}</div>
-      <div class="chip ${c.clashes.length ? 'bad' : 'good'}"><b>${c.clashes.length}</b>clashes</div>${c.check.noRoom.length ? `<div class="chip mid"><b>${c.check.noRoom.length}</b>staff with no room</div>` : ''}${nameGroups().length ? `<button class="chip bad" data-tab="names" style="cursor:pointer;text-align:left;font:inherit;font-weight:700"><b>${nameGroups().length}</b>names to fix ›</button>` : ''}</div>
+      <div class="chip ${c.clashes.length ? 'bad' : 'good'}"><b>${c.clashes.length}</b>clashes</div>${c.check.noRoom.length ? `<div class="chip mid"><b>${c.check.noRoom.length}</b>staff with no room</div>` : ''}${fxCount() ? `<button class="chip bad" data-tab="names" style="cursor:pointer;text-align:left;font:inherit;font-weight:700"><b>${fxCount()}</b>names to fix ›</button>` : ''}</div>
       <div class="grid"><label class="f">Duty timings (printed on every list)<input id="iTime" value="${esc(EX.timing || '08:30-12:30 PM (morning)')}" autocomplete="off"></label><label class="c" style="align-self:end;padding-bottom:10px"><input type="checkbox" id="iNp" ${V.newPage ? 'checked' : ''}> Each teacher / room / date / class on a new page</label></div>
       <h3 style="margin-top:14px">PDF lists <span class="sub">(file names carry today’s date, e.g. ${esc(fileName('teacher', 'pdf'))})</span></h3>
       <div class="acts">${Object.keys(KINDS).map(k => `<button class="btn sm pri" data-pdf="${k}">${KINDS[k].tab}</button>`).join('')}<button class="btn sm pri" data-pdf="sumdates">Teacher · Day/Date</button><button class="btn sm pri" data-pdf="sumcount">Teacher · Total duties</button></div>
@@ -481,7 +488,7 @@ function namesHtml(c){
     const st = std ? `<span class="ok">fixed</span>` : app ? `<span class="ok">✓ in app</span>` : CTS ? `<span class="x">not in app</span>` : '';
     return `<tr><td>${written.map(esc).join('<br>')}</td><td class="n">${v.n}</td><td><input class="nm" list="ctl" data-k="${esc(v.k)}" data-w="${esc(written[0])}" value="${esc(std)}" placeholder="${esc(app ? app.name : written[0])}">${sug ? `<div class="sub">Maybe <button class="lnk" data-use="${esc(v.k)}" data-name="${esc(sug)}">${esc(sug)}</button>?</div>` : ''}</td><td>${st}</td></tr>`;
   }).join('');
-  return fixerHtml() + `<section class="card"><h3>All names</h3><div class="sub">Every name as it is written in the Word table. When one teacher is written two ways (e.g. “dr.Hamida” and “Dr. BiBi Hamida”), type the correct name in <b>Standard name</b> — both then count as one teacher. Names that match the app’s teacher list are joined automatically. This replaces your old “names” sheet and is remembered for the next exam.</div>
+  return fixerHtml() + `<section class="card"><h3>All names</h3><div class="sub">Every name as it is written in the Word table. When one teacher is written two ways (e.g. “dr.Hamida” and “Dr. BiBi Hamida”), type the correct name in <b>Standard name</b> — both then count as one teacher. Two teachers written together (comma missing)? Type both with a +, e.g. <b>Ms. Naila Gul + Ms. Hina Gul</b>. Names that match the app’s teacher list are joined automatically. This replaces your old “names” sheet and is remembered for the next exam.</div>
     <div class="acts">${CTS ? `<span class="sub">App teacher list: ${CTS.list.length} names.</span><button class="btn sm" id="bCts">Reload app teachers</button>` : '<button class="btn pri sm" id="bCts">Load the app’s teacher list</button>'}<button class="btn sm pri" id="bNames">Save names on server</button></div>
     <datalist id="ctl">${opts}</datalist>
     <div class="tw"><table><thead><tr><th>Written in the table</th><th>Rows</th><th>Standard name</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="muted">No names.</td></tr>'}</tbody></table></div></section>`;
@@ -510,10 +517,12 @@ const pairKey = (a, b) => [nkey(a), nkey(b)].sort().join('|');
 /** groups of names that look like one teacher (complete linkage: every two names in a group are alike) */
 function nameGroups(){
   const c = compute(); if(c._ng) return c._ng;
-  const T = c.L.teacher.map(t => ({ name:t.label, k:nkey(t.label), n:t.items.length, tok:ntok(t.label).length }));
+  const J = new Set(joinedNames().map(x => x.k)), CT = nameIndex().ct;
+  const T = c.L.teacher.filter(t => !J.has(nkey(t.label))).map(t => ({ name:t.label, k:nkey(t.label), n:t.items.length, tok:ntok(t.label).length }));
   const P = {}, pairs = [];
   for(let i = 0; i < T.length; i++) for(let j = i + 1; j < T.length; j++){
     if(NOTSAME.has(pairKey(T[i].name, T[j].name))) continue;
+    if(CT[T[i].k] && CT[T[j].k] && CT[T[i].k].name !== CT[T[j].k].name) continue;   // two different teachers of the app
     const v = nameSim(T[i].name, T[j].name); if(v < .78) continue;
     P[i + ',' + j] = P[j + ',' + i] = v; if(v >= .82) pairs.push([v, i, j]);
   }
@@ -538,35 +547,81 @@ function nameGroups(){
   }).sort((a, b) => b.conf - a.conf);
   return (c._ng = groups);
 }
+let NOTSPLIT = new Set(ls.get('dut_notsplit', []));
+/** "Ms. Naila Gul Hina Gul" = Ms. Naila Gul + Ms. Hina Gul (a comma was missing in the Word table).
+    A name is split when its first words are one known teacher and the rest another known teacher
+    (known = other names in this table or the app's teacher list). A name that is itself in the app list is never split. */
+function joinedNames(){
+  const c = compute(); if(c._jn) return c._jn;
+  const CT = nameIndex().ct, known = [], seen = new Set();
+  const add = (name, n) => { const k = nkey(name); if(!k || seen.has(k)) return; seen.add(k); known.push({ name:CT[k] ? CT[k].name : name, k, tok:ntok(name) }); };
+  c.L.teacher.forEach(t => add(t.label)); ((CTS && CTS.list) || []).forEach(x => add(x.name));
+  const best = (W, self) => { let b = null, bv = 0; known.forEach(K => { if(K.k === self || !K.tok.length || Math.abs(K.tok.length - W.length) > 1) return; const v = textSim(W, K.tok); if(v > bv){ bv = v; b = K; } }); return [b, bv]; };
+  const out = [];
+  c.L.teacher.forEach(t => {
+    const k = nkey(t.label), W = ntok(t.label);
+    if(W.length < 3 || CT[k] || NOTSPLIT.has(k)) return;
+    let top = null;
+    for(let i = 1; i < W.length; i++){
+      const [A, av] = best(W.slice(0, i), k), [B, bv] = best(W.slice(i), k);
+      if(!A || !B || A.k === B.k) continue;
+      const v = Math.min(av, bv); if(v >= .88 && (!top || v > top.v)) top = { v, parts:[A.name, B.name] };
+    }
+    if(top) out.push({ id:'S:' + k, k, name:t.label, n:t.items.length, parts:top.parts, conf:Math.round(top.v * 100) });
+  });
+  return (c._jn = out);
+}
 let FX = { tick:new Set(), pick:{}, own:{} };
+const fxCount = () => joinedNames().length + nameGroups().length;
 function fixerHtml(){
-  const G = nameGroups();
-  if(!G.length) return `<section class="card"><h3>Name fixer</h3><div class="note ok">No two names look like the same teacher.${NOTSAME.size ? ` <button class="lnk" id="fxReset">Show the ${NOTSAME.size} pair(s) you marked “not the same” again</button>` : ''}</div></section>`;
-  return `<section class="card" id="fx"><h3>Name fixer <span class="x">${G.length}</span></h3>
-    <div class="sub">These names look like one teacher written in different ways. Pick the right name, tick the group, then press <b>Fix ticked names</b> — every list, PDF and count then uses that one name. Untick what is really two teachers, or press <b>Not the same</b> so it is not asked again. Fixes are remembered for the next exam (Save names on server).</div>
-    <div class="acts"><button class="btn sm" id="fxT96">Tick 96%+</button><button class="btn sm" id="fxAll">Tick all</button><button class="btn sm" id="fxNone">Untick all</button></div>
-    ${G.map(g => { const pick = FX.pick[g.id] || g.pick, on = FX.tick.has(g.id); return `<div class="li" style="align-items:flex-start;flex-wrap:wrap;border:1.5px solid ${on ? 'var(--good)' : 'var(--line)'};border-radius:14px;padding:10px;margin-top:8px">
-      <label style="display:flex;gap:10px;align-items:flex-start;flex:1;min-width:240px;cursor:pointer"><input type="checkbox" data-fxt="${esc(g.id)}" ${on ? 'checked' : ''} style="width:22px;height:22px;flex:none;margin-top:2px">
+  const S = joinedNames(), G = nameGroups(), n = S.length + G.length;
+  const reset = NOTSAME.size + NOTSPLIT.size ? ` <button class="lnk" id="fxReset">Ask again about the ${NOTSAME.size + NOTSPLIT.size} name(s) you marked as fine</button>` : '';
+  if(!n) return `<section class="card"><h3>Name fixer</h3><div class="note ok">Every name looks like one separate teacher.${reset}</div><div class="sub" style="margin-top:8px">Still two teachers in one name? In <b>All names</b> below, type both with a + in Standard name, e.g. <b>Ms. Naila Gul + Ms. Hina Gul</b>.</div></section>`;
+  const box = on => `class="li" style="align-items:flex-start;flex-wrap:wrap;border:1.5px solid ${on ? 'var(--good)' : 'var(--line)'};border-radius:14px;padding:10px;margin-top:8px"`;
+  const tick = (id, on) => `<input type="checkbox" data-fxt="${esc(id)}" ${on ? 'checked' : ''} style="width:22px;height:22px;flex:none;margin-top:2px">`;
+  let h = `<section class="card" id="fx"><h3>Name fixer <span class="x">${n}</span></h3>
+    <div class="sub">Tick what is right, then press <b>Fix ticked names</b>. Every list, PDF and count then uses the fixed names. What is not ticked stays as it is. Press <b>Save names on server</b> afterwards so the fixes are used for the next exam too.</div>
+    <div class="acts"><button class="btn sm" id="fxT96">Tick 96%+</button><button class="btn sm" id="fxAll">Tick all</button><button class="btn sm" id="fxNone">Untick all</button></div>`;
+  if(S.length) h += `<h3 style="margin-top:14px">Two teachers written together <span class="x">${S.length}</span></h3><div class="sub">A comma was missing in the Word table. Each of these is split into the teachers shown (separate them with <b>+</b>; you can correct the names).</div>` + S.map(x => { const on = FX.tick.has(x.id); return `<div ${box(on)}>
+      <label style="display:flex;gap:10px;align-items:flex-start;flex:1;min-width:240px;cursor:pointer">${tick(x.id, on)}<span><b>${esc(x.name)} <span class="muted">(${x.n})</span></b><span class="sub" style="display:block">→ ${x.parts.map(esc).join(' &nbsp;+&nbsp; ')} · ${x.conf}% sure</span></span></label>
+      <span style="display:flex;flex-direction:column;gap:6px;min-width:240px;flex:1"><input class="nm" data-fxo="${esc(x.id)}" value="${esc(FX.own[x.id] != null ? FX.own[x.id] : x.parts.join(' + '))}">
+      <button class="lnk" data-fxs="${esc(x.k)}" style="align-self:flex-start;font-size:13px">It is one teacher — do not split</button></span></div>`; }).join('');
+  if(G.length) h += `<h3 style="margin-top:14px">One teacher written in different ways <span class="x">${G.length}</span></h3><div class="sub">Tick only when it is really the same teacher and pick her right name. When they are different teachers press <b>Separate teachers</b> — they stay apart and are not asked again.</div>` + G.map(g => { const pick = FX.pick[g.id] || g.pick, on = FX.tick.has(g.id); return `<div ${box(on)}>
+      <label style="display:flex;gap:10px;align-items:flex-start;flex:1;min-width:240px;cursor:pointer">${tick(g.id, on)}
         <span><b>${g.members.map(x => esc(x.name) + ' <span class="muted">(' + x.n + ')</span>').join(' &nbsp;·&nbsp; ')}</b>
         <span class="sub" style="display:block"><span class="${g.conf >= 96 ? 'ok' : g.conf >= 88 ? '' : 'x'}">${g.conf}% alike</span>${g.inApp ? ' · <span class="ok">in the app’s teacher list</span>' : ''}${g.also.length ? ' · <span class="x">could also be ' + g.also.map(esc).join(', ') + '</span>' : ''}</span></span></label>
       <span style="display:flex;flex-direction:column;gap:6px;min-width:220px;flex:1">
         <select class="sq" data-fxp="${esc(g.id)}" style="height:40px">${g.opts.map(o => `<option ${o === pick ? 'selected' : ''}>${esc(o)}</option>`).join('')}<option value="__own" ${pick === '__own' ? 'selected' : ''}>Type another name…</option></select>
         ${pick === '__own' ? `<input class="nm" data-fxo="${esc(g.id)}" value="${esc(FX.own[g.id] || '')}" placeholder="e.g. Ms. Fazeela Gul">` : ''}
-        <button class="lnk" data-fxn="${esc(g.id)}" style="align-self:flex-start;font-size:13px">Not the same</button></span></div>`; }).join('')}
-    <div class="acts" style="position:sticky;bottom:0;background:var(--surface);padding:8px 0"><button class="btn pri" id="fxGo" ${FX.tick.size ? '' : 'disabled'}>Fix ${FX.tick.size} ticked name group${FX.tick.size === 1 ? '' : 's'} in one go</button></div></section>`;
+        <button class="btn sm" data-fxn="${esc(g.id)}" style="align-self:flex-start">Separate teachers</button></span></div>`; }).join('');
+  return h + `<div class="sub" style="margin-top:10px">Two teachers in one name that is not listed here? In <b>All names</b> below, type both with a + in Standard name, e.g. <b>Ms. Naila Gul + Ms. Hina Gul</b>.${reset}</div>
+    <div class="acts" style="position:sticky;bottom:0;background:var(--surface);padding:8px 0"><button class="btn pri" id="fxGo" ${FX.tick.size ? '' : 'disabled'}>Fix ${FX.tick.size} ticked name${FX.tick.size === 1 ? '' : 's'} in one go</button></div></section>`;
 }
 function fixApply(){
-  const G = nameGroups().filter(g => FX.tick.has(g.id)); let n = 0;
-  const c = compute();
+  const c = compute(), S = joinedNames().filter(x => FX.tick.has(x.id)), G = nameGroups().filter(g => FX.tick.has(g.id)); let n = 0;
+  const setPair = (w, k, v) => { PAIRS = PAIRS.filter(p => nkey(p[0]) !== k); PAIRS.push([w, v]); n++; };
+  // split first: "Ms. Naila Gul Hina Gul" -> "Ms. Naila Gul + Ms. Hina Gul"
+  S.forEach(x => {
+    const parts = String(FX.own[x.id] != null ? FX.own[x.id] : x.parts.join(' + ')).split(/\s*[+,]\s*/).map(cleanName).filter(z => nkey(z).length >= 2);
+    if(parts.length < 2) return;
+    c.variants.forEach(v => { const w = [...v.names][0]; if(nkey(stdName(w)) === x.k) setPair(w, v.k, parts.join(' + ')); });
+  });
+  // then merge: every spelling of the group -> the right name (also inside names that were split)
   G.forEach(g => {
     const pick = FX.pick[g.id] || g.pick, std = pick === '__own' ? cleanName(FX.own[g.id] || '') : pick;
     if(!std) return;
     const keys = new Set(g.members.map(x => x.k));
-    c.variants.forEach(v => { const w = [...v.names][0]; if(keys.has(nkey(stdName(w)))){ PAIRS = PAIRS.filter(p => nkey(p[0]) !== v.k); PAIRS.push([w, std]); n++; } });
+    _ix = null;
+    c.variants.forEach(v => {
+      const w = [...v.names][0], parts = stdList(w);
+      if(!parts.some(z => keys.has(nkey(z)))) return;
+      const out = [...new Set(parts.map(z => keys.has(nkey(z)) ? std : z))];
+      setPair(w, v.k, out.join(' + '));
+    });
   });
   ls.set('dut_names', PAIRS); _ix = null; C = null; FX = { tick:new Set(), pick:{}, own:{} };
   if(EX){ EX.saved = false; ls.set('dut_cur', EX); }
-  V.msg = 'Fixed ' + G.length + ' teacher(s) (' + n + ' spellings). Press “Save names on server” to keep them for next time.'; V.err = '';
+  V.msg = (S.length ? 'Split ' + S.length + ' joined name(s). ' : '') + (G.length ? 'Joined ' + G.length + ' teacher(s). ' : '') + 'Press “Save names on server” to keep the fixes for next time.'; V.err = '';
   refreshTab();
 }
 function suggest(k){
@@ -633,8 +688,9 @@ function wireTab(){
     if(t.id === 'bCts') return loadCts();
     if(t.id === 'bNames') return saveNames();
     if(t.dataset.fxn){ const g = nameGroups().find(x => x.id === t.dataset.fxn); if(g){ g.members.forEach(a => g.members.forEach(b => { if(a.k < b.k) NOTSAME.add(pairKey(a.name, b.name)); })); ls.set('dut_notsame', [...NOTSAME]); FX.tick.delete(g.id); C = null; } return refreshTab(); }
-    if(t.id === 'fxReset'){ NOTSAME = new Set(); ls.set('dut_notsame', []); C = null; return refreshTab(); }
-    if(t.id === 'fxT96' || t.id === 'fxAll' || t.id === 'fxNone'){ FX.tick = new Set(t.id === 'fxNone' ? [] : nameGroups().filter(g => t.id === 'fxAll' || (g.conf >= 96 && !g.also.length)).map(g => g.id)); return refreshTab(); }
+    if(t.dataset.fxs){ NOTSPLIT.add(t.dataset.fxs); ls.set('dut_notsplit', [...NOTSPLIT]); FX.tick.delete('S:' + t.dataset.fxs); C = null; return refreshTab(); }
+    if(t.id === 'fxReset'){ NOTSAME = new Set(); NOTSPLIT = new Set(); ls.set('dut_notsame', []); ls.set('dut_notsplit', []); C = null; return refreshTab(); }
+    if(t.id === 'fxT96' || t.id === 'fxAll' || t.id === 'fxNone'){ FX.tick = new Set(t.id === 'fxNone' ? [] : [...joinedNames(), ...nameGroups()].filter(g => t.id === 'fxAll' || (g.conf >= 96 && !(g.also || []).length)).map(g => g.id)); return refreshTab(); }
     if(t.id === 'fxGo') return fixApply();
     if(t.id === 'bCopyT') return copy(EX.title + '\nTEACHER-WISE DUTIES\n\n' + groups('teacher').map((g, i) => `${i + 1}. ${g.label} (${g.items.length}): ` + g.items.map(d => `${dayShort(d.day)} ${d.dt ? d.dt.slice(0, 5) : '?'} ${roomLbl(d.room)}${d.x ? ' ⚠' : ''}`).join(', ')).join('\n'));
     if(t.id === 'bAdd'){ const last = EX.rows[EX.rows.length - 1] || {}; EX.rows.push({ dt:last.dt || '', iso:last.iso || '', day:last.day || '', time:last.time || '', cls:'', sub:'', room:'', staff:'' }); saveLocal(); render(); const r = document.getElementById('row' + (EX.rows.length - 1)); r && r.scrollIntoView({ block:'center' }); return; }
@@ -670,8 +726,8 @@ function useParsed(res, how){
   ls.set('dut_cur', EX); C = null;
   const c = compute();
   V.err = ''; V.busy = ''; V.msg = `Read ${rows.length} rows ${how}: ${c.L.teacher.length} teachers, ${c.L.room.length} rooms, ${c.dates.length} days.` + (c.clashes.length ? ` ${c.clashes.length} clash(es) — see Check.` : '');
-  const ng = nameGroups().length;
-  if(ng){ V.msg += ` ${ng} name(s) look like the same teacher written differently — fix them first in the Name fixer.`; V.tab = 'names'; } else V.tab = 'teacher';
+  const ng = fxCount();
+  if(ng){ V.msg += ` ${ng} name(s) need a look (two teachers written together, or one teacher written differently) — fix them first in the Name fixer.`; V.tab = 'names'; } else V.tab = 'teacher';
   FX = { tick:new Set(), pick:{}, own:{} }; render();
   if(!CTS && navigator.onLine) loadCts(true);
 }
@@ -734,7 +790,7 @@ async function loadCts(quiet){
 async function saveServer(){
   const b = $('#bSave'); b.disabled = true; b.textContent = 'Saving…';
   try{
-    const rows = EX.rows.map(r => ({ dt:r.dt, day:r.day, time:r.time, cls:r.cls, sub:r.sub, room:r.room, staff:r.staff, teachers:splitStaff(r.staff).map(stdName).join(', ') }));
+    const rows = EX.rows.map(r => ({ dt:r.dt, day:r.day, time:r.time, cls:r.cls, sub:r.sub, room:r.room, staff:r.staff, teachers:splitStaff(r.staff).flatMap(stdList).join(', ') }));
     await api({ action:'dut_save', exam:{ id:EX.id, title:EX.title, timing:EX.timing || '', rows } });
     if(PAIRS.length) await api({ action:'dut_names_save', pairs:PAIRS });
     EX.saved = true; ls.set('dut_cur', EX); V.msg = 'Saved on the server (sheet “Duty Lists” in the Users workbook).'; V.err = '';
@@ -954,7 +1010,7 @@ async function allPdfs(){
 function tableOf(kind){
   if(kind === 'sumdates') return { name:'Teacher DAY-DATE', rows:[['Teacher', 'DAY/DATE'], ...summaryDates()], red:[] };
   if(kind === 'sumcount') return { name:'Total Duties', rows:[['Teacher', 'Duties', 'Total Duties'], ...summaryCount()], red:[] };
-  if(kind === 'rows') return { name:'All rows', rows:[['Date', 'Day', 'Time', 'Class', 'Subject', 'Room', 'Staff on duty (as written)', 'Teachers'], ...EX.rows.map(r => [r.dt, r.day, r.time, r.cls, r.sub, r.room, String(r.staff || '').replace(/\n/g, ', '), splitStaff(r.staff).map(stdName).join(', ')])], red:[] };
+  if(kind === 'rows') return { name:'All rows', rows:[['Date', 'Day', 'Time', 'Class', 'Subject', 'Room', 'Staff on duty (as written)', 'Teachers'], ...EX.rows.map(r => [r.dt, r.day, r.time, r.cls, r.sub, r.room, String(r.staff || '').replace(/\n/g, ', '), splitStaff(r.staff).flatMap(stdList).join(', ')])], red:[] };
   const first = { teacher:'TEACHER', room:'ROOM', date:'DATE/DAY', class:'CLASS', subject:'SUBJECT' }[kind], cols = colsOf(kind);
   const rows = [[first, '#', ...cols.map(c => COLNAME[c])]], red = [];
   groups(kind).forEach(g => g.items.forEach((it, i) => { if(it.x) red.push(rows.length); rows.push([i ? '' : g.label, i + 1, ...cols.map(c => cellOf(it, c))]); }));
