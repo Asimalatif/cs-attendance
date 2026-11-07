@@ -11,6 +11,8 @@
  *   a) + > Script > name it "IdCards" > paste this file.
  *   b) doPost, next to the pc_ line:
  *        if (/^idc_/.test(String(req.action || ''))) return json_(idcRoute_(user, req));
+ *   Photos are read 12 at a time in parallel; the page keeps them on the device, so each photo is read from Drive once.
+ *   Photos fixed or given in the app go to "JCW ID Cards/Student photos" and the sheet "ID Card Photos".
  *   c) Run idcAuthorize once (Run ▸ Allow), then Deploy > Manage deployments > Edit > New version > Deploy.
  */
 var IDC_CFG = {
@@ -20,8 +22,10 @@ var IDC_CFG = {
   SIGN_FOLDER: 'JCW ID Cards',                               // Drive folder for the principal's sign + stamp of each year
   PROP: 'IDC_SETTINGS',                                      // card settings (Script Properties)
   FIRST_YEAR: /1st/i,                                        // only 1st year students get cards
+  PHOTOS: 'ID Card Photos',                                  // sheet: photos the admin gave/fixed in the app (Enroll#, File ID, Updated, By)
+  PHOTO_FOLDER: 'Student photos',                            // inside the "JCW ID Cards" folder
   PHOTO_MAX: 1500000,                                        // bytes; bigger photos use Drive's thumbnail
-  BATCH: 8                                                   // photos per call
+  BATCH: 12                                                  // photos per call (fetched in parallel)
 };
 
 function idcAuthorize() {
@@ -40,6 +44,7 @@ function idcRoute_(user, req) {
       case 'idc_mark':   return idcMark_(user, req.rolls || []);
       case 'idc_settings': return idcSaveSettings_(req.cfg || {});
       case 'idc_sign':   return idcSaveSign_(req.year, req.data);
+      case 'idc_photo_save': return idcSavePhoto_(user, req.roll, req.data);
     }
     return { ok: false, error: 'UNKNOWN_ACTION' };
   } catch (e) {
@@ -65,7 +70,7 @@ function idcList_() {
     pic2: c('PHOTO'), status: c('STATUS'), session: c('SESSION'), dob: c('DOB'), contact: c('STUDENTCONTACT') };
   if (C.roll < 0 || C.name < 0) throw new Error('Enroll# or Student Name column not found in ' + IDC_CFG.STRENGTH + '.');
   var g = function (r, k) { return C[k] >= 0 ? idcS_(r[C[k]]) : ''; };
-  var printed = idcPrinted_(book), out = [];
+  var printed = idcPrinted_(book), own = idcOwnPhotos_(book), out = [];
   for (var i = 1; i < v.length; i++) {
     var r = v[i], roll = g(r, 'roll');
     if (!roll || !g(r, 'name') || !IDC_CFG.FIRST_YEAR.test(g(r, 'cls'))) continue;
@@ -73,6 +78,8 @@ function idcList_() {
       section: g(r, 'section'), pcs: g(r, 'pcs'), group: /^null$/i.test(g(r, 'group')) ? '' : g(r, 'group'),
       pic: g(r, 'pic') || g(r, 'pic2'), status: g(r, 'status'), session: g(r, 'session'),
       printed: printed[idcK_(roll)] || '' });
+    var o = own[idcK_(roll)];
+    if (o) { var st = out[out.length - 1]; st.pic = 'https://drive.google.com/file/d/' + o.id + '/view'; st.own = o.at; }
   }
   var cfg = idcSettings_(), signs = idcSigns_();
   return { ok: true, list: out, at: new Date().toISOString(), cfg: cfg, signs: signs };
@@ -118,32 +125,85 @@ function idcSaveSign_(year, data) {
   return { ok: true, year: year };
 }
 
-/** items: [{ roll, pic }] -> { photos: { roll: dataURL | '' } } */
+/** items: [{ roll, pic }] -> { photos: { roll: dataURL | '' } }. Drive files and web links are fetched in parallel. */
 function idcPhotos_(items) {
-  var out = {};
-  items.slice(0, IDC_CFG.BATCH).forEach(function (it) {
-    var roll = idcS_(it.roll);
-    try { out[roll] = idcPhoto_(idcS_(it.pic)); } catch (e) { out[roll] = ''; }
+  items = items.slice(0, IDC_CFG.BATCH);
+  var out = {}, reqs = [], who = [], tok = ScriptApp.getOAuthToken();
+  items.forEach(function (it) {
+    var roll = idcS_(it.roll), url = idcS_(it.pic);
+    out[roll] = '';
+    if (!url || /^(null|n\/?a|-|0)$/i.test(url)) return;
+    var id = (url.match(/[-\w]{25,}/) || [])[0];
+    if (id && /drive|docs\.google|googleusercontent/i.test(url)) {
+      reqs.push({ url: 'https://www.googleapis.com/drive/v3/files/' + id + '?alt=media&supportsAllDrives=true', headers: { Authorization: 'Bearer ' + tok }, muteHttpExceptions: true });
+      who.push({ roll: roll, id: id });
+    } else if (/^https?:\/\//i.test(url)) {
+      reqs.push({ url: url, muteHttpExceptions: true, followRedirects: true });
+      who.push({ roll: roll });
+    }
+  });
+  var res = [];
+  try { res = reqs.length ? UrlFetchApp.fetchAll(reqs) : []; } catch (e) { res = []; }
+  who.forEach(function (w, i) {
+    try {
+      var r = res[i], blob = r && r.getResponseCode() === 200 ? r.getBlob() : null;
+      if (blob && !/^image\//i.test(blob.getContentType() || '') && !w.id) blob = null;
+      if (w.id && (!blob || blob.getBytes().length > IDC_CFG.PHOTO_MAX)) {      // big or unreadable: one by one
+        var f = DriveApp.getFileById(w.id); blob = f.getBlob();
+        if (blob.getBytes().length > IDC_CFG.PHOTO_MAX) blob = f.getThumbnail();
+      }
+      if (!blob) return;
+      var bytes = blob.getBytes();
+      if (!bytes.length || bytes.length > IDC_CFG.PHOTO_MAX) return;
+      var type = /^image\//i.test(blob.getContentType() || '') ? blob.getContentType() : 'image/jpeg';
+      out[w.roll] = 'data:' + type + ';base64,' + Utilities.base64Encode(bytes);
+    } catch (e) { out[w.roll] = ''; }
   });
   return { ok: true, photos: out };
 }
-function idcPhoto_(url) {
-  if (!url || /^(null|n\/?a|-|0)$/i.test(url)) return '';
-  var blob = null, id = (url.match(/[-\w]{25,}/) || [])[0];
-  if (id && /drive|docs\.google|googleusercontent/i.test(url)) {
-    var f = DriveApp.getFileById(id);
-    blob = f.getBlob();
-    if (blob.getBytes().length > IDC_CFG.PHOTO_MAX) blob = f.getThumbnail();
-  } else if (/^https?:\/\//i.test(url)) {
-    var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
-    if (res.getResponseCode() !== 200) return '';
-    blob = res.getBlob();
-    if (!/^image\//i.test(blob.getContentType() || '')) return '';
-  }
-  if (!blob) return '';
-  var bytes = blob.getBytes();
-  if (!bytes.length || bytes.length > IDC_CFG.PHOTO_MAX) return '';
-  return 'data:' + (blob.getContentType() || 'image/jpeg') + ';base64,' + Utilities.base64Encode(bytes);
+
+/* ================= photos given or fixed in the app ================= */
+function idcOwnPhotos_(book) {
+  var sh = book.getSheetByName(IDC_CFG.PHOTOS), map = {};
+  if (!sh || sh.getLastRow() < 2) return map;
+  sh.getRange(2, 1, sh.getLastRow() - 1, 3).getDisplayValues().forEach(function (r) { if (r[0] && r[1]) map[idcK_(r[0])] = { id: r[1], at: r[2] }; });
+  return map;
+}
+function idcPhotoFolder_() {
+  var root = idcFolder_(), it = root.getFoldersByName(IDC_CFG.PHOTO_FOLDER);
+  return it.hasNext() ? it.next() : root.createFolder(IDC_CFG.PHOTO_FOLDER);
+}
+/** saves the (rotated / trimmed / new) photo of one student: Drive file + "ID Card Photos" row; fills Pic URL only if it is empty */
+function idcSavePhoto_(user, roll, data) {
+  roll = idcS_(roll);
+  var m = String(data || '').match(/^data:image\/(jpeg|png);base64,(.+)$/);
+  if (!roll || !m) throw new Error('No photo received.');
+  var bytes = Utilities.base64Decode(m[2]);
+  if (bytes.length > 2000000) throw new Error('Photo too big.');
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    var book = SpreadsheetApp.openById(IDC_CFG.USERS), folder = idcPhotoFolder_();
+    var name = roll.replace(/[^\w-]+/g, '_') + '.jpg', old = folder.getFilesByName(name);
+    while (old.hasNext()) old.next().setTrashed(true);
+    var file = folder.createFile(Utilities.newBlob(bytes, 'image/' + m[1], name));
+    var sh = book.getSheetByName(IDC_CFG.PHOTOS);
+    if (!sh) { sh = book.insertSheet(IDC_CFG.PHOTOS); sh.getRange(1, 1, 1, 4).setValues([['Enroll#', 'File ID', 'Updated', 'By']]).setFontWeight('bold'); sh.setFrozenRows(1); }
+    var now = Utilities.formatDate(new Date(), 'Asia/Karachi', 'dd-MM-yyyy HH:mm');
+    var who = idcS_(user && (user.username || user.name || user.email) || user);
+    var n = sh.getLastRow(), rows = n > 1 ? sh.getRange(2, 1, n - 1, 1).getDisplayValues() : [], at = -1;
+    for (var i = 0; i < rows.length; i++) if (idcK_(rows[i][0]) === idcK_(roll)) { at = i + 2; break; }
+    var row = [[roll, file.getId(), now, who]];
+    if (at > 0) sh.getRange(at, 1, 1, 4).setNumberFormat('@').setValues(row);
+    else sh.getRange(n + 1, 1, 1, 4).setNumberFormat('@').setValues(row);
+    // a student who had no photo gets this one in the strength sheet too (existing photo links are never changed)
+    var st = book.getSheetByName(IDC_CFG.STRENGTH), v = st.getDataRange().getDisplayValues(), head = v[0].map(idcK_);
+    var cR = head.indexOf('ENROLL'), cP = head.indexOf('PICURL');
+    if (cR >= 0 && cP >= 0) for (var r = 1; r < v.length; r++) if (idcK_(v[r][cR]) === idcK_(roll)) {
+      if (!idcS_(v[r][cP]) || /^null$/i.test(v[r][cP])) st.getRange(r + 1, cP + 1).setValue('https://drive.google.com/file/d/' + file.getId() + '/view');
+      break;
+    }
+    return { ok: true, id: file.getId(), at: now };
+  } finally { lock.releaseLock(); }
 }
 
 /* ================= printed log ================= */

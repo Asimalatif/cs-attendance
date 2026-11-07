@@ -1,6 +1,6 @@
 // Bump VERSION every time you change index.html so phones pick up the update.
-const VERSION = 'csa-v88';
-const CORE = ['./', './index.html', './admission.html', './grandtest.html', './detention.html', './board.html', './boardparse.js', './certificates.html', './idcards.html', './idcard/campus.jpg', './idcard/uop-logo.png', './idcard/jcw-crest.png', './idcard/principal-sign.png', './manifest.json', './icon-192.png', './jcw-logo.png', './icon-512.png'];
+const VERSION = 'csa-v90';
+const CORE = ['./', './index.html', './admission.html', './grandtest.html', './detention.html', './board.html', './boardparse.js', './certificates.html', './idcards.html', './idcard/sheet.svg', './idcard/sheet-template.pdf', './idcard/Carlito-Bold.ttf', './idcard/Carlito-Bold.woff2', './idcard/principal-sign.png', './idcard/uop-logo.png', './idcard/jcw-crest.png', './idcard/campus.jpg', './manifest.json', './icon-192.png', './jcw-logo.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
