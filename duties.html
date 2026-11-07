@@ -291,7 +291,7 @@ function cleanName(raw){
   return ((tm[1] || '') + fixed).replace(/\.\s*\./g, '.').trim();
 }
 function splitStaff(raw){
-  let s = String(raw || '').replace(/\u00a0/g, ' ').replace(/([a-z])(Ms|Mrs|Miss|Dr|Prof)\b\.?/g, '$1 $2 ');   // "dr.HamidaMs Fazeela" -> "dr.Hamida Ms Fazeela"
+  let s = String(raw || '').replace(/\u00a0/g, ' ').replace(/([a-z])(Ms|Mrs|Miss|Dr|Prof)\b\.?/g, '$1 $2 ').replace(/\b(Ms|MS|Mrs|MRS|Miss|Dr|DR|Prof)(?=[A-Z][a-z])/g, '$1 ');   // + "MsUmama" -> "Ms Umama"   // "dr.HamidaMs Fazeela" -> "dr.Hamida Ms Fazeela"
   let parts;
   if(/\b(ms|mrs|miss|dr|mr|prof|madam)\b\.?\s*[a-z]/i.test(s)){
     s = s.replace(/[\n,;&\/|+]+/g, ' ').replace(/\band\b/gi, ' ');
@@ -422,7 +422,7 @@ function render(){
     const c = compute(), probs = c.clashes.length + c.check.noRoom.length + c.check.noDate.length;
     h += `<section class="card"><h2>${esc(EX.title || 'Duty list')}</h2>
       <div class="chips"><div class="chip"><b>${c.L.teacher.length}</b>teachers</div><div class="chip"><b>${c.duties}</b>duties</div><div class="chip"><b>${c.L.room.length}</b>rooms</div><div class="chip"><b>${c.L.class.length}</b>classes</div><div class="chip"><b>${c.dates.length}</b>days${c.dates.length ? '<br><span class="muted" style="font-weight:600">' + esc(fmtIso(c.dates[0])) + ' – ' + esc(fmtIso(c.dates[c.dates.length - 1])) + '</span>' : ''}</div>
-      <div class="chip ${c.clashes.length ? 'bad' : 'good'}"><b>${c.clashes.length}</b>clashes</div>${c.check.noRoom.length ? `<div class="chip mid"><b>${c.check.noRoom.length}</b>staff with no room</div>` : ''}</div>
+      <div class="chip ${c.clashes.length ? 'bad' : 'good'}"><b>${c.clashes.length}</b>clashes</div>${c.check.noRoom.length ? `<div class="chip mid"><b>${c.check.noRoom.length}</b>staff with no room</div>` : ''}${nameGroups().length ? `<button class="chip bad" data-tab="names" style="cursor:pointer;text-align:left;font:inherit;font-weight:700"><b>${nameGroups().length}</b>names to fix ›</button>` : ''}</div>
       <div class="grid"><label class="f">Duty timings (printed on every list)<input id="iTime" value="${esc(EX.timing || '08:30-12:30 PM (morning)')}" autocomplete="off"></label><label class="c" style="align-self:end;padding-bottom:10px"><input type="checkbox" id="iNp" ${V.newPage ? 'checked' : ''}> Each teacher / room / date / class on a new page</label></div>
       <h3 style="margin-top:14px">PDF lists <span class="sub">(file names carry today’s date, e.g. ${esc(fileName('teacher', 'pdf'))})</span></h3>
       <div class="acts">${Object.keys(KINDS).map(k => `<button class="btn sm pri" data-pdf="${k}">${KINDS[k].tab}</button>`).join('')}<button class="btn sm pri" data-pdf="sumdates">Teacher · Day/Date</button><button class="btn sm pri" data-pdf="sumcount">Teacher · Total duties</button></div>
@@ -473,7 +473,7 @@ function summaryHtml(){
     <div class="tw"><table><thead><tr><th>Teacher</th><th>Duties</th><th>Total Duties</th></tr></thead><tbody>${B.map(r => `<tr><td class="nw"><b>${esc(r[0])}</b></td><td>${esc(r[1])}</td><td class="n">${r[2]}</td></tr>`).join('')}</tbody></table></div></section>`;
 }
 function namesHtml(c){
-  const opts = ((CTS && CTS.list) || []).map(x => `<option value="${esc(x.name)}">`).join('');
+  const opts = [...new Set([...((CTS && CTS.list) || []).map(x => x.name), ...c.L.teacher.map(t => t.label)])].sort(ncmp).map(n => `<option value="${esc(n)}">`).join('');
   const I = nameIndex();
   const rows = c.variants.slice().sort((a, b) => ncmp(a.k, b.k)).map(v => {
     const written = [...v.names], std = I.map[v.k] || '', app = I.ct[v.k];
@@ -481,12 +481,94 @@ function namesHtml(c){
     const st = std ? `<span class="ok">fixed</span>` : app ? `<span class="ok">✓ in app</span>` : CTS ? `<span class="x">not in app</span>` : '';
     return `<tr><td>${written.map(esc).join('<br>')}</td><td class="n">${v.n}</td><td><input class="nm" list="ctl" data-k="${esc(v.k)}" data-w="${esc(written[0])}" value="${esc(std)}" placeholder="${esc(app ? app.name : written[0])}">${sug ? `<div class="sub">Maybe <button class="lnk" data-use="${esc(v.k)}" data-name="${esc(sug)}">${esc(sug)}</button>?</div>` : ''}</td><td>${st}</td></tr>`;
   }).join('');
-  return `<section class="card"><h3>Teacher names</h3><div class="sub">Every name as it is written in the Word table. When one teacher is written two ways (e.g. “dr.Hamida” and “Dr. BiBi Hamida”), type the correct name in <b>Standard name</b> — both then count as one teacher. Names that match the app’s teacher list are joined automatically. This replaces your old “names” sheet and is remembered for the next exam.</div>
+  return fixerHtml() + `<section class="card"><h3>All names</h3><div class="sub">Every name as it is written in the Word table. When one teacher is written two ways (e.g. “dr.Hamida” and “Dr. BiBi Hamida”), type the correct name in <b>Standard name</b> — both then count as one teacher. Names that match the app’s teacher list are joined automatically. This replaces your old “names” sheet and is remembered for the next exam.</div>
     <div class="acts">${CTS ? `<span class="sub">App teacher list: ${CTS.list.length} names.</span><button class="btn sm" id="bCts">Reload app teachers</button>` : '<button class="btn pri sm" id="bCts">Load the app’s teacher list</button>'}<button class="btn sm pri" id="bNames">Save names on server</button></div>
     <datalist id="ctl">${opts}</datalist>
     <div class="tw"><table><thead><tr><th>Written in the table</th><th>Rows</th><th>Standard name</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="muted">No names.</td></tr>'}</tbody></table></div></section>`;
 }
-function lev(a, b){ if(Math.abs(a.length - b.length) > 3) return 9; const d = Array.from({ length:a.length + 1 }, (_, i) => [i]); for(let j = 1; j <= b.length; j++) d[0][j] = j; for(let i = 1; i <= a.length; i++) for(let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return d[a.length][b.length]; }
+/* ---------- Name Fixer: similarity (same as the certificates Name Fixer / HSSC Fill) ---------- */
+function lev(a, b){ const m = a.length, n = b.length; if(!m) return n; if(!n) return m; let p = [], c = []; for(let j = 0; j <= n; j++) p[j] = j; for(let i = 1; i <= m; i++){ c = [i]; for(let j = 1; j <= n; j++) c[j] = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); p = c; } return p[n]; }
+const ratio = (a, b) => { const L = Math.max(a.length, b.length); return L ? 1 - lev(a, b) / L : 1; };
+const collapse = s => s.replace(/(.)\1+/g, '$1');
+const skel = s => collapse(s[0] + s.slice(1).replace(/[AEIOUY]/g, ''));
+function tokSim(a, b){ if(a === b) return 1; let r = ratio(collapse(a), collapse(b)); const sa = skel(a), sb = skel(b); if(sa.length > 1 && sb.length > 1) r = Math.max(r, .8 * ratio(sa, sb)); if((a.length === 1 || b.length === 1) && a[0] === b[0]) r = Math.max(r, .75); return r; }
+function dirSim(A, B){ let t = 0, w = 0; A.forEach(x => { let best = 0; B.forEach(y => { const v = tokSim(x, y); if(v > best) best = v; }); t += best * x.length; w += x.length; }); return t / w; }
+function textSim(A, B){ if(!A.length || !B.length) return 0; return Math.max((dirSim(A, B) + dirSim(B, A)) / 2, ratio(collapse(A.join('')), collapse(B.join('')))); }
+const titleOf = n => (String(n).match(/^(Ms|Mrs|Dr|Mr|Prof|Miss|Madam)\b/i) || [''])[0].toLowerCase().replace('miss', 'ms').replace('mrs', 'ms');
+const ntok = n => String(n || '').replace(/^(ms|mrs|miss|dr|mr|prof|madam)\b\.?\s*/i, '').toUpperCase().replace(/[^A-Z ]/g, ' ').split(' ').filter(x => x);
+/** how alike two teacher names are (0..1). "Ms. Fazeela" inside "Ms. Fazeela Gul" counts as alike. */
+function nameSim(a, b){
+  const A = ntok(a), B = ntok(b); if(!A.length || !B.length) return 0;
+  let s = textSim(A, B);
+  const [S, L] = A.length <= B.length ? [A, B] : [B, A];
+  if(S.length < L.length && tokSim(S[0], L[0]) >= .85 && S.every(x => L.some(y => tokSim(x, y) >= .85))) s = Math.max(s, .9);   // short name inside the full name
+  const ta = titleOf(a), tb = titleOf(b); if(ta && tb && ta !== tb) s -= .06;                                                     // Dr. vs Ms.
+  return Math.max(0, Math.min(1, s));
+}
+let NOTSAME = new Set(ls.get('dut_notsame', []));
+const pairKey = (a, b) => [nkey(a), nkey(b)].sort().join('|');
+/** groups of names that look like one teacher (complete linkage: every two names in a group are alike) */
+function nameGroups(){
+  const c = compute(); if(c._ng) return c._ng;
+  const T = c.L.teacher.map(t => ({ name:t.label, k:nkey(t.label), n:t.items.length, tok:ntok(t.label).length }));
+  const P = {}, pairs = [];
+  for(let i = 0; i < T.length; i++) for(let j = i + 1; j < T.length; j++){
+    if(NOTSAME.has(pairKey(T[i].name, T[j].name))) continue;
+    const v = nameSim(T[i].name, T[j].name); if(v < .78) continue;
+    P[i + ',' + j] = P[j + ',' + i] = v; if(v >= .82) pairs.push([v, i, j]);
+  }
+  pairs.sort((a, b) => b[0] - a[0]);
+  const cl = T.map((t, i) => [i]), of = T.map((t, i) => i);
+  pairs.forEach(([v, i, j]) => {
+    const a = of[i], b = of[j]; if(a === b) return;
+    if(!cl[a].every(x => cl[b].every(y => P[x + ',' + y]))) return;
+    cl[b].forEach(x => { of[x] = a; }); cl[a] = cl[a].concat(cl[b]); cl[b] = [];
+  });
+  const groups = cl.filter(g => g.length > 1).map(g => {
+    const m = g.map(i => T[i]).sort((a, b) => b.n - a.n), inG = new Set(g);
+    let conf = 1; g.forEach(x => g.forEach(y => { if(x < y) conf = Math.min(conf, P[x + ',' + y]); }));
+    const also = [...new Set(pairs.filter(([v, i, j]) => inG.has(i) !== inG.has(j)).map(([v, i, j]) => T[inG.has(i) ? j : i].name))];
+    // the right name: the app's teacher list first, else the fullest name, else the one written most
+    const app = [], seen = new Set();
+    m.forEach(x => { const ct = nameIndex().ct[x.k]; if(ct && !seen.has(ct.name)){ seen.add(ct.name); app.push(ct.name); } });
+    ((CTS && CTS.list) || []).map(ct => [nameSim(m[0].name, ct.name), ct.name]).filter(z => z[0] >= .85 && !seen.has(z[1])).sort((a, b) => b[0] - a[0]).slice(0, 2).forEach(z => { seen.add(z[1]); app.push(z[1]); });
+    const full = m.slice().sort((a, b) => b.tok - a.tok || b.n - a.n || (titleOf(b.name) ? 1 : 0) - (titleOf(a.name) ? 1 : 0))[0].name;
+    const opts = [...new Set([...app, full, ...m.map(x => x.name)])];
+    return { id:m.map(x => x.k).sort().join('|'), members:m, conf:Math.round(conf * 100), also, opts, pick:app[0] || full, inApp:app.length > 0 };
+  }).sort((a, b) => b.conf - a.conf);
+  return (c._ng = groups);
+}
+let FX = { tick:new Set(), pick:{}, own:{} };
+function fixerHtml(){
+  const G = nameGroups();
+  if(!G.length) return `<section class="card"><h3>Name fixer</h3><div class="note ok">No two names look like the same teacher.${NOTSAME.size ? ` <button class="lnk" id="fxReset">Show the ${NOTSAME.size} pair(s) you marked “not the same” again</button>` : ''}</div></section>`;
+  return `<section class="card" id="fx"><h3>Name fixer <span class="x">${G.length}</span></h3>
+    <div class="sub">These names look like one teacher written in different ways. Pick the right name, tick the group, then press <b>Fix ticked names</b> — every list, PDF and count then uses that one name. Untick what is really two teachers, or press <b>Not the same</b> so it is not asked again. Fixes are remembered for the next exam (Save names on server).</div>
+    <div class="acts"><button class="btn sm" id="fxT96">Tick 96%+</button><button class="btn sm" id="fxAll">Tick all</button><button class="btn sm" id="fxNone">Untick all</button></div>
+    ${G.map(g => { const pick = FX.pick[g.id] || g.pick, on = FX.tick.has(g.id); return `<div class="li" style="align-items:flex-start;flex-wrap:wrap;border:1.5px solid ${on ? 'var(--good)' : 'var(--line)'};border-radius:14px;padding:10px;margin-top:8px">
+      <label style="display:flex;gap:10px;align-items:flex-start;flex:1;min-width:240px;cursor:pointer"><input type="checkbox" data-fxt="${esc(g.id)}" ${on ? 'checked' : ''} style="width:22px;height:22px;flex:none;margin-top:2px">
+        <span><b>${g.members.map(x => esc(x.name) + ' <span class="muted">(' + x.n + ')</span>').join(' &nbsp;·&nbsp; ')}</b>
+        <span class="sub" style="display:block"><span class="${g.conf >= 96 ? 'ok' : g.conf >= 88 ? '' : 'x'}">${g.conf}% alike</span>${g.inApp ? ' · <span class="ok">in the app’s teacher list</span>' : ''}${g.also.length ? ' · <span class="x">could also be ' + g.also.map(esc).join(', ') + '</span>' : ''}</span></span></label>
+      <span style="display:flex;flex-direction:column;gap:6px;min-width:220px;flex:1">
+        <select class="sq" data-fxp="${esc(g.id)}" style="height:40px">${g.opts.map(o => `<option ${o === pick ? 'selected' : ''}>${esc(o)}</option>`).join('')}<option value="__own" ${pick === '__own' ? 'selected' : ''}>Type another name…</option></select>
+        ${pick === '__own' ? `<input class="nm" data-fxo="${esc(g.id)}" value="${esc(FX.own[g.id] || '')}" placeholder="e.g. Ms. Fazeela Gul">` : ''}
+        <button class="lnk" data-fxn="${esc(g.id)}" style="align-self:flex-start;font-size:13px">Not the same</button></span></div>`; }).join('')}
+    <div class="acts" style="position:sticky;bottom:0;background:var(--surface);padding:8px 0"><button class="btn pri" id="fxGo" ${FX.tick.size ? '' : 'disabled'}>Fix ${FX.tick.size} ticked name group${FX.tick.size === 1 ? '' : 's'} in one go</button></div></section>`;
+}
+function fixApply(){
+  const G = nameGroups().filter(g => FX.tick.has(g.id)); let n = 0;
+  const c = compute();
+  G.forEach(g => {
+    const pick = FX.pick[g.id] || g.pick, std = pick === '__own' ? cleanName(FX.own[g.id] || '') : pick;
+    if(!std) return;
+    const keys = new Set(g.members.map(x => x.k));
+    c.variants.forEach(v => { const w = [...v.names][0]; if(keys.has(nkey(stdName(w)))){ PAIRS = PAIRS.filter(p => nkey(p[0]) !== v.k); PAIRS.push([w, std]); n++; } });
+  });
+  ls.set('dut_names', PAIRS); _ix = null; C = null; FX = { tick:new Set(), pick:{}, own:{} };
+  if(EX){ EX.saved = false; ls.set('dut_cur', EX); }
+  V.msg = 'Fixed ' + G.length + ' teacher(s) (' + n + ' spellings). Press “Save names on server” to keep them for next time.'; V.err = '';
+  refreshTab();
+}
 function suggest(k){
   let best = null, bd = 9;
   (CTS.list || []).forEach(c => { const ck = nkey(c.name); if(!ck) return; let d = lev(k, ck); if(d > 2 && k.length >= 4 && (ck.startsWith(k) || k.startsWith(ck) || ck.endsWith(k))) d = 2; if(d < bd){ bd = d; best = c.name; } });
@@ -550,6 +632,10 @@ function wireTab(){
     if(t.dataset.go !== undefined){ V.tab = 'rows'; ls.set('dut_tab', 'rows'); render(); const r = document.getElementById('row' + t.dataset.go); if(r){ r.scrollIntoView({ block:'center' }); const inp = r.querySelector('input'); inp && inp.focus(); } return; }
     if(t.id === 'bCts') return loadCts();
     if(t.id === 'bNames') return saveNames();
+    if(t.dataset.fxn){ const g = nameGroups().find(x => x.id === t.dataset.fxn); if(g){ g.members.forEach(a => g.members.forEach(b => { if(a.k < b.k) NOTSAME.add(pairKey(a.name, b.name)); })); ls.set('dut_notsame', [...NOTSAME]); FX.tick.delete(g.id); C = null; } return refreshTab(); }
+    if(t.id === 'fxReset'){ NOTSAME = new Set(); ls.set('dut_notsame', []); C = null; return refreshTab(); }
+    if(t.id === 'fxT96' || t.id === 'fxAll' || t.id === 'fxNone'){ FX.tick = new Set(t.id === 'fxNone' ? [] : nameGroups().filter(g => t.id === 'fxAll' || (g.conf >= 96 && !g.also.length)).map(g => g.id)); return refreshTab(); }
+    if(t.id === 'fxGo') return fixApply();
     if(t.id === 'bCopyT') return copy(EX.title + '\nTEACHER-WISE DUTIES\n\n' + groups('teacher').map((g, i) => `${i + 1}. ${g.label} (${g.items.length}): ` + g.items.map(d => `${dayShort(d.day)} ${d.dt ? d.dt.slice(0, 5) : '?'} ${roomLbl(d.room)}${d.x ? ' ⚠' : ''}`).join(', ')).join('\n'));
     if(t.id === 'bAdd'){ const last = EX.rows[EX.rows.length - 1] || {}; EX.rows.push({ dt:last.dt || '', iso:last.iso || '', day:last.day || '', time:last.time || '', cls:'', sub:'', room:'', staff:'' }); saveLocal(); render(); const r = document.getElementById('row' + (EX.rows.length - 1)); r && r.scrollIntoView({ block:'center' }); return; }
   };
@@ -560,11 +646,15 @@ function wireTab(){
       if(f === 'dt'){ const p = parseDate(t.value); r.iso = p.iso; r.day = p.day; if(p.dt) r.dt = p.dt; }
       saveLocal(); refreshTab(); return;
     }
-    if(t.classList.contains('nm')){ setStd(t.dataset.k, t.value.trim(), t.dataset.w); refreshTab(); }
+    if(t.dataset.fxt){ t.checked ? FX.tick.add(t.dataset.fxt) : FX.tick.delete(t.dataset.fxt); return refreshTab(); }
+    if(t.dataset.fxp){ FX.pick[t.dataset.fxp] = t.value; FX.tick.add(t.dataset.fxp); return refreshTab(); }
+    if(t.dataset.fxo){ FX.own[t.dataset.fxo] = t.value.trim(); FX.tick.add(t.dataset.fxo); return refreshTab(); }
+    if(t.classList.contains('nm') && t.dataset.k){ setStd(t.dataset.k, t.value.trim(), t.dataset.w); refreshTab(); }
   };
 }
 function refreshTab(){ const y = scrollY; render(); scrollTo(0, y); }
 function setStd(k, std, written){
+  _ix = null;
   PAIRS = PAIRS.filter(p => nkey(p[0]) !== k);
   if(std) PAIRS.push([written || std, std]);
   ls.set('dut_names', PAIRS); C = null; if(EX){ EX.saved = false; ls.set('dut_cur', EX); }
@@ -580,7 +670,9 @@ function useParsed(res, how){
   ls.set('dut_cur', EX); C = null;
   const c = compute();
   V.err = ''; V.busy = ''; V.msg = `Read ${rows.length} rows ${how}: ${c.L.teacher.length} teachers, ${c.L.room.length} rooms, ${c.dates.length} days.` + (c.clashes.length ? ` ${c.clashes.length} clash(es) — see Check.` : '');
-  V.tab = 'teacher'; render();
+  const ng = nameGroups().length;
+  if(ng){ V.msg += ` ${ng} name(s) look like the same teacher written differently — fix them first in the Name fixer.`; V.tab = 'names'; } else V.tab = 'teacher';
+  FX = { tick:new Set(), pick:{}, own:{} }; render();
   if(!CTS && navigator.onLine) loadCts(true);
 }
 function readPasted(html, text){
@@ -808,16 +900,41 @@ async function buildPdf(kind, only){
   footers(doc);
   return { blob:doc.output('blob'), name:fileName(kind, 'pdf') };
 }
-/* phone: share sheet (WhatsApp, Gmail, Drive…) · laptop: download */
+/* every file: Open · Print · Share (WhatsApp, Gmail, Drive…) · Download */
+const isPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+let URLS = [];
 function deliver(files){
-  const F = files.map(f => new File([f.blob], f.name, { type:f.blob.type }));
-  const down = () => F.forEach((f, i) => setTimeout(() => { const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 8000); }, i * 600));
-  const canShare = /Android|iPhone|iPad/i.test(navigator.userAgent) && navigator.canShare && navigator.canShare({ files:F });
-  $('#dlgIn').innerHTML = `<h2 style="margin:0 0 6px">${F.length === 1 ? 'File ready' : F.length + ' files ready'}</h2><div class="sub">${F.map(f => esc(f.name)).join('<br>')}</div><div class="acts">${canShare ? '<button class="btn pri" id="dSh">Share (WhatsApp, Gmail…)</button>' : ''}<button class="btn ${canShare ? '' : 'pri'}" id="dDn">Download</button><button class="btn" id="dClose">Close</button></div>`;
+  URLS.forEach(u => URL.revokeObjectURL(u)); URLS = [];
+  const F = files.map(f => new File([f.blob], f.name, { type:f.blob.type })), U = F.map(f => { const u = URL.createObjectURL(f); URLS.push(u); return u; });
+  const shareOk = list => !!(navigator.canShare && navigator.share && (() => { try{ return navigator.canShare({ files:list }); }catch(e){ return false; } })());
+  const down = i => { const a = document.createElement('a'); a.href = U[i]; a.download = F[i].name; document.body.appendChild(a); a.click(); a.remove(); };
+  const isPdf = i => /\.pdf$/i.test(F[i].name);
+  const open = i => { const w = window.open(U[i], '_blank'); if(!w) down(i); };
+  const print = i => {
+    if(isPhone){ open(i); alert('The PDF opens in a new tab. Use the menu (⋮ or Share) › Print there.'); return; }
+    let fr = $('#prFrame'); if(fr) fr.remove();
+    fr = document.createElement('iframe'); fr.id = 'prFrame'; fr.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0';
+    fr.onload = () => setTimeout(() => { try{ fr.contentWindow.focus(); fr.contentWindow.print(); }catch(e){ open(i); } }, 300);
+    fr.src = U[i]; document.body.appendChild(fr);
+  };
+  const share = list => navigator.share({ files:list, title:EX.title }).catch(e => { if(e && e.name !== 'AbortError') alert('Sharing did not work here: ' + e.message + '. Use Download.'); });
+  const row = (f, i) => `<div class="li" style="flex-wrap:wrap"><div style="flex:1;min-width:180px;font-weight:700;font-size:13.5px;word-break:break-all">${isPdf(i) ? '📄' : '📊'} ${esc(f.name)}<div class="sub">${Math.max(1, Math.round(f.size / 1024))} KB</div></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">${isPdf(i) ? `<button class="btn sm" data-fo="${i}">Open</button><button class="btn sm" data-fp="${i}">Print</button>` : ''}${shareOk([f]) ? `<button class="btn sm good" data-fs="${i}">Share</button>` : ''}<button class="btn sm" data-fd="${i}">Download</button></div></div>`;
+  $('#dlgIn').innerHTML = `<h2 style="margin:0 0 6px">${F.length === 1 ? 'File ready' : F.length + ' files ready'}</h2>
+    <div>${F.map(row).join('')}</div>
+    <div class="acts">${F.length > 1 && shareOk(F) ? '<button class="btn good" id="dShAll">Share all</button>' : ''}${F.length > 1 ? '<button class="btn pri" id="dDn">Download all</button>' : `<button class="btn pri" id="dDn">Download</button>`}<button class="btn" id="dClose">Close</button></div>
+    ${shareOk(F) ? '' : '<div class="sub" style="margin-top:6px">Share needs Chrome on a phone (or Windows). Here: Download, then send the file.</div>'}`;
   if(!$('#dlg').open) $('#dlg').showModal();
   $('#dClose').onclick = () => $('#dlg').close();
-  $('#dDn').onclick = () => { down(); $('#dlg').close(); };
-  canShare && ($('#dSh').onclick = () => navigator.share({ files:F, title:EX.title }).catch(() => {}).finally(() => $('#dlg').close()));
+  $('#dDn').onclick = () => F.forEach((f, i) => setTimeout(() => down(i), i * 600));
+  $('#dShAll') && ($('#dShAll').onclick = () => share(F));
+  $('#dlgIn').onclick = e => {
+    const b = e.target.closest('button'); if(!b) return;
+    if(b.dataset.fo !== undefined) open(+b.dataset.fo);
+    if(b.dataset.fp !== undefined) print(+b.dataset.fp);
+    if(b.dataset.fs !== undefined) share([F[+b.dataset.fs]]);
+    if(b.dataset.fd !== undefined) down(+b.dataset.fd);
+  };
 }
 async function onePdf(kind, btn){
   const t = btn && btn.textContent; if(btn){ btn.disabled = true; btn.textContent = 'Making…'; }
