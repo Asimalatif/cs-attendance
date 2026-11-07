@@ -1,0 +1,885 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#6B3423">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<title>JCW Exam Duty Lists</title>
+<style>
+:root{--bg:#F7EDEA;--surface:#fff;--surface2:#FBEDEA;--ink:#2B1912;--muted:#7C6159;--line:#E2C0B8;--brown:#6B3423;--tea:#E7B7AE;--good:#0E8A5F;--good-bg:#E3F4EC;--bad:#C0392B;--bad-bg:#FDE3E1;--mid:#B4740E;--mid-bg:#FFF2D6}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1A110F;--surface:#261915;--surface2:#30201B;--ink:#F6E9E5;--muted:#C4A8A0;--line:#4A3029;--tea:#8A5A50;--good-bg:#14302A;--bad-bg:#3A1C1F;--mid-bg:#3A2F14}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;padding-bottom:40px}
+button,select,input{font:inherit;color:inherit}
+header{background:linear-gradient(120deg,#4A2418,#8A4A35);color:#fff;padding:calc(12px + env(safe-area-inset-top,0px)) 16px 14px}
+header .in{max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:12px}
+header img{width:44px;height:44px;border-radius:50%;background:#fff;padding:3px;flex:none}
+header h1{margin:0;font-size:19px;line-height:1.2}
+header small{display:block;opacity:.85;font-size:12.5px;font-weight:400}
+header a{margin-left:auto;color:#fff;text-decoration:none;font-weight:700;font-size:14px;background:rgba(255,255,255,.14);padding:7px 12px;border-radius:999px;white-space:nowrap}
+main{max-width:1100px;margin:0 auto;padding:16px}
+.card{background:var(--surface);border:1.5px solid var(--line);border-top:5px solid var(--brown);border-radius:20px;padding:16px;margin-bottom:16px}
+.card h2{margin:0 0 4px;font-size:17px;color:var(--brown)}
+.card h3{margin:0 0 6px;font-size:15.5px;color:var(--brown)}
+@media(prefers-color-scheme:dark){.card h2,.card h3{color:var(--tea)}}
+.sub{color:var(--muted);font-size:13.5px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:10px;margin-top:12px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:700;color:var(--muted)}
+label.f input,label.f select,input.sq,select.sq{height:44px;border:1.5px solid var(--line);border-radius:12px;padding:0 10px;background:var(--surface);font-size:15px;font-weight:600;color:var(--ink);width:100%}
+label.c{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600}
+.btn{height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-weight:800;padding:0 14px;cursor:pointer;color:var(--ink);text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+.btn.pri{background:linear-gradient(180deg,#8A4A35,#6B3423);border-color:#6B3423;color:#fff}
+.btn.good{background:var(--good);border-color:var(--good);color:#fff}
+.btn.sm{height:34px;padding:0 10px;font-size:13px;border-radius:10px}
+.btn:disabled{opacity:.5;cursor:default}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.note{border-radius:12px;padding:10px 12px;font-size:13.5px;margin-top:10px}
+.note.ok{background:var(--good-bg);color:var(--good)}.note.bad{background:var(--bad-bg);color:var(--bad)}.note.mid{background:var(--mid-bg);color:var(--mid)}
+.tw{overflow:auto;max-height:70vh;margin-top:10px;border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{background:#6B3423;color:#fff;text-align:left;padding:7px 8px;white-space:nowrap;position:sticky;top:0;z-index:1}
+td{padding:6px 8px;border-top:1px solid var(--line);vertical-align:top}
+tr:nth-child(even) td{background:var(--surface2)}
+td.n{text-align:center;font-weight:800;white-space:nowrap}
+td.nw{white-space:nowrap}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.chip{border:1.5px solid var(--line);border-radius:14px;padding:8px 12px;background:var(--surface2);font-size:13px;font-weight:700;min-width:100px}
+.chip b{display:block;font-size:20px}
+.chip.bad b{color:var(--bad)}.chip.good b{color:var(--good)}.chip.mid b{color:var(--mid)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 12px;position:sticky;top:0;z-index:3;background:var(--bg);padding:8px 0}
+.tab{height:40px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);font-weight:800;padding:0 14px;cursor:pointer}
+.tab.on{background:var(--brown);color:#fff;border-color:var(--brown)}
+.tab .ct{font-size:11.5px;background:var(--bad);color:#fff;border-radius:999px;padding:1px 6px;margin-left:4px}
+.drop{border:2px dashed var(--line);border-radius:16px;padding:18px 14px;text-align:center;background:var(--surface2);min-height:96px;outline:none;color:var(--muted);font-weight:700;cursor:text;overflow:hidden;max-height:140px}
+.drop:focus{border-color:var(--brown)}
+.dc{display:inline-block;border:1px solid var(--line);border-radius:8px;padding:1px 7px;margin:2px 4px 2px 0;font-size:12.5px;background:var(--surface);white-space:nowrap}
+.dc.x{border-color:var(--bad);color:var(--bad);background:var(--bad-bg);font-weight:800}
+.lnk{background:none;border:none;padding:0;color:inherit;font-weight:800;text-decoration:underline;text-decoration-color:var(--tea);cursor:pointer;text-align:left}
+.x{color:var(--bad);font-weight:800}
+.ok{color:var(--good);font-weight:800}
+.muted{color:var(--muted)}
+input.cell{border:1px solid transparent;background:transparent;padding:4px 5px;border-radius:7px;width:100%;min-width:80px;font-size:13px;color:var(--ink)}
+input.cell:focus{border-color:var(--brown);background:var(--surface);outline:none}
+input.cell.wide{min-width:220px}
+input.nm{height:36px;border:1.5px solid var(--line);border-radius:10px;padding:0 8px;background:var(--surface);width:100%;min-width:170px;font-weight:600}
+.rm{margin-top:14px}
+.rm h3{display:flex;justify-content:space-between;gap:8px;align-items:center}
+dialog{border:none;border-radius:18px;padding:0;max-width:min(560px,94vw);width:100%;background:var(--surface);color:var(--ink)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog .in{padding:16px}
+textarea{width:100%;min-height:150px;border:1.5px solid var(--line);border-radius:12px;padding:8px;background:var(--surface);color:var(--ink);font:13px/1.4 inherit}
+.hidden{display:none!important}
+.li{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.li:first-child{border-top:none}
+</style>
+</head>
+<body>
+<header><div class="in"><img src="jcw-logo.png" alt=""><h1>Exam duty lists<small>Teacher-wise · room-wise · day-wise, from the Word duty table</small></h1><a href="./">← App</a></div></header>
+<main id="main"></main>
+<dialog id="dlg"><div class="in" id="dlgIn"></div></dialog>
+<input type="file" id="fDoc" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" class="hidden">
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm7d7-UKg0W-OoWAiuRBHe4mjlRgMQXIHuLm6zi--i/exec';
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const ls = { get(k, d){ try{ const v = localStorage.getItem('csa2_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } }, set(k, v){ try{ localStorage.setItem('csa2_' + k, JSON.stringify(v)); return true; }catch(e){ return false; } } };
+const user = ls.get('user', ''), pass = ls.get('pass', ''), me = ls.get('teacher', '') || user, isAdm = !!ls.get('admin', false);
+
+/* ---------- state (kept on this phone, works without internet) ---------- */
+let EX = ls.get('dut_cur', null);          // { id, title, rows:[{dt, iso, day, time, cls, sub, room, staff}], saved, sheet }
+let PAIRS = ls.get('dut_names', []);       // [[name as written, standard name]] — same idea as the old "names" sheet
+let CTS = (c => c && c.user === user ? c : null)(ls.get('dut_cts', null));   // app teachers (names + WhatsApp) from the server
+let V = { tab: ls.get('dut_tab', 'teachers'), q: '', sort: 'name', daysOnly: false, roomPage: true, msg: '', err: '', busy: '' };
+let C = null;                              // worked-out lists (built from EX)
+
+function saveLocal(){ if(EX) EX.saved = false; ls.set('dut_cur', EX); C = null; }
+const newId = () => 'D' + Date.now().toString(36).toUpperCase();
+
+async function api(payload, ms = 120000){
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms);
+  try{
+    const r = await fetch(API, { method:'POST', body:JSON.stringify({ username:user, password:pass, ...payload }), signal:ctl.signal, redirect:'follow' });
+    const txt = await r.text(); let j; try{ j = JSON.parse(txt); }catch(e){ throw new Error('The server sent a web page instead of data. Check the deployment.'); }
+    if(j && j.error === 'UNKNOWN_ACTION') throw new Error('The server does not know this yet: paste Duties.gs, add the dut_ line in doPost and deploy a new version.');
+    if(j && j.error === 'BAD_LOGIN') throw new Error('Your saved login was refused. Open the app, sign out and sign in again.');
+    if(j && j.ok === false) throw new Error(j.error || 'Server error');
+    return j;
+  }catch(e){
+    if(e.name === 'AbortError') throw new Error('The server took too long. Try again.');
+    if(e instanceof TypeError) throw new Error(navigator.onLine ? 'The Apps Script server did not answer. Try again in a minute.' : 'No internet. Everything else on this page works offline.');
+    throw e;
+  }finally{ clearTimeout(t); }
+}
+
+/* =====================================================================
+   1) READING THE WORD TABLE  (pasted HTML, .docx file, or tab text from a sheet)
+   Merged cells are copied into every cell they cover — same as the old optimizeExpandMergedCells.
+   ===================================================================== */
+function cellText(el){
+  const c = el.cloneNode(true);
+  c.querySelectorAll('br').forEach(b => b.replaceWith('\n'));
+  c.querySelectorAll('p,div,li,h1,h2,h3,h4,h5,h6').forEach(p => p.append('\n'));
+  return tidy(c.textContent);
+}
+const tidy = s => String(s || '').replace(/\u00a0/g, ' ').split(/\r?\n/).map(l => l.replace(/[ \t]+/g, ' ').trim()).filter(Boolean).join('\n');
+
+function htmlGrids(html){
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const tables = [...doc.querySelectorAll('table')].filter(t => !t.parentElement.closest('table'));
+  let title = '';
+  for(const p of doc.body.querySelectorAll('p,h1,h2,h3')){ if(p.closest('table')) break; const t = tidy(p.textContent); if(t){ title = t.split('\n')[0]; break; } }
+  const grids = tables.map(t => {
+    const g = [], rows = [...t.rows];
+    rows.forEach((tr, r) => {
+      g[r] = g[r] || []; let c = 0;
+      [...tr.cells].forEach(td => {
+        while(g[r][c] !== undefined) c++;
+        const rs = Math.max(1, td.rowSpan || 1), cs = Math.max(1, td.colSpan || 1), v = cellText(td);
+        for(let i = 0; i < rs && r + i < rows.length; i++){ g[r + i] = g[r + i] || []; for(let j = 0; j < cs; j++) g[r + i][c + j] = v; }
+        c += cs;
+      });
+    });
+    return g.map(row => Array.from(row, v => v || ''));
+  });
+  return { grids, title };
+}
+
+/* .docx = a zip; the browser itself unpacks word/document.xml (no library, works offline) */
+async function unzipText(buf, name){
+  const dv = new DataView(buf); let e = buf.byteLength - 22;
+  while(e >= 0 && dv.getUint32(e, true) !== 0x06054b50) e--;
+  if(e < 0) throw new Error('This is not a .docx file. In Word use File > Save As > Word Document (.docx), or copy the table and paste it.');
+  const n = dv.getUint16(e + 10, true); let p = dv.getUint32(e + 16, true);
+  const dec = new TextDecoder();
+  for(let i = 0; i < n; i++){
+    if(dv.getUint32(p, true) !== 0x02014b50) break;
+    const method = dv.getUint16(p + 10, true), size = dv.getUint32(p + 20, true), nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+    const fname = dec.decode(new Uint8Array(buf, p + 46, nl));
+    if(fname === name){
+      const start = off + 30 + dv.getUint16(off + 26, true) + dv.getUint16(off + 28, true), data = new Uint8Array(buf, start, size);
+      if(method === 0) return dec.decode(data);
+      if(typeof DecompressionStream === 'undefined') throw new Error('This browser cannot open .docx files. Update Chrome, or copy the table in Word and paste it here.');
+      return await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+    }
+    p += 46 + nl + el + cl;
+  }
+  throw new Error('No Word text found in this file.');
+}
+async function docxGrids(file){
+  const xml = await unzipText(await file.arrayBuffer(), 'word/document.xml');
+  const doc = new DOMParser().parseFromString(xml, 'application/xml');
+  const kids = (el, tag) => [...el.childNodes].filter(k => k.nodeName === tag);
+  const val = (el, tag) => { const pr = kids(el, tag.split('/')[0])[0]; if(!pr) return null; const x = kids(pr, tag.split('/')[1])[0]; return x ? (x.getAttribute('w:val') || '') : null; };
+  const paraText = p => { let s = ''; p.querySelectorAll('*').forEach(n => { if(n.nodeName === 'w:t') s += n.textContent; else if(n.nodeName === 'w:tab') s += ' '; else if(n.nodeName === 'w:br' || n.nodeName === 'w:cr') s += '\n'; }); return s; };
+  const cellTxt = tc => tidy([...tc.getElementsByTagName('w:p')].filter(p => p.parentNode.closest ? true : true).map(paraText).join('\n'));
+  const body = doc.getElementsByTagName('w:body')[0];
+  let title = '';
+  for(const n of body.childNodes){ if(n.nodeName === 'w:tbl') break; if(n.nodeName === 'w:p'){ const t = tidy(paraText(n)); if(t){ title = t.split('\n')[0]; break; } } }
+  const tables = [...doc.getElementsByTagName('w:tbl')].filter(t => { let p = t.parentNode; while(p){ if(p.nodeName === 'w:tbl') return false; p = p.parentNode; } return true; });
+  const grids = tables.map(t => {
+    const g = [];
+    kids(t, 'w:tr').forEach((tr, r) => {
+      const row = []; let c = Number(val(tr, 'w:trPr/w:gridBefore')) || 0;
+      for(let k = 0; k < c; k++) row[k] = '';
+      const cells = []; tr.childNodes.forEach(n => { if(n.nodeName === 'w:tc') cells.push(n); else if(n.nodeName === 'w:sdt'){ n.getElementsByTagName('w:tc').length && cells.push(...n.getElementsByTagName('w:tc')); } });
+      cells.forEach(tc => {
+        const span = Number(val(tc, 'w:tcPr/w:gridSpan')) || 1, vm = val(tc, 'w:tcPr/w:vMerge');
+        const v = vm !== null && vm !== 'restart' ? ((g[r - 1] || [])[c] || '') : cellTxt(tc);   // vMerge "continue" = same as the cell above
+        for(let j = 0; j < span; j++) row[c + j] = v;
+        c += span;
+      });
+      g[r] = Array.from(row, v => v || '');
+    });
+    return g;
+  });
+  return { grids, title };
+}
+
+/* tab text (copied from Google Sheets / Excel). Cells with line breaks come in "quotes". */
+function tsvGrid(text){
+  const rows = []; let row = [], cur = '', q = false;
+  for(let i = 0; i < text.length; i++){
+    const ch = text[i];
+    if(q){ if(ch === '"'){ if(text[i + 1] === '"'){ cur += '"'; i++; } else q = false; } else cur += ch; continue; }
+    if(ch === '"' && cur === '') q = true;
+    else if(ch === '\t'){ row.push(tidy(cur)); cur = ''; }
+    else if(ch === '\n' || ch === '\r'){ if(ch === '\r' && text[i + 1] === '\n') i++; row.push(tidy(cur)); rows.push(row); row = []; cur = ''; }
+    else cur += ch;
+  }
+  if(cur || row.length){ row.push(tidy(cur)); rows.push(row); }
+  return rows;
+}
+
+/* ---------- dates: "12/02/2026 Thursday", "Thursday 12-02-2026", "12 Feb 2026" … (day first, as in Pakistan) ---------- */
+const MON = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const pad = n => String(n).padStart(2, '0');
+function parseDate(s){
+  const t = String(s || '').replace(/\s+/g, ' ');
+  let d, m, y, r;
+  if((r = t.match(/(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{2,4})/))){ d = +r[1]; m = +r[2]; y = +r[3]; if(m > 12 && d <= 12) [d, m] = [m, d]; }
+  else if((r = t.match(/(\d{1,2})(?:st|nd|rd|th)?[\s\-,]*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?[\s,\-]*(\d{4})?/i))){ d = +r[1]; m = MON.indexOf(r[2].toLowerCase()) + 1; y = +(r[3] || new Date().getFullYear()); }
+  else if((r = t.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s*(\d{4})?/i))){ d = +r[2]; m = MON.indexOf(r[1].toLowerCase()) + 1; y = +(r[3] || new Date().getFullYear()); }
+  const dm = t.match(/\b(mon|tues?|wed(?:nes)?|thu(?:rs)?|fri|sat(?:ur)?|sun)(?:day)?\b/i);
+  const tm = t.match(/(morning|evening|afternoon|(?:1st|2nd|first|second)\s*shift|\d{1,2}[:.]\d{2}\s*(?:am|pm)?(?:\s*(?:-|to)\s*\d{1,2}[:.]\d{2}\s*(?:am|pm)?)?)/i);
+  const out = { iso:'', dt:'', day: dm ? DAYS.find(x => x.toLowerCase().startsWith(dm[1].toLowerCase().slice(0, 3))) : '', time: tm ? tm[1] : '' };
+  if(d && m){
+    if(y < 100) y += 2000;
+    const D = new Date(y, m - 1, d);
+    if(D.getMonth() === m - 1 && D.getDate() === d){ out.iso = y + '-' + pad(m) + '-' + pad(d); out.dt = pad(d) + '/' + pad(m) + '/' + y; out.day = DAYS[D.getDay()]; }
+  }
+  return out;
+}
+
+/* ---------- columns: found from the header row (Date/Day, Class, Subject, Room, Staff on Duty …) ---------- */
+const HEAD_RX = /^(date\s*[\/&-]?\s*day|day\s*[\/&-]?\s*date|date|day|class(es)?|class\s*[\/&-]\s*section|programs?|sections?|subjects?|papers?|rooms?(\s*no\.?)?|room\s*#|halls?|venue|staff(\s*on\s*duty)?|invigilators?|invigilation(\s*staff)?|duty(\s*staff)?|teachers?(\s*on\s*duty)?|supervisors?|time|timing|shift|session|s\.?\s*no\.?|sr\.?\s*(no\.?)?|#)$/i;
+const isHeader = cells => cells.filter(c => HEAD_RX.test(String(c).trim())).length >= 2;
+function headerCols(cells){
+  const col = {};
+  cells.forEach((c, i) => {
+    const t = String(c).toLowerCase().trim(); if(!t) return;
+    const put = f => { if(col[f] === undefined) col[f] = i; };
+    if(/date|day/.test(t)) put('date');
+    else if(/class|program|section/.test(t)) put('cls');
+    else if(/subject|paper/.test(t)) put('sub');
+    else if(/room|hall|venue/.test(t)) put('room');
+    else if(/staff|invigil|duty|teacher|supervis/.test(t)) put('staff');
+    else if(/time|shift|session/.test(t)) put('time');
+  });
+  return col;
+}
+const DEF_COLS = { date:0, cls:1, sub:2, room:3, staff:4 };
+
+function gridsToRows(grids){
+  const out = []; let col = null, cur = { dt:'', iso:'', day:'', time:'' }, block = 0, title = '';
+  const backfill = () => { for(let k = block; k < out.length; k++) if(!out[k].iso){ out[k].iso = cur.iso; out[k].dt = cur.dt; out[k].day = cur.day; if(!out[k].time) out[k].time = cur.time; } };
+  grids.forEach(g => g.forEach(cells => {
+    cells = cells.map(c => String(c || '').trim());
+    const filled = cells.filter(Boolean); if(!filled.length) return;
+    if(isHeader(cells)){ col = headerCols(cells); cur = { dt:'', iso:'', day:'', time:'' }; block = out.length; return; }   // new Date/Day block
+    if(new Set(filled).size === 1 && (filled.length > 1 || cells.length === 1 || !col)){         // a line across the whole table: title or a date line
+      const p = parseDate(filled[0]);
+      if(p.iso){ cur = p; backfill(); } else if(!title && !out.length) title = filled[0].split('\n')[0];
+      return;
+    }
+    const c = col || DEF_COLS, v = f => c[f] === undefined ? '' : (cells[c[f]] || '');
+    const dcell = v('date');
+    if(dcell){ const p = parseDate(dcell); if(p.iso && p.iso !== cur.iso){ cur = p; backfill(); } else if(!p.iso && p.day && !cur.iso) cur.day = p.day; }
+    const row = { dt:cur.dt, iso:cur.iso, day:cur.day, time:v('time') || cur.time, cls:v('cls'), sub:v('sub'), room:v('room'), staff:v('staff') };
+    if(!(row.cls || row.sub || row.room || row.staff)) return;                                      // only the date column filled
+    out.push(row);
+  }));
+  // a block whose date came after its first rows: fill those too (the old fillDateDayAnywhereComplete)
+  let last = null; for(let k = out.length - 1; k >= 0; k--){ if(out[k].iso) last = out[k]; else if(last){ out[k].iso = last.iso; out[k].dt = last.dt; out[k].day = last.day; } }
+  return { rows: out, title };
+}
+
+/* =====================================================================
+   2) TEACHER NAMES  (the old extractTeachers + formatTeacherNames + replaceTeacherNames)
+   ===================================================================== */
+const TITLE_SPLIT = /(?=\b(?:ms|mrs|miss|dr|mr|prof|madam)\b\.?\s*[a-z])/i;
+const nkey = s => String(s || '').toLowerCase().replace(/\b(ms|mrs|miss|dr|mr|prof|madam)\b\.?/g, ' ').replace(/[^a-z]/g, '');
+function cleanName(raw){
+  let s = String(raw || '').replace(/\(.*?\)/g, ' ').replace(/^[\s\d.)\-–:*•#]+/, '').replace(/[\s\d.(\-–:*•#]+$/, '').replace(/\s+/g, ' ').trim();
+  s = s.replace(/^(ms|mrs|dr|mr|prof)\b\.?\s*/i, (m, t) => t[0].toUpperCase() + t.slice(1).toLowerCase() + '. ').replace(/^(miss|madam)\b\.?\s*/i, (m, t) => t[0].toUpperCase() + t.slice(1).toLowerCase() + ' ');
+  const tm = s.match(/^((?:Ms|Mrs|Dr|Mr|Prof)\. |Miss |Madam )?(.*)$/), body = tm[2];
+  const fixed = (body === body.toUpperCase() ? body.toLowerCase() : body).replace(/(^|[\s\-])([a-z])/g, (m, p, l) => p + l.toUpperCase());
+  return ((tm[1] || '') + fixed).replace(/\.\s*\./g, '.').trim();
+}
+function splitStaff(raw){
+  let s = String(raw || '').replace(/\u00a0/g, ' ').replace(/([a-z])(Ms|Mrs|Miss|Dr|Prof)\b\.?/g, '$1 $2 ');   // "dr.HamidaMs Fazeela" -> "dr.Hamida Ms Fazeela"
+  let parts;
+  if(/\b(ms|mrs|miss|dr|mr|prof|madam)\b\.?\s*[a-z]/i.test(s)){
+    s = s.replace(/[\n,;&\/|+]+/g, ' ').replace(/\band\b/gi, ' ');
+    parts = s.split(TITLE_SPLIT);
+    if(parts.length && !TITLE_SPLIT.test(parts[0]) && !/^(ms|mrs|miss|dr|mr|prof|madam)\b/i.test(parts[0].trim())){   // words before the first Ms./Dr.
+      const pre = parts[0].replace(/[^a-z ]/gi, ' ').trim();
+      if(pre.length < 3 || /:|staff|duty|invigil/i.test(parts[0])) parts.shift();
+    }
+  } else parts = s.split(/[\n,;&\/|+]+|\band\b/i);
+  const seen = new Set();
+  return parts.map(cleanName).filter(n => { const k = nkey(n); if(k.length < 2 || seen.has(k) || /^(staff|onduty|duty|invigilators?|nil|none|na)$/.test(k)) return false; seen.add(k); return true; });
+}
+let _ix = null, _ixAt = -1;
+function nameIndex(){
+  const at = (CTS && CTS.at || 0) + ':' + PAIRS.length + ':' + JSON.stringify(PAIRS).length;
+  if(_ix && _ixAt === at) return _ix;
+  const map = {}, ct = {};
+  PAIRS.forEach(p => { const k = nkey(p[0]); if(k && String(p[1] || '').trim()) map[k] = String(p[1]).trim(); });
+  ((CTS && CTS.list) || []).forEach(c => { const k = nkey(c.name); if(k && !ct[k]) ct[k] = c; });
+  _ixAt = at; return (_ix = { map, ct });
+}
+function stdName(n){
+  const I = nameIndex(), k = nkey(n);
+  if(I.map[k]) return I.map[k];
+  if(I.ct[k]) return I.ct[k].name;
+  return n;
+}
+const contactOf = name => nameIndex().ct[nkey(name)] || null;
+
+
+/* =====================================================================
+   3) THE LISTS — teacher / room / date / class / subject wise.
+   One duty = teacher + date + time + room (two classes in one room = one duty).
+   ===================================================================== */
+const ncmp = (a, b) => String(a).localeCompare(String(b), undefined, { numeric:true, sensitivity:'base' });
+const dayShort = d => String(d || '').slice(0, 3);
+const roomLbl = r => !r ? '—' : /^(room|hall|lab|library|auditorium|mini|s\.?h|chem|bio|phy|comp)/i.test(r) ? r : 'Room# ' + r;
+const fmtIso = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '';
+const hasTime = () => !!(EX && EX.rows.some(r => r.time));
+const TITLED = /^(Ms|Mrs|Dr|Mr|Prof)\. |^Miss /;
+const bySlot = (a, b) => ncmp(a.iso || '9', b.iso || '9') || ncmp(a.time || '', b.time || '');
+const KINDS = {
+  teacher: { tab:'Teacher-wise', file:'TEACHER_WISE_DUTY_LIST', cols:['date', 'room', 'cls', 'sub', 'staff'] },
+  room:    { tab:'Room-wise',    file:'ROOM_WISE_DUTY_LIST',    cols:['date', 'cls', 'sub', 'staff'] },
+  date:    { tab:'Date-wise',    file:'DATE_WISE_DUTY_LIST',    cols:['room', 'cls', 'sub', 'staff'] },
+  class:   { tab:'Class-wise',   file:'CLASS_WISE_DUTY_LIST',   cols:['room', 'date', 'sub', 'staff'] },
+  subject: { tab:'Subject-wise', file:'SUBJECT_WISE_DUTY_LIST', cols:['room', 'date', 'cls', 'staff'] }
+};
+const COLNAME = { date:'DATE/DAY', time:'TIME', room:'ROOM', cls:'CLASS', sub:'SUBJECT', staff:'STAFF ON DUTY' };
+function colsOf(kind){ const c = KINDS[kind].cols.slice(); if(hasTime() && kind !== 'date'){ const i = c.indexOf('date'); c.splice(i + 1, 0, 'time'); } return c; }
+const cellOf = (it, c) => c === 'date' ? (it.dt || '?') + (it.day ? ' ' + it.day : '') : c === 'time' ? it.time || '' : c === 'room' ? it.room || '—' : c === 'cls' ? it.cls.join(', ') : c === 'sub' ? it.sub.join(', ') : it.staff.join(', ');
+
+function merge(list, keyFn){
+  const m = {};
+  list.forEach(r => {
+    const k = keyFn(r), it = (m[k] = m[k] || { iso:r.iso, dt:r.dt, day:r.day, time:r.time, room:r.room, cls:[], sub:[], staff:[], x:false });
+    if(r.cls && !it.cls.includes(r.cls)) it.cls.push(r.cls);
+    if(r.sub && !it.sub.includes(r.sub)) it.sub.push(r.sub);
+    r.staff.forEach(n => { if(!it.staff.some(z => nkey(z) === nkey(n))) it.staff.push(n); });
+  });
+  return Object.values(m).sort((a, b) => bySlot(a, b) || ncmp(a.room || 'zzz', b.room || 'zzz'));
+}
+function compute(){
+  if(C) return C;
+  const rows = EX ? EX.rows : [], check = { noRoom:[], noStaff:[], noDate:[] }, variants = {};
+  const recs = rows.map((r, i) => {
+    const seen = new Set(), staff = [];
+    splitStaff(r.staff).forEach(n => {
+      const k = nkey(n); (variants[k] = variants[k] || { k, names:new Set(), n:0 }).names.add(n); variants[k].n++;
+      const s = stdName(n), sk = nkey(s) || s; if(seen.has(sk)) return; seen.add(sk); staff.push(s);
+    });
+    if(r.staff && !r.room) check.noRoom.push(i);
+    if(!r.staff && (r.room || r.cls)) check.noStaff.push(i);
+    if(!r.iso) check.noDate.push(i);
+    return { iso:r.iso, dt:r.dt, day:r.day, time:r.time || '', room:r.room || '', cls:r.cls || '', sub:r.sub || '', staff };
+  });
+  const slot = r => (r.iso || '?') + '|' + r.time, rkey = s => String(s || '').toUpperCase().replace(/\s+/g, '').replace(/^ROOM#?/, '');
+  const grp = (keyFn, labelFn, mergeKey) => {
+    const g = {};
+    recs.forEach(r => { const k = keyFn(r); if(k == null) return; (g[k] = g[k] || { key:k, label:labelFn(r), recs:[] }).recs.push(r); });
+    return Object.values(g).map(x => ({ key:x.key, label:x.label, items:merge(x.recs, mergeKey) }));
+  };
+  // teacher-wise (a teacher appears in every row she is written in)
+  const T = {};
+  recs.forEach(r => r.staff.forEach(n => { const k = nkey(n) || n; const t = (T[k] = T[k] || { key:k, label:n, recs:[] }); if(!TITLED.test(t.label) && TITLED.test(n)) t.label = n; t.recs.push(r); }));
+  const teacher = Object.values(T).map(t => {
+    const items = merge(t.recs, r => slot(r) + '|' + rkey(r.room)), cnt = {};
+    items.forEach(d => { const k = slot(d); cnt[k] = (cnt[k] || 0) + 1; });
+    items.forEach(d => { d.x = !!d.iso && cnt[slot(d)] > 1; });            // same day & time in two rooms = clash
+    return { key:t.key, label:t.label, items, clash:items.filter(d => d.x).length };
+  });
+  const L = {
+    teacher,
+    room: grp(r => rkey(r.room) || '—', r => r.room ? roomLbl(r.room) : 'No room', r => slot(r)).sort((a, b) => ncmp(a.key, b.key)),
+    date: grp(r => slot(r), r => (r.dt ? r.dt + ' ' + r.day : 'No date') + (r.time ? ' · ' + r.time : ''), r => rkey(r.room)).sort((a, b) => ncmp(a.key, b.key)),
+    class: grp(r => r.cls ? r.cls.toUpperCase().replace(/\s+/g, '') : null, r => r.cls, r => slot(r) + '|' + rkey(r.room)).sort((a, b) => ncmp(a.label, b.label)),
+    subject: grp(r => r.sub ? r.sub.toUpperCase().replace(/[^A-Z0-9]/g, '') : null, r => r.sub, r => slot(r) + '|' + rkey(r.room)).sort((a, b) => ncmp(a.label, b.label))
+  };
+  L.date.forEach(g => g.items.sort((a, b) => ncmp(a.room || 'zzz', b.room || 'zzz')));
+  const dates = [...new Set(recs.map(r => r.iso).filter(Boolean))].sort();
+  let missing = [], unknown = [];
+  if(CTS && CTS.list && CTS.list.length){
+    const have = new Set(teacher.map(t => nkey(t.label)));
+    missing = CTS.list.filter(c => !have.has(nkey(c.name)) && !/visit/i.test(c.status || '')).map(c => c.name).sort(ncmp);
+    unknown = teacher.filter(t => !contactOf(t.label)).map(t => t.label).sort(ncmp);
+  }
+  return (C = { L, recs, dates, check, variants:Object.values(variants), missing, unknown, clashes:teacher.filter(t => t.clash), duties:teacher.reduce((s, t) => s + t.items.length, 0) });
+}
+const tSort = (a, b) => V.sort === 'few' ? a.items.length - b.items.length || ncmp(nkey(a.label), nkey(b.label)) : V.sort === 'many' ? b.items.length - a.items.length || ncmp(nkey(a.label), nkey(b.label)) : ncmp(nkey(a.label), nkey(b.label));
+function groups(kind){ const g = compute().L[kind].slice(); return kind === 'teacher' ? g.sort(tSort) : g; }
+/* the two short lists of the old sheets */
+const dateDay = d => (d.dt || '?') + (d.day ? ' ' + d.day : '');
+function summaryDates(){ return groups('teacher').slice().sort((a, b) => ncmp(nkey(a.label), nkey(b.label))).map(t => [t.label, t.items.map(dateDay).join(',  ')]); }   // Teacher | DAY/DATE
+function summaryCount(){ return groups('teacher').slice().sort((a, b) => a.items.length - b.items.length || ncmp(nkey(a.label), nkey(b.label))).map(t => [t.label, t.items.map(d => d.iso ? d.iso.slice(8) : '?').join(', '), t.items.length]); }   // Teacher | Duties | Total Duties
+const dutyFull = d => `${dateDay(d)}${d.time ? ' (' + d.time + ')' : ''} · ${roomLbl(d.room)}${d.cls.length ? ' · ' + d.cls.join(', ') : ''}${d.sub.length ? ' (' + d.sub.join(', ') + ')' : ''}`;
+
+/* =====================================================================
+   4) SCREEN
+   ===================================================================== */
+const TABS = [['teacher', 'Teacher-wise'], ['room', 'Room-wise'], ['date', 'Date-wise'], ['class', 'Class-wise'], ['subject', 'Subject-wise'], ['summary', 'Summary'], ['names', 'Names'], ['rows', 'All rows'], ['check', 'Check']];
+if(!TABS.some(t => t[0] === V.tab)) V.tab = 'teacher';
+V.newPage = ls.get('dut_newpage', true);
+function render(){
+  if(!user){ $('#main').innerHTML = '<section class="card"><h2>Please sign in</h2><div class="sub">Open the attendance app and sign in as admin first, then come back here.</div><div class="acts"><a class="btn pri" href="./">Open the app</a></div></section>'; return; }
+  if(!isAdm){ $('#main').innerHTML = '<section class="card"><h2>Admin only</h2><div class="sub">Exam duty lists are made by the admin. Sign in with the admin account in the app.</div><div class="acts"><a class="btn pri" href="./">Back to the app</a></div></section>'; return; }
+  let h = inputCard();
+  if(EX && EX.rows.length){
+    const c = compute(), probs = c.clashes.length + c.check.noRoom.length + c.check.noDate.length;
+    h += `<section class="card"><h2>${esc(EX.title || 'Duty list')}</h2>
+      <div class="chips"><div class="chip"><b>${c.L.teacher.length}</b>teachers</div><div class="chip"><b>${c.duties}</b>duties</div><div class="chip"><b>${c.L.room.length}</b>rooms</div><div class="chip"><b>${c.L.class.length}</b>classes</div><div class="chip"><b>${c.dates.length}</b>days${c.dates.length ? '<br><span class="muted" style="font-weight:600">' + esc(fmtIso(c.dates[0])) + ' – ' + esc(fmtIso(c.dates[c.dates.length - 1])) + '</span>' : ''}</div>
+      <div class="chip ${c.clashes.length ? 'bad' : 'good'}"><b>${c.clashes.length}</b>clashes</div>${c.check.noRoom.length ? `<div class="chip mid"><b>${c.check.noRoom.length}</b>staff with no room</div>` : ''}</div>
+      <div class="grid"><label class="f">Duty timings (printed on every list)<input id="iTime" value="${esc(EX.timing || '08:30-12:30 PM (morning)')}" autocomplete="off"></label><label class="c" style="align-self:end;padding-bottom:10px"><input type="checkbox" id="iNp" ${V.newPage ? 'checked' : ''}> Each teacher / room / date / class on a new page</label></div>
+      <h3 style="margin-top:14px">PDF lists <span class="sub">(file names carry today’s date, e.g. ${esc(fileName('teacher', 'pdf'))})</span></h3>
+      <div class="acts">${Object.keys(KINDS).map(k => `<button class="btn sm pri" data-pdf="${k}">${KINDS[k].tab}</button>`).join('')}<button class="btn sm pri" data-pdf="sumdates">Teacher · Day/Date</button><button class="btn sm pri" data-pdf="sumcount">Teacher · Total duties</button></div>
+      <div class="acts"><button class="btn good" id="bAll">All PDFs at once</button><button class="btn" id="bXlsx">Excel (all lists)</button><button class="btn ${EX.saved ? '' : 'pri'}" id="bSave">${EX.saved ? '✓ Saved on server' : 'Save on server'}</button><button class="btn" id="bSheet">${EX.sheet ? 'Update Google Sheet' : 'Make Google Sheet'}</button>${EX.sheetUrl ? `<a class="btn" href="${esc(EX.sheetUrl)}" target="_blank" rel="noopener">Open Google Sheet</a>` : ''}</div></section>`;
+    h += `<div class="tabs">${TABS.map(([k, l]) => `<button class="tab ${V.tab === k ? 'on' : ''}" data-tab="${k}">${l}${k === 'check' && probs ? '<span class="ct">' + probs + '</span>' : ''}</button>`).join('')}</div><div id="tabBody">${tabBody()}</div>`;
+  }
+  $('#main').innerHTML = h;
+  wire();
+}
+function inputCard(){
+  const has = EX && EX.rows.length;
+  return `<section class="card"><h2>${has ? 'Duty table' : 'New duty list'}</h2>
+    <div class="sub">Use the duty table your colleague makes in MS Word (Date/Day · Class · Subject · Room · Staff on Duty). Merged cells, repeated header rows and names written together (“dr.HamidaMs Fazeela”) are all handled. Nothing is sent anywhere until you press <b>Save on server</b>.</div>
+    <div class="grid"><label class="f">Exam / list title<input id="iTitle" value="${esc(EX ? EX.title : 'Detention Exam ' + new Date().getFullYear())}" autocomplete="off"></label></div>
+    <div class="acts"><button class="btn pri" id="bDoc">Open Word file (.docx)</button><button class="btn" id="bSrv">Saved lists</button>${has ? '<button class="btn" id="bNew">Start a new list</button>' : ''}</div>
+    <div class="drop" id="drop" contenteditable="true" spellcheck="false">… or copy the table in Word (or Sheet1 in Google Sheets) and paste it here (long-press › Paste, or Ctrl+V)</div>
+    ${V.busy ? `<div class="note mid">${esc(V.busy)}</div>` : ''}${V.err ? `<div class="note bad">${esc(V.err)}</div>` : ''}${V.msg ? `<div class="note ok">${esc(V.msg)}</div>` : ''}</section>`;
+}
+function tabBody(){
+  const c = compute();
+  if(KINDS[V.tab]) return groupHtml(V.tab);
+  if(V.tab === 'summary') return summaryHtml();
+  if(V.tab === 'names') return namesHtml(c);
+  if(V.tab === 'rows') return rowsHtml();
+  return checkHtml(c);
+}
+function groupHtml(kind){
+  const t = kind === 'teacher';
+  return `<section class="card"><h3>${KINDS[kind].tab} duties</h3>${t ? '<div class="sub"><span class="x">Red</span> = the same teacher in two rooms at the same time. Tap a name for WhatsApp.</div>' : ''}
+    <div class="grid"><input class="sq" id="gq" type="search" placeholder="Search" value="${esc(V.q)}" autocomplete="off">${t ? `<select class="sq" id="tsort"><option value="name" ${V.sort === 'name' ? 'selected' : ''}>Name A–Z</option><option value="few" ${V.sort === 'few' ? 'selected' : ''}>Fewest duties first</option><option value="many" ${V.sort === 'many' ? 'selected' : ''}>Most duties first</option></select>` : ''}</div>
+    <div class="acts"><button class="btn sm pri" data-pdf="${kind}">PDF</button>${t ? '<button class="btn sm" id="bCopyT">Copy as text</button>' : ''}${t && !CTS ? '<button class="btn sm" id="bCts">Load WhatsApp numbers</button>' : ''}</div><div id="gBody">${groupCards(kind)}</div></section>`;
+}
+function gMatch(g){ const q = V.q.trim().toLowerCase(); return !q || g.label.toLowerCase().includes(q) || g.items.some(it => [it.room, it.cls.join(' '), it.sub.join(' '), it.staff.join(' '), it.dt].join(' ').toLowerCase().includes(q)); }
+function groupCards(kind){
+  const G = groups(kind).filter(gMatch), cols = colsOf(kind);
+  if(!G.length) return '<div class="note mid">Nothing found.</div>';
+  return G.map(g => {
+    const ct = contactOf(g.label), wa = kind === 'teacher' && ct && waLink(ct);
+    return `<div class="rm"><h3><span>${kind === 'teacher' ? `<button class="lnk" data-t="${esc(g.key)}">${esc(g.label)}</button>${g.clash ? ' <span class="x">⚠ clash</span>' : ''}` : esc(g.label)}</span><span class="sub">${g.items.length} ${kind === 'teacher' ? 'dut' + (g.items.length === 1 ? 'y' : 'ies') : 'paper' + (g.items.length === 1 ? '' : 's')}${wa ? ` <button class="btn sm good" data-wa="${esc(g.key)}">WhatsApp</button>` : ''}</span></h3>
+      <div class="tw" style="max-height:none"><table><thead><tr><th>#</th>${cols.map(c => `<th>${COLNAME[c]}</th>`).join('')}</tr></thead><tbody>${g.items.map((it, i) => `<tr><td class="n">${i + 1}</td>${cols.map(c => `<td class="${c === 'date' || c === 'room' ? 'nw' : ''} ${it.x && (c === 'date' || c === 'room') ? 'x' : ''}">${c === 'room' ? '<b>' + esc(cellOf(it, c)) + '</b>' : c === 'staff' && !it.staff.length ? '<span class="x">No staff</span>' : esc(cellOf(it, c))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
+  }).join('');
+}
+function summaryHtml(){
+  const A = summaryDates(), B = summaryCount();
+  return `<section class="card"><h3>Teacher · DAY/DATE</h3><div class="sub">Every teacher with all her duty dates, A–Z.</div><div class="acts"><button class="btn sm pri" data-pdf="sumdates">PDF</button></div>
+    <div class="tw"><table><thead><tr><th>Teacher</th><th>DAY/DATE</th></tr></thead><tbody>${A.map(r => `<tr><td class="nw"><b>${esc(r[0])}</b></td><td>${esc(r[1])}</td></tr>`).join('')}</tbody></table></div></section>
+    <section class="card"><h3>Teacher · Duties · Total Duties</h3><div class="sub">Day numbers only, from fewest to most duties — for a fair share.</div><div class="acts"><button class="btn sm pri" data-pdf="sumcount">PDF</button></div>
+    <div class="tw"><table><thead><tr><th>Teacher</th><th>Duties</th><th>Total Duties</th></tr></thead><tbody>${B.map(r => `<tr><td class="nw"><b>${esc(r[0])}</b></td><td>${esc(r[1])}</td><td class="n">${r[2]}</td></tr>`).join('')}</tbody></table></div></section>`;
+}
+function namesHtml(c){
+  const opts = ((CTS && CTS.list) || []).map(x => `<option value="${esc(x.name)}">`).join('');
+  const I = nameIndex();
+  const rows = c.variants.slice().sort((a, b) => ncmp(a.k, b.k)).map(v => {
+    const written = [...v.names], std = I.map[v.k] || '', app = I.ct[v.k];
+    const sug = !std && !app && CTS ? suggest(v.k) : null;
+    const st = std ? `<span class="ok">fixed</span>` : app ? `<span class="ok">✓ in app</span>` : CTS ? `<span class="x">not in app</span>` : '';
+    return `<tr><td>${written.map(esc).join('<br>')}</td><td class="n">${v.n}</td><td><input class="nm" list="ctl" data-k="${esc(v.k)}" data-w="${esc(written[0])}" value="${esc(std)}" placeholder="${esc(app ? app.name : written[0])}">${sug ? `<div class="sub">Maybe <button class="lnk" data-use="${esc(v.k)}" data-name="${esc(sug)}">${esc(sug)}</button>?</div>` : ''}</td><td>${st}</td></tr>`;
+  }).join('');
+  return `<section class="card"><h3>Teacher names</h3><div class="sub">Every name as it is written in the Word table. When one teacher is written two ways (e.g. “dr.Hamida” and “Dr. BiBi Hamida”), type the correct name in <b>Standard name</b> — both then count as one teacher. Names that match the app’s teacher list are joined automatically. This replaces your old “names” sheet and is remembered for the next exam.</div>
+    <div class="acts">${CTS ? `<span class="sub">App teacher list: ${CTS.list.length} names.</span><button class="btn sm" id="bCts">Reload app teachers</button>` : '<button class="btn pri sm" id="bCts">Load the app’s teacher list</button>'}<button class="btn sm pri" id="bNames">Save names on server</button></div>
+    <datalist id="ctl">${opts}</datalist>
+    <div class="tw"><table><thead><tr><th>Written in the table</th><th>Rows</th><th>Standard name</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="muted">No names.</td></tr>'}</tbody></table></div></section>`;
+}
+function lev(a, b){ if(Math.abs(a.length - b.length) > 3) return 9; const d = Array.from({ length:a.length + 1 }, (_, i) => [i]); for(let j = 1; j <= b.length; j++) d[0][j] = j; for(let i = 1; i <= a.length; i++) for(let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return d[a.length][b.length]; }
+function suggest(k){
+  let best = null, bd = 9;
+  (CTS.list || []).forEach(c => { const ck = nkey(c.name); if(!ck) return; let d = lev(k, ck); if(d > 2 && k.length >= 4 && (ck.startsWith(k) || k.startsWith(ck) || ck.endsWith(k))) d = 2; if(d < bd){ bd = d; best = c.name; } });
+  return bd <= 2 ? best : null;
+}
+function rowsHtml(){
+  const cols = [['dt', 'Date'], ['day', 'Day'], ...(hasTime() ? [['time', 'Time']] : []), ['cls', 'Class'], ['sub', 'Subject'], ['room', 'Room'], ['staff', 'Staff on duty']];
+  return `<section class="card"><h3>All rows (${EX.rows.length})</h3><div class="sub">Exactly what was read from the Word table. Correct a cell here if the table had a mistake — every list updates at once. Write several teachers with commas.</div>
+    <div class="acts"><button class="btn sm" id="bAdd">+ Add a row</button></div>
+    <div class="tw"><table><thead><tr><th>#</th>${cols.map(c => `<th>${c[1]}</th>`).join('')}<th></th></tr></thead><tbody>${EX.rows.map((r, i) => `<tr id="row${i}"><td class="n">${i + 1}</td>${cols.map(([f]) => `<td><input class="cell ${f === 'staff' ? 'wide' : ''}" data-i="${i}" data-f="${f}" value="${esc(f === 'staff' ? String(r.staff || '').replace(/\n/g, ', ') : r[f])}" ${f === 'day' ? 'readonly tabindex="-1"' : ''}></td>`).join('')}<td><button class="btn sm" data-del="${i}" aria-label="Delete row">✕</button></td></tr>`).join('')}</tbody></table></div></section>`;
+}
+function checkHtml(c){
+  const rowRef = i => { const r = EX.rows[i]; return `<li><button class="lnk" data-go="${i}">Row ${i + 1}</button>: ${esc([r.dt, r.cls, r.sub, r.room && 'Room ' + r.room, r.staff && r.staff.replace(/\n/g, ', ')].filter(Boolean).join(' · '))}</li>`; };
+  const sec = (t, body) => `<section class="card"><h3>${t}</h3>${body}</section>`;
+  let h = '';
+  h += sec(`Clashes <span class="${c.clashes.length ? 'x' : 'ok'}">${c.clashes.length}</span>`, c.clashes.length ? '<div class="sub">The same teacher is written in two rooms at the same date and time.</div><ul>' + c.clashes.map(t => `<li><b>${esc(t.label)}</b>: ${t.items.filter(d => d.x).map(d => esc(dateDay(d) + ' · ' + roomLbl(d.room))).join(' &nbsp;|&nbsp; ')}</li>`).join('') + '</ul>' : '<div class="note ok">No teacher is in two rooms at the same time.</div>');
+  h += sec(`Staff written but no room <span class="${c.check.noRoom.length ? 'x' : 'ok'}">${c.check.noRoom.length}</span>`, c.check.noRoom.length ? '<div class="sub">These were the yellow rows of the old sheet. Add the room in <b>All rows</b>.</div><ul>' + c.check.noRoom.map(rowRef).join('') + '</ul>' : '<div class="note ok">Every row with staff has a room.</div>');
+  h += sec(`Rooms with no staff <span class="${c.check.noStaff.length ? 'x' : 'ok'}">${c.check.noStaff.length}</span>`, c.check.noStaff.length ? '<ul>' + c.check.noStaff.map(rowRef).join('') + '</ul>' : '<div class="note ok">Every room has staff.</div>');
+  h += sec(`Rows without a date <span class="${c.check.noDate.length ? 'x' : 'ok'}">${c.check.noDate.length}</span>`, c.check.noDate.length ? '<ul>' + c.check.noDate.map(rowRef).join('') + '</ul>' : '<div class="note ok">Every row has a date.</div>');
+  if(CTS){
+    h += sec(`Names not in the app’s teacher list <span class="${c.unknown.length ? 'x' : 'ok'}">${c.unknown.length}</span>`, c.unknown.length ? '<div class="sub">Probably spelt differently. Fix them in <b>Names</b>.</div><div>' + c.unknown.map(n => `<span class="dc">${esc(n)}</span>`).join('') + '</div>' : '<div class="note ok">Every name matches a teacher of the app.</div>');
+    h += sec(`Teachers with no duty <span class="muted">${c.missing.length}</span>`, c.missing.length ? '<div class="sub">Regular teachers of the app (not visiting) who got no duty in this list — useful for a fair share.</div><div>' + c.missing.map(n => `<span class="dc">${esc(n)}</span>`).join('') + '</div>' : '<div class="note ok">Every regular teacher has a duty.</div>');
+  } else h += sec('Teachers with no duty', '<div class="sub">Load the app’s teacher list to see who got no duty and which names are spelt differently.</div><div class="acts"><button class="btn sm pri" id="bCts">Load the app’s teacher list</button></div>');
+  return h;
+}
+
+/* ---------- events ---------- */
+function wire(){
+  const ti = $('#iTitle'); if(ti) ti.onchange = () => { if(EX){ EX.title = ti.value.trim(); saveLocal(); render(); } };
+  const tt = $('#iTime'); if(tt) tt.onchange = () => { EX.timing = tt.value.trim(); ls.set('dut_cur', EX); };
+  const np = $('#iNp'); if(np) np.onchange = () => { V.newPage = np.checked; ls.set('dut_newpage', V.newPage); };
+  $('#bDoc') && ($('#bDoc').onclick = () => $('#fDoc').click());
+  $('#bSrv') && ($('#bSrv').onclick = openSaved);
+  $('#bNew') && ($('#bNew').onclick = () => { if(!EX.saved && !confirm('This list is not saved on the server. Start a new one anyway?')) return; EX = null; ls.set('dut_cur', null); C = null; V.msg = V.err = ''; render(); });
+  const dr = $('#drop');
+  if(dr){
+    dr.onfocus = () => { if(!dr.dataset.t){ dr.dataset.t = dr.textContent; dr.textContent = ''; } };
+    dr.onblur = () => { if(!dr.textContent.trim() && dr.dataset.t){ dr.textContent = dr.dataset.t; delete dr.dataset.t; } };
+    dr.onpaste = e => { e.preventDefault(); const cd = e.clipboardData; readPasted(cd.getData('text/html'), cd.getData('text/plain')); };
+    dr.oninput = () => { if(dr.querySelector('table')){ const h = dr.innerHTML; dr.innerHTML = ''; readPasted(h, ''); } };   // phones that paste without the event
+  }
+  $('#bSave') && ($('#bSave').onclick = saveServer);
+  $('#bSheet') && ($('#bSheet').onclick = makeSheet);
+  $('#bAll') && ($('#bAll').onclick = allPdfs);
+  $('#bXlsx') && ($('#bXlsx').onclick = makeXlsx);
+  document.querySelectorAll('section.card [data-pdf]').forEach(b => { if(!b.closest('#tabBody')) b.onclick = () => onePdf(b.dataset.pdf, b); });
+  document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { V.tab = b.dataset.tab; V.q = ''; ls.set('dut_tab', V.tab); $('#tabBody').innerHTML = tabBody(); document.querySelectorAll('[data-tab]').forEach(x => x.classList.toggle('on', x === b)); wireTab(); });
+  wireTab();
+}
+function wireTab(){
+  const B = $('#tabBody'); if(!B) return;
+  const gq = $('#gq'); if(gq) gq.oninput = () => { V.q = gq.value; $('#gBody').innerHTML = groupCards(V.tab); };
+  const ts = $('#tsort'); if(ts) ts.onchange = () => { V.sort = ts.value; $('#gBody').innerHTML = groupCards(V.tab); };
+  B.onclick = e => {
+    const t = e.target.closest('button'); if(!t) return;
+    if(t.dataset.t) return openTeacher(t.dataset.t);
+    if(t.dataset.wa) return sendWa(t.dataset.wa);
+    if(t.dataset.pdf) return onePdf(t.dataset.pdf, t);
+    if(t.dataset.use){ setStd(t.dataset.use, t.dataset.name, t.closest('tr').querySelector('input').dataset.w); return refreshTab(); }
+    if(t.dataset.del !== undefined){ const i = +t.dataset.del; if(!confirm('Delete row ' + (i + 1) + '?')) return; EX.rows.splice(i, 1); saveLocal(); return refreshTab(); }
+    if(t.dataset.go !== undefined){ V.tab = 'rows'; ls.set('dut_tab', 'rows'); render(); const r = document.getElementById('row' + t.dataset.go); if(r){ r.scrollIntoView({ block:'center' }); const inp = r.querySelector('input'); inp && inp.focus(); } return; }
+    if(t.id === 'bCts') return loadCts();
+    if(t.id === 'bNames') return saveNames();
+    if(t.id === 'bCopyT') return copy(EX.title + '\nTEACHER-WISE DUTIES\n\n' + groups('teacher').map((g, i) => `${i + 1}. ${g.label} (${g.items.length}): ` + g.items.map(d => `${dayShort(d.day)} ${d.dt ? d.dt.slice(0, 5) : '?'} ${roomLbl(d.room)}${d.x ? ' ⚠' : ''}`).join(', ')).join('\n'));
+    if(t.id === 'bAdd'){ const last = EX.rows[EX.rows.length - 1] || {}; EX.rows.push({ dt:last.dt || '', iso:last.iso || '', day:last.day || '', time:last.time || '', cls:'', sub:'', room:'', staff:'' }); saveLocal(); render(); const r = document.getElementById('row' + (EX.rows.length - 1)); r && r.scrollIntoView({ block:'center' }); return; }
+  };
+  B.onchange = e => {
+    const t = e.target;
+    if(t.classList.contains('cell')){
+      const r = EX.rows[+t.dataset.i], f = t.dataset.f; r[f] = t.value.trim();
+      if(f === 'dt'){ const p = parseDate(t.value); r.iso = p.iso; r.day = p.day; if(p.dt) r.dt = p.dt; }
+      saveLocal(); refreshTab(); return;
+    }
+    if(t.classList.contains('nm')){ setStd(t.dataset.k, t.value.trim(), t.dataset.w); refreshTab(); }
+  };
+}
+function refreshTab(){ const y = scrollY; render(); scrollTo(0, y); }
+function setStd(k, std, written){
+  PAIRS = PAIRS.filter(p => nkey(p[0]) !== k);
+  if(std) PAIRS.push([written || std, std]);
+  ls.set('dut_names', PAIRS); C = null; if(EX){ EX.saved = false; ls.set('dut_cur', EX); }
+}
+
+/* ---------- reading ---------- */
+function useParsed(res, how){
+  const { rows, title } = res;
+  if(!rows.length){ V.err = 'No duty rows found. Copy the whole table (with the Date/Day · Class · Subject · Room · Staff on Duty heading) and try again.'; V.msg = ''; return render(); }
+  const ti = ($('#iTitle') || {}).value;
+  EX = { id:newId(), title:(ti && ti.trim()) || title || 'Duty list', rows, saved:false, timing:(EX && EX.timing) || '08:30-12:30 PM (morning)' };
+  if(title && /duty|detention|exam|test/i.test(title) && (!ti || /^Detention Exam \d{4}$/.test(ti))) EX.title = title;
+  ls.set('dut_cur', EX); C = null;
+  const c = compute();
+  V.err = ''; V.busy = ''; V.msg = `Read ${rows.length} rows ${how}: ${c.L.teacher.length} teachers, ${c.L.room.length} rooms, ${c.dates.length} days.` + (c.clashes.length ? ` ${c.clashes.length} clash(es) — see Check.` : '');
+  V.tab = 'teacher'; render();
+  if(!CTS && navigator.onLine) loadCts(true);
+}
+function readPasted(html, text){
+  try{
+    if(html && /<table/i.test(html)){ const g = htmlGrids(html); const r = gridsToRows(g.grids); r.title = r.title || g.title; return useParsed(r, 'from the pasted table'); }
+    if(text && /\t/.test(text)){ return useParsed(gridsToRows([tsvGrid(text)]), 'from the pasted sheet'); }
+    V.err = 'The pasted text has no table. In Word click inside the table, use the little square at its top-left corner to select all of it, copy, then paste here. Or open the .docx file.'; render();
+  }catch(e){ V.err = 'Could not read the table: ' + e.message; render(); }
+}
+$('#fDoc').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if(!f) return;
+  if(/\.doc$/i.test(f.name)){ V.err = 'Old .doc files cannot be opened. In Word use File > Save As > Word Document (.docx), or copy the table and paste it.'; return render(); }
+  V.busy = 'Reading ' + f.name + '…'; V.err = V.msg = ''; render();
+  try{ const g = await docxGrids(f); const r = gridsToRows(g.grids); r.title = r.title || g.title; useParsed(r, 'from ' + f.name); }
+  catch(err){ V.busy = ''; V.err = err.message; render(); }
+};
+
+/* ---------- teacher window + WhatsApp ---------- */
+function waLink(c){
+  if(!c) return '';
+  if(/^https?:/i.test(c.wa || '')) return c.wa;
+  let d = String(c.wa || '').replace(/\D/g, '') || String(c.phone || '').replace(/\D/g, '');
+  if(/^0\d{10}$/.test(d)) d = '92' + d.slice(1); else if(/^3\d{9}$/.test(d)) d = '92' + d;
+  return d ? 'https://wa.me/' + d : '';
+}
+const tOf = key => compute().L.teacher.find(x => x.key === key);
+function waMsg(t){
+  return `Assalam-o-Alaikum ${t.label},\nYour duties in ${EX.title} (timings ${EX.timing || '08:30-12:30 PM'}):\n` + t.items.map((d, i) => `${i + 1}. ${dutyFull(d)}`).join('\n') + `\nTotal: ${t.items.length} dut${t.items.length === 1 ? 'y' : 'ies'}\n- ${me} (Admin)`;
+}
+function sendWa(key){
+  const t = tOf(key), w = t && waLink(contactOf(t.label));
+  if(!w) return;
+  window.open(/wa\.me\//.test(w) ? w + '?text=' + encodeURIComponent(waMsg(t)) : w, '_blank', 'noopener');
+}
+function openTeacher(key){
+  const t = tOf(key); if(!t) return;
+  const w = waLink(contactOf(t.label));
+  $('#dlgIn').innerHTML = `<h2 style="margin:0 0 4px">${esc(t.label)}</h2><div class="sub">${t.items.length} dut${t.items.length === 1 ? 'y' : 'ies'} in ${esc(EX.title)}${t.clash ? ' · <span class="x">clash</span>' : ''}</div>
+    <div class="tw" style="max-height:50vh"><table><thead><tr><th>Date/Day</th><th>Room</th><th>Class</th><th>Subject</th></tr></thead><tbody>${t.items.map(d => `<tr><td class="nw ${d.x ? 'x' : ''}">${esc(dateDay(d))}${d.time ? '<br>' + esc(d.time) : ''}</td><td class="nw"><b>${esc(d.room || '—')}</b></td><td>${esc(d.cls.join(', '))}</td><td>${esc(d.sub.join(', '))}</td></tr>`).join('')}</tbody></table></div>
+    <div class="acts">${w ? `<button class="btn good" id="dWa">Send on WhatsApp</button>` : `<span class="sub">${CTS ? 'No WhatsApp number in the Users sheet.' : ''}</span>`}<button class="btn" id="dCopy">Copy</button><button class="btn" id="dPdf">Her PDF</button><button class="btn" id="dClose">Close</button></div>`;
+  $('#dlg').showModal();
+  $('#dClose').onclick = () => $('#dlg').close();
+  $('#dCopy').onclick = () => copy(waMsg(t));
+  $('#dPdf').onclick = async () => { $('#dlg').close(); try{ const r = await buildPdf('teacher', [t]); r.name = 'DUTY_' + t.label.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '') + '_' + stamp() + '.pdf'; deliver([r]); }catch(e){ alert(e.message); } };
+  w && ($('#dWa').onclick = () => sendWa(key));
+}
+async function loadCts(quiet){
+  try{
+    if(!quiet){ V.busy = 'Loading the app’s teacher list…'; render(); }
+    const r = await api({ action:'contacts' }, 60000);
+    CTS = { user, at:Date.now(), list:(r.list || []).map(c => ({ name:c.name, phone:c.phone || '', wa:c.wa || '', status:c.status || '', dept:c.dept || '' })) };
+    ls.set('dut_cts', CTS); C = null; _ix = null;
+    if(!quiet){ V.busy = ''; V.msg = CTS.list.length + ' teachers loaded from the app.'; }
+  }catch(e){ if(!quiet){ V.busy = ''; V.err = e.message; } }
+  refreshTab();
+}
+
+/* ---------- server: keep lists and names ---------- */
+async function saveServer(){
+  const b = $('#bSave'); b.disabled = true; b.textContent = 'Saving…';
+  try{
+    const rows = EX.rows.map(r => ({ dt:r.dt, day:r.day, time:r.time, cls:r.cls, sub:r.sub, room:r.room, staff:r.staff, teachers:splitStaff(r.staff).map(stdName).join(', ') }));
+    await api({ action:'dut_save', exam:{ id:EX.id, title:EX.title, timing:EX.timing || '', rows } });
+    if(PAIRS.length) await api({ action:'dut_names_save', pairs:PAIRS });
+    EX.saved = true; ls.set('dut_cur', EX); V.msg = 'Saved on the server (sheet “Duty Lists” in the Users workbook).'; V.err = '';
+  }catch(e){ V.err = 'Not saved: ' + e.message; V.msg = ''; }
+  render();
+}
+async function saveNames(){
+  try{ await api({ action:'dut_names_save', pairs:PAIRS }); V.msg = 'Names saved on the server (sheet “Duty Names”).'; V.err = ''; }
+  catch(e){ V.err = 'Names not saved: ' + e.message; }
+  refreshTab();
+}
+async function openSaved(){
+  $('#dlgIn').innerHTML = '<h2 style="margin:0 0 8px">Saved duty lists</h2><div class="sub">Loading…</div>';
+  $('#dlg').showModal();
+  try{
+    const r = await api({ action:'dut_list' }, 60000);
+    if(r.pairs && r.pairs.length){ const have = new Set(PAIRS.map(p => nkey(p[0]))); r.pairs.forEach(p => { if(!have.has(nkey(p[0]))) PAIRS.push(p); }); ls.set('dut_names', PAIRS); C = null; }
+    const L = r.exams || [];
+    $('#dlgIn').innerHTML = `<h2 style="margin:0 0 8px">Saved duty lists</h2>${L.length ? L.map(x => `<div class="li"><div><b>${esc(x.title)}</b><div class="sub">${x.count} rows · ${esc(x.first || '')}${x.last && x.last !== x.first ? ' – ' + esc(x.last) : ''} · saved ${esc(x.at || '')}${x.by ? ' by ' + esc(x.by) : ''}</div></div><div style="display:flex;gap:6px"><button class="btn sm pri" data-open="${esc(x.id)}">Open</button><button class="btn sm" data-rm="${esc(x.id)}">Delete</button></div></div>`).join('') : '<div class="sub">Nothing saved yet.</div>'}<div class="acts"><button class="btn" id="dClose">Close</button></div>`;
+  }catch(e){ $('#dlgIn').innerHTML = `<h2 style="margin:0 0 8px">Saved duty lists</h2><div class="note bad">${esc(e.message)}</div><div class="acts"><button class="btn" id="dClose">Close</button></div>`; }
+  $('#dClose').onclick = () => $('#dlg').close();
+  $('#dlgIn').onclick = async e => {
+    const b = e.target.closest('button'); if(!b) return;
+    if(b.dataset.open){
+      if(EX && !EX.saved && EX.rows.length && !confirm('The list on this phone is not saved on the server. Open the other one anyway?')) return;
+      b.disabled = true; b.textContent = 'Opening…';
+      try{
+        const r = await api({ action:'dut_load', id:b.dataset.open }, 60000);
+        EX = { id:r.exam.id, title:r.exam.title, timing:r.exam.timing || '08:30-12:30 PM (morning)', rows:r.exam.rows.map(x => { const p = parseDate(x.dt); return { dt:p.dt || x.dt, iso:p.iso, day:p.day || x.day, time:x.time || '', cls:x.cls, sub:x.sub, room:x.room, staff:x.staff }; }), saved:true, sheet:r.exam.sheet || '', sheetUrl:r.exam.sheetUrl || '' };
+        ls.set('dut_cur', EX); C = null; V.msg = 'Opened “' + EX.title + '”.'; V.err = ''; $('#dlg').close(); render();
+      }catch(err){ alert(err.message); b.disabled = false; b.textContent = 'Open'; }
+    }
+    if(b.dataset.rm){
+      if(!confirm('Delete this saved list from the server?')) return;
+      try{ await api({ action:'dut_delete', id:b.dataset.rm }); b.closest('.li').remove(); }catch(err){ alert(err.message); }
+    }
+  };
+}
+function copy(s){
+  (navigator.clipboard ? navigator.clipboard.writeText(s) : Promise.reject()).then(() => { V.msg = 'Copied.'; refreshTab(); }, () => { $('#dlgIn').innerHTML = `<h2 style="margin:0 0 8px">Copy this</h2><textarea readonly>${esc(s)}</textarea><div class="acts"><button class="btn" id="dClose">Close</button></div>`; if(!$('#dlg').open) $('#dlg').showModal(); $('#dClose').onclick = () => $('#dlg').close(); });
+}
+
+/* =====================================================================
+   5) PDF + EXCEL  — real files named with today's date, e.g. TEACHER_WISE_DUTY_LIST_07-11-2026.pdf
+   Same PDF/Excel tools and offline cache as the attendance app.
+   ===================================================================== */
+const PDF_CACHE = 'jcw-pdf-tools-v1';
+const LIBS = ['https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js'];
+const XLSX_LIB = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.min.js';
+function addScript(src){ return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.async = true; s.onload = res; s.onerror = () => { s.remove(); rej(new Error('not loaded')); }; document.head.appendChild(s); }); }
+async function loadScript(src){
+  try{ const r = window.caches && await (await caches.open(PDF_CACHE)).match(src); if(r){ const u = URL.createObjectURL(new Blob([await r.text()], { type:'text/javascript' })); try{ await addScript(u); return; } finally { setTimeout(() => URL.revokeObjectURL(u), 5000); } } }catch(e){}
+  try{ await addScript(src); }catch(e){ throw new Error('The PDF/Excel tools could not be loaded. Open this page once with internet, then they also work offline.'); }
+  try{ window.caches && (await caches.open(PDF_CACHE)).add(src).catch(() => {}); }catch(e){}
+}
+const pdfReady = () => !!(window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API.autoTable);
+let libP = null;
+function pdfLibs(){ if(pdfReady()) return Promise.resolve(); if(!libP) libP = (window.jspdf ? Promise.resolve() : loadScript(LIBS[0])).then(() => pdfReady() ? null : loadScript(LIBS[1])).catch(e => { libP = null; throw e; }); return libP; }
+function xlsxLib(){ return window.XLSX && window.XLSX.utils ? Promise.resolve() : loadScript(XLSX_LIB); }
+let LOGO = null;
+async function logo(){
+  if(LOGO) return LOGO;
+  try{ const r = await fetch('jcw-logo.png'); const b = await r.blob(); LOGO = await new Promise(ok => { const f = new FileReader(); f.onload = () => ok(f.result); f.readAsDataURL(b); }); }catch(e){}
+  return LOGO;
+}
+if(navigator.onLine) setTimeout(() => { pdfLibs().catch(() => {}); xlsxLib().catch(() => {}); logo(); }, 2500);
+
+const stamp = () => { const d = new Date(); return pad(d.getDate()) + '-' + pad(d.getMonth() + 1) + '-' + d.getFullYear(); };
+const fileName = (kind, ext) => (KINDS[kind] ? KINDS[kind].file : kind === 'sumdates' ? 'TEACHER_DAY_DATE_LIST' : kind === 'sumcount' ? 'TEACHER_TOTAL_DUTIES' : 'DUTY_LISTS') + '_' + stamp() + '.' + ext;
+const longDate = () => new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+const BROWN = [107, 52, 35], BR2 = [138, 74, 53], TEA = [231, 183, 174], SOFT = [251, 237, 234], INK = [43, 25, 18], LINE = [226, 192, 184], RED = [200, 30, 30], MUT = [124, 97, 89], GOLD = [201, 151, 63];
+
+/* page band (every page) */
+function band(doc, kindTitle){
+  const W = doc.internal.pageSize.getWidth();
+  doc.setFillColor(...BROWN); doc.rect(0, 0, W, 24, 'F');
+  doc.setFillColor(...BR2); doc.triangle(W - 90, 0, W, 0, W, 24, 'F');
+  doc.setFillColor(...GOLD); doc.rect(0, 24, W, 1.2, 'F');
+  if(LOGO){ doc.setFillColor(255, 255, 255); doc.circle(19, 12, 9.2, 'F'); try{ doc.addImage(LOGO, 'PNG', 11, 4, 16, 16, 'jcwlogo', 'FAST'); }catch(e){} }
+  doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(17); doc.text('JINNAH COLLEGE FOR WOMEN', 33, 11.5);
+  doc.setFontSize(10.5); doc.setTextColor(...TEA); doc.text('FACULTY DUTY LIST  ·  ' + kindTitle.toUpperCase(), 33, 18.5);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(255, 255, 255);
+  doc.text(doc.splitTextToSize(EX.title || '', 80)[0] || '', W - 10, 11.5, { align:'right' });
+  doc.setFontSize(8.5); doc.text('University of Peshawar', W - 10, 18.5, { align:'right' });
+}
+function footers(doc){
+  const n = doc.getNumberOfPages(), W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), d = longDate();
+  for(let i = 1; i <= n; i++){
+    doc.setPage(i);
+    doc.setDrawColor(...LINE); doc.setLineWidth(0.3); doc.line(10, H - 10, W - 10, H - 10);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...MUT);
+    doc.text(d, 10, H - 5.5); doc.text('Page ' + i + ' of ' + n, W - 10, H - 5.5, { align:'right' });
+    doc.text('Chief Proctor  ·  Jinnah College for Women', W / 2, H - 5.5, { align:'center' });
+  }
+}
+/* group heading: name in a tea-pink pill, Duty Timings on the right (like the old Access reports) */
+function gHead(doc, y, label, sub){
+  const W = doc.internal.pageSize.getWidth();
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
+  const w = Math.min(doc.getTextWidth(label) + 14, W - 130);
+  doc.setFillColor(...SOFT); doc.setDrawColor(...TEA); doc.setLineWidth(0.6); doc.roundedRect(10, y, w, 11, 3, 3, 'FD');
+  doc.setFillColor(...BROWN); doc.rect(10, y + 1.5, 1.6, 8, 'F');
+  doc.setTextColor(...BROWN); doc.text(doc.splitTextToSize(label, w - 8)[0], 15, y + 7.8);
+  if(sub){ doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...MUT); doc.text(sub, 10 + w + 4, y + 7.5); }
+  const tm = EX.timing || '';
+  if(tm){
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); const tw = doc.getTextWidth(tm);
+    doc.setTextColor(...RED); doc.text(tm, W - 10, y + 7.5, { align:'right' });
+    doc.setTextColor(...INK); doc.text('Duty Timings  ', W - 10 - tw, y + 7.5, { align:'right' });
+  }
+  return y + 14;
+}
+const tableStyle = (extra) => Object.assign({
+  theme:'grid', margin:{ left:10, right:10, top:30, bottom:14 },
+  styles:{ font:'helvetica', fontSize:9.5, cellPadding:{ top:2.2, bottom:2.2, left:2.5, right:2.5 }, textColor:INK, lineColor:LINE, lineWidth:0.25, valign:'middle', overflow:'linebreak' },
+  headStyles:{ fillColor:BROWN, textColor:[255, 255, 255], fontStyle:'bold', fontSize:9.5, halign:'left', lineColor:BROWN },
+  alternateRowStyles:{ fillColor:SOFT }, bodyStyles:{ fillColor:[255, 255, 255] }
+}, extra);
+const WIDTH = { '#':9, date:44, time:30, room:24, cls:34, sub:52 };      // staff takes the rest
+
+async function buildPdf(kind, only){
+  await pdfLibs(); await logo();
+  const doc = new window.jspdf.jsPDF({ unit:'mm', format:'a4', orientation:'landscape' }), H = doc.internal.pageSize.getHeight();
+  const kt = KINDS[kind] ? KINDS[kind].tab + ' duty list' : kind === 'sumdates' ? 'Teacher · Day/Date' : 'Teacher · Total duties';
+  doc.setProperties({ title:(EX.title || '') + ' — ' + kt, author:'Jinnah College for Women', creator:'JCW attendance app' });
+  const hook = { didDrawPage:() => band(doc, kt) };
+  band(doc, kt);
+  let y = 30;
+  if(KINDS[kind]){
+    const G = only || groups(kind), cols = colsOf(kind);
+    const colStyles = { 0:{ cellWidth:WIDTH['#'], halign:'center', fontStyle:'bold', textColor:BROWN } };
+    cols.forEach((c, i) => { if(WIDTH[c]) colStyles[i + 1] = { cellWidth:WIDTH[c] }; if(c === 'room' || c === 'date') colStyles[i + 1] = Object.assign(colStyles[i + 1] || {}, { fontStyle:'bold' }); });
+    G.forEach((g, gi) => {
+      if(gi > 0){ if(V.newPage || y > H - 45){ doc.addPage(); band(doc, kt); y = 30; } else y += 6; }
+      const sub = g.items.length + (kind === 'teacher' ? ' dut' + (g.items.length === 1 ? 'y' : 'ies') + (g.clash ? '  ·  clash shown in red' : '') : ' paper' + (g.items.length === 1 ? '' : 's'));
+      y = gHead(doc, y, g.label, sub);
+      doc.autoTable(tableStyle({
+        startY:y, head:[['#', ...cols.map(c => COLNAME[c])]],
+        body:g.items.map((it, i) => [i + 1, ...cols.map(c => cellOf(it, c))]),
+        columnStyles:colStyles, ...hook,
+        didParseCell:h => { if(h.section === 'body' && g.items[h.row.index] && g.items[h.row.index].x){ h.cell.styles.textColor = RED; h.cell.styles.fontStyle = 'bold'; } }
+      }));
+      y = doc.lastAutoTable.finalY;
+    });
+  } else {
+    const W = doc.internal.pageSize.getWidth();
+    if(kind === 'sumdates'){
+      const rows = summaryDates();
+      y = gHead(doc, y, 'Teacher-wise duty dates', rows.length + ' teachers');
+      doc.autoTable(tableStyle({ startY:y, head:[['#', 'Teacher', 'DAY/DATE']], body:rows.map((r, i) => [i + 1, r[0], r[1]]), columnStyles:{ 0:{ cellWidth:9, halign:'center', fontStyle:'bold', textColor:BROWN }, 1:{ cellWidth:55, fontStyle:'bold' } }, ...hook }));
+    } else {
+      const rows = summaryCount(), max = Math.max(1, ...rows.map(r => r[2]));
+      y = gHead(doc, y, 'Teachers by number of duties', rows.length + ' teachers  ·  fewest first');
+      doc.autoTable(tableStyle({ startY:y, head:[['#', 'Teacher', 'Duties (dates)', 'Total Duties']], body:rows.map((r, i) => [i + 1, r[0], r[1], r[2]]),
+        columnStyles:{ 0:{ cellWidth:9, halign:'center', fontStyle:'bold', textColor:BROWN }, 1:{ cellWidth:62, fontStyle:'bold' }, 3:{ cellWidth:60, halign:'right', fontStyle:'bold' } }, ...hook,
+        didDrawCell:h => { if(h.section === 'body' && h.column.index === 3){ const n = Number(h.cell.raw) || 0, bw = (h.cell.width - 14) * n / max; doc.setFillColor(...TEA); doc.roundedRect(h.cell.x + 2.5, h.cell.y + h.cell.height / 2 - 1.8, Math.max(bw, 1.5), 3.6, 1.5, 1.5, 'F'); } } }));
+    }
+    y = doc.lastAutoTable.finalY;
+  }
+  if(y > H - 34){ doc.addPage(); band(doc, kt); y = 30; }
+  const W = doc.internal.pageSize.getWidth(); doc.setDrawColor(...INK); doc.setLineWidth(0.3); doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...INK);
+  [['Chief Proctor', 30], ['Principal', W - 80]].forEach(([t, x]) => { doc.line(x, y + 20, x + 50, y + 20); doc.text(t, x + 25, y + 25, { align:'center' }); });
+  footers(doc);
+  return { blob:doc.output('blob'), name:fileName(kind, 'pdf') };
+}
+/* phone: share sheet (WhatsApp, Gmail, Drive…) · laptop: download */
+function deliver(files){
+  const F = files.map(f => new File([f.blob], f.name, { type:f.blob.type }));
+  const down = () => F.forEach((f, i) => setTimeout(() => { const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 8000); }, i * 600));
+  const canShare = /Android|iPhone|iPad/i.test(navigator.userAgent) && navigator.canShare && navigator.canShare({ files:F });
+  $('#dlgIn').innerHTML = `<h2 style="margin:0 0 6px">${F.length === 1 ? 'File ready' : F.length + ' files ready'}</h2><div class="sub">${F.map(f => esc(f.name)).join('<br>')}</div><div class="acts">${canShare ? '<button class="btn pri" id="dSh">Share (WhatsApp, Gmail…)</button>' : ''}<button class="btn ${canShare ? '' : 'pri'}" id="dDn">Download</button><button class="btn" id="dClose">Close</button></div>`;
+  if(!$('#dlg').open) $('#dlg').showModal();
+  $('#dClose').onclick = () => $('#dlg').close();
+  $('#dDn').onclick = () => { down(); $('#dlg').close(); };
+  canShare && ($('#dSh').onclick = () => navigator.share({ files:F, title:EX.title }).catch(() => {}).finally(() => $('#dlg').close()));
+}
+async function onePdf(kind, btn){
+  const t = btn && btn.textContent; if(btn){ btn.disabled = true; btn.textContent = 'Making…'; }
+  try{ deliver([await buildPdf(kind)]); }catch(e){ alert(e.message); }
+  finally{ if(btn){ btn.disabled = false; btn.textContent = t; } }
+}
+async function allPdfs(){
+  const b = $('#bAll'), t = b.textContent; b.disabled = true;
+  try{
+    const out = [], L = [...Object.keys(KINDS), 'sumdates', 'sumcount'];
+    for(const k of L){ b.textContent = 'Making ' + (out.length + 1) + ' of ' + L.length + '…'; out.push(await buildPdf(k)); await new Promise(r => setTimeout(r, 30)); }
+    deliver(out);
+  }catch(e){ alert(e.message); }
+  finally{ b.disabled = false; b.textContent = t; }
+}
+/* tables for Excel / Google Sheet */
+function tableOf(kind){
+  if(kind === 'sumdates') return { name:'Teacher DAY-DATE', rows:[['Teacher', 'DAY/DATE'], ...summaryDates()], red:[] };
+  if(kind === 'sumcount') return { name:'Total Duties', rows:[['Teacher', 'Duties', 'Total Duties'], ...summaryCount()], red:[] };
+  if(kind === 'rows') return { name:'All rows', rows:[['Date', 'Day', 'Time', 'Class', 'Subject', 'Room', 'Staff on duty (as written)', 'Teachers'], ...EX.rows.map(r => [r.dt, r.day, r.time, r.cls, r.sub, r.room, String(r.staff || '').replace(/\n/g, ', '), splitStaff(r.staff).map(stdName).join(', ')])], red:[] };
+  const first = { teacher:'TEACHER', room:'ROOM', date:'DATE/DAY', class:'CLASS', subject:'SUBJECT' }[kind], cols = colsOf(kind);
+  const rows = [[first, '#', ...cols.map(c => COLNAME[c])]], red = [];
+  groups(kind).forEach(g => g.items.forEach((it, i) => { if(it.x) red.push(rows.length); rows.push([i ? '' : g.label, i + 1, ...cols.map(c => cellOf(it, c))]); }));
+  return { name:KINDS[kind].tab, rows, red };
+}
+const ALL_TABS = ['teacher', 'sumdates', 'sumcount', 'room', 'date', 'class', 'subject', 'rows'];
+async function makeXlsx(){
+  const b = $('#bXlsx'), t = b.textContent; b.disabled = true; b.textContent = 'Making…';
+  try{
+    await xlsxLib(); const X = window.XLSX, wb = X.utils.book_new();
+    const bd = { style:'thin', color:{ rgb:'E2C0B8' } }, border = { top:bd, bottom:bd, left:bd, right:bd };
+    ALL_TABS.map(tableOf).forEach(tb => {
+      const n = Math.max(...tb.rows.map(r => r.length)), head = [['JINNAH COLLEGE FOR WOMEN — ' + (EX.title || '') + ' — ' + tb.name.toUpperCase()], ['Duty timings ' + (EX.timing || '') + ' · made ' + longDate()]];
+      const ws = X.utils.aoa_to_sheet(head.concat(tb.rows));
+      for(let r = 0; r < tb.rows.length + 2; r++) for(let c = 0; c < n; c++){
+        const a = X.utils.encode_cell({ r, c }); if(!ws[a]) ws[a] = { t:'s', v:'' };
+        const isRed = tb.red.includes(r - 2);
+        ws[a].s = r === 0 ? { font:{ bold:true, sz:14, color:{ rgb:'6B3423' } } } : r === 1 ? { font:{ italic:true, sz:9, color:{ rgb:'7C6159' } } }
+          : r === 2 ? { fill:{ patternType:'solid', fgColor:{ rgb:'6B3423' } }, font:{ bold:true, color:{ rgb:'FFFFFF' } }, alignment:{ vertical:'center', wrapText:true }, border }
+          : { fill:{ patternType:'solid', fgColor:{ rgb:r % 2 ? 'FBEDEA' : 'FFFFFF' } }, font:{ color:{ rgb:isRed ? 'C81E1E' : '2B1912' }, bold:isRed || c === 0 }, alignment:{ vertical:'top', wrapText:true }, border };
+      }
+      ws['!merges'] = [{ s:{ r:0, c:0 }, e:{ r:0, c:n - 1 } }, { s:{ r:1, c:0 }, e:{ r:1, c:n - 1 } }];
+      ws['!cols'] = Array.from({ length:n }, (_, c) => ({ wch:Math.min(60, Math.max(6, ...tb.rows.map(r => String(r[c] == null ? '' : r[c]).length + 2))) }));
+      ws['!freeze'] = { xSplit:0, ySplit:3 };
+      X.utils.book_append_sheet(wb, ws, tb.name.replace(/[\\/?*\[\]:]/g, ' ').slice(0, 31));
+    });
+    const out = X.write(wb, { bookType:'xlsx', type:'array' });
+    deliver([{ blob:new Blob([out], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), name:fileName('all', 'xlsx') }]);
+  }catch(e){ alert(e.message); }
+  finally{ b.disabled = false; b.textContent = t; }
+}
+async function makeSheet(){
+  const b = $('#bSheet'); b.disabled = true; b.textContent = 'Making the Google Sheet…';
+  try{
+    const r = await api({ action:'dut_sheet', id:EX.id, title:EX.title + ' — Duty lists ' + stamp(), fileId:EX.sheet || '', tabs:ALL_TABS.map(tableOf) }, 180000);
+    EX.sheet = r.fileId; EX.sheetUrl = r.url; ls.set('dut_cur', EX); V.msg = 'Google Sheet ready in the Drive folder “JCW Duty Lists”.'; V.err = '';
+    window.open(r.url, '_blank', 'noopener');
+  }catch(e){ V.err = 'Google Sheet not made: ' + e.message; V.msg = ''; }
+  render();
+}
+
+render();
+</script>
+</body>
+</html>
