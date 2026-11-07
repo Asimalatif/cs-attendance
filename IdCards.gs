@@ -13,6 +13,9 @@
  *        if (/^idc_/.test(String(req.action || ''))) return json_(idcRoute_(user, req));
  *   Photos are read 12 at a time in parallel; the page keeps them on the device, so each photo is read from Drive once.
  *   Photos fixed or given in the app go to "JCW ID Cards/Student photos" and the sheet "ID Card Photos".
+ *   Students check their card on idcheck.html (no login). For that, put this line at the TOP of doPost,
+ *   right after `req` is read and BEFORE the login check:
+ *        if (/^idp_/.test(String(req.action || ''))) return json_(idcPublic_(req));
  *   c) Run idcAuthorize once (Run ▸ Allow), then Deploy > Manage deployments > Edit > New version > Deploy.
  */
 var IDC_CFG = {
@@ -25,7 +28,11 @@ var IDC_CFG = {
   PHOTOS: 'ID Card Photos',                                  // sheet: photos the admin gave/fixed in the app (Enroll#, File ID, Updated, By)
   PHOTO_FOLDER: 'Student photos',                            // inside the "JCW ID Cards" folder
   PHOTO_MAX: 1500000,                                        // bytes; bigger photos use Drive's thumbnail
-  BATCH: 12                                                  // photos per call (fetched in parallel)
+  BATCH: 12,                                                 // photos per call (fetched in parallel)
+  REQS: 'ID Card Requests',                                  // sheet: what students sent from idcheck.html (made by itself)
+  REQ_FOLDER: 'Student requests',                            // inside "JCW ID Cards": photos students sent, waiting for the admin
+  CHECK_PROP: 'IDC_CHECK',                                   // { open: true/false, until: 'yyyy-mm-dd' } for the student page
+  TRIES: 8                                                   // wrong checks allowed per Enroll# in 30 minutes
 };
 
 function idcAuthorize() {
@@ -45,6 +52,9 @@ function idcRoute_(user, req) {
       case 'idc_settings': return idcSaveSettings_(req.cfg || {});
       case 'idc_sign':   return idcSaveSign_(req.year, req.data);
       case 'idc_photo_save': return idcSavePhoto_(user, req.roll, req.data);
+      case 'idc_reqs':   return idcReqList_(req.status || 'Pending', Number(req.from) || 0, Math.min(Number(req.n) || 20, 30));
+      case 'idc_req_do': return idcReqDo_(user, req.items || []);
+      case 'idc_check_set': PropertiesService.getScriptProperties().setProperty(IDC_CFG.CHECK_PROP, JSON.stringify(req.check || {})); return { ok: true };
     }
     return { ok: false, error: 'UNKNOWN_ACTION' };
   } catch (e) {
@@ -81,8 +91,10 @@ function idcList_() {
     var o = own[idcK_(roll)];
     if (o) { var st = out[out.length - 1]; st.pic = 'https://drive.google.com/file/d/' + o.id + '/view'; st.own = o.at; }
   }
+  var chk = idcReqLatest_(book);
+  out.forEach(function (st) { var q = chk[idcK_(st.roll)]; if (q) { st.chk = q.status; st.chkAt = q.when; } });
   var cfg = idcSettings_(), signs = idcSigns_();
-  return { ok: true, list: out, at: new Date().toISOString(), cfg: cfg, signs: signs };
+  return { ok: true, list: out, at: new Date().toISOString(), cfg: cfg, signs: signs, check: idcCheck_() };
 }
 
 /* ================= yearly settings + principal sign / stamp ================= */
@@ -181,28 +193,190 @@ function idcSavePhoto_(user, roll, data) {
   var bytes = Utilities.base64Decode(m[2]);
   if (bytes.length > 2000000) throw new Error('Photo too big.');
   var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try { return idcStorePhoto_(SpreadsheetApp.openById(IDC_CFG.USERS), roll, bytes, 'image/' + m[1], idcWho_(user)); }
+  finally { lock.releaseLock(); }
+}
+function idcWho_(user) { return idcS_(user && (user.username || user.name || user.email) || user); }
+/** the student's card photo from now on: Drive file + "ID Card Photos" row; Pic URL filled only if empty. Call inside a lock. */
+function idcStorePhoto_(book, roll, bytes, mime, who) {
+  var folder = idcPhotoFolder_();
+  var name = roll.replace(/[^\w-]+/g, '_') + '.jpg', old = folder.getFilesByName(name);
+  while (old.hasNext()) old.next().setTrashed(true);
+  var file = folder.createFile(Utilities.newBlob(bytes, mime || 'image/jpeg', name));
+  var sh = book.getSheetByName(IDC_CFG.PHOTOS);
+  if (!sh) { sh = book.insertSheet(IDC_CFG.PHOTOS); sh.getRange(1, 1, 1, 4).setValues([['Enroll#', 'File ID', 'Updated', 'By']]).setFontWeight('bold'); sh.setFrozenRows(1); }
+  var now = Utilities.formatDate(new Date(), 'Asia/Karachi', 'dd-MM-yyyy HH:mm');
+  var n = sh.getLastRow(), rows = n > 1 ? sh.getRange(2, 1, n - 1, 1).getDisplayValues() : [], at = -1;
+  for (var i = 0; i < rows.length; i++) if (idcK_(rows[i][0]) === idcK_(roll)) { at = i + 2; break; }
+  var row = [[roll, file.getId(), now, who]];
+  if (at > 0) sh.getRange(at, 1, 1, 4).setNumberFormat('@').setValues(row);
+  else sh.getRange(n + 1, 1, 1, 4).setNumberFormat('@').setValues(row);
+  idcSetStrength_(book, roll, { PICURL: 'https://drive.google.com/file/d/' + file.getId() + '/view' }, true);
+  idcIndexDrop_();
+  return { ok: true, id: file.getId(), at: now };
+}
+/** writes columns (by header key, e.g. STUDENTNAME) of one student in the strength sheet; onlyEmpty = never overwrite */
+function idcSetStrength_(book, roll, vals, onlyEmpty) {
+  var st = book.getSheetByName(IDC_CFG.STRENGTH), v = st.getDataRange().getDisplayValues(), head = v[0].map(idcK_), cR = head.indexOf('ENROLL');
+  if (cR < 0) return false;
+  for (var r = 1; r < v.length; r++) if (idcK_(v[r][cR]) === idcK_(roll)) {
+    Object.keys(vals).forEach(function (k) {
+      var c = head.indexOf(k); if (c < 0 || !idcS_(vals[k])) return;
+      if (onlyEmpty && idcS_(v[r][c]) && !/^null$/i.test(v[r][c])) return;
+      st.getRange(r + 1, c + 1).setValue(vals[k]);
+    });
+    return true;
+  }
+  return false;
+}
+
+/* ================= students check their own card (idcheck.html, no login) ================= */
+function idcCheck_() {
+  try { return JSON.parse(PropertiesService.getScriptProperties().getProperty(IDC_CFG.CHECK_PROP) || '{}'); } catch (e) { return {}; }
+}
+/** small list of 1st year students kept in the script cache for 30 minutes, so 3000 students do not read the sheet 3000 times */
+function idcIndex_() {
+  var cache = CacheService.getScriptCache(), n = Number(cache.get('idcidx_n') || 0);
+  if (n) {
+    var parts = cache.getAll(Array.apply(null, Array(n)).map(function (_, i) { return 'idcidx_' + i; })), txt = '';
+    for (var i = 0; i < n; i++) { if (parts['idcidx_' + i] == null) { txt = null; break; } txt += parts['idcidx_' + i]; }
+    if (txt) try { return JSON.parse(txt); } catch (e) {}
+  }
+  var book = SpreadsheetApp.openById(IDC_CFG.USERS), sh = book.getSheetByName(IDC_CFG.STRENGTH);
+  var v = sh.getDataRange().getDisplayValues(), head = v[0].map(idcK_);
+  var c = function (k) { return head.indexOf(k); };
+  var C = { roll: c('ENROLL'), name: c('STUDENTNAME'), father: c('FATHERNAME'), program: c('PROGRAM'), cls: c('CLASS'), section: c('SECTION'), pcs: c('PCS'),
+    pic: c('PICURL') >= 0 ? c('PICURL') : c('PHOTO'), contact: c('STUDENTCONTACT') >= 0 ? c('STUDENTCONTACT') : c('CONTACT'), status: c('STATUS') };
+  var own = idcOwnPhotos_(book), idx = {};
+  for (var r = 1; r < v.length; r++) {
+    var row = v[r], g = function (k) { return C[k] >= 0 ? idcS_(row[C[k]]) : ''; }, roll = g('roll');
+    if (!roll || !IDC_CFG.FIRST_YEAR.test(g('cls'))) continue;
+    var o = own[idcK_(roll)];
+    idx[idcK_(roll)] = [roll, g('name'), g('father'), g('program'), g('pcs'), g('section'), o ? 'https://drive.google.com/file/d/' + o.id + '/view' : g('pic'), g('contact').replace(/\D/g, '').slice(-4), g('status')];
+  }
+  var txt2 = JSON.stringify(idx), size = 90000, put = {}, k = 0;
+  for (var p = 0; p < txt2.length; p += size) put['idcidx_' + (k++)] = txt2.substr(p, size);
+  put.idcidx_n = String(k);
+  try { cache.putAll(put, 1800); } catch (e) {}
+  return idx;
+}
+function idcIndexDrop_() { try { CacheService.getScriptCache().remove('idcidx_n'); } catch (e) {} }
+function idcNameK_(s) { return idcS_(s).toUpperCase().replace(/[^A-Z ]+/g, ' ').replace(/\s+/g, ' ').trim(); }
+/** Enroll# (or its number) + father's first name or the last 4 digits of the mobile number in the college record */
+function idcVerify_(rollIn, key) {
+  var idx = idcIndex_(), k = idcK_(rollIn), st = idx[k];
+  if (!st) {
+    var d = String(rollIn || '').replace(/\D+/g, '');
+    if (d.length >= 3) { var hits = Object.keys(idx).filter(function (x) { return idx[x][0].split('-').pop() === d; }); if (hits.length === 1) st = idx[hits[0]]; }
+  }
+  if (!st) return { error: 'This Enroll# is not in the 1st year list. Write it like JCW-F26-1032.' };
+  var cache = CacheService.getScriptCache(), ck = 'idcfail_' + idcK_(st[0]), fails = Number(cache.get(ck) || 0);
+  if (fails >= IDC_CFG.TRIES) return { error: 'Too many wrong tries. Wait 30 minutes or ask the college office.' };
+  var key2 = idcS_(key), ok = false;
+  if (/^\d{4}$/.test(key2)) ok = !!st[7] && st[7] === key2;
+  else {
+    var a = idcNameK_(key2).split(' ')[0], f = idcNameK_(st[2]).split(' ');
+    ok = a.length >= 3 && f.some(function (w) { return w === a || (w.length > 4 && a.length > 4 && w.slice(0, 5) === a.slice(0, 5)); });
+  }
+  if (!ok) { cache.put(ck, String(fails + 1), 1800); return { error: 'That does not match our record. Check the spelling of your father\'s first name, or give the last 4 digits of the mobile number you gave the college.' }; }
+  return { st: st };
+}
+function idcReqSheet_(book) {
+  var sh = book.getSheetByName(IDC_CFG.REQS);
+  if (!sh) {
+    sh = book.insertSheet(IDC_CFG.REQS);
+    sh.getRange(1, 1, 1, 12).setValues([['When', 'Enroll#', 'Status', 'Name on record', 'Father on record', 'Correct name', 'Correct father name', 'Note', 'New photo (file id)', 'Checked by', 'Checked at', 'Reason']]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+/** latest request of every student: { ENROLLKEY: { status, when, row } } */
+function idcReqLatest_(book) {
+  var sh = book.getSheetByName(IDC_CFG.REQS), map = {};
+  if (!sh || sh.getLastRow() < 2) return map;
+  sh.getRange(2, 1, sh.getLastRow() - 1, 3).getDisplayValues().forEach(function (r, i) { if (r[1]) map[idcK_(r[1])] = { when: r[0], status: r[2], row: i + 2 }; });
+  return map;
+}
+function idcPublic_(req) {
   try {
-    var book = SpreadsheetApp.openById(IDC_CFG.USERS), folder = idcPhotoFolder_();
-    var name = roll.replace(/[^\w-]+/g, '_') + '.jpg', old = folder.getFilesByName(name);
-    while (old.hasNext()) old.next().setTrashed(true);
-    var file = folder.createFile(Utilities.newBlob(bytes, 'image/' + m[1], name));
-    var sh = book.getSheetByName(IDC_CFG.PHOTOS);
-    if (!sh) { sh = book.insertSheet(IDC_CFG.PHOTOS); sh.getRange(1, 1, 1, 4).setValues([['Enroll#', 'File ID', 'Updated', 'By']]).setFontWeight('bold'); sh.setFrozenRows(1); }
-    var now = Utilities.formatDate(new Date(), 'Asia/Karachi', 'dd-MM-yyyy HH:mm');
-    var who = idcS_(user && (user.username || user.name || user.email) || user);
-    var n = sh.getLastRow(), rows = n > 1 ? sh.getRange(2, 1, n - 1, 1).getDisplayValues() : [], at = -1;
-    for (var i = 0; i < rows.length; i++) if (idcK_(rows[i][0]) === idcK_(roll)) { at = i + 2; break; }
-    var row = [[roll, file.getId(), now, who]];
-    if (at > 0) sh.getRange(at, 1, 1, 4).setNumberFormat('@').setValues(row);
-    else sh.getRange(n + 1, 1, 1, 4).setNumberFormat('@').setValues(row);
-    // a student who had no photo gets this one in the strength sheet too (existing photo links are never changed)
-    var st = book.getSheetByName(IDC_CFG.STRENGTH), v = st.getDataRange().getDisplayValues(), head = v[0].map(idcK_);
-    var cR = head.indexOf('ENROLL'), cP = head.indexOf('PICURL');
-    if (cR >= 0 && cP >= 0) for (var r = 1; r < v.length; r++) if (idcK_(v[r][cR]) === idcK_(roll)) {
-      if (!idcS_(v[r][cP]) || /^null$/i.test(v[r][cP])) st.getRange(r + 1, cP + 1).setValue('https://drive.google.com/file/d/' + file.getId() + '/view');
-      break;
+    var chk = idcCheck_();
+    if (!chk.open) return { ok: false, error: 'Checking ID cards is closed at the moment. Ask your class teacher when it opens.' };
+    if (chk.until && Utilities.formatDate(new Date(), 'Asia/Karachi', 'yyyy-MM-dd') > chk.until) return { ok: false, error: 'The last date for checking ID cards (' + chk.until + ') has passed. Please visit the college office.' };
+    var v = idcVerify_(req.roll, req.key);
+    if (v.error) return { ok: false, error: v.error };
+    var st = v.st, book;
+    if (req.action === 'idp_find') {
+      book = SpreadsheetApp.openById(IDC_CFG.USERS);
+      var last = idcReqLatest_(book)[idcK_(st[0])] || null, photo = '';
+      try { photo = idcPhotos_([{ roll: st[0], pic: st[6] }]).photos[st[0]] || ''; } catch (e) {}
+      var cfg = idcSettings_(), sign = '';                       // (the principal's sign is not sent here, to keep this call light)
+      return { ok: true, st: { roll: st[0], name: st[1], father: st[2], program: st[3], pcs: st[4], section: st[5] }, photo: photo,
+        last: last ? { status: last.status, when: last.when } : null, cfg: cfg, sign: sign, until: chk.until || '' };
     }
-    return { ok: true, id: file.getId(), at: now };
+    if (req.action === 'idp_send') {
+      var name = idcS_(req.name).slice(0, 80), father = idcS_(req.father).slice(0, 80), note = idcS_(req.note).slice(0, 300), fileId = '';
+      var allOk = req.allOk === true && !name && !father && !note && !req.photo;
+      if (!allOk && !name && !father && !note && !req.photo) return { ok: false, error: 'Nothing to send.' };
+      if (req.photo) {
+        var pm = String(req.photo).match(/^data:image\/jpeg;base64,(.+)$/);
+        if (!pm) return { ok: false, error: 'Photo not received. Try again.' };
+        var bytes = Utilities.base64Decode(pm[1]);
+        if (bytes.length > 400000) return { ok: false, error: 'Photo too big.' };
+        var root = idcFolder_(), it = root.getFoldersByName(IDC_CFG.REQ_FOLDER), fol = it.hasNext() ? it.next() : root.createFolder(IDC_CFG.REQ_FOLDER);
+        fileId = fol.createFile(Utilities.newBlob(bytes, 'image/jpeg', st[0].replace(/[^\w-]+/g, '_') + ' ' + Date.now() + '.jpg')).getId();
+      }
+      var lock = LockService.getScriptLock(); lock.waitLock(25000);
+      try {
+        book = SpreadsheetApp.openById(IDC_CFG.USERS);
+        var sh = idcReqSheet_(book), prev = idcReqLatest_(book)[idcK_(st[0])];
+        if (prev && prev.status === 'Pending') sh.getRange(prev.row, 3).setValue('Replaced');
+        var now = Utilities.formatDate(new Date(), 'Asia/Karachi', 'dd-MM-yyyy HH:mm');
+        sh.appendRow([now, st[0], allOk ? 'Confirmed' : 'Pending', st[1], st[2], name, father, note, fileId, '', '', '']);
+        sh.getRange(sh.getLastRow(), 1, 1, 12).setNumberFormat('@');
+        return { ok: true, status: allOk ? 'Confirmed' : 'Pending', when: now };
+      } finally { lock.releaseLock(); }
+    }
+    return { ok: false, error: 'UNKNOWN_ACTION' };
+  } catch (e) {
+    console.error('idcPublic_ ' + req.action + ': ' + (e && e.stack || e));
+    return { ok: false, error: 'The server is busy. Please try again in a minute.' };
+  }
+}
+
+/* ================= admin: students' requests ================= */
+function idcReqList_(status, from, n) {
+  var book = SpreadsheetApp.openById(IDC_CFG.USERS), sh = book.getSheetByName(IDC_CFG.REQS);
+  if (!sh || sh.getLastRow() < 2) return { ok: true, items: [], total: 0 };
+  var v = sh.getRange(2, 1, sh.getLastRow() - 1, 12).getDisplayValues(), rows = [];
+  v.forEach(function (r, i) { if (r[2] === status) rows.push({ row: i + 2, when: r[0], roll: r[1], status: r[2], oldName: r[3], oldFather: r[4], name: r[5], father: r[6], note: r[7], file: r[8], by: r[9], at: r[10], reason: r[11] }); });
+  var page = rows.slice(from, from + n), pics = page.filter(function (x) { return x.file; }).map(function (x) { return { roll: x.row + '', pic: 'https://drive.google.com/file/d/' + x.file + '/view' }; });
+  var got = {};
+  for (var i = 0; i < pics.length; i += IDC_CFG.BATCH) { var p = idcPhotos_(pics.slice(i, i + IDC_CFG.BATCH)).photos; Object.keys(p).forEach(function (k) { got[k] = p[k]; }); }
+  page.forEach(function (x) { x.photo = got[x.row + ''] || ''; });
+  return { ok: true, items: page, total: rows.length };
+}
+/** items: [{ row, approve: true|false, reason, photo: true|false, name: true|false, father: true|false }] */
+function idcReqDo_(user, items) {
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    var book = SpreadsheetApp.openById(IDC_CFG.USERS), sh = idcReqSheet_(book), who = idcWho_(user), done = 0;
+    var now = Utilities.formatDate(new Date(), 'Asia/Karachi', 'dd-MM-yyyy HH:mm');
+    items.slice(0, 50).forEach(function (it) {
+      var r = sh.getRange(Number(it.row), 1, 1, 12).getDisplayValues()[0];
+      if (r[2] !== 'Pending') return;
+      if (it.approve) {
+        if (r[8] && it.photo !== false) { var f = DriveApp.getFileById(r[8]); idcStorePhoto_(book, r[1], f.getBlob().getBytes(), 'image/jpeg', who); }
+        var set = {};
+        if (r[5] && it.name !== false) set.STUDENTNAME = r[5].toUpperCase();
+        if (r[6] && it.father !== false) set.FATHERNAME = r[6].toUpperCase();
+        if (Object.keys(set).length) idcSetStrength_(book, r[1], set, false);
+      }
+      sh.getRange(Number(it.row), 3).setValue(it.approve ? 'Approved' : 'Rejected');
+      sh.getRange(Number(it.row), 10, 1, 3).setValues([[who, now, idcS_(it.reason)]]);
+      done++;
+    });
+    idcIndexDrop_();
+    return { ok: true, n: done };
   } finally { lock.releaseLock(); }
 }
 
