@@ -117,7 +117,26 @@ let CTS = (c => c && c.user === user ? c : null)(ls.get('dut_cts', null));   // 
 let V = { tab: ls.get('dut_tab', 'teachers'), q: '', sort: 'name', daysOnly: false, roomPage: true, msg: '', err: '', busy: '' };
 let C = null;                              // worked-out lists (built from EX)
 
-function saveLocal(){ if(EX) EX.saved = false; ls.set('dut_cur', EX); C = null; }
+/* undo: the duty table before each change (last 40 changes) */
+let UNDO = [], LAST = null;
+const snap = () => EX ? JSON.stringify(EX.rows) : null;
+function undoReset(){ UNDO = []; LAST = snap(); undoBtn(); }
+function saveLocal(){
+  if(EX){ const now = snap(); if(LAST != null && now !== LAST){ UNDO.push(LAST); if(UNDO.length > 40) UNDO.shift(); } LAST = now; EX.saved = false; }
+  ls.set('dut_cur', EX); C = null; undoBtn();
+}
+function undo(){
+  if(!UNDO.length || !EX) return;
+  EX.rows = JSON.parse(UNDO.pop()); LAST = snap(); EX.saved = false; ls.set('dut_cur', EX); C = null;
+  V.msg = 'Undone. ' + (UNDO.length ? UNDO.length + ' more step' + (UNDO.length === 1 ? '' : 's') + ' can be undone.' : 'Nothing more to undo.'); V.err = '';
+  const y = scrollY; render(); scrollTo(0, y); undoBtn();
+}
+function undoBtn(){
+  let b = document.getElementById('undoBtn');
+  if(!b){ b = document.createElement('button'); b.id = 'undoBtn'; b.className = 'btn pri'; b.style.cssText = 'position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:50;box-shadow:0 6px 18px rgba(0,0,0,.25);border-radius:999px'; b.onclick = undo; document.body.appendChild(b); }
+  b.textContent = '↶ Undo' + (UNDO.length > 1 ? ' (' + UNDO.length + ')' : ''); b.style.display = UNDO.length ? '' : 'none';
+}
+document.addEventListener('keydown', e => { if((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && !/INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || '')){ e.preventDefault(); undo(); } });
 const newId = () => 'D' + Date.now().toString(36).toUpperCase();
 
 async function api(payload, ms = 120000){
@@ -438,6 +457,15 @@ const COLNAME = { date:'DATE/DAY', time:'TIME', room:'ROOM', cls:'CLASS', sub:'S
 function colsOf(kind){ const c = KINDS[kind].cols.slice(); if(hasTime() && kind !== 'date'){ const i = c.indexOf('date'); c.splice(i + 1, 0, 'time'); } return c; }
 const cellOf = (it, c) => c === 'date' ? (it.dt || '?') + (it.day ? ' ' + it.day : '') : c === 'time' ? it.time || '' : c === 'room' ? (it.room ? it.room + (blockOf(it.room) ? ' · ' + blockOf(it.room) : '') : '—') : c === 'cls' ? it.cls.join(', ') : c === 'sub' ? it.sub.join(', ') : it.staff.join(', ');
 
+/** order in a room: permanent teachers (Professor, Associate, Assistant, Lecturer), then not in the list, then non-teaching staff, then visiting (by rank) — the first is the head */
+function senior(n){
+  const c = catOf(n), base = c === 'W' ? (isVisStatus(n) ? 'V' : '') + rankOf((contactOf(n) || {}).desig) : c;
+  const ty = base === 'NT' ? 2 : !contactOf(n) ? 1 : base[0] === 'V' ? 3 : 0;
+  return [ty, ({ P:4, ASP:3, AP:2, L:1 })[base.replace(/^V/, '')] || 0];
+}
+/** d = the paper (sub): at the same level, the teacher of the paper's subject comes first */
+function orderStaff(L, d){ const own = n => d && d.sub && d.sub.length && isOwnSeat(n, d) ? 1 : 0; return L.map((n, i) => ({ n, i, s:senior(n), o:own(n) })).sort((a, b) => a.s[0] - b.s[0] || b.s[1] - a.s[1] || b.o - a.o || a.i - b.i).map(x => x.n); }
+const staffHtml = L => L.length ? `<b>${esc(L[0])}</b>${L.length > 1 ? ', ' + esc(L.slice(1).join(', ')) : ''}` : '<span class="x">No staff</span>';
 function merge(list, keyFn){
   const m = {};
   list.forEach(r => {
@@ -447,7 +475,7 @@ function merge(list, keyFn){
     if(r.sub && !it.sub.includes(r.sub)) it.sub.push(r.sub);
     r.staff.forEach(n => { if(!it.staff.some(z => nkey(z) === nkey(n))) it.staff.push(n); });
   });
-  return Object.values(m).sort((a, b) => bySlot(a, b) || ncmp(a.room || 'zzz', b.room || 'zzz'));
+  return Object.values(m).map(it => { it.staff = orderStaff(it.staff, it); return it; }).sort((a, b) => bySlot(a, b) || ncmp(a.room || 'zzz', b.room || 'zzz'));
 }
 function compute(){
   if(C) return C;
@@ -462,6 +490,7 @@ function compute(){
       const k = nkey(n); (variants[k] = variants[k] || { k, names:new Set(), n:0 }).names.add(n); variants[k].n++;
       stdList(n).forEach(s => { const sk = nkey(s) || s; if(seen.has(sk)) return; seen.add(sk); staff.push(s); });
     });
+    staff.splice(0, staff.length, ...orderStaff(staff, { sub:[r.sub].filter(Boolean) }));
     if(r.staff && !r.room) check.noRoom.push(i);
     if(!r.staff && (r.room || r.cls)) check.noStaff.push(i);
     if(!r.iso) check.noDate.push(i);
@@ -576,7 +605,7 @@ function groupCards(kind){
     const head = kind === 'teacher' && (gi === 0 || typeOf(G[gi - 1].label) !== typeOf(g.label)) ? `<h3 style="margin:18px 0 0;padding:8px 12px;border-radius:12px;background:${typeOf(g.label) === 'V' ? 'var(--mid-bg)' : typeOf(g.label) === 'O' ? 'var(--bad-bg)' : 'var(--good-bg)'}">${TYPE_T[typeOf(g.label)]} <span class="sub">${G.filter(x => typeOf(x.label) === typeOf(g.label)).length}</span></h3>` : '';
     const wa = kind === 'teacher';
     return head + `<div class="rm"><h3><span>${kind === 'teacher' ? `<button class="lnk" data-t="${esc(g.key)}">${esc(g.label)}</button>${g.clash ? ' <span class="x">⚠ clash</span>' : ''}${wrongShift(g.label) ? ` <span class="dc x">${examShift() === 'M' ? 'EVENING' : 'MORNING'} ONLY</span>` : ''}${kind === 'teacher' ? shareBadge(g.label) + (bothShift(g.label) ? ' <span class="dc">MORNING + EVENING</span>' : '') : ''}${CTS && compute().unknown.includes(g.label) ? ` <span class="dc x">${compute().leftOf[g.label] ? 'LEFT the college' : 'not in Users sheet'}</span>` : ''}` : esc(g.label)}</span><span class="sub">${kind === 'teacher' ? esc(tLine(g.label)) : g.items.length + ' paper' + (g.items.length === 1 ? '' : 's')}${kind === 'teacher' ? ` <button class="btn sm ${lessOf(g.label) ? 'good' : ''}" data-t="${esc(g.key)}">${lessOf(g.label) ? 'Give more · Change' : 'Change'}</button>` : ''}${wa ? ` <button class="btn sm good" data-wa="${esc(g.key)}">WhatsApp</button>` : ''}</span></h3>
-      <div class="tw" style="max-height:none"><table><thead><tr><th>#</th>${cols.map(c => `<th>${COLNAME[c]}</th>`).join('')}</tr></thead><tbody>${g.items.map((it, i) => `<tr><td class="n">${i + 1}</td>${cols.map(c => `<td class="${c === 'date' || c === 'room' ? 'nw' : ''} ${it.x && (c === 'date' || c === 'room') ? 'x' : ''}">${c === 'room' ? '<b>' + esc(cellOf(it, c)) + '</b>' : c === 'staff' && !it.staff.length ? '<span class="x">No staff</span>' : esc(cellOf(it, c))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
+      <div class="tw" style="max-height:none"><table><thead><tr><th>#</th>${cols.map(c => `<th>${COLNAME[c]}</th>`).join('')}</tr></thead><tbody>${g.items.map((it, i) => `<tr><td class="n">${i + 1}</td>${cols.map(c => `<td class="${c === 'date' || c === 'room' ? 'nw' : ''} ${it.x && (c === 'date' || c === 'room') ? 'x' : ''}">${c === 'room' ? '<b>' + esc(cellOf(it, c)) + '</b>' : c === 'staff' ? staffHtml(it.staff) : esc(cellOf(it, c))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
   }).join('');
 }
 function summaryHtml(){
@@ -1351,10 +1380,10 @@ function planHtml(){
             ${tm ? `<label class="pf">Time<input class="pin" data-pg="${ids}" data-f="time" value="${esc(r0.time)}" style="width:110px"></label>` : ''}
             <span class="sub" style="flex:1;align-self:center">${L.length} room${L.length === 1 ? '' : 's'} · ${pst} staff</span>
             <button class="btn sm" data-pdup="${L[L.length - 1]}">+ Room for this paper</button><button class="ico" data-pdelg="${ids}" title="Delete this paper" aria-label="Delete this paper">🗑</button></div>
-          ${L.map(i => { const r = EX.rows[i], names = rowNames(i), cap = roomCap(r.room); return `<div class="prr ${names.length ? '' : 'nostaff'}" id="prow${i}">
+          ${L.map(i => { const r = EX.rows[i], names = orderStaff(rowNames(i), { sub:[r.sub].filter(Boolean) }), cap = roomCap(r.room); return `<div class="prr ${names.length ? '' : 'nostaff'}" id="prow${i}">
             <label class="pf">Room<input class="pin cell" list="pl-room" data-i="${i}" data-f="room" value="${esc(r.room)}" placeholder="e.g. 20" style="width:120px"></label>
             <label class="pf">Students${cap != null ? ' / ' + cap : ''}<input class="pin cell" type="number" min="0" inputmode="numeric" data-i="${i}" data-f="n" value="${esc(r.n == null ? '' : r.n)}" placeholder="—" style="width:80px"></label>
-            <div class="pst">${names.map(n => `<span class="dc ${wrongShift(n) ? 'x' : ''}" title="${esc(tLine(n))}">${esc(n)} <button class="lnk" data-prm="${i}|${esc(nkey(n))}" aria-label="Remove ${esc(n)}">✕</button></span>`).join('') || '<span class="x" style="font-size:13px;font-weight:800">No staff yet</span>'}<button class="btn sm good" data-padd="${i}">+ Teacher</button></div>
+            <div class="pst">${names.map((n, q) => `<span class="dc ${wrongShift(n) ? 'x' : ''}" title="${esc(tLine(n))}" style="${q === 0 ? 'font-weight:800;border-color:var(--brown)' : ''}">${q === 0 ? '<span style="font-size:10px;color:var(--brown)">HEAD</span> ' : ''}${esc(n)} <button class="lnk" data-prm="${i}|${esc(nkey(n))}" aria-label="Remove ${esc(n)}">✕</button></span>`).join('') || '<span class="x" style="font-size:13px;font-weight:800">No staff yet</span>'}<button class="btn sm good" data-padd="${i}">+ Teacher</button></div>
             <button class="ico" data-del="${i}" title="Delete this room" aria-label="Delete this room">✕</button></div>`; }).join('')}</div>`; }).join('')}
       </div>
       <div class="pfoot"><button class="btn sm pri" data-pday="${esc(iso)}">+ New paper on this day</button>
@@ -1502,7 +1531,7 @@ function useParsed(res, how){
   const ti = ($('#iTitle') || {}).value;
   EX = { id:newId(), title:(ti && ti.trim()) || title || 'Duty list', rows, saved:false, timing:(EX && EX.timing) || '08:30-12:30 PM (morning)' };
   if(title && /duty|detention|exam|test/i.test(title) && (!ti || /^Detention Exam \d{4}$/.test(ti))) EX.title = title;
-  ls.set('dut_cur', EX); C = null;
+  ls.set('dut_cur', EX); C = null; undoReset();
   const c = compute();
   V.err = ''; V.busy = ''; V.msg = `Read ${rows.length} rows ${how}: ${c.L.teacher.length} teachers, ${c.L.room.length} rooms, ${c.dates.length} days.` + (c.clashes.length ? ` ${c.clashes.length} clash(es) — see Check.` : '');
   const ng = fxCount();
@@ -1706,7 +1735,7 @@ async function openSaved(){
       try{
         const r = await api({ action:'dut_load', id:b.dataset.open }, 60000);
         EX = { id:r.exam.id, title:r.exam.title, timing:r.exam.timing || '08:30-12:30 PM (morning)', rows:r.exam.rows.map(x => { const p = parseDate(x.dt); return { dt:p.dt || x.dt, iso:p.iso, day:p.day || x.day, time:x.time || '', cls:x.cls, sub:x.sub, room:x.room, staff:x.staff, n:x.n || '' }; }), saved:true, sheet:r.exam.sheet || '', sheetUrl:r.exam.sheetUrl || '' };
-        ls.set('dut_cur', EX); C = null; V.msg = 'Opened “' + EX.title + '”.'; V.err = ''; $('#dlg').close(); render();
+        ls.set('dut_cur', EX); C = null; undoReset(); V.msg = 'Opened “' + EX.title + '”.'; V.err = ''; $('#dlg').close(); render();
       }catch(err){ alert(err.message); b.disabled = false; b.textContent = 'Open'; }
     }
     if(b.dataset.rm){
@@ -1795,7 +1824,7 @@ const tableStyle = (extra) => Object.assign({
   headStyles:{ fillColor:BROWN, textColor:[255, 255, 255], fontStyle:'bold', fontSize:9.5, halign:'left', lineColor:BROWN },
   alternateRowStyles:{ fillColor:SOFT }, bodyStyles:{ fillColor:[255, 255, 255] }
 }, extra);
-const WIDTH = { '#':9, date:44, time:30, room:24, cls:34, sub:52 };      // staff takes the rest
+const WIDTH = { '#':9, date:40, time:28, room:24, cls:30, sub:44, head:40 };      // staff takes the rest
 
 async function buildPdf(kind, only){
   await pdfLibs(); await logo();
@@ -1806,16 +1835,18 @@ async function buildPdf(kind, only){
   band(doc, kt);
   let y = 30;
   if(KINDS[kind]){
-    const G = only || groups(kind), cols = colsOf(kind);
+    const G = only || groups(kind), cols = colsOf(kind).flatMap(c => c === 'staff' ? ['head', 'others'] : [c]);
+    const PCOL = Object.assign({}, COLNAME, { head:'HEAD (IN-CHARGE)', others:'OTHER STAFF' });
+    const cellP = (it, c) => c === 'head' ? (it.staff[0] || '—') : c === 'others' ? it.staff.slice(1).join(', ') : cellOf(it, c);
     const colStyles = { 0:{ cellWidth:WIDTH['#'], halign:'center', fontStyle:'bold', textColor:BROWN } };
-    cols.forEach((c, i) => { if(WIDTH[c]) colStyles[i + 1] = { cellWidth:WIDTH[c] }; if(c === 'room' || c === 'date') colStyles[i + 1] = Object.assign(colStyles[i + 1] || {}, { fontStyle:'bold' }); });
+    cols.forEach((c, i) => { if(WIDTH[c]) colStyles[i + 1] = { cellWidth:WIDTH[c] }; if(c === 'room' || c === 'date' || c === 'head') colStyles[i + 1] = Object.assign(colStyles[i + 1] || {}, { fontStyle:'bold' }); });
     G.forEach((g, gi) => {
       if(gi > 0){ if(V.newPage || y > H - 45){ doc.addPage(); band(doc, kt); y = 30; } else y += 6; }
       const sub = kind === 'teacher' ? tLine(g.label) + (g.clash ? '  ·  clash shown in red' : '') : g.items.length + ( ' paper' + (g.items.length === 1 ? '' : 's'));
       y = gHead(doc, y, g.label, sub);
       doc.autoTable(tableStyle({
-        startY:y, head:[['#', ...cols.map(c => COLNAME[c])]],
-        body:g.items.map((it, i) => [i + 1, ...cols.map(c => cellOf(it, c))]),
+        startY:y, head:[['#', ...cols.map(c => PCOL[c])]],
+        body:g.items.map((it, i) => [i + 1, ...cols.map(c => cellP(it, c))]),
         columnStyles:colStyles, ...hook,
         didParseCell:h => { if(h.section === 'body' && g.items[h.row.index] && g.items[h.row.index].x){ h.cell.styles.textColor = RED; h.cell.styles.fontStyle = 'bold'; } }
       }));
@@ -1963,7 +1994,7 @@ function makeDocx(){
     const key = (f.iso || '?') + '|' + f.time, first = key !== prev; prev = key;
     const dateP = first ? para(run(f.dt || '', { b:1 })) + para(run(f.day || '')) + (f.time ? para(run(f.time, { sz:18 })) : '') : '';
     const room = f.room ? f.room + (blockOf(f.room) ? ' (' + blockOf(f.room) + ')' : '') : '';
-    const staff = f.staff.map((nm, q) => (q ? run(', ') : '') + run(nm, clash.has(nkey(nm) + '|' + f.iso + '|' + (f.time || '') + '|' + rk(f.room)) ? { color:'C81E1E', b:1 } : {})).join('');
+    const staff = f.staff.map((nm, q) => (q ? run(', ') : '') + run(nm, q === 0 ? { b:1 } : clash.has(nkey(nm) + '|' + f.iso + '|' + (f.time || '') + '|' + rk(f.room)) ? { color:'C81E1E', b:1 } : {})).join('');
     const fill = n % 2 ? 'FBEDEA' : '';
     body += `<w:tr><w:trPr><w:cantSplit/></w:trPr>${cell(0, dateP, { vm:first ? 'restart' : 'cont' })}${cell(1, para(run(f.cls)), { fill })}${cell(2, para(run(f.sub)), { fill })}${cell(3, para(run(room, { b:1 })), { fill })}${cell(4, para(staff), { fill })}</w:tr>`;
   });
@@ -1995,7 +2026,7 @@ async function makeSheet(){
   render();
 }
 
-render();
+render(); undoReset();
 if(CTS && (!CTS.users || !CTS.shv || !CTS.subv) && navigator.onLine) setTimeout(() => loadCts(true), 1500);   // a teacher list saved before the timetable was used
 </script>
 </body>
