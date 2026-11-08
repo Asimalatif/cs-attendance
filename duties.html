@@ -1387,12 +1387,42 @@ function unkApply(){
   V.msg = `${a} name(s) joined to app teachers, ${m} marked as not teaching. Press “Save names & fixes on server” to keep this.`; V.err = '';
   refreshTab();
 }
+/** everyone with NO duty in this list — teachers (permanent, visiting, evening-only) and lab / non-teaching staff — free for other exam work */
+function freeStaff(c){
+  const have = new Set(c.L.teacher.map(t => nkey(t.label))), seen = new Set(), out = [];
+  const push = (n, labNote) => { const k = nkey(n); if(!k || seen.has(k) || have.has(k)) return; seen.add(k); out.push(n); };
+  CTS.list.filter(x => (CTS.users ? x.users : true)).forEach(x => { if(!offDuty(x.name)) push(x.name); });
+  Object.values(NOTES).forEach(x => { if(x.v === NT_NOTE) push(x.n); });            // lab staff marked in Names (may not be in the Users sheet)
+  return out.sort(ncmp);
+}
+function freeGroups2(c){
+  const F = freeStaff(c), lab = n => typeOf(n) === 'N' || noteOf(n) === NT_NOTE;
+  return [['Permanent teachers', F.filter(n => !lab(n) && !wrongShift(n) && typeOf(n) === 'P')],
+    ['Visiting teachers', F.filter(n => !lab(n) && !wrongShift(n) && typeOf(n) !== 'P')],
+    ['Lab / non-teaching staff', F.filter(lab)],
+    [(examShift() === 'M' ? 'Evening' : 'Morning') + '-only teachers (no duty in this exam)', F.filter(n => !lab(n) && wrongShift(n))]].filter(g => g[1].length);
+}
+function freeText(c){
+  return `${EX.title || 'Duty list'} — staff with no invigilation duty (free for other exam work)\n` + freeGroups2(c).map(([lab, L]) => `\n${lab} (${L.length}):\n` + L.map((n, i) => `${i + 1}. ${n}${(contactOf(n) || {}).dept ? ' — ' + contactOf(n).dept : ''}`).join('\n')).join('\n');
+}
+function freePrint(c){
+  const G = freeGroups2(c), w = window.open('', '_blank'); if(!w) return alert('Allow pop-ups to print.');
+  w.document.write(`<!doctype html><title>No duty — ${esc(EX.title || '')}</title><style>body{font:14px system-ui,sans-serif;margin:24px;color:#2a1a14}h1{font-size:20px;margin:0}h2{font-size:15px;margin:18px 0 6px;color:#6b3423}table{border-collapse:collapse;width:100%}td,th{border:1px solid #d9c4bc;padding:5px 8px;text-align:left}th{background:#6b3423;color:#fff}.s{color:#7c6159}</style>
+    <h1>JINNAH COLLEGE FOR WOMEN</h1><div class="s">${esc(EX.title || '')} · staff with no invigilation duty — free for other exam work · ${esc(longDate())}</div>
+    ${G.map(([lab, L]) => `<h2>${esc(lab)} (${L.length})</h2><table><tr><th>#</th><th>Name</th><th>Designation</th><th>Department</th><th>Shift</th><th>Contact</th></tr>${L.map((n, i) => { const ct = contactOf(n) || {}; return `<tr><td>${i + 1}</td><td><b>${esc(n)}</b></td><td>${esc(ct.desig || (noteOf(n) === NT_NOTE ? 'Lab staff' : ''))}</td><td>${esc(ct.dept || '')}</td><td>${esc(shiftTxt(ct))}</td><td>${esc(ct.phone || ct.wa || '')}</td></tr>`; }).join('')}</table>`).join('')}
+    ${'<scr' + 'ipt>'}onload=()=>print()${'</scr' + 'ipt>'}`);
+  w.document.close();
+}
 function missingHtml(c){
   if(!CTS) return '';
-  const marked = Object.entries(NOTES).filter(([k]) => nameIndex().ct[k]);
-  return `<section class="card" style="border-top-color:var(--good)"><h3>Teachers with no duty <span class="ok">${c.missing.length}</span></h3>
-    <div class="sub">${CTS.users ? 'Every teacher in the <b>Users</b> sheet (permanent and visiting) who' : 'Teachers in the timetable who'} got no duty in this list — useful for a fair share. When a teacher has no invigilation for a reason (principal, exam / stationery staff, on leave…), choose it: she is then not counted here.</div>
-    ${c.missing.length ? [['P', 'Permanent'], ['V', 'Visiting'], ['N', 'Non-teaching staff']].map(([ty, lab]) => { const L = c.missing.filter(n => typeOf(n) === ty); return L.length ? `<h3 style="margin-top:12px">${lab} <span class="ok">${L.length}</span></h3><div class="tw" style="max-height:none"><table><tbody>${L.map(n => { const ct = contactOf(n) || {}; return `<tr style="background:var(--good-bg)"><td><b class="ok">${esc(n)}</b> <button class="btn sm good" data-t="${esc(nkey(n))}">Give duties</button><div class="sub">${esc(tLine(n))}</div></td><td><select class="sq" data-note="${esc(nkey(n))}" data-name="${esc(n)}" style="height:38px;min-width:210px"><option value="">— no duty —</option>${NOTE_OPTS.map(o => `<option>${esc(o)}</option>`).join('')}</select></td></tr>`; }).join('')}</tbody></table></div>` : ''; }).join('') : '<div class="note ok">Every teacher has a duty.</div>'}
+  const marked = Object.entries(NOTES).filter(([k, x]) => nameIndex().ct[k] && x.v !== NT_NOTE);
+  const G = freeGroups2(c), total = G.reduce((a, g) => a + g[1].length, 0);
+  return `<section class="card" style="border-top-color:var(--good)"><h3>No duty — free for other exam work <span class="ok">${total}</span></h3>
+    <div class="sub">Teachers and lab / non-teaching staff with <b>no invigilation duty</b> in this list (Users sheet + staff marked as lab staff in Names). Use them for other exam tasks, or tap <b>Give duties</b>. Staff with a reason for no duty (principal, exam / stationery staff, on leave …) are listed at the end and not counted.</div>
+    <div class="acts"><button class="btn sm" id="frCopy">Copy list</button><button class="btn sm" id="frPrint">Print / PDF</button><button class="btn sm good" id="frWa">Send list on WhatsApp</button></div>
+    ${G.length ? G.map(([lab, L]) => `<h3 style="margin-top:12px">${esc(lab)} <span class="ok">${L.length}</span></h3><div class="tw" style="max-height:none"><table><tbody>${L.map(n => { const ct = contactOf(n) || {};
+      return `<tr style="background:var(--good-bg)"><td><b class="ok">${esc(n)}</b> ${ct.name || CTS.list.some(x => nkey(x.name) === nkey(n)) ? `<button class="btn sm good" data-t="${esc(nkey(n))}">Give duties</button>` : ''}<div class="sub">${esc([ct.desig || (noteOf(n) === NT_NOTE ? 'Lab staff' : ''), ct.dept, /visit/i.test(ct.status || '') ? 'Visiting' : '', shiftTxt(ct)].filter(Boolean).join(' · '))}</div></td>
+        <td><select class="sq" data-note="${esc(nkey(n))}" data-name="${esc(n)}" style="height:38px;min-width:210px"><option value="">— free for other work —</option>${NOTE_OPTS.filter(o => o !== NT_NOTE).map(o => `<option>${esc(o)}</option>`).join('')}</select></td></tr>`; }).join('')}</tbody></table></div>`).join('') : '<div class="note ok">Everybody has a duty.</div>'}
     ${marked.length ? `<div class="sub" style="margin-top:10px">Not on duty lists: ${marked.map(([k, x]) => `<span class="dc">${esc(x.n)} — ${esc(x.v)} <button class="lnk" data-unclr="${esc(k)}" aria-label="Remove">✕</button></span>`).join('')}</div>` : ''}</section>`;
 }
 
@@ -1727,6 +1757,9 @@ function wireTab(){
     if(t.id === 'bkSet') return blockRange();
     if(t.id === 'bWaAll') return waAll();
     if(t.id === 'bSwap') return swapDialog('');
+    if(t.id === 'frCopy'){ const x = freeText(compute()); (navigator.clipboard ? navigator.clipboard.writeText(x) : Promise.reject()).then(() => { t.textContent = 'Copied ✓'; }).catch(() => prompt('Copy:', x)); return; }
+    if(t.id === 'frPrint') return freePrint(compute());
+    if(t.id === 'frWa') return waOpen('', freeText(compute()));
     if(t.dataset.rsw){ const [k, ...sk] = t.dataset.rsw.split('|'); return swapDialog(k, sk.join('|')); }
     if(t.dataset.rrel){ const [k, ...sk] = t.dataset.rrel.split('|'); return releaseDialog(k, sk.join('|')); }
     if(t.id === 'bAuto') return autoDialog();
