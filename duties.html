@@ -1160,15 +1160,30 @@ function roomSubjOptions(x){
   return out.sort((a, b) => a.rank - b.rank || (lessOf(b.t) ? 1 : 0) - (lessOf(a.t) ? 1 : 0) || ncmp(a.t, b.t)).slice(0, 15);
 }
 let RSX = {};
+/** one choice per room; a subject teacher is used for ONE room a day only (never pushed into several rooms the same day) */
+function rsSel(L){
+  const out = {}, used = {}, gone = {}, tOf = id => id ? nkey(id.split('§')[0]) : '';
+  const U = iso => (used[iso] = used[iso] || new Set());
+  const leaves = z => z.o.d1 && isOwnSeat(z.t, z.o.d1) ? seatKey(z.o.d1) : '';        // she leaves her own subject's room
+  const canLeave = z => { const r = leaves(z); if(!r) return true; const left = z.o.d1.staff.filter(n => isOwnSeat(n, z.o.d1)).length - (gone[r] || 0); return left > 1; };
+  const take = (iso, z) => { U(iso).add(nkey(z.t)); const r = leaves(z); if(r) gone[r] = (gone[r] || 0) + 1; };
+  L.forEach(x => { const k = seatKey(x.sd); if(RSX[k] !== undefined){ out[k] = RSX[k]; const z = RSX[k] && roomSubjOptions(x).find(q => q.id === RSX[k]); if(z) take(x.sd.iso, z); } });
+  L.forEach(x => { const k = seatKey(x.sd); if(out[k] !== undefined) return; const o = roomSubjOptions(x).find(z => !U(x.sd.iso).has(nkey(z.t)) && canLeave(z)); out[k] = o ? o.id : ''; if(o) take(x.sd.iso, o); });
+  return out;
+}
 function roomSubjHtml(c){
   if(!CTS) return '';
-  const L = roomSubjList();
+  const L = roomSubjList(), SEL = rsSel(L);
   if(!L.length) return `<section class="card"><h3>Rooms without a subject teacher <span class="ok">0</span></h3><div class="note ok">Every room has at least one teacher of its paper’s subject.</div></section>`;
   let n = 0;
   const rows = L.map(x => {
-    const k = seatKey(x.sd), opts = roomSubjOptions(x), sel = RSX[k] !== undefined ? RSX[k] : (opts[0] ? opts[0].id : ''); if(sel) n++;
+    const k = seatKey(x.sd), sel = SEL[k] || '';
+    const taken = new Set(L.filter(y => y !== x && y.sd.iso === x.sd.iso && SEL[seatKey(y.sd)]).map(y => nkey(SEL[seatKey(y.sd)].split('§')[0])));
+    const gone = {}; L.forEach(y => { const v = y !== x && SEL[seatKey(y.sd)]; const z = v && roomSubjOptions(y).find(q => q.id === v); if(z && z.o.d1 && isOwnSeat(z.t, z.o.d1)){ const r = seatKey(z.o.d1); gone[r] = (gone[r] || 0) + 1; } });
+    const stays = z => !(z.o.d1 && isOwnSeat(z.t, z.o.d1)) || z.o.d1.staff.filter(q => isOwnSeat(q, z.o.d1)).length - (gone[seatKey(z.o.d1)] || 0) > 1;
+    const all = roomSubjOptions(x), opts = all.filter(z => sel === z.id || (!taken.has(nkey(z.t)) && stays(z))); if(sel) n++;
     return `<tr style="background:var(--mid-bg)"><td class="nw"><b>${esc(dayShort(x.sd.day) + ' ' + (x.sd.dt || '').slice(0, 5))}</b><div class="sub">${esc(roomLbl(x.sd.room))}</div></td><td><b>${esc(x.sd.sub.join(', '))}</b><div class="sub">${esc(x.sd.cls.join(', '))} · now: ${esc(x.sd.staff.join(', '))}</div></td>
-      <td>${!x.cand.length ? '<span class="x">No teacher of this subject in the teacher list</span>' : opts.length ? `<select class="sq" data-rsx="${esc(k)}" style="height:40px;min-width:240px;max-width:440px"><option value="">— leave —</option>${opts.map(z => `<option value="${esc(z.id)}" ${sel === z.id ? 'selected' : ''}>${esc(z.t)}: ${esc(ownLbl(z.o).split(' — ').slice(1).join(' — ') || ownLbl(z.o))}</option>`).join('')}</select>` : `<span class="x">Subject teachers (${esc(x.cand.slice(0, 4).join(', '))}${x.cand.length > 4 ? '…' : ''}) are all needed in their own rooms that day</span>`}</td></tr>`;
+      <td>${!x.cand.length ? '<span class="x">No teacher of this subject in the teacher list</span>' : !opts.length && all.length ? '<span style="color:var(--mid);font-weight:700">No subject teacher left for this room today — the others are already chosen for another room or are the only subject teacher of their own room. Leave it (one teacher, one room a day).</span>' : opts.length ? `<select class="sq" data-rsx="${esc(k)}" style="height:40px;min-width:240px;max-width:440px"><option value="">— leave —</option>${opts.map(z => `<option value="${esc(z.id)}" ${sel === z.id ? 'selected' : ''}>${esc(z.t)}: ${esc(ownLbl(z.o).split(' — ').slice(1).join(' — ') || ownLbl(z.o))}</option>`).join('')}</select>` : `<span class="x">Subject teachers (${esc(x.cand.slice(0, 4).join(', '))}${x.cand.length > 4 ? '…' : ''}) are all needed in their own rooms that day</span>`}</td></tr>`;
   }).join('');
   return `<section class="card" style="border-top-color:var(--mid)"><h3>Rooms without a subject teacher <span style="color:var(--mid)">${L.length}</span></h3>
     <div class="sub">No teacher of the paper’s subject is on duty in these rooms. Suggested exchange first: a subject teacher <b>switches rooms</b> the same day with one of this room’s staff (★ both end up in their own subject; counts unchanged), or <b>swaps a day</b>, takes over from a teacher with MORE, or joins as extra. A subject teacher is never taken from a room where she is its only subject teacher.</div>
@@ -1176,14 +1191,17 @@ function roomSubjHtml(c){
     <div class="acts"><button class="btn pri" id="rsGo" ${n ? '' : 'disabled'}>Apply ${n} exchange${n === 1 ? '' : 's'}</button></div></section>`;
 }
 function roomSubjApply(){
-  const want = roomSubjList().map(x => { const k = seatKey(x.sd), opts = roomSubjOptions(x); return { k, id:RSX[k] !== undefined ? RSX[k] : (opts[0] ? opts[0].id : '') }; });
-  let n = 0, skipped = 0;
-  want.forEach(({ k, id }) => {
+  const L0 = roomSubjList(), SEL = rsSel(L0), want = L0.map(x => ({ k:seatKey(x.sd), iso:x.sd.iso, id:SEL[seatKey(x.sd)] || '' }));
+  let n = 0, skipped = 0; const used = {};
+  const U = iso => (used[iso] = used[iso] || new Set());
+  want.forEach(({ k, iso, id }) => {
     if(!id) return;
     const x = roomSubjList().find(z => seatKey(z.sd) === k); if(!x){ return; }          // fixed meanwhile
     const [t, oid] = id.split('§');
-    if(ownApplyOne(t, x.sd.iso, oid)) n++;
-    else { const best = roomSubjOptions(x)[0]; if(best && ownApplyOne(best.t, x.sd.iso, best.o.id)) n++; else skipped++; }
+    if(U(iso).has(nkey(t))){ skipped++; return; }                                        // she was already put in another room that day
+    const fresh = roomSubjOptions(x);                                                       // the room she leaves must keep a subject teacher (state after the earlier changes)
+    const ok = (fresh.some(z => z.id === id) && ownApplyOne(t, iso, oid)) || (() => { const best = fresh.find(z => !U(iso).has(nkey(z.t))); return best && ownApplyOne(best.t, iso, best.o.id) && (U(iso).add(nkey(best.t)), true); })();
+    if(ok){ n++; U(iso).add(nkey(t)); } else skipped++;
   });
   RSX = {};
   V.msg = n + ' room(s) now have a teacher of their subject' + (skipped ? ' · ' + skipped + ' could not be changed any more' : '') + '. Download the PDFs or the corrected Word file again.'; V.err = '';
