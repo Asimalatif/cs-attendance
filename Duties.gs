@@ -25,7 +25,7 @@ var DUT_CFG = {
   FOLDER: 'JCW Duty Lists',                                // Drive folder for the Google Sheets
   MAX_ROWS: 3000                                           // rows in one list (safety)
 };
-var DUT_HEAD = ['Exam ID', 'Exam', 'Date', 'Day', 'Time', 'Class', 'Subject', 'Room', 'Staff on duty (as written)', 'Teachers', 'Duty timings', 'Saved by', 'Saved at', 'Google Sheet'];
+var DUT_HEAD = ['Exam ID', 'Exam', 'Date', 'Day', 'Time', 'Class', 'Subject', 'Room', 'Staff on duty (as written)', 'Teachers', 'Duty timings', 'Saved by', 'Saved at', 'Google Sheet', 'Students'];
 
 function dutAuthorize() {
   SpreadsheetApp.openById(DUT_CFG.USERS).getName();
@@ -85,6 +85,8 @@ function dutTab_(name, head) {
     sh.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight('bold').setBackground('#6B3423').setFontColor('#ffffff');
     sh.setFrozenRows(1);
     sh.getRange('A:Z').setNumberFormat('@');          // keep dates like 17/02/2026 as text
+  } else if (sh.getLastColumn() < head.length) {
+    sh.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight('bold').setBackground('#6B3423').setFontColor('#ffffff');   // a new column (e.g. Students) on an older sheet
   }
   return sh;
 }
@@ -128,7 +130,7 @@ function dutLoad_(id) {
   var sheet = d[0][13] || '';
   return { ok: true, exam: {
     id: id, title: d[0][1], timing: d[0][10], sheet: sheet, sheetUrl: sheet ? 'https://docs.google.com/spreadsheets/d/' + sheet + '/edit' : '',
-    rows: d.map(function (r) { return { dt: r[2], day: r[3], time: r[4], cls: r[5], sub: r[6], room: r[7], staff: r[8] }; })
+    rows: d.map(function (r) { return { dt: r[2], day: r[3], time: r[4], cls: r[5], sub: r[6], room: r[7], staff: r[8], n: r[14] || '' }; })
   } };
 }
 
@@ -143,7 +145,7 @@ function dutSave_(user, ex) {
     var at = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm'), by = user.teacher || user.username || '';
     var keep = R.rows.filter(function (r) { return r[0] !== id; });
     var add = rows.map(function (r) {
-      return [id, dutS_(ex.title), dutS_(r.dt), dutS_(r.day), dutS_(r.time), dutS_(r.cls), dutS_(r.sub), dutS_(r.room), dutS_(r.staff), dutS_(r.teachers), dutS_(ex.timing), by, at, sheet];
+      return [id, dutS_(ex.title), dutS_(r.dt), dutS_(r.day), dutS_(r.time), dutS_(r.cls), dutS_(r.sub), dutS_(r.room), dutS_(r.staff), dutS_(r.teachers), dutS_(ex.timing), by, at, sheet, dutS_(r.n)];
     });
     dutWrite_(R.sh, keep.concat(add));
     return { ok: true, count: add.length };
