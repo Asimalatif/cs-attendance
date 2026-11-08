@@ -1001,9 +1001,9 @@ function sgApply(){
 const SUBALIAS = { MATHEMATICS:'MATH', MATHS:'MATH', MATH:'MATH', GMATHS:'MATH', GMATH:'MATH', GENERALMATHEMATICS:'MATH', GENERALMATHS:'MATH', PAKISTANSTUDIES:'PAKSTUDY', PAKSTUDIES:'PAKSTUDY', PAKSTUDY:'PAKSTUDY', ISLAMIAT:'ISLAMIYAT', ISLAMYAT:'ISLAMIYAT', CS:'COMPUTERSCIENCE', COMPUTER:'COMPUTERSCIENCE', PSYCOLOGY:'PSYCHOLOGY', STATSTIC:'STATISTICS', STATISTIC:'STATISTICS', STATS:'STATISTICS' };
 const subjK = x => { const k = vnorm(x).replace(/^(ADVANCED|ADVANCE|ADV)/, '').replace(/(ADVANCED|ADVANCE|ADV)$/, ''); return SUBALIAS[k] || k; };
 function subjMatch(a, b){ const x = subjK(a), y = subjK(b); if(x.length < 3 || y.length < 3) return false; return x === y || x.includes(y) || y.includes(x) || ratio(collapse(x), collapse(y)) >= .82; }
-const paperSubs = d => (d.sub || []).flatMap(x => String(x).split(/[\/,&+]+/)).map(x => x.trim()).filter(Boolean);
+const paperSubs = d => ((d && d.sub) || []).flatMap(x => String(x).split(/[\/,&+]+/)).map(x => x.trim()).filter(Boolean);
 const mySubs = n => { const ct = contactOf(n) || {}; return [ct.dept, ...(ct.subs || [])].filter(Boolean); };
-const isOwnSeat = (n, d) => { const M = mySubs(n); return M.length > 0 && paperSubs(d).some(ps => M.some(ms => subjMatch(ps, ms))); };
+const isOwnSeat = (n, d) => { if(!d) return false; const M = mySubs(n); return M.length > 0 && paperSubs(d).some(ps => M.some(ms => subjMatch(ps, ms))); };
 function seatsAll(){ const c = compute(); return c.L.room.flatMap(g => g.items); }
 const seatKey = d => (d.iso || '?') + '|' + (d.time || '') + '|' + vnorm(d.room);
 /** ways to give her one duty in her own subject */
@@ -1116,7 +1116,7 @@ function roomSubjOptions(x){
     ownOptions(t, x.sd.iso).forEach(o => {
       if(seatKey(o.sd) !== seatKey(x.sd)) return;
       if((o.kind === 'switch' || o.kind === 'move') && isOwnSeat(t, o.d1) && !o.d1.staff.some(z => nkey(z) !== nkey(t) && isOwnSeat(z, o.d1))) return;   // her own room would lose its only subject teacher
-      const rank = { switch:o.x && isOwnSeat(o.x, o.d1) ? 0 : 1, swap:o.x && isOwnSeat(o.x, o.d1) ? 2 : 3, take:4, move:5, add:6 }[o.kind];
+      const rank = { switch:o.x && o.d1 && isOwnSeat(o.x, o.d1) ? 0 : 1, swap:o.x && o.d1 && isOwnSeat(o.x, o.d1) ? 2 : 3, take:4, move:5, add:6 }[o.kind];
       out.push({ t, o, id:t + '§' + o.id, rank });
     });
   });
