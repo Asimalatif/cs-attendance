@@ -1276,7 +1276,7 @@ function setHtml(){
     <div class="sub">They also invigilate the evening exam. Morning / evening comes from the Timetable sheet (e.g. a permanent lecturer with evening classes: ${Math.max(0, (parseInt(SET.max.L, 10) || 0) - (parseInt(SET.both, 10) || 0))} instead of ${esc(SET.max.L || '—')}).</div>
     <div class="acts"><button class="btn sm" id="sReset">Use the college numbers (5, 5, 3, 3 · 9, 5, 4, 3 · non-teaching 6 · 2 fewer)</button></div></section>
     <section class="card"><h3>Teachers</h3><div class="sub">Category is worked out from <b>designation</b> and <b>Status</b> (Visiting) in the Users sheet — lab staff, librarian, clerk, attendant … are <b>Non-teaching staff</b>. Change it here if it is wrong. Tick <b>Elderly / weak</b> for ill or disabled staff: they get the “Elderly or weak” number of duties.</div>
-    ${CTS ? '' : '<div class="acts"><button class="btn sm pri" id="bCts">Load the teacher list</button></div>'}
+    <div class="acts">${CTS ? `<span class="sub">Teacher list read ${esc(new Date(CTS.at).toLocaleString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }))} — changed a designation or status in the Users sheet?</span><button class="btn sm pri" id="bCts">Reload teacher list</button>` : '<button class="btn sm pri" id="bCts">Load the teacher list</button>'}</div>
     <input class="sq" id="sq2" type="search" placeholder="Search teacher" style="margin-top:8px" autocomplete="off">
     <div class="tw" id="setL"><table><thead><tr><th>Teacher</th><th>Category</th><th>Elderly / weak</th><th>Duties</th></tr></thead><tbody>${L.map(n => { const k = nkey(n), ct = contactOf(n) || {}, o = (SET.cat[k] || {}).c || '';
       return `<tr data-q="${esc((n + ' ' + (ct.desig || '') + ' ' + (ct.dept || '')).toLowerCase())}"><td class="nw"><b>${esc(n)}</b><div class="sub">${esc([ct.desig, ct.dept, ct.status].filter(Boolean).join(' · '))}</div></td>
@@ -2705,7 +2705,8 @@ async function makeSheet(){
 }
 
 render(); undoReset();
-if(CTS && (!CTS.users || !CTS.shv || !CTS.subv || !CTS.clv) && navigator.onLine) setTimeout(() => loadCts(true), 1500);   // a teacher list saved before the timetable was used
+// read the Users sheet / timetable again in the background when the saved copy is old (designation, status, department changes)
+if(CTS && (!CTS.users || !CTS.shv || !CTS.subv || !CTS.clv || Date.now() - (CTS.at || 0) > 30 * 60 * 1000) && navigator.onLine) setTimeout(() => loadCts(true), 1500);   // a teacher list saved before the timetable was used
 </script>
 </body>
 </html>
