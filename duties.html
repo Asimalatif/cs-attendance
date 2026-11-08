@@ -919,81 +919,95 @@ const isOwnSeat = (n, d) => { const M = mySubs(n); return M.length > 0 && paperS
 function seatsAll(){ const c = compute(); return c.L.room.flatMap(g => g.items); }
 const seatKey = d => (d.iso || '?') + '|' + (d.time || '') + '|' + vnorm(d.room);
 /** ways to give her one duty in her own subject */
-function ownOptions(n){
-  const c = compute(), k = nkey(n), me = c.L.teacher.find(t => nkey(t.label) === k) || { items:[] }, mine = new Set(me.items.map(x => x.iso));
-  const busyOn = (x, iso) => (c.L.teacher.find(t => nkey(t.label) === nkey(x)) || { items:[] }).items.some(y => y.iso === iso);
-  const own = seatsAll().filter(sd => sd.iso && !mine.has(sd.iso) && isOwnSeat(n, sd));
-  const swap = [], take = [], add = [];
-  own.forEach(sd => {
+/** dates on which a paper of her subject is held */
+const subjDays = n => [...new Set(seatsAll().filter(sd => sd.iso && isOwnSeat(n, sd)).map(sd => sd.iso))].sort();
+const myItems = n => (compute().L.teacher.find(t => nkey(t.label) === nkey(n)) || { items:[] }).items;
+/** ways to put her in a room of her subject's paper on date iso */
+function ownOptions(n, iso){
+  const c = compute(), k = nkey(n), me = myItems(n), meDay = me.find(x => x.iso === iso), sdays = new Set(subjDays(n));
+  const busyOn = (x, day) => myItems(x).some(y => y.iso === day);
+  const seats = seatsAll().filter(sd => sd.iso === iso && isOwnSeat(n, sd) && !sd.staff.some(z => nkey(z) === k));
+  const both = [], other = [], take = [], add = [], move = [];
+  seats.forEach(sd => {
     sd.staff.forEach(x => {
-      if(nkey(x) === k || isOwnSeat(x, sd)) return;                          // never move a teacher out of her own subject's paper
+      if(nkey(x) === k || isOwnSeat(x, sd)) return;                           // never move a teacher out of her own subject's paper
+      if(meDay){ (isOwnSeat(x, meDay) ? both : other).push({ id:'switch|' + seatKey(sd) + '|' + nkey(x) + '|' + seatKey(meDay), kind:'switch', sd, x, d1:meDay }); return; }
       if(overOf(x)) take.push({ id:'take|' + seatKey(sd) + '|' + nkey(x), kind:'take', sd, x });
-      me.items.forEach(d1 => { if(d1.iso !== sd.iso && !busyOn(x, d1.iso) && !isOwnSeat(n, d1)) swap.push({ id:'swap|' + seatKey(sd) + '|' + nkey(x) + '|' + seatKey(d1), kind:'swap', sd, x, d1 }); });
+      me.forEach(d1 => { if(d1.iso !== iso && !sdays.has(d1.iso) && !busyOn(x, d1.iso)) (isOwnSeat(x, d1) ? both : other).push({ id:'swap|' + seatKey(sd) + '|' + nkey(x) + '|' + seatKey(d1), kind:'swap', sd, x, d1 }); });
     });
-    add.push({ id:'add|' + seatKey(sd), kind:'add', sd });
+    if(meDay) move.push({ id:'move|' + seatKey(sd) + '|' + seatKey(meDay), kind:'move', sd, d1:meDay });
+    else add.push({ id:'add|' + seatKey(sd), kind:'add', sd });
   });
-  swap.sort((a, b) => (isOwnSeat(a.x, a.d1) ? 0 : 1) - (isOwnSeat(b.x, b.d1) ? 0 : 1) || ncmp(a.sd.iso, b.sd.iso));   // best: she gets her paper, the other teacher gets one of HER subject
-  take.sort((a, b) => (dutyCount(b.x) - (maxOf(b.x) || 0)) - (dutyCount(a.x) - (maxOf(a.x) || 0)) || ncmp(a.sd.iso, b.sd.iso));
-  add.sort((a, b) => a.sd.staff.length - b.sd.staff.length || ncmp(a.sd.iso, b.sd.iso));
-  const both = swap.filter(o => isOwnSeat(o.x, o.d1)), other = swap.filter(o => !isOwnSeat(o.x, o.d1));   // both win: she gets her paper, the other teacher gets one of HER subject
-  const order = lessOf(n) || !me.items.length ? [both, take, add, other] : [both, other, take, add];
+  take.sort((a, b) => (dutyCount(b.x) - (maxOf(b.x) || 0)) - (dutyCount(a.x) - (maxOf(a.x) || 0)));
+  add.sort((a, b) => a.sd.staff.length - b.sd.staff.length);
+  move.sort((a, b) => a.sd.staff.length - b.sd.staff.length);
+  const order = meDay ? [both, other, move] : (lessOf(n) || !me.length ? [both, take, add, other] : [both, other, take, add]);
   return [].concat(...order.map(L => L.slice(0, 12)));
 }
-const ownLbl = o => `${dayShort(o.sd.day)} ${(o.sd.dt || '').slice(0, 5)} · ${roomLbl(o.sd.room)} · ${o.sd.sub.join(', ')}` + (o.kind === 'swap' ? ` — swap with ${o.x} (she takes your ${dayShort(o.d1.day)} ${(o.d1.dt || '').slice(0, 5)} ${roomLbl(o.d1.room)}${isOwnSeat(o.x, o.d1) ? ' — her own subject too ★' : ''})` : o.kind === 'take' ? ` — take it from ${o.x} (MORE)` : ` — join as extra (${o.sd.staff.length} staff)`);
+const ownLbl = o => `${roomLbl(o.sd.room)} · ${o.sd.cls.join(', ')} ${o.sd.sub.join(', ')}` + (o.kind === 'switch' ? ` — switch rooms with ${o.x} (she goes to your ${roomLbl(o.d1.room)}${isOwnSeat(o.x, o.d1) ? ', her own subject ★' : ''})`
+  : o.kind === 'swap' ? ` — swap with ${o.x} (she takes your ${dayShort(o.d1.day)} ${(o.d1.dt || '').slice(0, 5)} ${roomLbl(o.d1.room)}${isOwnSeat(o.x, o.d1) ? ', her own subject ★' : ''})`
+  : o.kind === 'move' ? ` — move here from ${roomLbl(o.d1.room)} (that room keeps ${Math.max(0, o.d1.staff.length - 1)} staff)`
+  : o.kind === 'take' ? ` — take it from ${o.x} (MORE)` : ` — join as extra (${o.sd.staff.length} staff)`);
+/** every (teacher, date) where her subject's paper is held but she is not in one of its rooms */
 function ownList(){
   const c = compute(); if(c._own) return c._own;
   const pool = CTS ? [...new Set(CTS.list.filter(x => CTS.users ? x.users : true).map(x => x.name))] : c.L.teacher.map(t => t.label);
   const L = pool.filter(n => !offDuty(n) && catOf(n) !== 'NT' && !(c.unknown || []).includes(n));
-  const allSubs = [...new Set(seatsAll().flatMap(paperSubs))];
   const need = [], noSub = [], noPaper = [];
   L.forEach(n => {
-    const M = mySubs(n); if(!M.length){ noSub.push(n); return; }
-    if(!allSubs.some(ps => M.some(ms => subjMatch(ps, ms)))){ noPaper.push(n); return; }
-    const t = c.L.teacher.find(x => nkey(x.label) === nkey(n));
-    if(!t || !t.items.some(d => isOwnSeat(n, d))) need.push(n);
+    if(!mySubs(n).length){ noSub.push(n); return; }
+    const days = subjDays(n); if(!days.length){ noPaper.push(n); return; }
+    const me = myItems(n);
+    days.forEach(iso => { if(!me.some(d => d.iso === iso && isOwnSeat(n, d))) need.push({ t:n, iso, busy:me.some(d => d.iso === iso) }); });
   });
-  need.sort((a, b) => typeRank(a) - typeRank(b) || ncmp(nkey(a), nkey(b)));
+  need.sort((a, b) => typeRank(a.t) - typeRank(b.t) || ncmp(nkey(a.t), nkey(b.t)) || ncmp(a.iso, b.iso));
   return (c._own = { need, noSub, noPaper, total:L.length });
 }
 let OWN = {};
+const ownKey = x => nkey(x.t) + '@' + x.iso;
 function ownHtml(c){
   if(!CTS) return '';
   const O = ownList();
-  if(!O.need.length) return `<section class="card"><h3>Duty in her own subject <span class="ok">✓</span></h3><div class="note ok">Every teacher has at least one duty in a paper of her own subject.</div>${O.noPaper.length ? `<div class="sub" style="margin-top:6px">No paper of their subject in this exam: ${O.noPaper.map(esc).join(', ')}.</div>` : ''}</section>`;
+  if(!O.need.length) return `<section class="card"><h3>Duty on her subject’s paper days <span class="ok">✓</span></h3><div class="note ok">On every day a subject’s paper is held, its teachers are on duty in one of its rooms.</div>${O.noPaper.length ? `<div class="sub" style="margin-top:6px">No paper of their subject in this exam: ${O.noPaper.map(esc).join(', ')}.</div>` : ''}</section>`;
   let n = 0;
-  const rows = O.need.map(t => {
-    const opts = ownOptions(t), k = nkey(t), sel = OWN[k] !== undefined ? OWN[k] : (opts[0] ? opts[0].id : ''); if(sel) n++;
-    return `<tr><td class="nw"><b>${esc(t)}</b>${shareBadge(t)}<div class="sub">${esc(tLine(t))}</div></td><td>${esc(mySubs(t).join(', '))}</td>
-      <td>${opts.length ? `<select class="sq" data-own="${esc(k)}" style="height:40px;min-width:240px;max-width:420px"><option value="">— leave —</option>${opts.map(o => `<option value="${esc(o.id)}" ${sel === o.id ? 'selected' : ''}>${esc(ownLbl(o))}</option>`).join('')}</select>` : '<span class="x">No paper of her subject on a day she is free</span>'}</td></tr>`;
+  const rows = O.need.map(x => {
+    const opts = ownOptions(x.t, x.iso), k = ownKey(x), sel = OWN[k] !== undefined ? OWN[k] : (opts[0] ? opts[0].id : ''); if(sel) n++;
+    const r0 = compute().recs.find(r => r.iso === x.iso) || {};
+    return `<tr><td class="nw"><b>${esc(x.t)}</b>${shareBadge(x.t)}<div class="sub">${esc(mySubs(x.t).join(', '))}</div></td><td class="nw">${esc(dayShort(r0.day) + ' ' + (r0.dt || x.iso))}<div class="sub">${x.busy ? 'on duty in another room' : '<span class="x">no duty that day</span>'}</div></td>
+      <td>${opts.length ? `<select class="sq" data-own="${esc(k)}" style="height:40px;min-width:240px;max-width:440px"><option value="">— leave —</option>${opts.map(o => `<option value="${esc(o.id)}" ${sel === o.id ? 'selected' : ''}>${esc(ownLbl(o))}</option>`).join('')}</select>` : '<span class="x">No way found — add her in Plan &amp; edit</span>'}</td></tr>`;
   }).join('');
-  return `<section class="card" style="border-top-color:var(--mid)"><h3>Duty in her own subject <span style="color:var(--mid)">${O.need.length}</span></h3>
-    <div class="sub">These teachers have no duty in a paper of their own subject (department in the Users sheet + subjects in the timetable). Best choice is picked: a <b>swap</b> keeps everyone’s number of duties the same; <b>take</b> moves a duty from a teacher with MORE than her share; <b>join as extra</b> adds her to the room. Teachers are never moved out of their own subject’s paper.</div>
-    <div class="tw" style="max-height:none"><table><thead><tr><th>Teacher</th><th>Her subject</th><th>Fix</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="acts"><button class="btn pri" id="ownGo" ${n ? '' : 'disabled'}>Fix ${n} teacher${n === 1 ? '' : 's'} in one go</button></div>
+  return `<section class="card" style="border-top-color:var(--mid)"><h3>Duty on her subject’s paper days <span style="color:var(--mid)">${O.need.length}</span></h3>
+    <div class="sub">On every day her subject’s paper is held, a teacher should be on duty <b>in one of that paper’s rooms</b> (subject = department in the Users sheet + subjects in the timetable). The best way is picked for each: <b>switch rooms</b> the same day or <b>swap a day</b> with a teacher of another subject (★ = she gets her own subject too; counts stay the same), <b>move</b> to her subject’s room, <b>take</b> from a teacher with MORE, or <b>join as extra</b>. Nobody is moved out of her own subject’s paper.</div>
+    <div class="tw" style="max-height:none"><table><thead><tr><th>Teacher</th><th>Her paper day</th><th>Fix</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="acts"><button class="btn pri" id="ownGo" ${n ? '' : 'disabled'}>Fix ${n} in one go</button></div>
     ${O.noSub.length ? `<div class="sub" style="margin-top:8px">No subject known (no department in Users, not in the timetable): ${O.noSub.slice(0, 30).map(esc).join(', ')}${O.noSub.length > 30 ? ' …' : ''}</div>` : ''}
     ${O.noPaper.length ? `<div class="sub" style="margin-top:4px">No paper of their subject in this exam: ${O.noPaper.slice(0, 30).map(esc).join(', ')}${O.noPaper.length > 30 ? ' …' : ''}</div>` : ''}</section>`;
 }
-function ownApplyOne(t, id){
-  const c = compute(), o = ownOptions(t).find(x => x.id === id); if(!o) return false;
-  const rowsOf = (who, d) => { const it = (c.L.teacher.find(x => nkey(x.label) === nkey(who)) || { items:[] }).items.find(y => seatKey(y) === seatKey(d)); return it ? it.rows : d.rows; };
-  if(o.kind === 'add'){ o.sd.rows.forEach(i => setRowNames(i, rowNames(i).concat(t))); }
+function ownApplyOne(t, iso, id){
+  const c = compute(), o = ownOptions(t, iso).find(x => x.id === id); if(!o) return false;
+  const rowsOf = (who, d) => { const it = myItems(who).find(y => seatKey(y) === seatKey(d)); return it ? it.rows : d.rows; };
+  const out = (rows, who) => rows.forEach(i => setRowNames(i, rowNames(i).filter(z => nkey(z) !== nkey(who))));
+  const inn = (rows, who) => rows.forEach(i => setRowNames(i, rowNames(i).concat(who)));
+  if(o.kind === 'add') inn(o.sd.rows, t);
+  else if(o.kind === 'move'){ out(rowsOf(t, o.d1), t); inn(o.sd.rows, t); }
   else {
-    rowsOf(o.x, o.sd).forEach(i => setRowNames(i, rowNames(i).filter(z => nkey(z) !== nkey(o.x)).concat(t)));
-    if(o.kind === 'swap') rowsOf(t, o.d1).forEach(i => setRowNames(i, rowNames(i).filter(z => nkey(z) !== nkey(t)).concat(o.x)));
+    const R = rowsOf(o.x, o.sd), R1 = o.d1 ? rowsOf(t, o.d1) : null;
+    out(R, o.x); inn(R, t);
+    if(o.kind === 'swap' || o.kind === 'switch'){ out(R1, t); inn(R1, o.x); }
   }
   saveLocal(); return true;
 }
 function ownApply(){
-  const want = {}; ownList().need.forEach(t => { const k = nkey(t), opts = ownOptions(t); want[t] = OWN[k] !== undefined ? OWN[k] : (opts[0] ? opts[0].id : ''); });
+  const want = ownList().need.map(x => { const opts = ownOptions(x.t, x.iso), k = ownKey(x); return { x, id:OWN[k] !== undefined ? OWN[k] : (opts[0] ? opts[0].id : '') }; });
   let n = 0, again = 0;
-  Object.entries(want).forEach(([t, id]) => {
+  want.forEach(({ x, id }) => {
     if(!id) return;
-    if(compute().L.teacher.some(x => nkey(x.label) === nkey(t) && x.items.some(d => isOwnSeat(t, d)))) return;   // fixed meanwhile
-    if(ownApplyOne(t, id)) n++;
-    else { const best = ownOptions(t)[0]; if(best && ownApplyOne(t, best.id)){ n++; again++; } }      // first choice no longer possible: next best
+    if(myItems(x.t).some(d => d.iso === x.iso && isOwnSeat(x.t, d))) return;                       // fixed meanwhile
+    if(ownApplyOne(x.t, x.iso, id)) n++;
+    else { const best = ownOptions(x.t, x.iso)[0]; if(best && ownApplyOne(x.t, x.iso, best.id)){ n++; again++; } }
   });
   OWN = {};
-  V.msg = n + ' teacher(s) now have a duty in their own subject' + (again ? ' (' + again + ' with the next best choice)' : '') + '. Download the PDFs or the corrected Word file again.'; V.err = '';
+  V.msg = n + ' fixed: teachers on duty in their subject’s paper on its day' + (again ? ' (' + again + ' with the next best choice)' : '') + '. Download the PDFs or the corrected Word file again.'; V.err = '';
   refreshTab();
 }
 
@@ -1264,12 +1278,26 @@ function stuHtml(){
 const isoToDt = v => { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? m[3] + '/' + m[2] + '/' + m[1] : String(v || ''); };
 function newRow(dt){ const p = parseDate(dt); return { dt:p.dt || dt, iso:p.iso, day:p.day, time:'', cls:'', sub:'', room:'', staff:'' }; }
 function insertAfterDay(iso, row){ let at = -1; EX.rows.forEach((r, i) => { if((r.iso || '') === (iso || '')) at = i; }); if(at < 0) EX.rows.push(row); else EX.rows.splice(at + 1, 0, row); return at < 0 ? EX.rows.length - 1 : at + 1; }
+/** papers (class + subject) held on a date */
+function dayPapers(iso){ const m = {}; compute().recs.forEach(r => { if(r.iso !== iso || !(r.cls || r.sub)) return; const k = vnorm(r.cls) + '|' + vnorm(r.sub); if(!m[k]) m[k] = { cls:r.cls, sub:r.sub, rooms:new Set(), time:r.time || '' }; if(r.room) m[k].rooms.add(r.room); }); return Object.values(m).sort((a, b) => ncmp(a.sub, b.sub) || ncmp(a.cls, b.cls)); }
+/** tap on a free room: choose which of that day's papers goes there */
+function freeRoomPick(iso, room){
+  const P = dayPapers(iso), r0 = EX.rows.find(r => (r.iso || '') === iso) || {};
+  $('#dlgIn').onclick = null; $('#dlgIn').onchange = null;
+  $('#dlgIn').innerHTML = `<h2 style="margin:0 0 4px">${esc(roomLbl(room))}${roomCap(room) != null ? ' · ' + roomCap(room) + ' seats' : ''}</h2><div class="sub">${esc((r0.day ? r0.day + ', ' : '') + (r0.dt || iso))} — which of today’s papers should also sit here?</div>
+    <div class="tw" style="max-height:55vh;margin-top:8px">${P.map((x, q) => `<div class="li" style="padding:8px"><div style="flex:1"><b>${esc(x.sub || '—')}</b> · ${esc(x.cls || '—')}<div class="sub">now in ${esc([...x.rooms].map(roomLbl).join(', ') || 'no room')}</div></div><button class="btn sm good" data-fp="${q}">Put it here</button></div>`).join('') || '<div class="sub">No paper on this day yet.</div>'}</div>
+    <div class="acts"><button class="btn" id="dClose">Close</button></div>`;
+  if(!$('#dlg').open) $('#dlg').showModal();
+  $('#dClose').onclick = () => $('#dlg').close();
+  $('#dlgIn').onclick = e => { const b = e.target.closest('[data-fp]'); if(!b) return; const x = P[+b.dataset.fp]; const i = insertAfterDay(iso, Object.assign(newRow(r0.dt || ''), { time:x.time, cls:x.cls, sub:x.sub, room })); saveLocal(); $('#dlg').close(); V.tab = 'plan'; ls.set('dut_tab', 'plan'); V.msg = x.sub + ' (' + x.cls + ') also in ' + roomLbl(room) + ' — add staff with + Teacher.'; render(); const el = document.getElementById('prow' + i); el && el.scrollIntoView({ block:'center' }); };
+}
 function freeHtml(){
   const c = compute(), caps = stdRooms().filter(r => roomCap(r) != null).length, R = stdRooms().length;
-  let h = `<section class="card"><h3>Free rooms on exam days</h3><div class="sub">For every exam date: rooms not used at all (free), then rooms with seats left (seats minus students). Add seats per room in <b>Rooms · Classes · Subjects</b> (${caps} of ${R} rooms have seats) and students per paper in <b>Plan &amp; edit</b> to see free seats. Tap a free room to put a new paper there.</div></section>`;
+  let h = `<section class="card"><h3>Free rooms on exam days</h3><div class="sub">For every exam date: rooms not used at all (free), then rooms with seats left (seats minus students). Add seats per room in <b>Rooms · Classes · Subjects</b> (${caps} of ${R} rooms have seats) and students per paper in <b>Plan &amp; edit</b> to see free seats. Tap a free room to put one of <b>that day’s</b> papers there.</div></section>`;
   c.dates.forEach(iso => {
     const D = roomDay(iso), r0 = c.recs.find(r => r.iso === iso) || {}, fr = D.filter(x => !x.used), used = D.filter(x => x.used);
     h += `<section class="card"><h3 style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>${esc((r0.day ? r0.day + ', ' : '') + (r0.dt || iso))}</span><span class="sub">${fr.length} free · ${used.length} in use</span></h3>
+      <div class="sub" style="margin-top:4px">Papers today: ${dayPapers(iso).map(x => `<span class="dc">${esc(x.sub || '—')} · ${esc(x.cls || '')}</span>`).join('') || '—'}</div>
       ${fr.length ? `<div style="margin:6px 0">${fr.map(x => `<button class="dc" style="cursor:pointer;color:var(--good);border-color:var(--good);background:var(--good-bg);font-weight:800" data-pfree="${esc(iso)}|${esc(x.room)}">${esc(roomLbl(x.room))}${x.cap != null ? ' · ' + x.cap + ' seats' : ''}</button>`).join('')}</div>` : '<div class="sub">No room is completely free on this day.</div>'}
       <div class="tw" style="max-height:none"><table><thead><tr><th>Room in use</th><th>Classes / papers</th><th>Students</th><th>Seats</th><th>Free seats</th><th>Staff</th></tr></thead><tbody>${used.map(x => `<tr><td class="nw"><b>${esc(roomLbl(x.room))}</b></td><td>${esc(x.cls.join(', '))}<div class="sub">${esc(x.sub.join(', '))}</div></td><td class="n">${x.n == null ? '—' : x.n}</td><td class="n">${x.cap == null ? '—' : x.cap}</td><td class="n ${x.free != null ? (x.free > 0 ? 'ok' : 'x') : ''}">${x.free == null ? '—' : x.free}</td><td class="n">${x.staff}</td></tr>`).join('')}</tbody></table></div></section>`;
   });
@@ -1290,7 +1318,7 @@ function planHtml(){
     const staffN = L.reduce((n, i) => n + rowNames(i).length, 0);
     h += `<section class="card"><h3 style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>${esc(iso ? (r0.day ? r0.day + ', ' : '') + r0.dt : 'No date')}</span><span class="sub">${L.length} room${L.length === 1 ? '' : 's'} · ${staffN} staff</span></h3>
       <div class="acts" style="margin-top:4px"><button class="btn sm pri" data-pday="${esc(iso)}">+ Paper / room</button><label class="c" style="font-size:13px">Move this whole day to <input type="date" class="sq" data-pmv="${esc(iso)}" style="height:34px;width:auto"></label><button class="btn sm" data-pdel="${esc(iso)}">Delete day</button></div>
-      ${(() => { if(!iso) return ''; const D = roomDay(iso), fr = D.filter(x => !x.used), sp = D.filter(x => x.used && x.free != null && x.free > 0); return fr.length || sp.length ? `<div class="sub" style="margin-top:6px">${fr.length ? 'Free rooms (tap to add a paper there): ' + fr.slice(0, 20).map(x => `<button class="dc" style="cursor:pointer;color:var(--good);border-color:var(--good)" data-pfree="${esc(iso)}|${esc(x.room)}">${esc(x.room)}${x.cap != null ? ' · ' + x.cap + ' seats' : ''}</button>`).join('') : ''}${sp.length ? '<br>Space left: ' + sp.slice(0, 12).map(x => `<span class="dc">${esc(x.room)} · ${x.free} seats free</span>`).join('') : ''}</div>` : ''; })()}
+      ${(() => { if(!iso) return ''; const D = roomDay(iso), fr = D.filter(x => !x.used), sp = D.filter(x => x.used && x.free != null && x.free > 0); return fr.length || sp.length ? `<div class="sub" style="margin-top:6px">${fr.length ? 'Free rooms (tap to put one of today’s papers there): ' + fr.slice(0, 20).map(x => `<button class="dc" style="cursor:pointer;color:var(--good);border-color:var(--good)" data-pfree="${esc(iso)}|${esc(x.room)}">${esc(x.room)}${x.cap != null ? ' · ' + x.cap + ' seats' : ''}</button>`).join('') : ''}${sp.length ? '<br>Space left: ' + sp.slice(0, 12).map(x => `<span class="dc">${esc(x.room)} · ${x.free} seats free</span>`).join('') : ''}</div>` : ''; })()}
       ${L.map(i => { const r = EX.rows[i], names = rowNames(i); return `<div class="li" style="flex-direction:column;align-items:stretch;border:1.5px solid var(--line);border-radius:14px;padding:8px 10px;margin-top:8px" id="prow${i}">
         <div class="grid" style="margin-top:0;grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr))">
           <label class="f">Class<input class="cell" list="pl-cls" data-i="${i}" data-f="cls" value="${esc(r.cls)}" placeholder="e.g. F.Sc-I"></label>
@@ -1369,7 +1397,7 @@ function wireTab(){
     if(t.id === 'sgGo') return sgApply();
     if(t.id === 'ownGo') return ownApply();
     if(t.id === 'sReset'){ SET.max = Object.assign({}, SET_DEFAULT); SET.both = '2'; saveSet(); return refreshTab(); }
-    if(t.dataset.pfree){ const [iso, room] = t.dataset.pfree.split('|'), r0 = EX.rows.find(r => (r.iso || '') === iso) || {}; const i = insertAfterDay(iso, Object.assign(newRow(r0.dt || ''), { time:r0.time || '', room })); saveLocal(); V.tab = 'plan'; ls.set('dut_tab', 'plan'); render(); const el = document.getElementById('prow' + i); if(el){ el.scrollIntoView({ block:'center' }); const inp = el.querySelector('[data-f=cls]'); inp && inp.focus(); } return; }
+    if(t.dataset.pfree){ const [iso, room] = t.dataset.pfree.split('|'); return freeRoomPick(iso, room); }
     if(t.id === 'rmAdd'){ const r = String(($('#rmNew') || {}).value || '').trim(), cap = String(($('#rmCap') || {}).value || '').trim(); if(!r) return alert('Write the room first.'); ROOMS[vnorm(r)] = { r, cap }; saveRooms(); V.msg = 'Room ' + r + ' added.'; return refreshTab(); }
     if(t.id === 'pAddDate'){ const v = ($('#pDate') || {}).value; if(!v) return alert('Choose the date first.'); const i = insertAfterDay(parseDate(isoToDt(v)).iso, newRow(isoToDt(v))); saveLocal(); refreshTab(); const el = document.getElementById('prow' + i); el && el.scrollIntoView({ block:'center' }); return; }
     if(t.dataset.pday !== undefined){ const iso = t.dataset.pday, r0 = EX.rows.find(r => (r.iso || '') === iso) || {}; const i = insertAfterDay(iso, Object.assign(newRow(r0.dt || ''), { time:r0.time || '' })); saveLocal(); refreshTab(); const el = document.getElementById('prow' + i); if(el){ el.scrollIntoView({ block:'center' }); const inp = el.querySelector('input'); inp && inp.focus(); } return; }
