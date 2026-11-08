@@ -731,27 +731,45 @@ function checkHtml(c){
 /* ---------- clashes: give the duty to a free teacher, move her to another date, or take her off ---------- */
 let CX = {};
 const slotK = d => (d.iso || '?') + '|' + (d.time || '');
-function freeTeachers(d){
+/** 2 = same department as the teacher being changed, 1 = department of the paper, 0 = other */
+function sameDeptOf(n, from, d){
+  const dk = vnorm((contactOf(n) || {}).dept); if(!dk) return 0;
+  const fd = from ? vnorm((contactOf(from) || {}).dept) : ''; if(fd && dk === fd) return 2;
+  const subs = d && d.sub ? (Array.isArray(d.sub) ? d.sub : [d.sub]) : [];
+  return subs.some(x => { const sx = vnorm(x); return sx && (sx.includes(dk) || dk.includes(sx)); }) ? 1 : 0;
+}
+/** duties still missing from her share (fewest first = closest to her number) */
+const needOf = n => { const m = maxOf(n); return m == null ? 99 : m - dutyCount(n); };
+/** best first: right shift, still below her share, same department, closest to her number, fewest duties */
+const candCmp = (from, d) => (a, b) => (wrongShift(a) ? 1 : 0) - (wrongShift(b) ? 1 : 0) || (fullOf(a) ? 1 : 0) - (fullOf(b) ? 1 : 0) || sameDeptOf(b, from, d) - sameDeptOf(a, from, d) || needOf(a) - needOf(b) || dutyCount(a) - dutyCount(b) || ncmp(a, b);
+/** teachers with NO duty on that date (any room, any time) */
+function freeTeachers(d, from){
   const c = compute(), busy = new Set();
-  c.L.teacher.forEach(t => { if(t.items.some(x => slotK(x) === slotK(d))) busy.add(nkey(t.label)); });
+  c.L.teacher.forEach(t => { if(t.items.some(x => (x.iso || '?') === (d.iso || '?'))) busy.add(nkey(t.label)); });
   const pool = CTS ? CTS.list.filter(x => CTS.users ? x.users : true).map(x => x.name) : c.L.teacher.map(t => t.label);
   const seen = new Set();
   return pool.filter(n => { const k = nkey(n); if(!k || seen.has(k) || busy.has(k) || (noteOf(n) && noteOf(n) !== '')) return false; seen.add(k); return !c.unknown || !c.unknown.includes(n); })
-    .sort((a, b) => (wrongShift(a) ? 1 : 0) - (wrongShift(b) ? 1 : 0) || dutyCount(a) - dutyCount(b) || ncmp(a, b));
+    .sort(candCmp(from, d));
 }
-function freeGroups(d){ const F = freeTeachers(d); return [['Permanent teachers free that day', F.filter(n => !fullOf(n) && typeOf(n) === 'P')], ['Visiting teachers free that day', F.filter(n => !fullOf(n) && typeOf(n) === 'V')], ['Already have their share of duties', F.filter(n => fullOf(n))]].filter(g => g[1].length); }
-/** choices for one duty of a teacher: give it to a free teacher, move her to another date, take her off */
+function freeGroups(d, from){
+  const F = freeTeachers(d, from), dep = (contactOf(from) || {}).dept;
+  const same = F.filter(n => !fullOf(n) && !wrongShift(n) && sameDeptOf(n, from, d) > 0), S = new Set(same);
+  const rest = F.filter(n => !S.has(n));
+  return [[from && dep ? '★ Same department as ' + from + ' (' + dep + ')' : '★ Department of this paper', same],
+    ['Permanent teachers free that day', rest.filter(n => !fullOf(n) && typeOf(n) === 'P')], ['Visiting teachers free that day', rest.filter(n => !fullOf(n) && typeOf(n) === 'V')],
+    ['Already have their share of duties', rest.filter(n => fullOf(n))]].filter(g => g[1].length);
+}
 function dutyOpts(t, d, sel){
   const mv = moveTargets(t, d);
   return `<option value="">— keep —</option>
-    ${freeGroups(d).map(([lab, L]) => `<optgroup label="Give it to · ${esc(lab)} (fewest duties first)">${L.map(x => `<option value="give:${esc(x)}" ${sel === 'give:' + x ? 'selected' : ''}>${wrongShift(x) || fullOf(x) ? '⚠ ' : ''}${esc(x)} — ${esc(tLine(x))}</option>`).join('')}</optgroup>`).join('')}
+    ${freeGroups(d, t.label).map(([lab, L]) => `<optgroup label="Give it to · ${esc(lab)}">${L.map(x => `<option value="give:${esc(x)}" ${sel === 'give:' + x ? 'selected' : ''}>${wrongShift(x) || fullOf(x) ? '⚠ ' : ''}${esc(x)} — ${esc(tLine(x))}</option>`).join('')}</optgroup>`).join('')}
     <optgroup label="Move ${esc(t.label)} to another date (she is free then)">${mv.map(r => `<option value="move:${r.i}" ${sel === 'move:' + r.i ? 'selected' : ''}>${esc(dayShort(r.day) + ' ' + r.dt + (r.time ? ' ' + r.time : '') + ' · ' + roomLbl(r.room) + ' · ' + r.cls)} (${r.staff.length} staff)</option>`).join('')}</optgroup>
     <optgroup label="Other"><option value="drop" ${sel === 'drop' ? 'selected' : ''}>Take her off this room (others stay)</option></optgroup>`;
 }
 const dutyId = (t, d) => nkey(t.label) + '|' + slotK(d) + '|' + vnorm(d.room);
 function moveTargets(t, d){
-  const c = compute(), mine = new Set(t.items.map(slotK)), out = [], seen = new Set();
-  c.recs.forEach(r => { if(!r.iso || mine.has(slotK(r))) return; const k = slotK(r) + '|' + vnorm(r.room); if(seen.has(k)) return; seen.add(k); out.push(r); });
+  const c = compute(), mine = new Set(t.items.map(x => x.iso)), out = [], seen = new Set();
+  c.recs.forEach(r => { if(!r.iso || mine.has(r.iso)) return; const k = slotK(r) + '|' + vnorm(r.room); if(seen.has(k)) return; seen.add(k); out.push(r); });
   return out.sort((a, b) => ncmp(a.iso, b.iso) || a.staff.length - b.staff.length || ncmp(a.room, b.room));
 }
 function clashHtml(c){
@@ -818,16 +836,15 @@ function overHtml(c){
    (or the paper's subject department), permanent for permanent / visiting for visiting. */
 let SGX = {};
 function scoreCand(n, from, d, cnt){
-  const ct = contactOf(n) || {}, fc = contactOf(from) || {}, why = [], k = cnt[nkey(n)] || 0;
-  const m = maxOf(n);
-  let s = m != null ? -(m > 0 ? (m - k) / m * 50 : 0) - (m - k) * 2 : k * 10;   // the bigger part of her share still missing, the better
-  why.push(k + (m != null ? '/' + m : '') + ' dut' + (k === 1 && m == null ? 'y' : 'ies') + (m != null && m > k ? ' (needs ' + (m - k) + ' more)' : ''));
-  if(bothShift(n)){ s += 4; why.push('also teaches evening'); }
-  if(wrongShift(n)){ s += 100; why.push('⚠ teaches only in the other shift'); } else if(ct.sh) why.push('teaches ' + (examShift() === 'M' ? 'morning' : 'evening'));
-  const dk = vnorm(ct.dept);
-  if(dk && fc.dept && dk === vnorm(fc.dept)){ s -= 8; why.push('same department'); }
-  else if(dk && d.sub.some(x => { const sx = vnorm(x); return sx && (sx.includes(dk) || dk.includes(sx)); })){ s -= 6; why.push('department of this paper'); }
-  if(typeOf(n) === typeOf(from)) s -= 8; else why.push(typeOf(n) === 'V' ? 'visiting' : 'permanent');
+  const ct = contactOf(n) || {}, why = [], k = cnt[nkey(n)] || 0, m = maxOf(n), sd = sameDeptOf(n, from, d);
+  let s = 0;
+  if(wrongShift(n)){ s += 1000; why.push('⚠ teaches only in the other shift'); }
+  if(sd === 2){ why.push('★ same department'); } else if(sd === 1){ s += 50; why.push('department of this paper'); } else s += 100;   // same department first
+  if(m != null){ s += (m - k) * 5; why.push(k + '/' + m + ' duties' + (m - k === 1 ? ' — reaches her number' : ' (needs ' + (m - k) + ' more)')); }   // closest to her number first
+  else { s += 40 + k * 5; why.push(k + ' duties'); }
+  if(typeOf(n) !== typeOf(from)){ s += 20; why.push(typeOf(n) === 'V' ? 'visiting' : 'permanent'); }
+  if(bothShift(n)){ s += 3; why.push('also teaches evening'); }
+  if(ct.sh && !wrongShift(n)) why.push('teaches ' + (examShift() === 'M' ? 'morning' : 'evening'));
   return { s, why:why.join(' · ') };
 }
 function suggestPlan(){
@@ -837,7 +854,7 @@ function suggestPlan(){
   const cnt = {}; avail.forEach(n => { cnt[nkey(n)] = 0; }); c.L.teacher.forEach(t => { cnt[nkey(t.label)] = t.items.length; });
   const avg = avail.length ? avail.reduce((a, n) => a + cnt[nkey(n)], 0) / avail.length : 0;
   const target = n => { const m = maxOf(n); return m != null ? m : Math.ceil(avg) + 1; };
-  const busy = {}; c.L.teacher.forEach(t => t.items.forEach(d => { (busy[slotK(d)] = busy[slotK(d)] || new Set()).add(nkey(t.label)); }));
+  const busy = {}; c.L.teacher.forEach(t => t.items.forEach(d => { (busy[d.iso || '?'] = busy[d.iso || '?'] || new Set()).add(nkey(t.label)); }));   // any duty that day
   const out = [];
   c.L.teacher.filter(t => !(c.unknown || []).includes(t.label) && cnt[nkey(t.label)] > target(t.label))
     .sort((a, b) => (cnt[nkey(b.label)] - target(b.label)) - (cnt[nkey(a.label)] - target(a.label)))
@@ -845,11 +862,11 @@ function suggestPlan(){
       let extra = cnt[nkey(t.label)] - target(t.label);
       for(const d of t.items.slice().reverse()){
         if(extra <= 0) break;
-        const B = busy[slotK(d)] || new Set();
+        const B = busy[d.iso || '?'] || new Set();
         const ranked = avail.filter(n => nkey(n) !== nkey(t.label) && !B.has(nkey(n)) && cnt[nkey(n)] < target(n)).map(n => Object.assign({ n }, scoreCand(n, t.label, d, cnt))).sort((a, b) => a.s - b.s || ncmp(a.n, b.n));
         if(!ranked.length) continue;
         out.push({ t, d, id:dutyId(t, d), ranked:ranked.slice(0, 15) });
-        cnt[nkey(ranked[0].n)]++; cnt[nkey(t.label)]--; extra--; (busy[slotK(d)] = B).add(nkey(ranked[0].n));
+        cnt[nkey(ranked[0].n)]++; cnt[nkey(t.label)]--; extra--; (busy[d.iso || '?'] = B).add(nkey(ranked[0].n));
       }
     });
   const low = avail.filter(n => (c.L.teacher.find(t => nkey(t.label) === nkey(n)) || { items:[] }).items.length < Math.min(target(n), Math.max(1, Math.floor(avg)))).sort((a, b) => typeRank(a) - typeRank(b) || dutyCount(a) - dutyCount(b) || ncmp(a, b));
@@ -862,7 +879,7 @@ function suggestHtml(c){
   if(!P.out.length) return `<section class="card"><h3>Suggestions — balance duties <span class="ok">0</span></h3><div class="note ok">${P.hasMax ? 'Nobody has more duties than her share.' : 'Nobody has many more duties than the average (' + P.avg.toFixed(1) + ').'} </div>${lowTxt}</section>`;
   const n = P.out.filter(x => (SGX[x.id] !== undefined ? SGX[x.id] : 'give:' + x.ranked[0].n)).length;
   return `<section class="card" style="border-top-color:var(--mid)"><h3>Suggestions — balance duties <span style="color:var(--mid)">${P.out.length}</span></h3>
-    <div class="sub">${P.hasMax ? 'Teachers with more duties than their share (⚙ Settings)' : 'Teachers with many more duties than the average (' + P.avg.toFixed(1) + ')'} give their extra duties to the best free teacher: the one with the most duties still missing from her share, teaching in the ${examShift() === 'M' ? 'morning' : 'evening'}, same department (or the paper’s department), permanent for permanent and visiting for visiting. Change any choice, then press <b>Apply</b>.</div>
+    <div class="sub">${P.hasMax ? 'Teachers with more duties than their share (⚙ Settings)' : 'Teachers with many more duties than the average (' + P.avg.toFixed(1) + ')'} give their extra duties to the best teacher with no duty that day: same department first, then the one closest to reaching her number of duties, teaching in the ${examShift() === 'M' ? 'morning' : 'evening'}, same department (or the paper’s department), permanent for permanent and visiting for visiting. Change any choice, then press <b>Apply</b>.</div>
     <div class="tw" style="max-height:none"><table><thead><tr><th>From</th><th>Duty</th><th>Give it to</th></tr></thead><tbody>${P.out.map(x => { const sel = SGX[x.id] !== undefined ? SGX[x.id] : 'give:' + x.ranked[0].n, best = x.ranked.find(r => 'give:' + r.n === sel);
       return `<tr><td class="nw"><b>${esc(x.t.label)}</b><div class="sub">${esc(tLine(x.t.label))}</div></td><td class="nw">${esc(dateDay(x.d))}<div class="sub">${esc(roomLbl(x.d.room))} · ${esc(x.d.cls.join(', '))} · ${esc(x.d.sub.join(', '))}</div></td>
         <td><select class="sq" data-sgx="${esc(x.id)}" style="height:40px;min-width:230px;max-width:340px"><option value="" ${!sel ? 'selected' : ''}>— don’t change —</option>${x.ranked.map(r => `<option value="give:${esc(r.n)}" ${sel === 'give:' + r.n ? 'selected' : ''}>${esc(r.n)} — ${esc(r.why)}</option>`).join('')}</select>${best ? `<div class="sub ok">${esc(best.why)}${tInfo(best.n) ? ' · ' + esc(tInfo(best.n)) : ''}</div>` : ''}</td></tr>`; }).join('')}</tbody></table></div>
@@ -1162,8 +1179,8 @@ function pickTeacher(i, msg){
   $('#dlgIn').innerHTML = `<h2 style="margin:0 0 4px">Add a teacher</h2><div class="sub">${esc(dateDay(r))} · ${esc(roomLbl(rec.room))} · ${esc(rec.cls)} ${esc(rec.sub)} — now: ${esc(rowNames(i).join(', ') || 'no staff')}</div>
     ${msg ? `<div class="note ok">${esc(msg)}</div>` : ''}
     <input class="sq" id="ptq" type="search" placeholder="Search teacher, department…" style="margin-top:8px" autocomplete="off">
-    <div class="sub" style="margin-top:6px">Teachers free on this date — permanent, then visiting, fewest duties first. <span class="x">⚠</span> = at her maximum duties, or teaches only in the other shift.</div>
-    <div class="tw" style="max-height:52vh" id="ptl">${freeGroups({ iso:r.iso, time:r.time || '' }).map(([lab, L]) => `<div class="li" style="padding:6px 8px;background:var(--surface2)"><b>${esc(lab)}</b><span class="sub">${L.length}</span></div>` + L.map(n => `<div class="li" style="padding:6px 8px" data-q="${esc((n + ' ' + tInfo(n)).toLowerCase())}"><div style="flex:1"><b>${wrongShift(n) || fullOf(n) ? '<span class="x">⚠</span> ' : ''}${esc(n)}</b><div class="sub">${esc(tLine(n))}</div></div><button class="btn sm good" data-pick="${esc(n)}">Add</button></div>`).join('')).join('') || '<div class="sub">Every teacher already has a duty on this date.</div>'}</div>
+    <div class="sub" style="margin-top:6px">Only teachers with <b>no duty on this date</b>: the paper’s department first, then those closest to their number of duties. <span class="x">⚠</span> = at her maximum duties, or teaches only in the other shift.</div>
+    <div class="tw" style="max-height:52vh" id="ptl">${freeGroups({ iso:r.iso, time:r.time || '', sub:[rec.sub] }, null).map(([lab, L]) => `<div class="li" style="padding:6px 8px;background:var(--surface2)"><b>${esc(lab)}</b><span class="sub">${L.length}</span></div>` + L.map(n => `<div class="li" style="padding:6px 8px" data-q="${esc((n + ' ' + tInfo(n)).toLowerCase())}"><div style="flex:1"><b>${wrongShift(n) || fullOf(n) ? '<span class="x">⚠</span> ' : ''}${esc(n)}</b><div class="sub">${esc(tLine(n))}</div></div><button class="btn sm good" data-pick="${esc(n)}">Add</button></div>`).join('')).join('') || '<div class="sub">Every teacher already has a duty on this date.</div>'}</div>
     <div class="acts"><button class="btn" id="dClose">Done</button></div>`;
   if(!$('#dlg').open) $('#dlg').showModal();
   $('#ptq').oninput = e => { const q = e.target.value.trim().toLowerCase(); document.querySelectorAll('#ptl [data-q]').forEach(d => { d.style.display = !q || d.dataset.q.includes(q) ? '' : 'none'; }); };
