@@ -298,6 +298,8 @@ function headerCols(cells){
     else if(/staff|invigil|duty|teacher|supervis/.test(t)) put('staff');
     else if(/time|shift|session/.test(t)) put('time');
   });
+  // a heading typed wrongly (e.g. "`" instead of "Class"): the column between Date/Day and Subject is the class
+  if(col.cls === undefined && col.date !== undefined && col.sub === col.date + 2) col.cls = col.date + 1;
   return col;
 }
 const DEF_COLS = { date:0, cls:1, sub:2, room:3, staff:4 };
@@ -2261,8 +2263,12 @@ function pyLoose(t){
 /** every programme + year written in one cell: "F.AII FCS I" → FA2, FCS1 */
 function pyAll(t){
   const u = ' ' + String(t || '').toUpperCase().replace(/[._\-]/g, ' ').replace(/\s+/g, ' ') + ' ', out = new Set();
-  const Y = { XII:2, XI:1, II:2, I:1, 2:2, 1:1, '2ND':2, '1ST':1 };
-  for(const m of u.matchAll(/\b(F ?CS|ICS|F ?SC|F ?A)\s?(XII|XI|II|I|2ND|1ST|2|1)(?![0-9A-Z])/g)) out.add(({ FCS:'FCS', ICS:'FCS', FSC:'FSC', FA:'FA' })[m[1].replace(' ', '')] + Y[m[2]]);
+  const Y = { XII:2, XI:1, II:2, I:1, 2:2, 1:1, '2ND':2, '1ST':1 }, PG = { FCS:'FCS', ICS:'FCS', FSC:'FSC', FA:'FA' };
+  // "F.A-I & II", "F.A-I/II", "FA I, II" → FA1 and FA2
+  for(const m of u.matchAll(/\b(F ?CS|ICS|F ?SC|F ?A)\s?(XII|XI|II|I|2ND|1ST|2|1)((?:\s?(?:&|\/|,|AND)\s?(?:XII|XI|II|I|2|1)(?![0-9A-Z]))*)(?![0-9A-Z])/g)){
+    const pg = PG[m[1].replace(' ', '')]; out.add(pg + Y[m[2]]);
+    (m[3].match(/XII|XI|II|I|2|1/g) || []).forEach(y => out.add(pg + Y[y]));
+  }
   if(!out.size){ const one = pyLoose(t); if(one) out.add(one); }
   return [...out];
 }
@@ -2271,13 +2277,14 @@ function skey(x){
   let u = vnorm(x).replace(/(COMPULSORY|COMPUL|COMP)$/, '').replace(/(ADVANCED|ADVANCE|ADV)$/, 'ADV').replace(/(ELECTIVE|ELEC|ELE)$/, 'ELE');
   return SUBALIAS[u] || u;
 }
-const sEq = (a, b) => { const x = skey(a), y = skey(b); if(!x || !y) return false; if(x === y || (x.length > 4 && y.length > 4 && ratio(x, y) >= .86)) return true;
+const sEq = (a, b) => { const x = skey(a), y = skey(b); if(!x || !y) return false; if(x === y || (x.length > 4 && y.length > 4 && ratio(x, y) >= (Math.min(x.length, y.length) >= 7 ? .8 : .86))) return true;
+  if(x.length === y.length && x.length >= 5 && [...x].sort().join('') === [...y].sort().join('') && ratio(x, y) >= .7) return true;   // letters swapped: Histroy = History
   const [S, L] = x.length <= y.length ? [x, y] : [y, x]; return S.length >= 6 && L.startsWith(S) && !/^(ADV|ELE)$/.test(L.slice(S.length)); };   // "Computer sci" = "Computer Science"
 /** the date sheet as papers: date → [{ py:[FSC1…], subs:[…], label }] */
 function pcPapers(){
   const out = {};
   compute().recs.forEach(r => { if(!r.iso || !(r.sub || r.cls)) return;
-    const py = [...new Set(String(r.cls).split(/[\/,&+\n]+/).flatMap(pyAll))], subs = paperSubs({ sub:[r.sub] });
+    const py = [...new Set([...pyAll(r.cls), ...String(r.cls).split(/\n+/).flatMap(pyAll)])], subs = paperSubs({ sub:[r.sub] });
     const L = (out[r.iso] = out[r.iso] || []), k = py.join(',') + '|' + subs.map(skey).join(',');
     if(!L.some(x => x.k === k)) L.push({ k, py, subs, label:(r.cls + ' · ' + r.sub).replace(/\s+/g, ' ') }); });
   // a row without a class (an empty line of a merged Word cell): the class of the same subject that day
@@ -2291,11 +2298,14 @@ function pcAnalyse(){
   (PC.list || []).forEach(g => {
     const py = pyLoose([g.pcs, g.cls, g.program, g.group].join(' ')); if(!py){ noClass.push(g); return; }
     const subs = [...new Set(g.subs.map(pcSub).filter(Boolean))];
+    // the papers of each subject for this student: her own class first; FCS → the F.Sc paper of her year; else the paper of her year in any programme
+    const yr = py.slice(-1), tiers = [p => p.py.includes(py), p => py.startsWith('FCS') && p.py.includes('FSC' + yr), p => p.py.some(x => x.slice(-1) === yr)];
+    const sitOf = {}; subs.forEach(s => { for(const f of tiers){ const L = []; days.forEach(d => P[d].forEach(p => { if(f(p) && p.subs.some(ps => sEq(s, ps))) L.push({ d, p }); })); if(L.length){ sitOf[s] = L; break; } } });
     days.forEach(d => {
-      const hit = []; P[d].forEach(p => { if(!p.py.includes(py)) return; p.subs.forEach(ps => { const s = subs.find(x => sEq(x, ps)); if(s && !hit.some(h => sEq(h.s, s))) hit.push({ s:ps, label:p.label }); }); });
+      const hit = []; subs.forEach(s => (sitOf[s] || []).filter(x => x.d === d).forEach(x => { if(!hit.some(h => sEq(h.s, s))) hit.push({ s:x.p.subs.find(ps => sEq(s, ps)) || s, label:x.p.label }); }));
       if(hit.length > 1){ const k = d + '|' + py + '|' + hit.map(h => skey(h.s)).sort().join(','); const c = (clashes[k] = clashes[k] || { d, py, hit, groups:[], n:0 }); c.groups.push(g); c.n += g.rolls.length; }
     });
-    subs.forEach(s => { if(days.some(d => P[d].some(p => p.py.includes(py) && p.subs.some(ps => sEq(s, ps))))) return;
+    subs.forEach(s => { if(sitOf[s]) return;
       const k = py + '|' + skey(s); const m = (missing[k] = missing[k] || { py, s, n:0, raw:new Set() }); m.n += g.rolls.length; g.subs.filter(x => pcSub(x) === s).forEach(x => m.raw.add(x)); });
   });
   return { clashes:Object.values(clashes).sort((a, b) => ncmp(a.d, b.d) || ncmp(a.py, b.py)), missing:Object.values(missing).sort((a, b) => ncmp(a.py, b.py) || b.n - a.n), noClass, P, days };
@@ -2326,13 +2336,14 @@ function pcHtml(){
   }
   h += `<div class="acts">${PC ? `<span class="sub">${PC.list.reduce((a, g) => a + g.rolls.length, 0)} students · read ${esc(new Date(PC.at).toLocaleString('en-GB'))}</span><button class="btn sm" id="pcReload">Read again</button>` : ''}<button class="btn sm ${PC ? '' : 'pri'}" id="pcCols">${PC ? 'Choose subject columns' : 'Read students from the sheet'}</button></div></section>`;
   if(!PC) return h;
-  const A = pcAnalyse(), papSubs = py => [...new Set(A.days.flatMap(d => A.P[d].filter(p => p.py.includes(py)).flatMap(p => p.subs)))].sort(ncmp);
+  const A = pcAnalyse(), papSubs = py => [...new Set(A.days.flatMap(d => A.P[d].filter(p => p.py.includes(py)).flatMap(p => p.subs)))].sort(ncmp),
+    allSubs = [...new Set(A.days.flatMap(d => A.P[d].flatMap(p => p.subs)))].sort(ncmp);
   h += `<section class="card" style="border-top-color:${A.clashes.length ? 'var(--bad)' : 'var(--good)'}"><h3>Students with two papers on one day <span class="${A.clashes.length ? 'x' : 'ok'}">${A.clashes.length}</span></h3>
     ${A.clashes.length ? `<div class="sub">Change the date of one of the two papers (Plan &amp; edit), or arrange a separate sitting for these students.</div><div class="tw" style="max-height:none"><table><thead><tr><th>Date</th><th>Class</th><th>Papers the same day</th><th>Students</th></tr></thead><tbody>${A.clashes.map(c => { const r0 = compute().recs.find(r => r.iso === c.d) || {};
       return `<tr><td class="nw x"><b>${esc(dayShort(r0.day) + ' ' + (r0.dt || c.d))}</b></td><td class="nw">${esc(pyName(c.py))}</td><td>${c.hit.map(x => `<div><b>${esc(x.s)}</b> <span class="sub">${esc(x.label)}</span></div>`).join('')}</td><td><b class="x">${c.n}</b><details><summary class="sub">Enroll#</summary><div class="sub" style="max-width:420px">${c.groups.map(g => esc([g.pcs || g.cls, g.section].filter(Boolean).join(' ') + ': ' + g.rolls.join(', '))).join('<br>')}</div></details></td></tr>`; }).join('')}</tbody></table></div>
       <div class="acts"><button class="btn sm" id="pcCopy">Copy as text</button></div>` : '<div class="note ok">No student has two papers on the same day.</div>'}</section>`;
   h += `<section class="card" style="border-top-color:${A.missing.length ? 'var(--mid)' : 'var(--good)'}"><h3>Subjects with no paper in the date sheet <span style="color:var(--mid)">${A.missing.length}</span></h3>
-    ${A.missing.length ? `<div class="sub">Students of this class take the subject, but the date sheet has no paper for it. Either the paper is missing, or the subject is written differently — choose the paper it is (remembered), or “not examined”.</div><div class="tw" style="max-height:none"><table><thead><tr><th>Class</th><th>Subject (students’ sheet)</th><th>Students</th><th>It is the paper …</th></tr></thead><tbody>${A.missing.map(m => `<tr><td class="nw">${esc(pyName(m.py))}</td><td><b>${esc([...m.raw].join(' / ') || m.s)}</b></td><td class="n">${m.n}</td><td><select class="sq" data-pcmap="${esc(skey([...m.raw][0] || m.s))}" style="height:38px;min-width:200px"><option value="">— no paper (missing) —</option><option value="-">Not examined / no paper needed</option>${papSubs(m.py).map(x => `<option>${esc(x)}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div>` : '<div class="note ok">Every subject the students take has a paper in the date sheet.</div>'}
+    ${A.missing.length ? `<div class="sub">Students of this class take the subject, but the date sheet has no paper for it. Either the paper is missing, or the subject is written differently — choose the paper it is (remembered), or “not examined”.</div><div class="tw" style="max-height:none"><table><thead><tr><th>Class</th><th>Subject (students’ sheet)</th><th>Students</th><th>It is the paper …</th></tr></thead><tbody>${A.missing.map(m => `<tr><td class="nw">${esc(pyName(m.py))}</td><td><b>${esc([...m.raw].join(' / ') || m.s)}</b></td><td class="n">${m.n}</td><td><select class="sq" data-pcmap="${esc(skey([...m.raw][0] || m.s))}" style="height:38px;min-width:200px"><option value="">— no paper (missing) —</option><option value="-">Not examined / no paper needed</option>${(() => { const mine = papSubs(m.py); return `<optgroup label="Papers of ${esc(pyName(m.py))}">${mine.map(x => `<option>${esc(x)}</option>`).join('')}</optgroup><optgroup label="All other papers in the date sheet">${allSubs.filter(x => !mine.includes(x)).map(x => `<option>${esc(x)}</option>`).join('')}</optgroup>`; })()}</select></td></tr>`).join('')}</tbody></table></div>` : '<div class="note ok">Every subject the students take has a paper in the date sheet.</div>'}
     ${Object.keys(SUBMAP).length ? `<div class="sub" style="margin-top:8px">Same subject: ${Object.entries(SUBMAP).map(([k, v]) => `<span class="dc">${esc(k)} → ${esc(v === '-' ? 'not examined' : v)} <button class="lnk" data-pcun="${esc(k)}" aria-label="Remove">✕</button></span>`).join('')}</div>` : ''}</section>`;
   if(A.noClass.length) h += `<section class="card"><h3>Class not recognised <span class="x">${A.noClass.length}</span></h3><div class="sub">These groups were skipped (programme / year not found): ${A.noClass.slice(0, 20).map(g => esc([g.pcs, g.cls, g.program, g.group].filter(Boolean).join(' ') + ' (' + g.rolls.length + ')')).join(', ')}</div></section>`;
   return h;
