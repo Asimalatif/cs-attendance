@@ -1070,6 +1070,22 @@ const subjK = x => { const k = vnorm(x).replace(/^(ADVANCED|ADVANCE|ADV)/, '').r
 function subjMatch(a, b){ const x = subjK(a), y = subjK(b); if(x.length < 3 || y.length < 3) return false; return x === y || x.includes(y) || y.includes(x) || ratio(collapse(x), collapse(y)) >= .82; }
 const paperSubs = d => ((d && d.sub) || []).flatMap(x => String(x).split(/[\/,&+\n]+/)).map(x => x.trim()).filter(Boolean);
 const mySubs = n => { const ct = contactOf(n) || {}; return [ct.dept, ...(ct.subs || [])].filter(Boolean); };
+/** class → programme + year: "F.Sc-I" → FSC1, "FCS-1 D3" → FCS1, "F.A II" → FA2, "ICS-II" → FCS2 (null when unknown) */
+function progYear(c){
+  const m = String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '').match(/^(ICS|FCS|FSC|FA|BS)(XII|XI|II|I|2|1)/); if(!m) return '';
+  return (m[1] === 'ICS' ? 'FCS' : m[1]) + ({ XII:2, XI:1, II:2, I:1, 2:2, 1:1 })[m[2]];
+}
+/** how close a paper is to a teacher: 3 = her subject AND a class she teaches (e.g. FCS-1 Computer), 2 = her subject, same year,
+    1 = her subject only (another year), 0 = not her subject */
+function ownLevel(n, d){
+  if(!isOwnSeat(n, d)) return 0;
+  const cl = (contactOf(n) || {}).cl || []; if(!cl.length) return 1;
+  const PY = (d.cls || []).flatMap(x => String(x).split(/[\/,&+\n]+/)).map(progYear).filter(Boolean), PS = paperSubs(d);
+  let best = 1;
+  cl.forEach(e => { const [py, sub] = e.split('|'); if(!PS.some(ps => subjMatch(ps, sub))) return;
+    if(PY.includes(py)) best = 3; else if(best < 2 && PY.some(x => x.slice(-1) === py.slice(-1))) best = 2; });
+  return best;
+}
 const isOwnSeat = (n, d) => { if(!d) return false; const M = mySubs(n); return M.length > 0 && paperSubs(d).some(ps => M.some(ms => subjMatch(ps, ms))); };
 function seatsAll(){ const c = compute(); return c.L.room.flatMap(g => g.items); }
 const seatKey = d => (d.iso || '?') + '|' + (d.time || '') + '|' + vnorm(d.room);
@@ -2019,7 +2035,7 @@ function autoRun(o){
   const seats = seatsAll().filter(sd => sd.iso && vnorm(sd.room)).map(sd => {
     const keepNames = o.mode === 'fill' ? sd.staff.slice() : [];
     const need = Math.max(o.per || staffNeed(sd.room), o.keep && o.mode === 'fill' ? sd.staff.length : 0);
-    return { sd, names:keepNames, need, own:P.filter(n => isOwnSeat(n, sd)).map(nkey) };
+    return { sd, names:keepNames, need, own:P.filter(n => isOwnSeat(n, sd)).map(nkey), lv:new Map(P.map(n => [nkey(n), ownLevel(n, sd)]).filter(x => x[1])) };
   });
   const K = {}; P.forEach(n => { K[nkey(n)] = n; });
   const cnt = {}, busy = {}, add = (S, n) => { S.names.push(n); const k = nkey(n); cnt[k] = (cnt[k] || 0) + 1; (busy[S.sd.iso] = busy[S.sd.iso] || new Set()).add(k); };
@@ -2036,6 +2052,7 @@ function autoRun(o){
   const ok = (n, S) => !(busy[S.sd.iso] && busy[S.sd.iso].has(nkey(n))) && !S.names.some(z => nkey(z) === nkey(n));
   const hasPerm = S => S.names.some(z => typeOf(z) === 'P');
   const ownHere = (n, S) => S.own.includes(nkey(n));
+  const lvl = (n, S) => S.lv.get(nkey(n)) || 0;                                   // 3 her class · 2 her year · 1 her subject
   // who first: permanent → visiting → non-teaching (or as chosen); 'EVEN' = everyone together
   const ORD = (o.order || SET.order || 'PVN'), tier = n => ORD === 'EVEN' ? 0 : Math.max(0, ORD.indexOf(typeOf(n) === 'O' ? 'V' : typeOf(n)));
   // lower = better
@@ -2044,7 +2061,7 @@ function autoRun(o){
     let s = tier(n) * 10000;                                                 // the next group only when this one is full (or busy that day)
     s += (cap ? have / cap : 1) * 100;                                       // evenly towards her number inside the group
     s += Math.max(0, freeDaysLeft(n) - (cap - have)) * 2;                    // few free days left → earlier
-    if(ownHere(n, S)) s -= 35;                                               // her subject's paper
+    if(ownHere(n, S)) s -= 25 + lvl(n, S) * 10;                                               // her subject's paper
     if(!hasPerm(S) && S.names.length >= S.need - 1) s += typeOf(n) === 'P' ? -60 : 60;   // last seat and no superintendent yet
     if(typeOf(n) === 'V' && S.names.length && S.names.every(z => typeOf(z) === 'V')) s += 15;
     if(typeOf(n) === 'N' && S.names.some(z => typeOf(z) === 'N')) s += 15;
@@ -2070,7 +2087,7 @@ function autoRun(o){
   seats.flatMap(S => [...new Set(paperSubs(S.sd))].map(sub => ({ S, sub, T:subjTeachers(sub) }))).filter(x => x.T.length).sort((a, b) => a.T.length - b.T.length || ncmp(a.S.sd.iso, b.S.sd.iso))
     .forEach(({ S, sub, T: ST }) => {
       if(S.names.some(z => mySubs(z).some(zs => subjMatch(sub, zs)))) return;                       // already there
-      const C = ST.filter(n => under(n) && ok(n, S) && prefScore(n, S.sd) <= 0).sort((a, b) => tier(a) - tier(b) || ownCnt(a) - ownCnt(b) || subjDays(a).length - subjDays(b).length || ((cnt[nkey(a)] || 0) / capOf(a)) - ((cnt[nkey(b)] || 0) / capOf(b)) || ncmp(a, b));
+      const C = ST.filter(n => under(n) && ok(n, S) && prefScore(n, S.sd) <= 0).sort((a, b) => lvl(b, S) - lvl(a, S) || tier(a) - tier(b) || ownCnt(a) - ownCnt(b) || subjDays(a).length - subjDays(b).length || ((cnt[nkey(a)] || 0) / capOf(a)) - ((cnt[nkey(b)] || 0) / capOf(b)) || ncmp(a, b));
       if(!C.length) return;
       if(S.names.length >= S.need){ if(S.need >= base.get(S) + Math.max(0, new Set(paperSubs(S.sd).map(subjK)).size - 1)) return; S.need++; extraSubj++; }
       add(S, C[0]); filledOwn++;
@@ -2080,7 +2097,7 @@ function autoRun(o){
     T.forEach(n => {
       const k = nkey(n); if(!under(n)) return;
       let best = null;
-      ownDays[k].forEach(iso => { if(busy[iso] && busy[iso].has(k)) return; const R = seatsFor(n, iso, false); if(!R.length) return; const free = R.reduce((a, S) => a + S.need - S.names.length, 0); if(!best || free > best.free) best = { R, free }; });
+      ownDays[k].forEach(iso => { if(busy[iso] && busy[iso].has(k)) return; const R = seatsFor(n, iso, false).sort((a, b) => lvl(n, b) - lvl(n, a)); if(!R.length) return; const lv = lvl(n, R[0]), free = R.reduce((a, S) => a + S.need - S.names.length, 0); if(!best || lv > best.lv || (lv === best.lv && free > best.free)) best = { R, free, lv }; });
       if(best){ add(best.R[0], n); filledOwn++; more = true; }
     });
   }
@@ -2106,7 +2123,7 @@ function autoRun(o){
     let C = best.C;
     if(!C.length){
       if(!o.over){ best.S.need = best.S.names.length; continue; }
-      C = P.filter(n => ok(n, best.S)).sort((a, b) => ((cnt[nkey(a)] || 0) - capOf(a)) - ((cnt[nkey(b)] || 0) - capOf(b)) || score(a, best.S) - score(b, best.S));
+      C = P.filter(n => ok(n, best.S)).sort((a, b) => ((cnt[nkey(a)] || 0) - capOf(a)) - ((cnt[nkey(b)] || 0) - capOf(b)) || (typeOf(a) === 'P' ? 1 : 0) - (typeOf(b) === 'P' ? 1 : 0) || score(a, best.S) - score(b, best.S));
       if(!C.length){ best.S.need = best.S.names.length; continue; }
       add(best.S, C[0]); extra++; continue;
     }
@@ -2168,7 +2185,9 @@ async function loadCts(quiet){
     Object.entries(SH).forEach(([k, v]) => { if(m[k]) m[k].sh = Object.fromEntries(Object.entries(v).map(([q, a]) => [q, [a.cls.size, a.p]])); });
     const SUBS = {}; ttRows.forEach(x => { const k = nkey(x.teacher); if(k && x.sub) (SUBS[k] = SUBS[k] || new Set()).add(String(x.sub).trim()); });
     Object.entries(SUBS).forEach(([k, v]) => { if(m[k]) m[k].subs = [...v]; });
-    CTS = { user, at:Date.now(), tt:ttRows.length > 0, users:!!st, shv:1, subv:1, left, list:Object.values(m) };
+    const CL = {}; ttRows.forEach(x => { const k = nkey(x.teacher), py = progYear(x.cls); if(k && py && x.sub) (CL[k] = CL[k] || new Set()).add(py + '|' + String(x.sub).trim()); });
+    Object.entries(CL).forEach(([k, v]) => { if(m[k]) m[k].cl = [...v]; });
+    CTS = { user, at:Date.now(), tt:ttRows.length > 0, users:!!st, shv:1, subv:1, clv:1, left, list:Object.values(m) };
     ls.set('dut_cts', CTS); C = null; _ix = null;
     if(!quiet){ V.busy = ''; V.msg = CTS.users ? CTS.list.filter(x => x.users).length + ' teachers from the Users sheet, ' + left.length + ' who left (X-Users).' : 'Teacher list loaded from the timetable / contacts. Update Duties.gs in Apps Script to use the Users and X-Users sheets.'; }
   }catch(e){ if(!quiet){ V.busy = ''; V.err = e.message; } }
@@ -2503,7 +2522,7 @@ async function makeSheet(){
 }
 
 render(); undoReset();
-if(CTS && (!CTS.users || !CTS.shv || !CTS.subv) && navigator.onLine) setTimeout(() => loadCts(true), 1500);   // a teacher list saved before the timetable was used
+if(CTS && (!CTS.users || !CTS.shv || !CTS.subv || !CTS.clv) && navigator.onLine) setTimeout(() => loadCts(true), 1500);   // a teacher list saved before the timetable was used
 </script>
 </body>
 </html>
