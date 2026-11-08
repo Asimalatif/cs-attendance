@@ -724,7 +724,7 @@ function checkHtml(c){
   const rowRef = i => { const r = EX.rows[i]; return `<li><button class="lnk" data-go="${i}">Row ${i + 1}</button>: ${esc([r.dt, r.cls, r.sub, r.room && 'Room ' + r.room, r.staff && r.staff.replace(/\n/g, ', ')].filter(Boolean).join(' · '))}</li>`; };
   const sec = (t, body) => `<section class="card"><h3>${t}</h3>${body}</section>`;
   let h = '';
-  h += clashHtml(c) + overHtml(c) + suggestHtml(c) + shiftHtml(c) + yearHtml(c);
+  h += clashHtml(c) + ownHtml(c) + overHtml(c) + suggestHtml(c) + shiftHtml(c) + yearHtml(c);
   h += sec(`Staff written but no room <span class="${c.check.noRoom.length ? 'x' : 'ok'}">${c.check.noRoom.length}</span>`, c.check.noRoom.length ? '<div class="sub">These were the yellow rows of the old sheet. Add the room in <b>All rows</b>.</div><ul>' + c.check.noRoom.map(rowRef).join('') + '</ul>' : '<div class="note ok">Every row with staff has a room.</div>');
   h += sec(`Rooms with no staff <span class="${c.check.noStaff.length ? 'x' : 'ok'}">${c.check.noStaff.length}</span>`, c.check.noStaff.length ? '<ul>' + c.check.noStaff.map(rowRef).join('') + '</ul>' : '<div class="note ok">Every room has staff.</div>');
   h += sec(`Rows without a date <span class="${c.check.noDate.length ? 'x' : 'ok'}">${c.check.noDate.length}</span>`, c.check.noDate.length ? '<ul>' + c.check.noDate.map(rowRef).join('') + '</ul>' : '<div class="note ok">Every row has a date.</div>');
@@ -904,6 +904,96 @@ function sgApply(){
   V.msg = n + ' duty(ies) moved to balance the load. Download the PDFs or the corrected Word file again.'; V.err = '';
   refreshTab();
 }
+/* ---------- at least one duty in her own subject ----------
+   Her subject = department (Users sheet) + subjects she teaches (Timetable). A paper is hers when one of its
+   subjects matches (Maths = Mathematics = G.Maths, Psycology = Psychology, Urdu = Urdu Comp …). */
+const SUBALIAS = { MATHEMATICS:'MATH', MATHS:'MATH', MATH:'MATH', GMATHS:'MATH', GMATH:'MATH', GENERALMATHEMATICS:'MATH', GENERALMATHS:'MATH', PAKISTANSTUDIES:'PAKSTUDY', PAKSTUDIES:'PAKSTUDY', PAKSTUDY:'PAKSTUDY', ISLAMIAT:'ISLAMIYAT', ISLAMYAT:'ISLAMIYAT', CS:'COMPUTERSCIENCE', COMPUTER:'COMPUTERSCIENCE', PSYCOLOGY:'PSYCHOLOGY', STATSTIC:'STATISTICS', STATISTIC:'STATISTICS', STATS:'STATISTICS' };
+const subjK = x => { const k = vnorm(x).replace(/^(ADVANCED|ADVANCE|ADV)/, '').replace(/(ADVANCED|ADVANCE|ADV)$/, ''); return SUBALIAS[k] || k; };
+function subjMatch(a, b){ const x = subjK(a), y = subjK(b); if(x.length < 3 || y.length < 3) return false; return x === y || x.includes(y) || y.includes(x) || ratio(collapse(x), collapse(y)) >= .82; }
+const paperSubs = d => (d.sub || []).flatMap(x => String(x).split(/[\/,&+]+/)).map(x => x.trim()).filter(Boolean);
+const mySubs = n => { const ct = contactOf(n) || {}; return [ct.dept, ...(ct.subs || [])].filter(Boolean); };
+const isOwnSeat = (n, d) => { const M = mySubs(n); return M.length > 0 && paperSubs(d).some(ps => M.some(ms => subjMatch(ps, ms))); };
+function seatsAll(){ const c = compute(); return c.L.room.flatMap(g => g.items); }
+const seatKey = d => (d.iso || '?') + '|' + (d.time || '') + '|' + vnorm(d.room);
+/** ways to give her one duty in her own subject */
+function ownOptions(n){
+  const c = compute(), k = nkey(n), me = c.L.teacher.find(t => nkey(t.label) === k) || { items:[] }, mine = new Set(me.items.map(x => x.iso));
+  const busyOn = (x, iso) => (c.L.teacher.find(t => nkey(t.label) === nkey(x)) || { items:[] }).items.some(y => y.iso === iso);
+  const own = seatsAll().filter(sd => sd.iso && !mine.has(sd.iso) && isOwnSeat(n, sd));
+  const swap = [], take = [], add = [];
+  own.forEach(sd => {
+    sd.staff.forEach(x => {
+      if(nkey(x) === k || isOwnSeat(x, sd)) return;                          // never move a teacher out of her own subject's paper
+      if(overOf(x)) take.push({ id:'take|' + seatKey(sd) + '|' + nkey(x), kind:'take', sd, x });
+      me.items.forEach(d1 => { if(d1.iso !== sd.iso && !busyOn(x, d1.iso) && !isOwnSeat(n, d1)) swap.push({ id:'swap|' + seatKey(sd) + '|' + nkey(x) + '|' + seatKey(d1), kind:'swap', sd, x, d1 }); });
+    });
+    add.push({ id:'add|' + seatKey(sd), kind:'add', sd });
+  });
+  swap.sort((a, b) => (isOwnSeat(a.x, a.d1) ? 0 : 1) - (isOwnSeat(b.x, b.d1) ? 0 : 1) || ncmp(a.sd.iso, b.sd.iso));   // best: she gets her paper, the other teacher gets one of HER subject
+  take.sort((a, b) => (dutyCount(b.x) - (maxOf(b.x) || 0)) - (dutyCount(a.x) - (maxOf(a.x) || 0)) || ncmp(a.sd.iso, b.sd.iso));
+  add.sort((a, b) => a.sd.staff.length - b.sd.staff.length || ncmp(a.sd.iso, b.sd.iso));
+  const both = swap.filter(o => isOwnSeat(o.x, o.d1)), other = swap.filter(o => !isOwnSeat(o.x, o.d1));   // both win: she gets her paper, the other teacher gets one of HER subject
+  const order = lessOf(n) || !me.items.length ? [both, take, add, other] : [both, other, take, add];
+  return [].concat(...order.map(L => L.slice(0, 12)));
+}
+const ownLbl = o => `${dayShort(o.sd.day)} ${(o.sd.dt || '').slice(0, 5)} · ${roomLbl(o.sd.room)} · ${o.sd.sub.join(', ')}` + (o.kind === 'swap' ? ` — swap with ${o.x} (she takes your ${dayShort(o.d1.day)} ${(o.d1.dt || '').slice(0, 5)} ${roomLbl(o.d1.room)}${isOwnSeat(o.x, o.d1) ? ' — her own subject too ★' : ''})` : o.kind === 'take' ? ` — take it from ${o.x} (MORE)` : ` — join as extra (${o.sd.staff.length} staff)`);
+function ownList(){
+  const c = compute(); if(c._own) return c._own;
+  const pool = CTS ? [...new Set(CTS.list.filter(x => CTS.users ? x.users : true).map(x => x.name))] : c.L.teacher.map(t => t.label);
+  const L = pool.filter(n => !offDuty(n) && catOf(n) !== 'NT' && !(c.unknown || []).includes(n));
+  const allSubs = [...new Set(seatsAll().flatMap(paperSubs))];
+  const need = [], noSub = [], noPaper = [];
+  L.forEach(n => {
+    const M = mySubs(n); if(!M.length){ noSub.push(n); return; }
+    if(!allSubs.some(ps => M.some(ms => subjMatch(ps, ms)))){ noPaper.push(n); return; }
+    const t = c.L.teacher.find(x => nkey(x.label) === nkey(n));
+    if(!t || !t.items.some(d => isOwnSeat(n, d))) need.push(n);
+  });
+  need.sort((a, b) => typeRank(a) - typeRank(b) || ncmp(nkey(a), nkey(b)));
+  return (c._own = { need, noSub, noPaper, total:L.length });
+}
+let OWN = {};
+function ownHtml(c){
+  if(!CTS) return '';
+  const O = ownList();
+  if(!O.need.length) return `<section class="card"><h3>Duty in her own subject <span class="ok">✓</span></h3><div class="note ok">Every teacher has at least one duty in a paper of her own subject.</div>${O.noPaper.length ? `<div class="sub" style="margin-top:6px">No paper of their subject in this exam: ${O.noPaper.map(esc).join(', ')}.</div>` : ''}</section>`;
+  let n = 0;
+  const rows = O.need.map(t => {
+    const opts = ownOptions(t), k = nkey(t), sel = OWN[k] !== undefined ? OWN[k] : (opts[0] ? opts[0].id : ''); if(sel) n++;
+    return `<tr><td class="nw"><b>${esc(t)}</b>${shareBadge(t)}<div class="sub">${esc(tLine(t))}</div></td><td>${esc(mySubs(t).join(', '))}</td>
+      <td>${opts.length ? `<select class="sq" data-own="${esc(k)}" style="height:40px;min-width:240px;max-width:420px"><option value="">— leave —</option>${opts.map(o => `<option value="${esc(o.id)}" ${sel === o.id ? 'selected' : ''}>${esc(ownLbl(o))}</option>`).join('')}</select>` : '<span class="x">No paper of her subject on a day she is free</span>'}</td></tr>`;
+  }).join('');
+  return `<section class="card" style="border-top-color:var(--mid)"><h3>Duty in her own subject <span style="color:var(--mid)">${O.need.length}</span></h3>
+    <div class="sub">These teachers have no duty in a paper of their own subject (department in the Users sheet + subjects in the timetable). Best choice is picked: a <b>swap</b> keeps everyone’s number of duties the same; <b>take</b> moves a duty from a teacher with MORE than her share; <b>join as extra</b> adds her to the room. Teachers are never moved out of their own subject’s paper.</div>
+    <div class="tw" style="max-height:none"><table><thead><tr><th>Teacher</th><th>Her subject</th><th>Fix</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="acts"><button class="btn pri" id="ownGo" ${n ? '' : 'disabled'}>Fix ${n} teacher${n === 1 ? '' : 's'} in one go</button></div>
+    ${O.noSub.length ? `<div class="sub" style="margin-top:8px">No subject known (no department in Users, not in the timetable): ${O.noSub.slice(0, 30).map(esc).join(', ')}${O.noSub.length > 30 ? ' …' : ''}</div>` : ''}
+    ${O.noPaper.length ? `<div class="sub" style="margin-top:4px">No paper of their subject in this exam: ${O.noPaper.slice(0, 30).map(esc).join(', ')}${O.noPaper.length > 30 ? ' …' : ''}</div>` : ''}</section>`;
+}
+function ownApplyOne(t, id){
+  const c = compute(), o = ownOptions(t).find(x => x.id === id); if(!o) return false;
+  const rowsOf = (who, d) => { const it = (c.L.teacher.find(x => nkey(x.label) === nkey(who)) || { items:[] }).items.find(y => seatKey(y) === seatKey(d)); return it ? it.rows : d.rows; };
+  if(o.kind === 'add'){ o.sd.rows.forEach(i => setRowNames(i, rowNames(i).concat(t))); }
+  else {
+    rowsOf(o.x, o.sd).forEach(i => setRowNames(i, rowNames(i).filter(z => nkey(z) !== nkey(o.x)).concat(t)));
+    if(o.kind === 'swap') rowsOf(t, o.d1).forEach(i => setRowNames(i, rowNames(i).filter(z => nkey(z) !== nkey(t)).concat(o.x)));
+  }
+  saveLocal(); return true;
+}
+function ownApply(){
+  const want = {}; ownList().need.forEach(t => { const k = nkey(t), opts = ownOptions(t); want[t] = OWN[k] !== undefined ? OWN[k] : (opts[0] ? opts[0].id : ''); });
+  let n = 0, again = 0;
+  Object.entries(want).forEach(([t, id]) => {
+    if(!id) return;
+    if(compute().L.teacher.some(x => nkey(x.label) === nkey(t) && x.items.some(d => isOwnSeat(t, d)))) return;   // fixed meanwhile
+    if(ownApplyOne(t, id)) n++;
+    else { const best = ownOptions(t)[0]; if(best && ownApplyOne(t, best.id)){ n++; again++; } }      // first choice no longer possible: next best
+  });
+  OWN = {};
+  V.msg = n + ' teacher(s) now have a duty in their own subject' + (again ? ' (' + again + ' with the next best choice)' : '') + '. Download the PDFs or the corrected Word file again.'; V.err = '';
+  refreshTab();
+}
+
 /* ---------- Settings tab ---------- */
 function setHtml(){
   const people = CTS ? CTS.list.filter(x => CTS.users ? x.users : true).map(x => x.name) : compute().L.teacher.map(t => t.label);
@@ -1248,6 +1338,7 @@ function wireTab(){
     if(t.id === 'unGo') return unkApply();
     if(t.id === 'cxGo') return cxApply();
     if(t.id === 'sgGo') return sgApply();
+    if(t.id === 'ownGo') return ownApply();
     if(t.id === 'sReset'){ SET.max = Object.assign({}, SET_DEFAULT); SET.both = '2'; saveSet(); return refreshTab(); }
     if(t.id === 'pAddDate'){ const v = ($('#pDate') || {}).value; if(!v) return alert('Choose the date first.'); const i = insertAfterDay(parseDate(isoToDt(v)).iso, newRow(isoToDt(v))); saveLocal(); refreshTab(); const el = document.getElementById('prow' + i); el && el.scrollIntoView({ block:'center' }); return; }
     if(t.dataset.pday !== undefined){ const iso = t.dataset.pday, r0 = EX.rows.find(r => (r.iso || '') === iso) || {}; const i = insertAfterDay(iso, Object.assign(newRow(r0.dt || ''), { time:r0.time || '' })); saveLocal(); refreshTab(); const el = document.getElementById('prow' + i); if(el){ el.scrollIntoView({ block:'center' }); const inp = el.querySelector('input'); inp && inp.focus(); } return; }
@@ -1276,6 +1367,7 @@ function wireTab(){
       saveLocal(); refreshTab(); return;
     }
     if(t.dataset.pmv !== undefined){ const iso = t.dataset.pmv, dt = isoToDt(t.value); if(!t.value) return; const p = parseDate(dt), n = EX.rows.filter(r => (r.iso || '') === iso).length; if(!confirm('Move ' + n + ' row(s) to ' + p.day + ' ' + p.dt + '?')) return refreshTab(); EX.rows.forEach(r => { if((r.iso || '') === iso){ r.iso = p.iso; r.dt = p.dt; r.day = p.day; } }); saveLocal(); return refreshTab(); }
+    if(t.dataset.own !== undefined){ OWN[t.dataset.own] = t.value; return refreshTab(); }
     if(t.dataset.sgx !== undefined){ SGX[t.dataset.sgx] = t.value; return refreshTab(); }
     if(t.dataset.sboth !== undefined){ SET.both = String(Math.max(0, parseInt(t.value, 10) || 0)); saveSet(); return refreshTab(); }
     if(t.dataset.smax !== undefined){ SET.max[t.dataset.smax] = t.value === '' ? '' : String(Math.max(0, parseInt(t.value, 10) || 0)); saveSet(); if(EX){ EX.saved = false; ls.set('dut_cur', EX); } return refreshTab(); }
@@ -1472,7 +1564,9 @@ async function loadCts(quiet){
     ttRows.forEach(x => { const k = nkey(x.teacher); if(!k) return; const sh = x.sh === 'E' || (!x.sh && /EVENING/i.test(x.room || '')) ? 'E' : 'M'; const a = ((SH[k] = SH[k] || {})[sh] = SH[k][sh] || { cls:new Set(), p:0 }); a.cls.add(String(x.cls || '').toUpperCase().replace(/[^A-Z0-9]/g, '') + '|' + x.sub); const days = new Set([...(x.th || []), ...(x.pr || [])]); a.p += (x.ps || [1]).length * days.size; });
     ttRows.forEach(x => { const k = nkey(x.teacher); if(!k) return; if(m[k]){ m[k].tt = true; if(!m[k].dept) m[k].dept = x.dept || ''; } else if(!isLeft(k)) m[k] = { name:x.teacher, phone:'', wa:'', status:'', dept:x.dept || '', tt:true, users:false }; });
     Object.entries(SH).forEach(([k, v]) => { if(m[k]) m[k].sh = Object.fromEntries(Object.entries(v).map(([q, a]) => [q, [a.cls.size, a.p]])); });
-    CTS = { user, at:Date.now(), tt:ttRows.length > 0, users:!!st, shv:1, left, list:Object.values(m) };
+    const SUBS = {}; ttRows.forEach(x => { const k = nkey(x.teacher); if(k && x.sub) (SUBS[k] = SUBS[k] || new Set()).add(String(x.sub).trim()); });
+    Object.entries(SUBS).forEach(([k, v]) => { if(m[k]) m[k].subs = [...v]; });
+    CTS = { user, at:Date.now(), tt:ttRows.length > 0, users:!!st, shv:1, subv:1, left, list:Object.values(m) };
     ls.set('dut_cts', CTS); C = null; _ix = null;
     if(!quiet){ V.busy = ''; V.msg = CTS.users ? CTS.list.filter(x => x.users).length + ' teachers from the Users sheet, ' + left.length + ' who left (X-Users).' : 'Teacher list loaded from the timetable / contacts. Update Duties.gs in Apps Script to use the Users and X-Users sheets.'; }
   }catch(e){ if(!quiet){ V.busy = ''; V.err = e.message; } }
@@ -1805,7 +1899,7 @@ async function makeSheet(){
 }
 
 render();
-if(CTS && (!CTS.users || !CTS.shv) && navigator.onLine) setTimeout(() => loadCts(true), 1500);   // a teacher list saved before the timetable was used
+if(CTS && (!CTS.users || !CTS.shv || !CTS.subv) && navigator.onLine) setTimeout(() => loadCts(true), 1500);   // a teacher list saved before the timetable was used
 </script>
 </body>
 </html>
