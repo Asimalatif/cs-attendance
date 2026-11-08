@@ -745,7 +745,14 @@ function sameDeptOf(n, from, d){
 /** duties still missing from her share (fewest first = closest to her number) */
 const needOf = n => { const m = maxOf(n); return m == null ? 99 : m - dutyCount(n); };
 /** best first: right shift, still below her share, same department, closest to her number, fewest duties */
-const candCmp = (from, d) => (a, b) => (wrongShift(a) ? 1 : 0) - (wrongShift(b) ? 1 : 0) || (fullOf(a) ? 1 : 0) - (fullOf(b) ? 1 : 0) || sameDeptOf(b, from, d) - sameDeptOf(a, from, d) || needOf(a) - needOf(b) || dutyCount(a) - dutyCount(b) || ncmp(a, b);
+const sd2 = (n, from) => sameDeptOf(n, from, null) === 2 ? 1 : 0;
+const candCmp = (from, d) => (a, b) => (wrongShift(a) ? 1 : 0) - (wrongShift(b) ? 1 : 0) || (fullOf(a) ? 1 : 0) - (fullOf(b) ? 1 : 0) || sd2(b, from) - sd2(a, from) || needOf(a) - needOf(b) || sameDeptOf(b, from, d) - sameDeptOf(a, from, d) || dutyCount(b) - dutyCount(a) || ncmp(a, b);
+/** teachers below their share who are NOT offered because they already have a duty on that date */
+function busyLess(d){
+  const c = compute(), out = [];
+  c.L.teacher.forEach(t => { if(t.items.some(x => (x.iso || '?') === (d.iso || '?')) && lessOf(t.label) && !offDuty(t.label) && !(c.unknown || []).includes(t.label)) out.push(t.label); });
+  return out.sort((a, b) => needOf(a) - needOf(b) || ncmp(a, b));
+}
 /** teachers with NO duty on that date (any room, any time) */
 function freeTeachers(d, from){
   const c = compute(), busy = new Set();
@@ -757,9 +764,9 @@ function freeTeachers(d, from){
 }
 function freeGroups(d, from){
   const F = freeTeachers(d, from), dep = (contactOf(from) || {}).dept;
-  const same = F.filter(n => !fullOf(n) && !wrongShift(n) && sameDeptOf(n, from, d) > 0), S = new Set(same);
+  const same = from && dep ? F.filter(n => !fullOf(n) && !wrongShift(n) && sameDeptOf(n, from, d) === 2) : [], S = new Set(same);
   const rest = F.filter(n => !S.has(n));
-  return [[from && dep ? '★ Same department as ' + from + ' (' + dep + ')' : '★ Department of this paper', same],
+  return [['★ Same department as ' + from + ' (' + dep + ')', same],
     ['Permanent teachers free that day', rest.filter(n => !fullOf(n) && typeOf(n) === 'P')], ['Visiting teachers free that day', rest.filter(n => !fullOf(n) && typeOf(n) === 'V')], ['Non-teaching staff free that day', rest.filter(n => !fullOf(n) && typeOf(n) === 'N')],
     ['Already have their share of duties', rest.filter(n => fullOf(n))]].filter(g => g[1].length);
 }
@@ -767,6 +774,7 @@ function dutyOpts(t, d, sel){
   const mv = moveTargets(t, d);
   return `<option value="">— keep —</option>
     ${freeGroups(d, t.label).map(([lab, L]) => `<optgroup label="Give it to · ${esc(lab)}">${L.map(x => `<option value="give:${esc(x)}" ${sel === 'give:' + x ? 'selected' : ''}>${wrongShift(x) || fullOf(x) ? '⚠ ' : ''}${esc(x)} — ${esc(tLine(x))}</option>`).join('')}</optgroup>`).join('')}
+    ${(() => { const B = busyLess(d).filter(x => nkey(x) !== nkey(t.label)); return B.length ? `<optgroup label="Not offered — already have a duty on ${esc(d.dt || '')}">${B.slice(0, 40).map(x => `<option disabled>${esc(x)} — ${esc(tLine(x).split(' · ')[0])}</option>`).join('')}</optgroup>` : ''; })()}
     <optgroup label="Move ${esc(t.label)} to another date (she is free then)">${mv.map(r => `<option value="move:${r.i}" ${sel === 'move:' + r.i ? 'selected' : ''}>${esc(dayShort(r.day) + ' ' + r.dt + (r.time ? ' ' + r.time : '') + ' · ' + roomLbl(r.room) + ' · ' + r.cls)} (${r.staff.length} staff)</option>`).join('')}</optgroup>
     <optgroup label="Other"><option value="drop" ${sel === 'drop' ? 'selected' : ''}>Take her off this room (others stay)</option></optgroup>`;
 }
@@ -843,7 +851,7 @@ function scoreCand(n, from, d, cnt){
   const ct = contactOf(n) || {}, why = [], k = cnt[nkey(n)] || 0, m = maxOf(n), sd = sameDeptOf(n, from, d);
   let s = 0;
   if(wrongShift(n)){ s += 1000; why.push('⚠ teaches only in the other shift'); }
-  if(sd === 2){ why.push('★ same department'); } else if(sd === 1){ s += 50; why.push('department of this paper'); } else s += 100;   // same department first
+  if(sd === 2){ why.push('★ same department'); } else { s += 100; if(sd === 1){ s -= 2; why.push('department of this paper'); } }   // same department first
   if(m != null){ s += (m - k) * 5; why.push(k + '/' + m + ' duties' + (m - k === 1 ? ' — reaches her number' : ' (needs ' + (m - k) + ' more)')); }   // closest to her number first
   else { s += 40 + k * 5; why.push(k + ' duties'); }
   if(typeOf(n) !== typeOf(from)){ s += 20; why.push(typeOf(n) === 'V' ? 'visiting' : 'permanent'); }
@@ -1183,8 +1191,9 @@ function pickTeacher(i, msg){
   $('#dlgIn').innerHTML = `<h2 style="margin:0 0 4px">Add a teacher</h2><div class="sub">${esc(dateDay(r))} · ${esc(roomLbl(rec.room))} · ${esc(rec.cls)} ${esc(rec.sub)} — now: ${esc(rowNames(i).join(', ') || 'no staff')}</div>
     ${msg ? `<div class="note ok">${esc(msg)}</div>` : ''}
     <input class="sq" id="ptq" type="search" placeholder="Search teacher, department…" style="margin-top:8px" autocomplete="off">
-    <div class="sub" style="margin-top:6px">Only teachers with <b>no duty on this date</b>: the paper’s department first, then those closest to their number of duties. <span class="x">⚠</span> = at her maximum duties, or teaches only in the other shift.</div>
+    <div class="sub" style="margin-top:6px">Only teachers with <b>no duty on this date</b>, closest to their number of duties first (e.g. 6/9 before 0/5). <span class="x">⚠</span> = at her maximum duties, or teaches only in the other shift.</div>
     <div class="tw" style="max-height:52vh" id="ptl">${freeGroups({ iso:r.iso, time:r.time || '', sub:[rec.sub] }, null).map(([lab, L]) => `<div class="li" style="padding:6px 8px;background:var(--surface2)"><b>${esc(lab)}</b><span class="sub">${L.length}</span></div>` + L.map(n => `<div class="li" style="padding:6px 8px" data-q="${esc((n + ' ' + tInfo(n)).toLowerCase())}"><div style="flex:1"><b>${wrongShift(n) || fullOf(n) ? '<span class="x">⚠</span> ' : ''}${esc(n)}</b><div class="sub">${esc(tLine(n))}</div></div><button class="btn sm good" data-pick="${esc(n)}">Add</button></div>`).join('')).join('') || '<div class="sub">Every teacher already has a duty on this date.</div>'}</div>
+    ${(() => { const B = busyLess({ iso:r.iso }); return B.length ? `<div class="sub" style="margin-top:8px">Not offered — they already have a duty on ${esc(r.dt)}: ${B.slice(0, 40).map(x => esc(x) + ' (' + esc(tLine(x).split(' · ')[0].split(' (')[0]) + ')').join(', ')}</div>` : ''; })()}
     <div class="acts"><button class="btn" id="dClose">Done</button></div>`;
   if(!$('#dlg').open) $('#dlg').showModal();
   $('#ptq').oninput = e => { const q = e.target.value.trim().toLowerCase(); document.querySelectorAll('#ptl [data-q]').forEach(d => { d.style.display = !q || d.dataset.q.includes(q) ? '' : 'none'; }); };
