@@ -340,6 +340,7 @@ function fixItems(){
   Object.values(BLOCK).forEach(x => out.push(['block', x.r, x.b]));
   Object.entries(SET.max).forEach(([c, v]) => { if(v !== '' && v != null) out.push(['max', c, String(v)]); });
   Object.values(SET.weak).forEach(n => out.push(['weak', n, '1']));
+  out.push(['both', 'fewer duties for morning + evening', String(SET.both)]);
   Object.values(SET.cat).forEach(x => { if(x.c) out.push(['cat', x.n, x.c]); });
   return out;
 }
@@ -347,6 +348,7 @@ function loadFixItems(items){   // from the server: fill what this device does n
   (items || []).forEach(([t, w, v]) => {
     if(t === 'note'){ const k = nkey(w); if(k && !NOTES[k]) NOTES[k] = { n:w, v }; }
     else if(t === 'max'){ if(SET.max[w] == null || SET.max[w] === '') SET.max[w] = v; }
+    else if(t === 'both'){ if(!ls.get('dut_set', null) || ls.get('dut_set', {}).both == null) SET.both = v; }
     else if(t === 'weak'){ const k = nkey(w); if(k && !SET.weak[k]) SET.weak[k] = w; }
     else if(t === 'cat'){ const k = nkey(w); if(k && !SET.cat[k]) SET.cat[k] = { n:w, c:v }; }
     else if(t === 'block'){ const k = vnorm(w); if(k && !BLOCK[k]) BLOCK[k] = { r:w, b:v }; }
@@ -357,6 +359,9 @@ function loadFixItems(items){   // from the server: fill what this device does n
 /* ---------- settings: maximum duties per category; elderly / weak staff; permanent and visiting kept apart ---------- */
 const CATS = [['L', 'Lecturer'], ['AP', 'Assistant Professor'], ['ASP', 'Associate Professor'], ['P', 'Professor'], ['VL', 'Visiting Lecturer'], ['VAP', 'Visiting Assistant Professor'], ['VASP', 'Visiting Associate Professor'], ['VP', 'Visiting Professor'], ['W', 'Elderly or weak (ill / disabled)']];
 let SET = Object.assign({ max:{}, weak:{}, cat:{} }, ls.get('dut_set', {}));   // max: cat -> n · weak: nkey -> name · cat: nkey -> { n, c }
+const SET_DEFAULT = { L:'5', AP:'5', ASP:'3', P:'3', VL:'9', VAP:'5', VASP:'4', VP:'3', W:'' };
+Object.keys(SET_DEFAULT).forEach(k => { if(SET.max[k] == null) SET.max[k] = SET_DEFAULT[k]; });
+if(SET.both == null) SET.both = '2';      // teaches morning AND evening: this many duties fewer (she also has evening exam duties)
 function saveSet(){ ls.set('dut_set', SET); C = null; }
 const rankOf = d => { d = String(d || '').toLowerCase(); return /assoc/.test(d) ? 'ASP' : /assist|asst|\ba\.?\s*p\b/.test(d) ? 'AP' : /prof/.test(d) ? 'P' : 'L'; };
 const isVisStatus = n => /visit/i.test((contactOf(n) || {}).status || '');
@@ -367,7 +372,12 @@ const catName = c => (CATS.find(x => x[0] === c) || ['', ''])[1];
 function typeOf(n){ if(!contactOf(n)) return 'O'; const c = catOf(n); return c === 'W' ? (isVisStatus(n) ? 'V' : 'P') : c[0] === 'V' ? 'V' : 'P'; }
 const TYPE_T = { P:'Permanent teachers', V:'Visiting teachers', O:'Not in the teacher list' };
 const typeRank = n => ({ P:0, V:1, O:2 })[typeOf(n)];
-const maxOf = n => { const v = SET.max[catOf(n)]; return v === '' || v == null || isNaN(+v) ? null : +v; };
+/** she teaches in the morning AND in the evening (timetable) */
+const bothShift = n => { const s = (contactOf(n) || {}).sh; return !!(s && s.M && s.E); };
+const bothLess = n => bothShift(n) ? Math.max(0, parseInt(SET.both, 10) || 0) : 0;
+/** the duties she should get: her category's number (Settings), fewer when she also teaches the other shift */
+const maxOf = n => { const v = SET.max[catOf(n)]; if(v === '' || v == null || isNaN(+v)) return null; return Math.max(0, +v - bothLess(n)); };
+const lessOf = n => { const m = maxOf(n); return m != null && dutyCount(n) < m; };
 const fullOf = n => { const m = maxOf(n); return m != null && dutyCount(n) >= m; };
 const overOf = n => { const m = maxOf(n); return m != null && dutyCount(n) > m; };
 /** the teacher(s) behind one written name. A standard name "Ms. Naila Gul + Ms. Hina Gul" = two teachers written together. */
@@ -539,7 +549,7 @@ function groupCards(kind){
   return G.map((g, gi) => {
     const head = kind === 'teacher' && (gi === 0 || typeOf(G[gi - 1].label) !== typeOf(g.label)) ? `<h3 style="margin:18px 0 0;padding:8px 12px;border-radius:12px;background:${typeOf(g.label) === 'V' ? 'var(--mid-bg)' : typeOf(g.label) === 'O' ? 'var(--bad-bg)' : 'var(--good-bg)'}">${TYPE_T[typeOf(g.label)]} <span class="sub">${G.filter(x => typeOf(x.label) === typeOf(g.label)).length}</span></h3>` : '';
     const wa = kind === 'teacher';
-    return head + `<div class="rm"><h3><span>${kind === 'teacher' ? `<button class="lnk" data-t="${esc(g.key)}">${esc(g.label)}</button>${g.clash ? ' <span class="x">⚠ clash</span>' : ''}${wrongShift(g.label) ? ` <span class="dc x">${examShift() === 'M' ? 'EVENING' : 'MORNING'} ONLY</span>` : ''}${kind === 'teacher' && overOf(g.label) ? ' <span class="dc x">OVER MAX</span>' : ''}${CTS && compute().unknown.includes(g.label) ? ` <span class="dc x">${compute().leftOf[g.label] ? 'LEFT the college' : 'not in Users sheet'}</span>` : ''}` : esc(g.label)}</span><span class="sub">${kind === 'teacher' ? esc(tLine(g.label)) : g.items.length + ' paper' + (g.items.length === 1 ? '' : 's')}${kind === 'teacher' ? ` <button class="btn sm" data-t="${esc(g.key)}">Change</button>` : ''}${wa ? ` <button class="btn sm good" data-wa="${esc(g.key)}">WhatsApp</button>` : ''}</span></h3>
+    return head + `<div class="rm"><h3><span>${kind === 'teacher' ? `<button class="lnk" data-t="${esc(g.key)}">${esc(g.label)}</button>${g.clash ? ' <span class="x">⚠ clash</span>' : ''}${wrongShift(g.label) ? ` <span class="dc x">${examShift() === 'M' ? 'EVENING' : 'MORNING'} ONLY</span>` : ''}${kind === 'teacher' ? shareBadge(g.label) + (bothShift(g.label) ? ' <span class="dc">MORNING + EVENING</span>' : '') : ''}${CTS && compute().unknown.includes(g.label) ? ` <span class="dc x">${compute().leftOf[g.label] ? 'LEFT the college' : 'not in Users sheet'}</span>` : ''}` : esc(g.label)}</span><span class="sub">${kind === 'teacher' ? esc(tLine(g.label)) : g.items.length + ' paper' + (g.items.length === 1 ? '' : 's')}${kind === 'teacher' ? ` <button class="btn sm" data-t="${esc(g.key)}">Change</button>` : ''}${wa ? ` <button class="btn sm good" data-wa="${esc(g.key)}">WhatsApp</button>` : ''}</span></h3>
       <div class="tw" style="max-height:none"><table><thead><tr><th>#</th>${cols.map(c => `<th>${COLNAME[c]}</th>`).join('')}</tr></thead><tbody>${g.items.map((it, i) => `<tr><td class="n">${i + 1}</td>${cols.map(c => `<td class="${c === 'date' || c === 'room' ? 'nw' : ''} ${it.x && (c === 'date' || c === 'room') ? 'x' : ''}">${c === 'room' ? '<b>' + esc(cellOf(it, c)) + '</b>' : c === 'staff' && !it.staff.length ? '<span class="x">No staff</span>' : esc(cellOf(it, c))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
   }).join('');
 }
@@ -729,7 +739,7 @@ function freeTeachers(d){
   return pool.filter(n => { const k = nkey(n); if(!k || seen.has(k) || busy.has(k) || (noteOf(n) && noteOf(n) !== '')) return false; seen.add(k); return !c.unknown || !c.unknown.includes(n); })
     .sort((a, b) => (wrongShift(a) ? 1 : 0) - (wrongShift(b) ? 1 : 0) || dutyCount(a) - dutyCount(b) || ncmp(a, b));
 }
-function freeGroups(d){ const F = freeTeachers(d); return [['Permanent teachers free that day', F.filter(n => !fullOf(n) && typeOf(n) === 'P')], ['Visiting teachers free that day', F.filter(n => !fullOf(n) && typeOf(n) === 'V')], ['Already at their maximum duties', F.filter(n => fullOf(n))]].filter(g => g[1].length); }
+function freeGroups(d){ const F = freeTeachers(d); return [['Permanent teachers free that day', F.filter(n => !fullOf(n) && typeOf(n) === 'P')], ['Visiting teachers free that day', F.filter(n => !fullOf(n) && typeOf(n) === 'V')], ['Already have their share of duties', F.filter(n => fullOf(n))]].filter(g => g[1].length); }
 /** choices for one duty of a teacher: give it to a free teacher, move her to another date, take her off */
 function dutyOpts(t, d, sel){
   const mv = moveTargets(t, d);
@@ -789,10 +799,18 @@ function shiftHtml(c){
 }
 /* teachers with more duties than the maximum of their category (Settings) */
 function overHtml(c){
-  const L = c.L.teacher.filter(t => overOf(t.label));
-  if(!L.length) return Object.keys(SET.max).some(k => SET.max[k] !== '' && SET.max[k] != null) ? `<section class="card"><h3>Over the maximum <span class="ok">0</span></h3><div class="note ok">No teacher has more duties than the maximum set in Settings.</div></section>` : '';
-  return `<section class="card" style="border-top-color:var(--bad)"><h3>Over the maximum <span class="x">${L.length}</span></h3><div class="sub">More duties than the maximum for their category (Settings). Tap <b>Change</b> and give the extra duties to someone else.</div>
-    <div class="tw" style="max-height:none"><table><tbody>${L.sort((a, b) => typeRank(a.label) - typeRank(b.label)).map(t => `<tr><td><b>${esc(t.label)}</b><div class="sub">${esc(catName(catOf(t.label)))} · ${esc(tLine(t.label))}</div></td><td><button class="btn sm pri" data-t="${esc(t.key)}">Change</button></td></tr>`).join('')}</tbody></table></div></section>`;
+  if(!CTS) return '';
+  const pool = [...new Set(CTS.list.filter(x => CTS.users ? x.users : true).map(x => x.name))].filter(n => !noteOf(n) && maxOf(n) != null);
+  const more = pool.filter(overOf).sort((a, b) => typeRank(a) - typeRank(b) || (dutyCount(b) - maxOf(b)) - (dutyCount(a) - maxOf(a)));
+  const less = pool.filter(lessOf).sort((a, b) => typeRank(a) - typeRank(b) || (maxOf(b) - dutyCount(b)) - (maxOf(a) - dutyCount(a)));
+  const ok = pool.length - more.length - less.length;
+  const row = n => { const t = c.L.teacher.find(x => nkey(x.label) === nkey(n)); return `<tr><td><b>${esc(n)}</b>${shareBadge(n)}<div class="sub">${esc(catName(catOf(n)))} · ${esc(tLine(n))}</div></td><td>${t ? `<button class="btn sm pri" data-t="${esc(t.key)}">Change</button>` : ''}</td></tr>`; };
+  const part = (L, ty) => L.filter(n => typeOf(n) === ty);
+  const block = (L, title, color, note) => !L.length ? '' : `<section class="card" style="border-top-color:${color}"><h3>${title} <span style="color:${color}">${L.length}</span></h3><div class="sub">${note}</div>${[['P', 'Permanent'], ['V', 'Visiting']].map(([ty, lab]) => part(L, ty).length ? `<h3 style="margin-top:10px">${lab} <span class="sub">${part(L, ty).length}</span></h3><div class="tw" style="max-height:none"><table><tbody>${part(L, ty).map(row).join('')}</tbody></table></div>` : '').join('')}</section>`;
+  return `<section class="card"><h3>Duties share</h3><div class="sub">Against the duties each teacher should get (⚙ Settings: by designation, permanent / visiting, ${esc(SET.both || 0)} fewer for teachers of both morning and evening).</div>
+    <div class="chips"><div class="chip bad"><b>${more.length}</b>more than share</div><div class="chip mid"><b>${less.length}</b>less than share</div><div class="chip good"><b>${ok}</b>right number ✓</div></div></section>`
+    + block(more, 'More duties than their share', 'var(--bad)', 'Tap <b>Change</b>, or use <b>Suggestions</b> below, to give the extra duties to teachers who have less.')
+    + block(less, 'Less duties than their share', 'var(--mid)', 'These teachers can take more duties — the Suggestions below give them duties from teachers who have more. You can also add them in <b>Plan &amp; edit</b> (+ Teacher).');
 }
 /* ---------- suggestions: who should take the extra duties ----------
    From: teachers over their maximum (Settings) — or, without a maximum, well above the average.
@@ -801,12 +819,15 @@ function overHtml(c){
 let SGX = {};
 function scoreCand(n, from, d, cnt){
   const ct = contactOf(n) || {}, fc = contactOf(from) || {}, why = [], k = cnt[nkey(n)] || 0;
-  let s = k * 10; why.push(k + ' dut' + (k === 1 ? 'y' : 'ies'));
+  const m = maxOf(n);
+  let s = m != null ? -(m > 0 ? (m - k) / m * 50 : 0) - (m - k) * 2 : k * 10;   // the bigger part of her share still missing, the better
+  why.push(k + (m != null ? '/' + m : '') + ' dut' + (k === 1 && m == null ? 'y' : 'ies') + (m != null && m > k ? ' (needs ' + (m - k) + ' more)' : ''));
+  if(bothShift(n)){ s += 4; why.push('also teaches evening'); }
   if(wrongShift(n)){ s += 100; why.push('⚠ teaches only in the other shift'); } else if(ct.sh) why.push('teaches ' + (examShift() === 'M' ? 'morning' : 'evening'));
   const dk = vnorm(ct.dept);
   if(dk && fc.dept && dk === vnorm(fc.dept)){ s -= 8; why.push('same department'); }
   else if(dk && d.sub.some(x => { const sx = vnorm(x); return sx && (sx.includes(dk) || dk.includes(sx)); })){ s -= 6; why.push('department of this paper'); }
-  if(typeOf(n) === typeOf(from)) s -= 3; else why.push(typeOf(n) === 'V' ? 'visiting' : 'permanent');
+  if(typeOf(n) === typeOf(from)) s -= 8; else why.push(typeOf(n) === 'V' ? 'visiting' : 'permanent');
   return { s, why:why.join(' · ') };
 }
 function suggestPlan(){
@@ -838,10 +859,10 @@ function suggestHtml(c){
   if(!CTS) return '';
   const P = suggestPlan();
   const lowTxt = P.low.length ? `<div class="sub" style="margin-top:8px">Below their share (average ${P.avg.toFixed(1)}): ${P.low.slice(0, 40).map(n => `<span class="dc">${esc(n)} · ${dutyCount(n)}${maxOf(n) != null ? '/' + maxOf(n) : ''}</span>`).join('')}${P.low.length > 40 ? ' …' : ''}</div>` : '';
-  if(!P.out.length) return `<section class="card"><h3>Suggestions — balance duties <span class="ok">0</span></h3><div class="note ok">${P.hasMax ? 'Nobody is over her maximum.' : 'Nobody has many more duties than the average (' + P.avg.toFixed(1) + ').'} </div>${lowTxt}</section>`;
+  if(!P.out.length) return `<section class="card"><h3>Suggestions — balance duties <span class="ok">0</span></h3><div class="note ok">${P.hasMax ? 'Nobody has more duties than her share.' : 'Nobody has many more duties than the average (' + P.avg.toFixed(1) + ').'} </div>${lowTxt}</section>`;
   const n = P.out.filter(x => (SGX[x.id] !== undefined ? SGX[x.id] : 'give:' + x.ranked[0].n)).length;
   return `<section class="card" style="border-top-color:var(--mid)"><h3>Suggestions — balance duties <span style="color:var(--mid)">${P.out.length}</span></h3>
-    <div class="sub">${P.hasMax ? 'Teachers over their maximum (Settings)' : 'Teachers with many more duties than the average (' + P.avg.toFixed(1) + ')'} give their extra duties to the best free teacher: fewest duties and under her own maximum, teaching in the ${examShift() === 'M' ? 'morning' : 'evening'}, same department (or the paper’s department), permanent for permanent and visiting for visiting. Change any choice, then press <b>Apply</b>.</div>
+    <div class="sub">${P.hasMax ? 'Teachers with more duties than their share (⚙ Settings)' : 'Teachers with many more duties than the average (' + P.avg.toFixed(1) + ')'} give their extra duties to the best free teacher: the one with the most duties still missing from her share, teaching in the ${examShift() === 'M' ? 'morning' : 'evening'}, same department (or the paper’s department), permanent for permanent and visiting for visiting. Change any choice, then press <b>Apply</b>.</div>
     <div class="tw" style="max-height:none"><table><thead><tr><th>From</th><th>Duty</th><th>Give it to</th></tr></thead><tbody>${P.out.map(x => { const sel = SGX[x.id] !== undefined ? SGX[x.id] : 'give:' + x.ranked[0].n, best = x.ranked.find(r => 'give:' + r.n === sel);
       return `<tr><td class="nw"><b>${esc(x.t.label)}</b><div class="sub">${esc(tLine(x.t.label))}</div></td><td class="nw">${esc(dateDay(x.d))}<div class="sub">${esc(roomLbl(x.d.room))} · ${esc(x.d.cls.join(', '))} · ${esc(x.d.sub.join(', '))}</div></td>
         <td><select class="sq" data-sgx="${esc(x.id)}" style="height:40px;min-width:230px;max-width:340px"><option value="" ${!sel ? 'selected' : ''}>— don’t change —</option>${x.ranked.map(r => `<option value="give:${esc(r.n)}" ${sel === 'give:' + r.n ? 'selected' : ''}>${esc(r.n)} — ${esc(r.why)}</option>`).join('')}</select>${best ? `<div class="sub ok">${esc(best.why)}${tInfo(best.n) ? ' · ' + esc(tInfo(best.n)) : ''}</div>` : ''}</td></tr>`; }).join('')}</tbody></table></div>
@@ -859,9 +880,13 @@ function setHtml(){
   const people = CTS ? CTS.list.filter(x => CTS.users ? x.users : true).map(x => x.name) : compute().L.teacher.map(t => t.label);
   const L = [...new Set(people)].sort((a, b) => typeRank(a) - typeRank(b) || ncmp(nkey(a), nkey(b)));
   const inCat = cc => L.filter(n => catOf(n) === cc);
-  return `<section class="card"><h3>Maximum duties</h3><div class="sub">The most duties a teacher of each category should get in this exam. Leave empty for no limit. Teachers at the maximum go to the end of every “give this duty to” list (marked ⚠, FULL); teachers over it are listed in <b>Check</b>.</div>
-    <div class="tw" style="max-height:none"><table><thead><tr><th>Category</th><th>Maximum</th><th>Teachers</th><th>Over</th></tr></thead><tbody>${CATS.map(([cc, lab]) => `<tr><td><b>${esc(lab)}</b></td><td><input class="nm" type="number" min="0" inputmode="numeric" data-smax="${cc}" value="${esc(SET.max[cc] == null ? '' : SET.max[cc])}" style="width:90px;min-width:0"></td><td class="n">${inCat(cc).length}</td><td class="n ${inCat(cc).some(overOf) ? 'x' : ''}">${inCat(cc).filter(overOf).length}</td></tr>`).join('')}</tbody></table></div></section>
-    <section class="card"><h3>Teachers</h3><div class="sub">Category is worked out from <b>designation</b> and <b>Status</b> (Visiting) in the Users sheet — change it here if it is wrong. Tick <b>Elderly / weak</b> for ill or disabled staff: they get the “Elderly or weak” maximum.</div>
+  const cnt = (cc, f) => inCat(cc).filter(n => !noteOf(n) && f(n)).length, okF = n => maxOf(n) != null && !lessOf(n) && !overOf(n);
+  return `<section class="card"><h3>Duties for each teacher</h3><div class="sub">How many duties a teacher of each designation should get in this exam. Every teacher is then marked <b class="x">MORE</b>, <b style="color:var(--mid)">LESS</b> or <b class="ok">✓</b> everywhere, and the Suggestions in <b>Check</b> move duties from teachers with more to teachers with less. Leave a box empty for no number.</div>
+    <div class="tw" style="max-height:none"><table><thead><tr><th>Designation</th><th>Duties</th><th>Teachers</th><th>Less</th><th>✓</th><th>More</th></tr></thead><tbody>${CATS.map(([cc, lab], q) => `${q === 0 ? '<tr><td colspan="6" style="background:var(--good-bg)"><b>Permanent</b></td></tr>' : q === 4 ? '<tr><td colspan="6" style="background:var(--mid-bg)"><b>Visiting</b></td></tr>' : q === 8 ? '<tr><td colspan="6"><b>Others</b></td></tr>' : ''}<tr><td><b>${esc(lab.replace(/^Visiting /, ''))}</b></td><td><input class="nm" type="number" min="0" inputmode="numeric" data-smax="${cc}" value="${esc(SET.max[cc] == null ? '' : SET.max[cc])}" style="width:80px;min-width:0"></td><td class="n">${inCat(cc).length}</td><td class="n" style="color:var(--mid)">${cnt(cc, lessOf)}</td><td class="n ok">${cnt(cc, okF)}</td><td class="n x">${cnt(cc, overOf)}</td></tr>`).join('')}</tbody></table></div>
+    <div class="grid"><label class="f">Teachers of both morning and evening get this many duties fewer<input class="nm" type="number" min="0" inputmode="numeric" data-sboth="1" value="${esc(SET.both)}" style="max-width:120px"></label></div>
+    <div class="sub">They also invigilate the evening exam. Morning / evening comes from the Timetable sheet (e.g. a permanent lecturer with evening classes: ${Math.max(0, (parseInt(SET.max.L, 10) || 0) - (parseInt(SET.both, 10) || 0))} instead of ${esc(SET.max.L || '—')}).</div>
+    <div class="acts"><button class="btn sm" id="sReset">Use the college numbers (5, 5, 3, 3 · 9, 5, 4, 3 · 2 fewer)</button></div></section>
+    <section class="card"><h3>Teachers</h3><div class="sub">Category is worked out from <b>designation</b> and <b>Status</b> (Visiting) in the Users sheet — change it here if it is wrong. Tick <b>Elderly / weak</b> for ill or disabled staff: they get the “Elderly or weak” number of duties.</div>
     ${CTS ? '' : '<div class="acts"><button class="btn sm pri" id="bCts">Load the teacher list</button></div>'}
     <input class="sq" id="sq2" type="search" placeholder="Search teacher" style="margin-top:8px" autocomplete="off">
     <div class="tw" id="setL"><table><thead><tr><th>Teacher</th><th>Category</th><th>Elderly / weak</th><th>Duties</th></tr></thead><tbody>${L.map(n => { const k = nkey(n), ct = contactOf(n) || {}, o = (SET.cat[k] || {}).c || '';
@@ -1193,6 +1218,7 @@ function wireTab(){
     if(t.id === 'unGo') return unkApply();
     if(t.id === 'cxGo') return cxApply();
     if(t.id === 'sgGo') return sgApply();
+    if(t.id === 'sReset'){ SET.max = Object.assign({}, SET_DEFAULT); SET.both = '2'; saveSet(); return refreshTab(); }
     if(t.id === 'pAddDate'){ const v = ($('#pDate') || {}).value; if(!v) return alert('Choose the date first.'); const i = insertAfterDay(parseDate(isoToDt(v)).iso, newRow(isoToDt(v))); saveLocal(); refreshTab(); const el = document.getElementById('prow' + i); el && el.scrollIntoView({ block:'center' }); return; }
     if(t.dataset.pday !== undefined){ const iso = t.dataset.pday, r0 = EX.rows.find(r => (r.iso || '') === iso) || {}; const i = insertAfterDay(iso, Object.assign(newRow(r0.dt || ''), { time:r0.time || '' })); saveLocal(); refreshTab(); const el = document.getElementById('prow' + i); if(el){ el.scrollIntoView({ block:'center' }); const inp = el.querySelector('input'); inp && inp.focus(); } return; }
     if(t.dataset.pdel !== undefined){ const iso = t.dataset.pdel, n = EX.rows.filter(r => (r.iso || '') === iso).length; if(!confirm('Delete this whole day (' + n + ' rows)?')) return; EX.rows = EX.rows.filter(r => (r.iso || '') !== iso); saveLocal(); return refreshTab(); }
@@ -1221,6 +1247,7 @@ function wireTab(){
     }
     if(t.dataset.pmv !== undefined){ const iso = t.dataset.pmv, dt = isoToDt(t.value); if(!t.value) return; const p = parseDate(dt), n = EX.rows.filter(r => (r.iso || '') === iso).length; if(!confirm('Move ' + n + ' row(s) to ' + p.day + ' ' + p.dt + '?')) return refreshTab(); EX.rows.forEach(r => { if((r.iso || '') === iso){ r.iso = p.iso; r.dt = p.dt; r.day = p.day; } }); saveLocal(); return refreshTab(); }
     if(t.dataset.sgx !== undefined){ SGX[t.dataset.sgx] = t.value; return refreshTab(); }
+    if(t.dataset.sboth !== undefined){ SET.both = String(Math.max(0, parseInt(t.value, 10) || 0)); saveSet(); return refreshTab(); }
     if(t.dataset.smax !== undefined){ SET.max[t.dataset.smax] = t.value === '' ? '' : String(Math.max(0, parseInt(t.value, 10) || 0)); saveSet(); if(EX){ EX.saved = false; ls.set('dut_cur', EX); } return refreshTab(); }
     if(t.dataset.scat !== undefined){ const k = t.dataset.scat; if(t.value) SET.cat[k] = { n:t.dataset.name, c:t.value }; else delete SET.cat[k]; saveSet(); return refreshTab(); }
     if(t.dataset.sweak !== undefined){ const k = t.dataset.sweak; if(t.checked) SET.weak[k] = t.dataset.name; else delete SET.weak[k]; saveSet(); return refreshTab(); }
@@ -1337,7 +1364,9 @@ function shiftLong(ct){ const s = (ct || {}).sh; if(!s) return ''; return ['M', 
 const wrongShift = n => { const s = (contactOf(n) || {}).sh; return !!(s && !s[examShift()] && s[examShift() === 'M' ? 'E' : 'M']); };
 const tInfo = n => { const ct = contactOf(n) || {}; return [ct.desig, ct.dept, /visit/i.test(ct.status || '') ? 'Visiting' : '', SET.weak[nkey(n)] ? 'Elderly / weak' : '', shiftTxt(ct)].filter(Boolean).join(' · '); };
 function dutyCount(n){ const c = compute(); if(!c._cnt){ c._cnt = {}; c.L.teacher.forEach(t => { c._cnt[nkey(t.label)] = t.items.length; }); } return c._cnt[nkey(n)] || 0; }
-const tLine = n => { const d = dutyCount(n), m = maxOf(n), i = tInfo(n); return d + (m != null ? '/' + m : '') + ' dut' + (d === 1 && m == null ? 'y' : 'ies') + (m != null && d > m ? ' (OVER MAX)' : m != null && d >= m ? ' (FULL)' : '') + (i ? ' · ' + i : ''); };
+const tLine = n => { const d = dutyCount(n), m = maxOf(n), i = tInfo(n); return d + (m != null ? '/' + m : '') + ' dut' + (d === 1 && m == null ? 'y' : 'ies') + (m == null ? '' : d > m ? ' (MORE by ' + (d - m) + ')' : d < m ? ' (LESS by ' + (m - d) + ')' : ' ✓') + (bothLess(n) ? ' · ' + bothLess(n) + ' fewer: morning + evening' : '') + (i ? ' · ' + i : ''); };
+/** coloured badge: MORE / LESS / ✓ against the duties she should get */
+function shareBadge(n){ const d = dutyCount(n), m = maxOf(n); if(m == null) return ''; return d > m ? ` <span class="dc x">MORE ${d}/${m}</span>` : d < m ? ` <span class="dc" style="color:var(--mid);border-color:var(--mid);background:var(--mid-bg);font-weight:800">LESS ${d}/${m}</span>` : ` <span class="dc" style="color:var(--good);border-color:var(--good);background:var(--good-bg);font-weight:800">✓ ${d}/${m}</span>`; }
 const tOf = key => compute().L.teacher.find(x => x.key === key);
 function waMsg(t){
   return `Assalam-o-Alaikum ${t.label},\nYour duties in ${EX.title} (timings ${EX.timing || '08:30-12:30 PM'}):\n` + t.items.map((d, i) => `${i + 1}. ${dutyFull(d)}`).join('\n') + `\nTotal: ${t.items.length} dut${t.items.length === 1 ? 'y' : 'ies'}\n- ${me} (Admin)`;
