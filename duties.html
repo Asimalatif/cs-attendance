@@ -390,7 +390,7 @@ function fixItems(){
   Object.values(SET.weak).forEach(n => out.push(['weak', n, '1']));
   out.push(['both', 'fewer duties for morning + evening', String(SET.both)]);
   Object.values(SET.cat).forEach(x => { if(x.c) out.push(['cat', x.n, x.c]); });
-  Object.values(SET.pref).forEach(x => out.push(['pref', x.n, JSON.stringify({ a:x.a || [], s:x.s || [], m:!!x.m })]));
+  Object.values(SET.pref).forEach(x => out.push(['pref', x.n, JSON.stringify({ a:x.a || [], r:x.r || [], s:x.s || [], x:x.x || [], m:!!x.m })]));
   return out;
 }
 function loadFixItems(items){   // from the server: fill what this device does not have yet
@@ -399,7 +399,7 @@ function loadFixItems(items){   // from the server: fill what this device does n
     else if(t === 'max'){ if(SET.max[w] == null || SET.max[w] === '') SET.max[w] = v; }
     else if(t === 'both'){ if(!ls.get('dut_set', null) || ls.get('dut_set', {}).both == null) SET.both = v; }
     else if(t === 'weak'){ const k = nkey(w); if(k && !SET.weak[k]) SET.weak[k] = w; }
-    else if(t === 'pref'){ const k = nkey(w); if(k && !SET.pref[k]){ try { const o = JSON.parse(v); SET.pref[k] = { n:w, a:o.a || [], s:o.s || [], m:!!o.m }; } catch(e){} } }
+    else if(t === 'pref'){ const k = nkey(w); if(k && !SET.pref[k]){ try { const o = JSON.parse(v); SET.pref[k] = { n:w, a:o.a || [], r:o.r || [], s:o.s || [], x:o.x || [], m:!!o.m }; } catch(e){} } }
     else if(t === 'cat'){ const k = nkey(w); if(k && !SET.cat[k]) SET.cat[k] = { n:w, c:v }; }
     else if(t === 'room+'){ const k = vnorm(w); if(k && !ROOMS[k]) ROOMS[k] = { r:w, cap:v }; }
     else if(t === 'room staff'){ const k = vnorm(w); if(k){ ROOMS[k] = ROOMS[k] || { r:w, cap:'' }; if(!ROOMS[k].st) ROOMS[k].st = v; } }
@@ -421,16 +421,30 @@ const prefOf = n => SET.pref[nkey(n)] || null;
 const csvL = v => String(v || '').split(',').map(x => x.trim()).filter(Boolean);
 const roomEq = (a, b) => { const f = v => vnorm(String(fixVal('room', v)).replace(/^\s*room\s*(no\.?|#)?\s*/i, '')), x = f(a), y = f(b); return !!x && !!y && (x === y || (Math.min(x.length, y.length) >= 4 && (x.includes(y) || y.includes(x)))); };
 const subjEq = (L, s) => [].concat(L || []).some(x => { const a = vnorm(x), b = vnorm(s); return !!a && !!b && (a === b || a.includes(b) || b.includes(a)); });
-/** 2 = against her preference, 0 = neutral, -1 / -2 = matches it (lower is better) */
+/* a value is a room, "Block: …" (every room of that block), a subject, or @own (her own subject) */
+const pfRoom = (v, room) => !!room && (/^Block: /.test(v) ? vnorm(blockOf(room)) === vnorm(v.slice(7)) : roomEq(v, room));
+const pfSub = (n, v, d) => v === '@own' ? isOwnSeat(n, d) : !!d.sub && subjEq(d.sub, v);
+const pfLbl = v => v === '@own' ? 'her own subject' : v;
+/** what goes against her preference on this duty ('' = nothing) */
+function prefBad(n, d){
+  const p = prefOf(n); if(!p || !d) return '';
+  if((p.a || []).some(v => pfRoom(v, d.room))) return 'She asked not to be in this room';
+  if((p.x || []).some(v => pfSub(n, v, d))) return 'She asked not to be in papers of this subject';
+  return '';
+}
+/** 2 = against her preference, 0 = neutral, -1 … -3 = matches it (lower is better) */
 function prefScore(n, d){
   const p = prefOf(n); if(!p || !d) return 0;
-  if(d.room && (p.a || []).some(r => roomEq(r, d.room))) return 2;
+  if(prefBad(n, d)) return 2;
   let s = 0;
-  if((p.s || []).length && d.sub && (p.s || []).some(x => subjEq(d.sub, x))) s--;
+  if((p.s || []).some(v => pfSub(n, v, d))) s--;
+  if((p.r || []).some(v => pfRoom(v, d.room))) s--;
   if(p.m && d.staff && d.staff.length <= 2) s--;
   return s;
 }
-const prefTxt = n => { const p = prefOf(n); if(!p) return ''; const L = [(p.a || []).length ? 'not in ' + p.a.join(', ') : '', p.m ? 'small rooms' : '', (p.s || []).length ? 'papers of ' + p.s.join(', ') : ''].filter(Boolean); return L.length ? 'Preference: ' + L.join(' · ') : ''; };
+const prefTxt = n => { const p = prefOf(n); if(!p) return ''; const j = L => L.map(pfLbl).join(', ');
+  const L = [(p.r || []).length ? 'rooms ' + j(p.r) : '', p.m ? 'small rooms' : '', (p.a || []).length ? 'not in ' + j(p.a) : '', (p.s || []).length ? 'papers of ' + j(p.s) : '', (p.x || []).length ? 'not papers of ' + j(p.x) : ''].filter(Boolean);
+  return L.length ? 'Preference: ' + L.join(' · ') : ''; };
 const rankOf = d => { d = String(d || '').toLowerCase(); return /assoc/.test(d) ? 'ASP' : /assist|asst|\ba\.?\s*p\b/.test(d) ? 'AP' : /prof/.test(d) ? 'P' : 'L'; };
 const isVisStatus = n => /visit/i.test((contactOf(n) || {}).status || '');
 const NT_NOTE = 'Lab staff (not teaching)';
@@ -948,7 +962,7 @@ function scoreCand(n, from, d, cnt){
   else { s += 40 + k * 5; why.push(k + ' duties'); }
   if(typeOf(n) !== typeOf(from)){ s += 20; why.push(typeOf(n) === 'V' ? 'visiting' : 'permanent'); }
   if(bothShift(n)){ s += 3; why.push('also teaches evening'); }
-  { const ps = prefScore(n, d); if(ps > 0){ s += 60; why.push('✗ asked not to be in this room'); } else if(ps < 0){ s += ps * 2; why.push('♥ matches her duty preference'); } }
+  { const ps = prefScore(n, d); if(ps > 0){ s += 60; why.push('✗ against her duty preference'); } else if(ps < 0){ s += ps * 2; why.push('♥ matches her duty preference'); } }
   if(ct.sh && !wrongShift(n)) why.push('teaches ' + (examShift() === 'M' ? 'morning' : 'evening'));
   return { s, why:why.join(' · ') };
 }
@@ -1003,7 +1017,7 @@ function sgApply(){
 const SUBALIAS = { MATHEMATICS:'MATH', MATHS:'MATH', MATH:'MATH', GMATHS:'MATH', GMATH:'MATH', GENERALMATHEMATICS:'MATH', GENERALMATHS:'MATH', PAKISTANSTUDIES:'PAKSTUDY', PAKSTUDIES:'PAKSTUDY', PAKSTUDY:'PAKSTUDY', ISLAMIAT:'ISLAMIYAT', ISLAMYAT:'ISLAMIYAT', CS:'COMPUTERSCIENCE', COMPUTER:'COMPUTERSCIENCE', PSYCOLOGY:'PSYCHOLOGY', STATSTIC:'STATISTICS', STATISTIC:'STATISTICS', STATS:'STATISTICS' };
 const subjK = x => { const k = vnorm(x).replace(/^(ADVANCED|ADVANCE|ADV)/, '').replace(/(ADVANCED|ADVANCE|ADV)$/, ''); return SUBALIAS[k] || k; };
 function subjMatch(a, b){ const x = subjK(a), y = subjK(b); if(x.length < 3 || y.length < 3) return false; return x === y || x.includes(y) || y.includes(x) || ratio(collapse(x), collapse(y)) >= .82; }
-const paperSubs = d => ((d && d.sub) || []).flatMap(x => String(x).split(/[\/,&+]+/)).map(x => x.trim()).filter(Boolean);
+const paperSubs = d => ((d && d.sub) || []).flatMap(x => String(x).split(/[\/,&+\n]+/)).map(x => x.trim()).filter(Boolean);
 const mySubs = n => { const ct = contactOf(n) || {}; return [ct.dept, ...(ct.subs || [])].filter(Boolean); };
 const isOwnSeat = (n, d) => { if(!d) return false; const M = mySubs(n); return M.length > 0 && paperSubs(d).some(ps => M.some(ms => subjMatch(ps, ms))); };
 function seatsAll(){ const c = compute(); return c.L.room.flatMap(g => g.items); }
@@ -1178,16 +1192,25 @@ function setHtml(){
     ${prefSetHtml(L)}`;
 }
 function prefSetHtml(L){
-  const c = compute(), rooms = [...new Set(c.L.room.map(r => r.label))].sort(ncmp), subs = [...new Set(c.L.subject.map(r => r.label))].sort(ncmp);
+  const c = compute(), rooms = stdRooms(), blocks = [...new Set(rooms.map(blockOf).filter(Boolean))].sort(ncmp), subs = [...new Set(c.L.subject.flatMap(g => paperSubs({ sub:[g.label] })))].sort(ncmp);
   const P = Object.entries(SET.pref).sort((a, b) => ncmp(a[1].n, b[1].n));
-  return `<section class="card"><h3>Duty preferences <span class="sub">${P.length}</span></h3><div class="sub">A teacher’s request, e.g. not in a big hall, small rooms only, or duties in the papers of her own / other subjects. Preferences are <b>open</b>: they show in every teacher line, the dropdowns put teachers who asked not to be in a room last (✗) and those who match first (♥), and <b>Check</b> lists every duty that goes against a preference. They do not change anyone’s number of duties.</div>
-    <datalist id="pfRooms">${rooms.map(r => `<option value="${esc(r)}">`).join('')}</datalist><datalist id="pfSubs">${subs.map(r => `<option value="${esc(r)}">`).join('')}</datalist>
-    ${P.length ? `<div class="tw" style="max-height:none"><table><thead><tr><th>Teacher</th><th>Not in these rooms</th><th>Small rooms</th><th>Papers of these subjects</th><th></th></tr></thead><tbody>${P.map(([k, x]) => `<tr><td class="nw"><b>${esc(x.n)}</b><div class="sub">${esc(dutyCount(x.n) + (maxOf(x.n) != null ? '/' + maxOf(x.n) : '') + ' duties')}</div></td>
-      <td><input class="sq" list="pfRooms" data-pfa="${esc(k)}" value="${esc((x.a || []).join(', '))}" placeholder="e.g. Safia Hassan Hall" style="min-width:180px;height:36px"></td>
-      <td style="text-align:center"><input type="checkbox" data-pfm="${esc(k)}" ${x.m ? 'checked' : ''} style="width:22px;height:22px"></td>
-      <td><input class="sq" list="pfSubs" data-pfs="${esc(k)}" value="${esc((x.s || []).join(', '))}" placeholder="e.g. Computer, Islamiat" style="min-width:180px;height:36px"></td>
-      <td><button class="btn sm" data-pfdel="${esc(k)}" aria-label="Remove preference">✕</button></td></tr>`).join('')}</tbody></table></div><div class="sub">Write several rooms or subjects with commas.</div>` : '<div class="sub" style="margin-top:6px">No preferences yet.</div>'}
-    <div class="grid"><label class="f">Add a preference for<select class="sq" data-pfadd="1" style="height:40px"><option value="">— choose teacher —</option>${L.filter(n => !SET.pref[nkey(n)]).map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}</select></label></div>
+  const roomOpts = [...blocks.map(b => ['Block: ' + b, 'Block: ' + b + ' (all its rooms)']), ...rooms.map(r => [r, roomLbl(r)])];
+  const subOpts = [['@own', '★ Her own subject'], ...subs.map(x => [x, x])];
+  const field = (k, x, f, title, hint, opts, color) => { const v = x[f] || [], lab = new Map(opts);
+    return `<div style="flex:1;min-width:240px;border:1.5px solid var(--line);border-radius:12px;padding:8px 10px;border-left:5px solid ${color}"><b>${title}</b> <span class="sub">${hint}</span>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin:6px 0">${v.map(z => `<span class="dc" style="white-space:normal;max-width:100%">${esc(z === '@own' ? '★ Her own subject' : z)} <button class="lnk" data-pfrm="${esc(k)}|${f}|${esc(z)}" aria-label="Remove">✕</button></span>`).join('') || '<span class="sub">— none —</span>'}</div>
+      <select class="sq" data-pfpick="${esc(k)}|${f}" style="height:36px"><option value="">+ add …</option>${opts.filter(o => !v.includes(o[0])).map(o => `<option value="${esc(o[0])}">${esc(o[1])}</option>`).join('')}</select></div>`; };
+  return `<section class="card"><h3>Duty preferences <span class="sub">${P.length}</span></h3><div class="sub">A teacher’s request about <b>rooms</b> (rooms or whole blocks she prefers / not, small rooms) and <b>papers</b> (subjects she prefers / not, her own subject). Preferences are <b>open</b>: they show in every teacher line, the dropdowns and ⚡ Auto-create put a teacher who asked “not” last (✗) and one who matches first (♥), and <b>Check</b> lists every duty that goes against a preference. They do not change anyone’s number of duties.</div>
+    ${P.map(([k, x]) => `<div style="border:1.5px solid var(--line);border-radius:14px;padding:10px;margin-top:10px">
+      <div class="li" style="padding:0 0 6px"><span><b>${esc(x.n)}</b> <span class="sub">${esc(dutyCount(x.n) + (maxOf(x.n) != null ? '/' + maxOf(x.n) : '') + ' duties · ' + ((contactOf(x.n) || {}).dept || ''))}</span></span>
+        <span style="display:flex;gap:10px;align-items:center"><label style="display:flex;gap:6px;align-items:center;cursor:pointer;font-weight:700"><input type="checkbox" data-pfm="${esc(k)}" ${x.m ? 'checked' : ''} style="width:20px;height:20px">Small rooms (2 staff or fewer)</label><button class="btn sm" data-pfdel="${esc(k)}" aria-label="Remove preference">✕ Remove</button></span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        ${field(k, x, 'r', '♥ Rooms she prefers', '', roomOpts, 'var(--good)')}
+        ${field(k, x, 'a', '✗ Not in these rooms', '', roomOpts, 'var(--bad)')}
+        ${field(k, x, 's', '♥ Papers she prefers', '', subOpts, 'var(--good)')}
+        ${field(k, x, 'x', '✗ Not in papers of', '', subOpts, 'var(--bad)')}
+      </div></div>`).join('') || '<div class="sub" style="margin-top:6px">No preferences yet.</div>'}
+    <div class="grid" style="margin-top:10px"><label class="f">Add a preference for<select class="sq" data-pfadd="1" style="height:40px"><option value="">— choose teacher —</option>${L.filter(n => !SET.pref[nkey(n)]).map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}</select></label></div>
     <div class="acts"><button class="btn pri" id="bNames">Save settings on server</button></div></section>`;
 }
 /* Check: duties that go against a teacher's preference */
@@ -1195,12 +1218,12 @@ function prefHtml(c){
   const P = Object.values(SET.pref); if(!P.length) return '';
   const rows = [];
   P.forEach(p => { const t = c.L.teacher.find(x => nkey(x.label) === nkey(p.n)); if(!t) return;
-    t.items.forEach(d => { const bad = (p.a || []).some(r => roomEq(r, d.room)); const big = p.m && d.staff.length > 2;
-      if(bad || big) rows.push(`<tr><td class="nw"><b>${esc(t.label)}</b><div class="sub">${esc(prefTxt(t.label))}</div></td><td class="nw">${esc(dateDay(d))}</td><td><b>${esc(roomLbl(d.room))}</b> <span class="sub">${d.staff.length} staff · ${esc(d.cls.join(', '))} ${esc(d.sub.join(', '))}</span><div class="${bad ? 'x' : ''}" style="font-size:13px;font-weight:700;${bad ? '' : 'color:var(--mid)'}">${bad ? 'She asked not to be in this room' : 'Not a small room'}</div></td><td><button class="btn sm pri" data-t="${esc(t.key)}">Change</button></td></tr>`); }); });
-  const sw = P.filter(p => (p.s || []).length).map(p => { const t = c.L.teacher.find(x => nkey(x.label) === nkey(p.n)); const has = t ? t.items.filter(d => p.s.some(x => subjEq(d.sub, x))).length : 0; return { p, t, has }; });
+    t.items.forEach(d => { const bad = prefBad(t.label, d); const big = p.m && d.staff.length > 2;
+      if(bad || big) rows.push(`<tr><td class="nw"><b>${esc(t.label)}</b><div class="sub">${esc(prefTxt(t.label))}</div></td><td class="nw">${esc(dateDay(d))}</td><td><b>${esc(roomLbl(d.room))}</b> <span class="sub">${d.staff.length} staff · ${esc(d.cls.join(', '))} ${esc(d.sub.join(', '))}</span><div class="${bad ? 'x' : ''}" style="font-size:13px;font-weight:700;${bad ? '' : 'color:var(--mid)'}">${esc(bad || 'Not a small room')}</div></td><td><button class="btn sm pri" data-t="${esc(t.key)}">Change</button></td></tr>`); }); });
+  const sw = P.filter(p => (p.s || []).length || (p.r || []).length).map(p => { const t = c.L.teacher.find(x => nkey(x.label) === nkey(p.n)); const has = t ? t.items.filter(d => (p.s || []).some(v => pfSub(t.label, v, d)) || (p.r || []).some(v => pfRoom(v, d.room))).length : 0; return { p, t, has }; });
   return `<section class="card" style="border-top-color:var(--mid)"><h3>Duty preferences <span class="${rows.length ? 'x' : 'ok'}">${rows.length}</span></h3><div class="sub">Duties that go against a teacher’s preference (Settings › Duty preferences). Tap <b>Change</b> to give the duty to someone else or to swap it.</div>
     ${rows.length ? `<div class="tw" style="max-height:none"><table><tbody>${rows.join('')}</tbody></table></div>` : '<div class="note ok">Every duty follows the preferences.</div>'}
-    ${sw.length ? `<div class="sub" style="margin-top:8px">Preferred papers: ${sw.map(x => `${esc(x.p.n)} — ${x.has} dut${x.has === 1 ? 'y' : 'ies'} in ${esc(x.p.s.join(', '))}${x.t ? ` <button class="lnk" data-t="${esc(x.t.key)}">give more</button>` : ''}`).join(' · ')}</div>` : ''}</section>`;
+    ${sw.length ? `<div class="sub" style="margin-top:8px">Preferred rooms / papers: ${sw.map(x => `${esc(x.p.n)} — ${x.has} dut${x.has === 1 ? 'y' : 'ies'} in ${esc([...(x.p.s || []), ...(x.p.r || [])].map(pfLbl).join(', '))}${x.t ? ` <button class="lnk" data-t="${esc(x.t.key)}">give more</button>` : ''}`).join(' · ')}</div>` : ''}</section>`;
 }
 /* dates typed with another year (e.g. 24/02/2025 in a 2026 exam) */
 function yearHtml(c){
@@ -1532,7 +1555,7 @@ function pickTeacher(i, msg){
     ${msg ? `<div class="note ok">${esc(msg)}</div>` : ''}
     <input class="sq" id="ptq" type="search" placeholder="Search teacher, department…" style="margin-top:8px" autocomplete="off">
     <div class="sub" style="margin-top:6px">Only teachers with <b>no duty on this date</b>, closest to their number of duties first (e.g. 6/9 before 0/5). <span class="x">⚠</span> = at her maximum duties, or teaches only in the other shift.</div>
-    <div class="tw" style="max-height:52vh" id="ptl">${freeGroups({ iso:r.iso, time:r.time || '', sub:[rec.sub], room:rec.room, staff:rowNames(i) }, null).map(([lab, L]) => `<div class="li" style="padding:6px 8px;background:var(--surface2)"><b>${esc(lab)}</b><span class="sub">${L.length}</span></div>` + L.map(n => `<div class="li" style="padding:6px 8px" data-q="${esc((n + ' ' + tInfo(n)).toLowerCase())}"><div style="flex:1"><b>${wrongShift(n) || fullOf(n) ? '<span class="x">⚠</span> ' : ''}${prefScore(n, { room:rec.room, sub:[rec.sub], staff:rowNames(i) }) > 0 ? '<span class="x">✗ asked not this room</span> ' : prefScore(n, { room:rec.room, sub:[rec.sub], staff:rowNames(i) }) < 0 ? '<span class="ok">♥</span> ' : ''}${esc(n)}</b><div class="sub">${esc(tLine(n))}</div></div><button class="btn sm good" data-pick="${esc(n)}">Add</button></div>`).join('')).join('') || '<div class="sub">Every teacher already has a duty on this date.</div>'}</div>
+    <div class="tw" style="max-height:52vh" id="ptl">${freeGroups({ iso:r.iso, time:r.time || '', sub:[rec.sub], room:rec.room, staff:rowNames(i) }, null).map(([lab, L]) => `<div class="li" style="padding:6px 8px;background:var(--surface2)"><b>${esc(lab)}</b><span class="sub">${L.length}</span></div>` + L.map(n => `<div class="li" style="padding:6px 8px" data-q="${esc((n + ' ' + tInfo(n)).toLowerCase())}"><div style="flex:1"><b>${wrongShift(n) || fullOf(n) ? '<span class="x">⚠</span> ' : ''}${prefScore(n, { room:rec.room, sub:[rec.sub], staff:rowNames(i) }) > 0 ? '<span class="x">✗ against her preference</span> ' : prefScore(n, { room:rec.room, sub:[rec.sub], staff:rowNames(i) }) < 0 ? '<span class="ok">♥</span> ' : ''}${esc(n)}</b><div class="sub">${esc(tLine(n))}</div></div><button class="btn sm good" data-pick="${esc(n)}">Add</button></div>`).join('')).join('') || '<div class="sub">Every teacher already has a duty on this date.</div>'}</div>
     ${(() => { const B = busyLess({ iso:r.iso }); return B.length ? `<div class="sub" style="margin-top:8px">Not offered — they already have a duty on ${esc(r.dt)}: ${B.slice(0, 40).map(x => esc(x) + ' (' + esc(tLine(x).split(' · ')[0].split(' (')[0]) + ')').join(', ')}</div>` : ''; })()}
     <div class="acts"><button class="btn" id="dClose">Done</button></div>`;
   if(!$('#dlg').open) $('#dlg').showModal();
@@ -1613,6 +1636,7 @@ function wireTab(){
     if(t.id === 'bSwap') return swapDialog('');
     if(t.id === 'bAuto') return autoDialog();
     if(t.id === 'rsLearn'){ let n = 0; stdRooms().forEach(r => { const v = learnedStaff(r); if(v){ const k = vnorm(r); ROOMS[k] = Object.assign({ r, cap:'' }, ROOMS[k] || {}, { st:String(v) }); n++; } }); saveRooms(); V.msg = 'Staff numbers taken from this duty list for ' + n + ' rooms. Press “Save names & fixes on server” to keep them for the next exam.'; V.err = ''; return refreshTab(); }
+    if(t.dataset.pfrm !== undefined){ const [k, f, ...v] = t.dataset.pfrm.split('|'), x = SET.pref[k]; if(x){ x[f] = (x[f] || []).filter(z => z !== v.join('|')); saveSet(); } return refreshTab(); }
     if(t.dataset.pfdel !== undefined){ delete SET.pref[t.dataset.pfdel]; saveSet(); return refreshTab(); }
     if(t.id === 'stLoad') return loadStudents();
     if(t.id === 'stCopy') return copy(stuMessage());
@@ -1635,9 +1659,8 @@ function wireTab(){
     if(t.dataset.sboth !== undefined){ SET.both = String(Math.max(0, parseInt(t.value, 10) || 0)); saveSet(); return refreshTab(); }
     if(t.dataset.smax !== undefined){ SET.max[t.dataset.smax] = t.value === '' ? '' : String(Math.max(0, parseInt(t.value, 10) || 0)); saveSet(); if(EX){ EX.saved = false; ls.set('dut_cur', EX); } return refreshTab(); }
     if(t.dataset.scat !== undefined){ const k = t.dataset.scat; if(t.value) SET.cat[k] = { n:t.dataset.name, c:t.value }; else delete SET.cat[k]; saveSet(); return refreshTab(); }
-    if(t.dataset.pfadd){ if(!t.value) return; SET.pref[nkey(t.value)] = { n:t.value, a:[], s:[], m:false }; saveSet(); return refreshTab(); }
-    if(t.dataset.pfa !== undefined){ const x = SET.pref[t.dataset.pfa]; if(x){ x.a = csvL(t.value); saveSet(); } return refreshTab(); }
-    if(t.dataset.pfs !== undefined){ const x = SET.pref[t.dataset.pfs]; if(x){ x.s = csvL(t.value); saveSet(); } return refreshTab(); }
+    if(t.dataset.pfadd){ if(!t.value) return; SET.pref[nkey(t.value)] = { n:t.value, a:[], r:[], s:[], x:[], m:false }; saveSet(); return refreshTab(); }
+    if(t.dataset.pfpick !== undefined){ const [k, f] = t.dataset.pfpick.split('|'), x = SET.pref[k]; if(x && t.value){ x[f] = (x[f] || []).concat(t.value); const o = { r:'a', a:'r', s:'x', x:'s' }[f]; x[o] = (x[o] || []).filter(z => z !== t.value); saveSet(); } return refreshTab(); }
     if(t.dataset.pfm !== undefined){ const x = SET.pref[t.dataset.pfm]; if(x){ x.m = t.checked; saveSet(); } return refreshTab(); }
     if(t.dataset.sweak !== undefined){ const k = t.dataset.sweak; if(t.checked) SET.weak[k] = t.dataset.name; else delete SET.weak[k]; saveSet(); return refreshTab(); }
     if(t.dataset.cx !== undefined){ CX[t.dataset.cx] = t.value; return refreshTab(); }
