@@ -105,6 +105,11 @@ input.pin:focus{border-color:var(--brown);outline:none}
 <dialog id="dlg"><div class="in" id="dlgIn"></div></dialog>
 <input type="file" id="fDoc" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" class="hidden">
 <script>
+window.addEventListener('error', e => {   // an error while the page starts: show it instead of a blank page
+  const m = document.getElementById('main'); if(!m || m.innerHTML.trim()) return;
+  if(typeof showCrash === 'function'){ try{ return showCrash(e.error || e.message); }catch(x){} }
+  m.textContent = 'Something went wrong: ' + (e.message || '') + ' — please send a screenshot.';
+});
 const API = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm7d7-UKg0W-OoWAiuRBHe4mjlRgMQXIHuLm6zi--i/exec';
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
@@ -403,7 +408,7 @@ function loadFixItems(items){   // from the server: fill what this device does n
 }
 /* ---------- settings: maximum duties per category; elderly / weak staff; permanent and visiting kept apart ---------- */
 const CATS = [['L', 'Lecturer'], ['AP', 'Assistant Professor'], ['ASP', 'Associate Professor'], ['P', 'Professor'], ['VL', 'Visiting Lecturer'], ['VAP', 'Visiting Assistant Professor'], ['VASP', 'Visiting Associate Professor'], ['VP', 'Visiting Professor'], ['NT', 'Non-teaching staff'], ['W', 'Elderly or weak (ill / disabled)']];
-let SET = Object.assign({ max:{}, weak:{}, cat:{}, pref:{} }, ls.get('dut_set', {}));   SET.pref = SET.pref || {};   // max: cat -> n · weak: nkey -> name · cat: nkey -> { n, c }
+let SET = Object.assign({ max:{}, weak:{}, cat:{}, pref:{} }, ls.get('dut_set', {}));   ['max', 'weak', 'cat', 'pref'].forEach(k => { if(!SET[k] || typeof SET[k] !== 'object') SET[k] = {}; });   // max: cat -> n · weak: nkey -> name · cat: nkey -> { n, c }
 const SET_DEFAULT = { L:'5', AP:'5', ASP:'3', P:'3', VL:'9', VAP:'5', VASP:'4', VP:'3', NT:'6', W:'' };
 Object.keys(SET_DEFAULT).forEach(k => { if(SET.max[k] == null) SET.max[k] = SET_DEFAULT[k]; });
 if(SET.both == null) SET.both = '2';      // teaches morning AND evening: this many duties fewer (she also has evening exam duties)
@@ -569,7 +574,20 @@ const dutyFull = d => `${dateDay(d)}${d.time ? ' (' + d.time + ')' : ''} · ${ro
 const TABS = [['teacher', 'Teacher-wise'], ['room', 'Room-wise'], ['date', 'Date-wise'], ['class', 'Class-wise'], ['subject', 'Subject-wise'], ['plan', 'Plan & edit'], ['free', 'Free rooms'], ['summary', 'Summary'], ['names', 'Names'], ['places', 'Rooms · Classes · Subjects'], ['students', 'Students’ message'], ['settings', '⚙ Settings'], ['rows', 'All rows'], ['check', 'Check']];
 if(!TABS.some(t => t[0] === V.tab)) V.tab = 'teacher';
 V.newPage = ls.get('dut_newpage', true);
-function render(){
+/* never a blank page: show what went wrong and a way out */
+function showCrash(e){
+  const m = $('#main'); if(!m) return;
+  const where = String((e && e.stack) || '').split('\n').slice(0, 3).join(' · ');
+  m.innerHTML = `<section class="card" style="border-top-color:var(--bad)"><h2 class="x">Something went wrong on this screen</h2>
+    <div class="sub">Please send a screenshot of this box. Your duty list is safe on this device.</div>
+    <div class="note bad" style="word-break:break-word;font-size:13px">${esc((e && e.message) || String(e))}<br><span style="opacity:.75">${esc(where)}</span></div>
+    <div class="acts"><button class="btn pri" id="crTab">Open Teacher-wise</button><button class="btn" id="crUndo">↶ Undo last change</button><button class="btn" id="crNew">Start a new list (the saved lists on the server stay)</button></div></section>`;
+  $('#crTab').onclick = () => { V.tab = 'teacher'; ls.set('dut_tab', 'teacher'); V.msg = V.err = ''; render(); };
+  $('#crUndo').onclick = () => { try{ undo(); }catch(x){} render(); };
+  $('#crNew').onclick = () => { if(!confirm('Close this duty list on this device? Lists saved on the server stay there.')) return; EX = null; ls.set('dut_cur', null); C = null; V.tab = 'teacher'; ls.set('dut_tab', 'teacher'); render(); };
+}
+function render(){ try { render0(); } catch(e){ try{ console.error(e); }catch(x){} showCrash(e); } }
+function render0(){
   if(!user){ $('#main').innerHTML = '<section class="card"><h2>Please sign in</h2><div class="sub">Open the attendance app and sign in as admin first, then come back here.</div><div class="acts"><a class="btn pri" href="./">Open the app</a></div></section>'; return; }
   if(!isAdm){
     if(!roleChecked && navigator.onLine){ roleChecked = true; $('#main').innerHTML = '<section class="card"><h2>Checking your role…</h2></section>'; api({ action:'dut_whoami' }, 30000).then(r => { if(r && (r.ds || r.admin)){ isAdm = true; ls.set('dsAdmin', !!r.ds); } render(); }).catch(() => render()); return; }
