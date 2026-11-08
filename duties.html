@@ -338,6 +338,7 @@ function fixItems(){
   Object.values(NOTES).forEach(x => out.push(['note', x.n, x.v]));
   Object.keys(FIXT).forEach(t => Object.values(VMAP[t]).forEach(x => out.push([FIXT[t], x.w, x.s])));
   Object.values(BLOCK).forEach(x => out.push(['block', x.r, x.b]));
+  Object.values(ROOMS).forEach(x => out.push(['room+', x.r, String(x.cap == null ? '' : x.cap)]));
   Object.entries(SET.max).forEach(([c, v]) => { if(v !== '' && v != null) out.push(['max', c, String(v)]); });
   Object.values(SET.weak).forEach(n => out.push(['weak', n, '1']));
   out.push(['both', 'fewer duties for morning + evening', String(SET.both)]);
@@ -351,10 +352,11 @@ function loadFixItems(items){   // from the server: fill what this device does n
     else if(t === 'both'){ if(!ls.get('dut_set', null) || ls.get('dut_set', {}).both == null) SET.both = v; }
     else if(t === 'weak'){ const k = nkey(w); if(k && !SET.weak[k]) SET.weak[k] = w; }
     else if(t === 'cat'){ const k = nkey(w); if(k && !SET.cat[k]) SET.cat[k] = { n:w, c:v }; }
+    else if(t === 'room+'){ const k = vnorm(w); if(k && !ROOMS[k]) ROOMS[k] = { r:w, cap:v }; }
     else if(t === 'block'){ const k = vnorm(w); if(k && !BLOCK[k]) BLOCK[k] = { r:w, b:v }; }
     else { const ty = Object.keys(FIXT).find(x => FIXT[x] === t); const k = vnorm(w); if(ty && k && !VMAP[ty][k]) VMAP[ty][k] = { w, s:v }; }
   });
-  ls.set('dut_notes', NOTES); ls.set('dut_vmap', VMAP); ls.set('dut_block', BLOCK); ls.set('dut_set', SET); C = null;
+  ls.set('dut_notes', NOTES); ls.set('dut_vmap', VMAP); ls.set('dut_block', BLOCK); ls.set('dut_set', SET); ls.set('dut_rooms', ROOMS); C = null;
 }
 /* ---------- settings: maximum duties per category; elderly / weak staff; permanent and visiting kept apart ---------- */
 const CATS = [['L', 'Lecturer'], ['AP', 'Assistant Professor'], ['ASP', 'Associate Professor'], ['P', 'Professor'], ['VL', 'Visiting Lecturer'], ['VAP', 'Visiting Assistant Professor'], ['VASP', 'Visiting Associate Professor'], ['VP', 'Visiting Professor'], ['NT', 'Non-teaching staff'], ['W', 'Elderly or weak (ill / disabled)']];
@@ -495,7 +497,7 @@ const dutyFull = d => `${dateDay(d)}${d.time ? ' (' + d.time + ')' : ''} · ${ro
 /* =====================================================================
    4) SCREEN
    ===================================================================== */
-const TABS = [['teacher', 'Teacher-wise'], ['room', 'Room-wise'], ['date', 'Date-wise'], ['class', 'Class-wise'], ['subject', 'Subject-wise'], ['plan', 'Plan & edit'], ['summary', 'Summary'], ['names', 'Names'], ['places', 'Rooms · Classes · Subjects'], ['students', 'Students’ message'], ['settings', '⚙ Settings'], ['rows', 'All rows'], ['check', 'Check']];
+const TABS = [['teacher', 'Teacher-wise'], ['room', 'Room-wise'], ['date', 'Date-wise'], ['class', 'Class-wise'], ['subject', 'Subject-wise'], ['plan', 'Plan & edit'], ['free', 'Free rooms'], ['summary', 'Summary'], ['names', 'Names'], ['places', 'Rooms · Classes · Subjects'], ['students', 'Students’ message'], ['settings', '⚙ Settings'], ['rows', 'All rows'], ['check', 'Check']];
 if(!TABS.some(t => t[0] === V.tab)) V.tab = 'teacher';
 V.newPage = ls.get('dut_newpage', true);
 function render(){
@@ -533,6 +535,7 @@ function tabBody(){
   if(KINDS[V.tab]) return groupHtml(V.tab);
   if(V.tab === 'summary') return summaryHtml();
   if(V.tab === 'plan') return planHtml();
+  if(V.tab === 'free') return freeHtml();
   if(V.tab === 'settings') return setHtml();
   if(V.tab === 'places') return vfixHtml();
   if(V.tab === 'students') return stuHtml();
@@ -1133,7 +1136,17 @@ function vApply(){
   V.msg = n + ' room / class / subject spellings fixed. Press “Save names & fixes on server” to keep them.'; V.err = '';
   refreshTab();
 }
-function stdRooms(){ return [...new Set(compute().recs.map(r => r.room).filter(Boolean))].sort(ncmp); }
+let ROOMS = ls.get('dut_rooms', {});   // vnorm(room) -> { r, cap }
+const roomCap = r => { const x = ROOMS[vnorm(r)]; return x && x.cap !== '' && x.cap != null && !isNaN(+x.cap) ? +x.cap : null; };
+function saveRooms(){ ls.set('dut_rooms', ROOMS); C = null; if(EX){ EX.saved = false; ls.set('dut_cur', EX); } }
+function stdRooms(){ const m = {}; compute().recs.forEach(r => { if(r.room && !m[vnorm(r.room)]) m[vnorm(r.room)] = r.room; }); Object.values(ROOMS).forEach(x => { if(x.r && !m[vnorm(x.r)]) m[vnorm(x.r)] = x.r; }); return Object.values(m).sort(ncmp); }
+/** every room on one date: free all day, or in use with its classes, students, seats and staff */
+function roomDay(iso){
+  const c = compute(), use = {};
+  c.recs.forEach(r => { if((r.iso || '') !== iso || !r.room) return; const k = vnorm(r.room); const u = (use[k] = use[k] || { room:r.room, cls:[], sub:[], n:0, nKnown:true, staff:new Set() }); if(r.cls && !u.cls.includes(r.cls)) u.cls.push(r.cls); if(r.sub && !u.sub.includes(r.sub)) u.sub.push(r.sub); const st = parseInt(EX.rows[r.i].n, 10); if(isNaN(st)) u.nKnown = false; else u.n += st; r.staff.forEach(x => u.staff.add(nkey(x))); });
+  return stdRooms().map(room => { const k = vnorm(room), u = use[k], cap = roomCap(room); return u ? { room, used:true, cls:u.cls, sub:u.sub, n:u.nKnown ? u.n : null, cap, free:cap != null && u.nKnown ? cap - u.n : null, staff:u.staff.size } : { room, used:false, cap, free:cap, staff:0 }; })
+    .sort((a, b) => (a.used ? 1 : 0) - (b.used ? 1 : 0) || (b.free == null ? -1 : b.free) - (a.free == null ? -1 : a.free) || ncmp(a.room, b.room));
+}
 function blockRange(){
   const a = +($('#bkFrom') || {}).value, b = +($('#bkTo') || {}).value, nm = String(($('#bkName') || {}).value || '').trim();
   if(!a || !b || !nm) return alert('Write the first room number, the last room number and the block name.');
@@ -1161,10 +1174,13 @@ function vfixHtml(){
       <div class="tw"><table><thead><tr><th>As written</th><th>Rows</th><th>Right name</th></tr></thead><tbody>${L.map(x => `<tr><td class="nw"><b>${esc(x.v)}</b></td><td class="n">${x.n}</td><td><input class="nm" list="vl-${type}" data-vstd="${type}|${esc(x.k)}" data-w="${esc(x.v)}" value="${esc((VMAP[type][x.k] || {}).s || '')}" placeholder="${esc(x.v)}"></td></tr>`).join('')}</tbody></table></div></section>`;
   });
   const R = stdRooms();
-  h += `<section class="card"><h3>Blocks</h3><div class="sub">Where a room is — shown with the room on every list and in the students’ message (e.g. rooms 20 to 24 are in Ayesha Sadiqa Block).</div>
+  h += `<section class="card"><h3>Rooms &amp; blocks</h3><div class="sub">Where a room is — shown with the room on every list and in the students’ message (e.g. rooms 20 to 24 are in Ayesha Sadiqa Block).</div>
     <div class="grid"><label class="f">From room<input id="bkFrom" inputmode="numeric" placeholder="20"></label><label class="f">To room<input id="bkTo" inputmode="numeric" placeholder="24"></label><label class="f">Block<input id="bkName" placeholder="Ayesha Sadiqa Block"></label></div>
     <div class="acts"><button class="btn sm pri" id="bkSet">Set block</button></div>
-    <div class="tw"><table><thead><tr><th>Room</th><th>Block / where</th></tr></thead><tbody>${R.map(r => `<tr><td class="nw"><b>${esc(r)}</b></td><td><input class="nm" data-blk="${esc(r)}" value="${esc(blockOf(r))}" placeholder="—"></td></tr>`).join('')}</tbody></table></div></section>`;
+    <h3 style="margin-top:14px">Rooms</h3><div class="sub">Seats = how many students fit (for the <b>Free rooms</b> tab). Add new rooms here even before they are used in a paper.</div>
+    <div class="grid"><label class="f">New room<input id="rmNew" placeholder="e.g. 25 or Chemistry Lab 2"></label><label class="f">Seats<input id="rmCap" type="number" min="0" inputmode="numeric" placeholder="40"></label></div>
+    <div class="acts"><button class="btn sm pri" id="rmAdd">+ Add room</button></div>
+    <div class="tw"><table><thead><tr><th>Room</th><th>Seats</th><th>Block / where</th></tr></thead><tbody>${R.map(r => `<tr><td class="nw"><b>${esc(r)}</b></td><td><input class="nm" type="number" min="0" inputmode="numeric" data-rcap="${esc(r)}" value="${esc(roomCap(r) == null ? '' : roomCap(r))}" placeholder="—" style="width:90px;min-width:0"></td><td><input class="nm" data-blk="${esc(r)}" value="${esc(blockOf(r))}" placeholder="—"></td></tr>`).join('')}</tbody></table></div></section>`;
   return h;
 }
 
@@ -1248,6 +1264,17 @@ function stuHtml(){
 const isoToDt = v => { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? m[3] + '/' + m[2] + '/' + m[1] : String(v || ''); };
 function newRow(dt){ const p = parseDate(dt); return { dt:p.dt || dt, iso:p.iso, day:p.day, time:'', cls:'', sub:'', room:'', staff:'' }; }
 function insertAfterDay(iso, row){ let at = -1; EX.rows.forEach((r, i) => { if((r.iso || '') === (iso || '')) at = i; }); if(at < 0) EX.rows.push(row); else EX.rows.splice(at + 1, 0, row); return at < 0 ? EX.rows.length - 1 : at + 1; }
+function freeHtml(){
+  const c = compute(), caps = stdRooms().filter(r => roomCap(r) != null).length, R = stdRooms().length;
+  let h = `<section class="card"><h3>Free rooms on exam days</h3><div class="sub">For every exam date: rooms not used at all (free), then rooms with seats left (seats minus students). Add seats per room in <b>Rooms · Classes · Subjects</b> (${caps} of ${R} rooms have seats) and students per paper in <b>Plan &amp; edit</b> to see free seats. Tap a free room to put a new paper there.</div></section>`;
+  c.dates.forEach(iso => {
+    const D = roomDay(iso), r0 = c.recs.find(r => r.iso === iso) || {}, fr = D.filter(x => !x.used), used = D.filter(x => x.used);
+    h += `<section class="card"><h3 style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>${esc((r0.day ? r0.day + ', ' : '') + (r0.dt || iso))}</span><span class="sub">${fr.length} free · ${used.length} in use</span></h3>
+      ${fr.length ? `<div style="margin:6px 0">${fr.map(x => `<button class="dc" style="cursor:pointer;color:var(--good);border-color:var(--good);background:var(--good-bg);font-weight:800" data-pfree="${esc(iso)}|${esc(x.room)}">${esc(roomLbl(x.room))}${x.cap != null ? ' · ' + x.cap + ' seats' : ''}</button>`).join('')}</div>` : '<div class="sub">No room is completely free on this day.</div>'}
+      <div class="tw" style="max-height:none"><table><thead><tr><th>Room in use</th><th>Classes / papers</th><th>Students</th><th>Seats</th><th>Free seats</th><th>Staff</th></tr></thead><tbody>${used.map(x => `<tr><td class="nw"><b>${esc(roomLbl(x.room))}</b></td><td>${esc(x.cls.join(', '))}<div class="sub">${esc(x.sub.join(', '))}</div></td><td class="n">${x.n == null ? '—' : x.n}</td><td class="n">${x.cap == null ? '—' : x.cap}</td><td class="n ${x.free != null ? (x.free > 0 ? 'ok' : 'x') : ''}">${x.free == null ? '—' : x.free}</td><td class="n">${x.staff}</td></tr>`).join('')}</tbody></table></div></section>`;
+  });
+  return h;
+}
 function planHtml(){
   const c = compute(), by = {};
   EX.rows.forEach((r, i) => { const k = r.iso || ''; (by[k] = by[k] || []).push(i); });
@@ -1263,12 +1290,14 @@ function planHtml(){
     const staffN = L.reduce((n, i) => n + rowNames(i).length, 0);
     h += `<section class="card"><h3 style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>${esc(iso ? (r0.day ? r0.day + ', ' : '') + r0.dt : 'No date')}</span><span class="sub">${L.length} room${L.length === 1 ? '' : 's'} · ${staffN} staff</span></h3>
       <div class="acts" style="margin-top:4px"><button class="btn sm pri" data-pday="${esc(iso)}">+ Paper / room</button><label class="c" style="font-size:13px">Move this whole day to <input type="date" class="sq" data-pmv="${esc(iso)}" style="height:34px;width:auto"></label><button class="btn sm" data-pdel="${esc(iso)}">Delete day</button></div>
+      ${(() => { if(!iso) return ''; const D = roomDay(iso), fr = D.filter(x => !x.used), sp = D.filter(x => x.used && x.free != null && x.free > 0); return fr.length || sp.length ? `<div class="sub" style="margin-top:6px">${fr.length ? 'Free rooms (tap to add a paper there): ' + fr.slice(0, 20).map(x => `<button class="dc" style="cursor:pointer;color:var(--good);border-color:var(--good)" data-pfree="${esc(iso)}|${esc(x.room)}">${esc(x.room)}${x.cap != null ? ' · ' + x.cap + ' seats' : ''}</button>`).join('') : ''}${sp.length ? '<br>Space left: ' + sp.slice(0, 12).map(x => `<span class="dc">${esc(x.room)} · ${x.free} seats free</span>`).join('') : ''}</div>` : ''; })()}
       ${L.map(i => { const r = EX.rows[i], names = rowNames(i); return `<div class="li" style="flex-direction:column;align-items:stretch;border:1.5px solid var(--line);border-radius:14px;padding:8px 10px;margin-top:8px" id="prow${i}">
         <div class="grid" style="margin-top:0;grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr))">
           <label class="f">Class<input class="cell" list="pl-cls" data-i="${i}" data-f="cls" value="${esc(r.cls)}" placeholder="e.g. F.Sc-I"></label>
           <label class="f">Subject<input class="cell" list="pl-sub" data-i="${i}" data-f="sub" value="${esc(r.sub)}" placeholder="e.g. Chemistry"></label>
           <label class="f">Room<input class="cell" list="pl-room" data-i="${i}" data-f="room" value="${esc(r.room)}" placeholder="e.g. 20"></label>
           ${tm ? `<label class="f">Time<input class="cell" data-i="${i}" data-f="time" value="${esc(r.time)}"></label>` : ''}
+          <label class="f">Students${roomCap(r.room) != null ? ' (room ' + roomCap(r.room) + ')' : ''}<input class="cell" type="number" min="0" inputmode="numeric" data-i="${i}" data-f="n" value="${esc(r.n == null ? '' : r.n)}" placeholder="optional"></label>
           <label class="f">Date<input class="cell" data-i="${i}" data-f="dt" value="${esc(r.dt)}" placeholder="dd/mm/yyyy"></label></div>
         <div style="margin-top:6px">${names.map(n => `<span class="dc ${wrongShift(n) ? 'x' : ''}" title="${esc(tLine(n))}">${esc(n)} <button class="lnk" data-prm="${i}|${esc(nkey(n))}" aria-label="Remove ${esc(n)}">✕</button></span>`).join('') || '<span class="x" style="font-size:13px">No staff yet</span>'}
           <button class="btn sm good" data-padd="${i}">+ Teacher</button><button class="btn sm" data-pdup="${i}">Copy to another room</button><button class="btn sm" data-del="${i}">Delete</button></div></div>`; }).join('')}</section>`;
@@ -1340,6 +1369,8 @@ function wireTab(){
     if(t.id === 'sgGo') return sgApply();
     if(t.id === 'ownGo') return ownApply();
     if(t.id === 'sReset'){ SET.max = Object.assign({}, SET_DEFAULT); SET.both = '2'; saveSet(); return refreshTab(); }
+    if(t.dataset.pfree){ const [iso, room] = t.dataset.pfree.split('|'), r0 = EX.rows.find(r => (r.iso || '') === iso) || {}; const i = insertAfterDay(iso, Object.assign(newRow(r0.dt || ''), { time:r0.time || '', room })); saveLocal(); V.tab = 'plan'; ls.set('dut_tab', 'plan'); render(); const el = document.getElementById('prow' + i); if(el){ el.scrollIntoView({ block:'center' }); const inp = el.querySelector('[data-f=cls]'); inp && inp.focus(); } return; }
+    if(t.id === 'rmAdd'){ const r = String(($('#rmNew') || {}).value || '').trim(), cap = String(($('#rmCap') || {}).value || '').trim(); if(!r) return alert('Write the room first.'); ROOMS[vnorm(r)] = { r, cap }; saveRooms(); V.msg = 'Room ' + r + ' added.'; return refreshTab(); }
     if(t.id === 'pAddDate'){ const v = ($('#pDate') || {}).value; if(!v) return alert('Choose the date first.'); const i = insertAfterDay(parseDate(isoToDt(v)).iso, newRow(isoToDt(v))); saveLocal(); refreshTab(); const el = document.getElementById('prow' + i); el && el.scrollIntoView({ block:'center' }); return; }
     if(t.dataset.pday !== undefined){ const iso = t.dataset.pday, r0 = EX.rows.find(r => (r.iso || '') === iso) || {}; const i = insertAfterDay(iso, Object.assign(newRow(r0.dt || ''), { time:r0.time || '' })); saveLocal(); refreshTab(); const el = document.getElementById('prow' + i); if(el){ el.scrollIntoView({ block:'center' }); const inp = el.querySelector('input'); inp && inp.focus(); } return; }
     if(t.dataset.pdel !== undefined){ const iso = t.dataset.pdel, n = EX.rows.filter(r => (r.iso || '') === iso).length; if(!confirm('Delete this whole day (' + n + ' rows)?')) return; EX.rows = EX.rows.filter(r => (r.iso || '') !== iso); saveLocal(); return refreshTab(); }
@@ -1379,6 +1410,7 @@ function wireTab(){
     if(t.dataset.vt){ t.checked ? VF.tick.add(t.dataset.vt) : VF.tick.delete(t.dataset.vt); return refreshTab(); }
     if(t.dataset.vp){ VF.std[t.dataset.vp] = t.value.trim(); VF.tick.add(t.dataset.vp); return refreshTab(); }
     if(t.dataset.vstd){ const [ty, k] = t.dataset.vstd.split('|'), v = t.value.trim(); if(v && v !== t.dataset.w) VMAP[ty][k] = { w:t.dataset.w, s:v }; else delete VMAP[ty][k]; saveFixes(); return refreshTab(); }
+    if(t.dataset.rcap !== undefined){ const r = t.dataset.rcap, k = vnorm(r); ROOMS[k] = Object.assign({ r }, ROOMS[k] || {}, { cap:t.value.trim() }); saveRooms(); return refreshTab(); }
     if(t.dataset.blk !== undefined){ const k = vnorm(t.dataset.blk), v = t.value.trim(); if(v) BLOCK[k] = { r:t.dataset.blk, b:v }; else delete BLOCK[k]; saveFixes(); return refreshTab(); }
     if(t.dataset.g){ const G = guide(); G[t.dataset.g] = t.value; if(t.dataset.g === 'cls'){ G.head = ''; } ls.set('dut_cur', EX); return refreshTab(); }
     if(t.dataset.sg){ guide().sg[t.dataset.sg] = +t.value; ls.set('dut_cur', EX); return refreshTab(); }
@@ -1577,7 +1609,7 @@ async function loadCts(quiet){
 async function saveServer(){
   const b = $('#bSave'); b.disabled = true; b.textContent = 'Saving…';
   try{
-    const rows = EX.rows.map(r => ({ dt:r.dt, day:r.day, time:r.time, cls:r.cls, sub:r.sub, room:r.room, staff:r.staff, teachers:splitStaff(r.staff).flatMap(stdList).join(', ') }));
+    const rows = EX.rows.map(r => ({ dt:r.dt, day:r.day, time:r.time, cls:r.cls, sub:r.sub, room:r.room, staff:r.staff, n:r.n == null ? '' : String(r.n), teachers:splitStaff(r.staff).flatMap(stdList).join(', ') }));
     await api({ action:'dut_save', exam:{ id:EX.id, title:EX.title, timing:EX.timing || '', rows } });
     if(PAIRS.length) await api({ action:'dut_names_save', pairs:PAIRS });
     await api({ action:'dut_fix_save', items:fixItems() });
@@ -1608,7 +1640,7 @@ async function openSaved(){
       b.disabled = true; b.textContent = 'Opening…';
       try{
         const r = await api({ action:'dut_load', id:b.dataset.open }, 60000);
-        EX = { id:r.exam.id, title:r.exam.title, timing:r.exam.timing || '08:30-12:30 PM (morning)', rows:r.exam.rows.map(x => { const p = parseDate(x.dt); return { dt:p.dt || x.dt, iso:p.iso, day:p.day || x.day, time:x.time || '', cls:x.cls, sub:x.sub, room:x.room, staff:x.staff }; }), saved:true, sheet:r.exam.sheet || '', sheetUrl:r.exam.sheetUrl || '' };
+        EX = { id:r.exam.id, title:r.exam.title, timing:r.exam.timing || '08:30-12:30 PM (morning)', rows:r.exam.rows.map(x => { const p = parseDate(x.dt); return { dt:p.dt || x.dt, iso:p.iso, day:p.day || x.day, time:x.time || '', cls:x.cls, sub:x.sub, room:x.room, staff:x.staff, n:x.n || '' }; }), saved:true, sheet:r.exam.sheet || '', sheetUrl:r.exam.sheetUrl || '' };
         ls.set('dut_cur', EX); C = null; V.msg = 'Opened “' + EX.title + '”.'; V.err = ''; $('#dlg').close(); render();
       }catch(err){ alert(err.message); b.disabled = false; b.textContent = 'Open'; }
     }
