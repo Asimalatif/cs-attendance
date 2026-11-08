@@ -88,6 +88,8 @@ textarea{width:100%;min-height:150px;border:1.5px solid var(--line);border-radiu
 .pph{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;padding:8px 10px;background:var(--surface2)}
 .prr{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;padding:8px 10px;border-top:1px solid var(--line)}
 .prr.nostaff{background:var(--bad-bg)}
+.prr.nosubj{background:var(--mid-bg)}
+.prr.nosubj .pst::after{content:'⚠ no teacher of this subject';font-size:12px;font-weight:800;color:var(--mid)}
 .pst{flex:1;min-width:220px;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
 .pf{display:flex;flex-direction:column;gap:2px;font-size:11px;font-weight:700;color:var(--muted)}
 input.pin{height:36px;border:1.5px solid var(--line);border-radius:10px;padding:0 8px;background:var(--surface);font-weight:600;color:var(--ink);font-size:14px}
@@ -605,7 +607,7 @@ function groupCards(kind){
     const head = kind === 'teacher' && (gi === 0 || typeOf(G[gi - 1].label) !== typeOf(g.label)) ? `<h3 style="margin:18px 0 0;padding:8px 12px;border-radius:12px;background:${typeOf(g.label) === 'V' ? 'var(--mid-bg)' : typeOf(g.label) === 'O' ? 'var(--bad-bg)' : 'var(--good-bg)'}">${TYPE_T[typeOf(g.label)]} <span class="sub">${G.filter(x => typeOf(x.label) === typeOf(g.label)).length}</span></h3>` : '';
     const wa = kind === 'teacher';
     return head + `<div class="rm"><h3><span>${kind === 'teacher' ? `<button class="lnk" data-t="${esc(g.key)}">${esc(g.label)}</button>${g.clash ? ' <span class="x">⚠ clash</span>' : ''}${wrongShift(g.label) ? ` <span class="dc x">${examShift() === 'M' ? 'EVENING' : 'MORNING'} ONLY</span>` : ''}${kind === 'teacher' ? shareBadge(g.label) + (bothShift(g.label) ? ' <span class="dc">MORNING + EVENING</span>' : '') : ''}${CTS && compute().unknown.includes(g.label) ? ` <span class="dc x">${compute().leftOf[g.label] ? 'LEFT the college' : 'not in Users sheet'}</span>` : ''}` : esc(g.label)}</span><span class="sub">${kind === 'teacher' ? esc(tLine(g.label)) : g.items.length + ' paper' + (g.items.length === 1 ? '' : 's')}${kind === 'teacher' ? ` <button class="btn sm ${lessOf(g.label) ? 'good' : ''}" data-t="${esc(g.key)}">${lessOf(g.label) ? 'Give more · Change' : 'Change'}</button>` : ''}${wa ? ` <button class="btn sm good" data-wa="${esc(g.key)}">WhatsApp</button>` : ''}</span></h3>
-      <div class="tw" style="max-height:none"><table><thead><tr><th>#</th>${cols.map(c => `<th>${COLNAME[c]}</th>`).join('')}</tr></thead><tbody>${g.items.map((it, i) => `<tr><td class="n">${i + 1}</td>${cols.map(c => `<td class="${c === 'date' || c === 'room' ? 'nw' : ''} ${it.x && (c === 'date' || c === 'room') ? 'x' : ''}">${c === 'room' ? '<b>' + esc(cellOf(it, c)) + '</b>' : c === 'staff' ? staffHtml(it.staff) : esc(cellOf(it, c))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
+      <div class="tw" style="max-height:none"><table><thead><tr><th>#</th>${cols.map(c => `<th>${COLNAME[c]}</th>`).join('')}</tr></thead><tbody>${g.items.map((it, i) => `<tr><td class="n">${i + 1}</td>${cols.map(c => `<td class="${c === 'date' || c === 'room' ? 'nw' : ''} ${it.x && (c === 'date' || c === 'room') ? 'x' : ''}">${c === 'room' ? '<b>' + esc(cellOf(it, c)) + '</b>' : c === 'staff' ? staffHtml(it.staff) + (CTS && it.staff.length && !roomHasSubj(it) ? '<div class="sub" style="color:var(--mid);font-weight:800">⚠ no teacher of this subject</div>' : '') : esc(cellOf(it, c))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
   }).join('');
 }
 function summaryHtml(){
@@ -775,7 +777,7 @@ function checkHtml(c){
   const rowRef = i => { const r = EX.rows[i]; return `<li><button class="lnk" data-go="${i}">Row ${i + 1}</button>: ${esc([r.dt, r.cls, r.sub, r.room && 'Room ' + r.room, r.staff && r.staff.replace(/\n/g, ', ')].filter(Boolean).join(' · '))}</li>`; };
   const sec = (t, body) => `<section class="card"><h3>${t}</h3>${body}</section>`;
   let h = '';
-  h += clashHtml(c) + ownHtml(c) + overHtml(c) + suggestHtml(c) + shiftHtml(c) + yearHtml(c);
+  h += clashHtml(c) + roomSubjHtml(c) + ownHtml(c) + overHtml(c) + suggestHtml(c) + shiftHtml(c) + yearHtml(c);
   h += sec(`Staff written but no room <span class="${c.check.noRoom.length ? 'x' : 'ok'}">${c.check.noRoom.length}</span>`, c.check.noRoom.length ? '<div class="sub">These were the yellow rows of the old sheet. Add the room in <b>All rows</b>.</div><ul>' + c.check.noRoom.map(rowRef).join('') + '</ul>' : '<div class="note ok">Every row with staff has a room.</div>');
   h += sec(`Rooms with no staff <span class="${c.check.noStaff.length ? 'x' : 'ok'}">${c.check.noStaff.length}</span>`, c.check.noStaff.length ? '<ul>' + c.check.noStaff.map(rowRef).join('') + '</ul>' : '<div class="note ok">Every room has staff.</div>');
   h += sec(`Rows without a date <span class="${c.check.noDate.length ? 'x' : 'ok'}">${c.check.noDate.length}</span>`, c.check.noDate.length ? '<ul>' + c.check.noDate.map(rowRef).join('') + '</ul>' : '<div class="note ok">Every row has a date.</div>');
@@ -1056,6 +1058,60 @@ function ownApply(){
   });
   OWN = {};
   V.msg = n + ' fixed: teachers on duty in their subject’s paper on its day' + (again ? ' (' + again + ' with the next best choice)' : '') + '. Download the PDFs or the corrected Word file again.'; V.err = '';
+  refreshTab();
+}
+
+/* ---------- rooms where no teacher of the paper's subject is on duty ---------- */
+const subjPool = () => { const c = compute(); return CTS ? [...new Set(CTS.list.filter(x => CTS.users ? x.users : true).map(x => x.name))].filter(n => !offDuty(n) && catOf(n) !== 'NT' && !(c.unknown || []).includes(n)) : []; };
+/** a room has a teacher of its paper's subject (unknown when no teacher of that subject exists) */
+const roomHasSubj = sd => !paperSubs(sd).length || sd.staff.some(x => isOwnSeat(x, sd));
+function roomSubjList(){
+  const c = compute(); if(c._rs) return c._rs;
+  if(!CTS) return (c._rs = []);
+  const pool = subjPool();
+  return (c._rs = seatsAll().filter(sd => sd.iso && sd.staff.length && !roomHasSubj(sd)).map(sd => ({ sd, cand:pool.filter(n => isOwnSeat(n, sd)) })).sort((a, b) => ncmp(a.sd.iso, b.sd.iso) || ncmp(a.sd.room, b.sd.room)));
+}
+/** exchanges that bring a teacher of the subject into this room (never empties her own subject's room) */
+function roomSubjOptions(x){
+  const out = [];
+  x.cand.forEach(t => {
+    ownOptions(t, x.sd.iso).forEach(o => {
+      if(seatKey(o.sd) !== seatKey(x.sd)) return;
+      if((o.kind === 'switch' || o.kind === 'move') && isOwnSeat(t, o.d1) && !o.d1.staff.some(z => nkey(z) !== nkey(t) && isOwnSeat(z, o.d1))) return;   // her own room would lose its only subject teacher
+      const rank = { switch:o.x && isOwnSeat(o.x, o.d1) ? 0 : 1, swap:o.x && isOwnSeat(o.x, o.d1) ? 2 : 3, take:4, move:5, add:6 }[o.kind];
+      out.push({ t, o, id:t + '§' + o.id, rank });
+    });
+  });
+  return out.sort((a, b) => a.rank - b.rank || (lessOf(b.t) ? 1 : 0) - (lessOf(a.t) ? 1 : 0) || ncmp(a.t, b.t)).slice(0, 15);
+}
+let RSX = {};
+function roomSubjHtml(c){
+  if(!CTS) return '';
+  const L = roomSubjList();
+  if(!L.length) return `<section class="card"><h3>Rooms without a subject teacher <span class="ok">0</span></h3><div class="note ok">Every room has at least one teacher of its paper’s subject.</div></section>`;
+  let n = 0;
+  const rows = L.map(x => {
+    const k = seatKey(x.sd), opts = roomSubjOptions(x), sel = RSX[k] !== undefined ? RSX[k] : (opts[0] ? opts[0].id : ''); if(sel) n++;
+    return `<tr style="background:var(--mid-bg)"><td class="nw"><b>${esc(dayShort(x.sd.day) + ' ' + (x.sd.dt || '').slice(0, 5))}</b><div class="sub">${esc(roomLbl(x.sd.room))}</div></td><td><b>${esc(x.sd.sub.join(', '))}</b><div class="sub">${esc(x.sd.cls.join(', '))} · now: ${esc(x.sd.staff.join(', '))}</div></td>
+      <td>${!x.cand.length ? '<span class="x">No teacher of this subject in the teacher list</span>' : opts.length ? `<select class="sq" data-rsx="${esc(k)}" style="height:40px;min-width:240px;max-width:440px"><option value="">— leave —</option>${opts.map(z => `<option value="${esc(z.id)}" ${sel === z.id ? 'selected' : ''}>${esc(z.t)}: ${esc(ownLbl(z.o).split(' — ').slice(1).join(' — ') || ownLbl(z.o))}</option>`).join('')}</select>` : `<span class="x">Subject teachers (${esc(x.cand.slice(0, 4).join(', '))}${x.cand.length > 4 ? '…' : ''}) are all needed in their own rooms that day</span>`}</td></tr>`;
+  }).join('');
+  return `<section class="card" style="border-top-color:var(--mid)"><h3>Rooms without a subject teacher <span style="color:var(--mid)">${L.length}</span></h3>
+    <div class="sub">No teacher of the paper’s subject is on duty in these rooms. Suggested exchange first: a subject teacher <b>switches rooms</b> the same day with one of this room’s staff (★ both end up in their own subject; counts unchanged), or <b>swaps a day</b>, takes over from a teacher with MORE, or joins as extra. A subject teacher is never taken from a room where she is its only subject teacher.</div>
+    <div class="tw" style="max-height:none"><table><thead><tr><th>Day / room</th><th>Paper</th><th>Suggested exchange</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="acts"><button class="btn pri" id="rsGo" ${n ? '' : 'disabled'}>Apply ${n} exchange${n === 1 ? '' : 's'}</button></div></section>`;
+}
+function roomSubjApply(){
+  const want = roomSubjList().map(x => { const k = seatKey(x.sd), opts = roomSubjOptions(x); return { k, id:RSX[k] !== undefined ? RSX[k] : (opts[0] ? opts[0].id : '') }; });
+  let n = 0, skipped = 0;
+  want.forEach(({ k, id }) => {
+    if(!id) return;
+    const x = roomSubjList().find(z => seatKey(z.sd) === k); if(!x){ return; }          // fixed meanwhile
+    const [t, oid] = id.split('§');
+    if(ownApplyOne(t, x.sd.iso, oid)) n++;
+    else { const best = roomSubjOptions(x)[0]; if(best && ownApplyOne(best.t, x.sd.iso, best.o.id)) n++; else skipped++; }
+  });
+  RSX = {};
+  V.msg = n + ' room(s) now have a teacher of their subject' + (skipped ? ' · ' + skipped + ' could not be changed any more' : '') + '. Download the PDFs or the corrected Word file again.'; V.err = '';
   refreshTab();
 }
 
@@ -1380,7 +1436,7 @@ function planHtml(){
             ${tm ? `<label class="pf">Time<input class="pin" data-pg="${ids}" data-f="time" value="${esc(r0.time)}" style="width:110px"></label>` : ''}
             <span class="sub" style="flex:1;align-self:center">${L.length} room${L.length === 1 ? '' : 's'} · ${pst} staff</span>
             <button class="btn sm" data-pdup="${L[L.length - 1]}">+ Room for this paper</button><button class="ico" data-pdelg="${ids}" title="Delete this paper" aria-label="Delete this paper">🗑</button></div>
-          ${L.map(i => { const r = EX.rows[i], names = orderStaff(rowNames(i), { sub:[r.sub].filter(Boolean) }), cap = roomCap(r.room); return `<div class="prr ${names.length ? '' : 'nostaff'}" id="prow${i}">
+          ${L.map(i => { const r = EX.rows[i], names = orderStaff(rowNames(i), { sub:[r.sub].filter(Boolean) }), cap = roomCap(r.room); return `<div class="prr ${names.length ? (CTS && r.sub && !roomHasSubj({ sub:[r.sub], staff:names }) ? 'nosubj' : '') : 'nostaff'}" id="prow${i}">
             <label class="pf">Room<input class="pin cell" list="pl-room" data-i="${i}" data-f="room" value="${esc(r.room)}" placeholder="e.g. 20" style="width:120px"></label>
             <label class="pf">Students${cap != null ? ' / ' + cap : ''}<input class="pin cell" type="number" min="0" inputmode="numeric" data-i="${i}" data-f="n" value="${esc(r.n == null ? '' : r.n)}" placeholder="—" style="width:80px"></label>
             <div class="pst">${names.map((n, q) => `<span class="dc ${wrongShift(n) ? 'x' : ''}" title="${esc(tLine(n))}" style="${q === 0 ? 'font-weight:800;border-color:var(--brown)' : ''}">${q === 0 ? '<span style="font-size:10px;color:var(--brown)">HEAD</span> ' : ''}${esc(n)} <button class="lnk" data-prm="${i}|${esc(nkey(n))}" aria-label="Remove ${esc(n)}">✕</button></span>`).join('') || '<span class="x" style="font-size:13px;font-weight:800">No staff yet</span>'}<button class="btn sm good" data-padd="${i}">+ Teacher</button></div>
@@ -1458,6 +1514,7 @@ function wireTab(){
     if(t.id === 'cxGo') return cxApply();
     if(t.id === 'sgGo') return sgApply();
     if(t.id === 'ownGo') return ownApply();
+    if(t.id === 'rsGo') return roomSubjApply();
     if(t.id === 'sReset'){ SET.max = Object.assign({}, SET_DEFAULT); SET.both = '2'; saveSet(); return refreshTab(); }
     if(t.dataset.pjump !== undefined){ PLAN_OPEN.add(t.dataset.pjump); ls.set('dut_plan_open', [...PLAN_OPEN]); const d = document.getElementById('pday-' + (t.dataset.pjump || 'none')); if(d){ d.open = true; d.scrollIntoView({ block:'start' }); } return; }
     if(t.id === 'pOpenAll' || t.id === 'pCloseAll'){ PLAN_OPEN = new Set(t.id === 'pOpenAll' ? EX.rows.map(r => r.iso || '') : []); ls.set('dut_plan_open', [...PLAN_OPEN]); return refreshTab(); }
@@ -1492,6 +1549,7 @@ function wireTab(){
     }
     if(t.dataset.pg){ t.dataset.pg.split(',').forEach(i => { EX.rows[+i][t.dataset.f] = t.value.trim(); }); saveLocal(); return refreshTab(); }
     if(t.dataset.pmv !== undefined){ const iso = t.dataset.pmv, dt = isoToDt(t.value); if(!t.value) return; const p = parseDate(dt), n = EX.rows.filter(r => (r.iso || '') === iso).length; if(!confirm('Move ' + n + ' row(s) to ' + p.day + ' ' + p.dt + '?')) return refreshTab(); EX.rows.forEach(r => { if((r.iso || '') === iso){ r.iso = p.iso; r.dt = p.dt; r.day = p.day; } }); saveLocal(); return refreshTab(); }
+    if(t.dataset.rsx !== undefined){ RSX[t.dataset.rsx] = t.value; return refreshTab(); }
     if(t.dataset.own !== undefined){ OWN[t.dataset.own] = t.value; return refreshTab(); }
     if(t.dataset.sgx !== undefined){ SGX[t.dataset.sgx] = t.value; return refreshTab(); }
     if(t.dataset.sboth !== undefined){ SET.both = String(Math.max(0, parseInt(t.value, 10) || 0)); saveSet(); return refreshTab(); }
