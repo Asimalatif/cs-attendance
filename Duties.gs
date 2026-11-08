@@ -20,6 +20,8 @@ var DUT_CFG = {
   USERS: '1ARU8zMO2daJUfU_SIIo4baeSOG7qBPuni5TYRIRLBNY',   // Users workbook
   LIST: 'Duty Lists',                                      // made by itself
   NAMES: 'Duty Names',                                     // made by itself
+  FIXES: 'Duty Fixes',                                     // made by itself: rooms / classes / subjects / staff notes / room blocks
+  STRENGTH: 'Transform-ALL-COLLEGE-STRENGTH',              // students (for the students' seating message)
   FOLDER: 'JCW Duty Lists',                                // Drive folder for the Google Sheets
   MAX_ROWS: 3000                                           // rows in one list (safety)
 };
@@ -41,6 +43,8 @@ function dutRoute_(user, req) {
       case 'dut_delete':     return dutDelete_(dutS_(req.id));
       case 'dut_names_save': return dutNamesSave_(req.pairs || []);
       case 'dut_sheet':      return dutMakeSheet_(req);
+      case 'dut_fix_save':   return dutFixSave_(req.items || []);
+      case 'dut_students':   return dutStudents_();
     }
     return { ok: false, error: 'UNKNOWN_ACTION' };
   } catch (e) {
@@ -91,7 +95,7 @@ function dutList_() {
     var x = by[id], ds = x.dates.slice().sort(function (a, b) { return key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0; });
     return { id: id, title: x.title, count: x.count, first: ds[0] || '', last: ds[ds.length - 1] || '', by: x.by, at: x.at };
   }).reverse();                                       // newest first
-  return { ok: true, exams: exams, pairs: dutPairs_() };
+  return { ok: true, exams: exams, pairs: dutPairs_(), fixes: dutFixes_() };
 }
 
 function dutLoad_(id) {
@@ -177,4 +181,39 @@ function dutMakeSheet_(req) {
     if (ch) dutWrite_(R.sh, R.rows);
   } finally { lock.releaseLock(); }
   return { ok: true, fileId: ss.getId(), url: ss.getUrl() };
+}
+
+/* ---------- fixes: Type | As written | Standard | (room, class, subject, note, block) ---------- */
+var DUT_FIX_HEAD = ['Type', 'As written', 'Standard / note'];
+function dutFixes_() {
+  var sh = dutTab_(DUT_CFG.FIXES, DUT_FIX_HEAD), n = sh.getLastRow();
+  if (n < 2) return [];
+  return sh.getRange(2, 1, n - 1, 3).getDisplayValues().filter(function (r) { return r[0] && r[1]; });
+}
+function dutFixSave_(items) {
+  var sh = dutTab_(DUT_CFG.FIXES, DUT_FIX_HEAD);
+  var rows = (items || []).map(function (r) { return [dutS_(r[0]), dutS_(r[1]), dutS_(r[2])]; }).filter(function (r) { return r[0] && r[1]; });
+  var n = sh.getLastRow();
+  if (n > 1) sh.getRange(2, 1, n - 1, 3).clearContent();
+  if (rows.length) sh.getRange(2, 1, rows.length, 3).setValues(rows);
+  return { ok: true, count: rows.length };
+}
+
+/* ---------- students by class + section, with their Enroll# (for the students' seating message) ---------- */
+function dutStudents_() {
+  var sh = SpreadsheetApp.openById(DUT_CFG.USERS).getSheetByName(DUT_CFG.STRENGTH);
+  if (!sh) throw new Error('Sheet ' + DUT_CFG.STRENGTH + ' not found.');
+  var v = sh.getDataRange().getDisplayValues(), K = function (x) { return dutS_(x).toUpperCase().replace(/[^A-Z0-9]/g, ''); };
+  var head = v[0].map(K), c = function () { for (var i = 0; i < arguments.length; i++) { var j = head.indexOf(arguments[i]); if (j >= 0) return j; } return -1; };
+  var C = { roll: c('ENROLL', 'REG'), cls: c('CLASS'), section: c('SECTION'), program: c('PROGRAM'), group: c('GROUPONLY'), status: c('STATUS') };
+  if (C.roll < 0) throw new Error('Enroll# column not found in ' + DUT_CFG.STRENGTH + '.');
+  var g = function (r, k) { return C[k] >= 0 ? dutS_(r[C[k]]) : ''; }, by = {};
+  for (var i = 1; i < v.length; i++) {
+    var r = v[i], roll = g(r, 'roll');
+    if (!roll || /migrat|cancel|disenrol|left|struck/i.test(g(r, 'status'))) continue;
+    var grp = /^null$/i.test(g(r, 'group')) ? '' : g(r, 'group');
+    var key = [g(r, 'cls'), g(r, 'section'), g(r, 'program'), grp].join('|');
+    (by[key] = by[key] || { cls: g(r, 'cls'), section: g(r, 'section'), program: g(r, 'program'), group: grp, rolls: [] }).rolls.push(roll);
+  }
+  return { ok: true, list: Object.keys(by).map(function (k) { return by[k]; }), at: new Date().toISOString() };
 }
