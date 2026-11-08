@@ -2048,13 +2048,27 @@ function autoRun(o){
   let filledOwn = 0;
   // 1 · her own subject's paper on each of its days (while she is under her number)
   const T = P.filter(n => catOf(n) !== 'NT' && mySubs(n).length).sort((a, b) => tier(a) - tier(b) || subjDays(a).length - subjDays(b).length || typeRank(a) - typeRank(b));
-  T.forEach(n => {
-    subjDays(n).forEach(iso => {
-      if(!under(n) || (busy[iso] && busy[iso].has(nkey(n)))) return;
-      const R = seats.filter(S => S.sd.iso === iso && ownHere(n, S) && S.names.length < S.need && ok(n, S) && prefScore(n, S.sd) <= 0)
-        .sort((a, b) => a.names.filter(z => ownHere(z, a)).length - b.names.filter(z => ownHere(z, b)).length || (b.need - b.names.length) - (a.need - a.names.length));
-      if(R.length){ add(R[0], n); filledOwn++; }
+  //   in rounds: everyone gets ONE paper day first (permanent before visiting), then a second, … so the
+  //   few places in a shared paper room (e.g. Mini Hall with five subjects) are not taken by one teacher's many days
+  const dayset = new Set(days), ownDays = {}; T.forEach(n => { ownDays[nkey(n)] = subjDays(n).filter(iso => dayset.has(iso)); });
+  const seatsFor = (n, iso, extra) => seats.filter(S => S.sd.iso === iso && ownHere(n, S) && (extra || S.names.length < S.need) && ok(n, S) && prefScore(n, S.sd) <= 0)
+    .sort((a, b) => a.names.filter(z => ownHere(z, a)).length - b.names.filter(z => ownHere(z, b)).length || (b.need - b.names.length) - (a.need - a.names.length) || a.names.length - b.names.length);
+  const hasOwn = n => seats.some(S => ownHere(n, S) && S.names.some(z => nkey(z) === nkey(n)));
+  for(let more = true; more;){
+    more = false;
+    T.forEach(n => {
+      const k = nkey(n); if(!under(n)) return;
+      let best = null;
+      ownDays[k].forEach(iso => { if(busy[iso] && busy[iso].has(k)) return; const R = seatsFor(n, iso, false); if(!R.length) return; const free = R.reduce((a, S) => a + S.need - S.names.length, 0); if(!best || free > best.free) best = { R, free }; });
+      if(best){ add(best.R[0], n); filledOwn++; more = true; }
     });
+  }
+  //   a permanent teacher whose paper rooms were all full still gets ONE duty there (one extra place in that room)
+  let extraOwn = 0;
+  const base = new Map(seats.map(S => [S, S.need]));
+  T.filter(n => typeOf(n) === 'P' && under(n) && ownDays[nkey(n)].length && !hasOwn(n)).forEach(n => {
+    const R = ownDays[nkey(n)].flatMap(iso => seatsFor(n, iso, true)).filter(S => S.need < base.get(S) + 3)   // at most 3 extra in one room.sort((a, b) => (a.names.length - a.need) - (b.names.length - b.need) || a.names.length - b.names.length);
+    if(R.length){ R[0].need++; add(R[0], n); filledOwn++; extraOwn++; }
   });
   reOpen();
   // 2 · a permanent teacher (superintendent) in every room
@@ -2088,7 +2102,7 @@ function autoRun(o){
   });
   saveLocal();
   const empty = seats.filter(S => S.names.length < (o.per || staffNeed(S.sd.room))).length;
-  return { added, extra, filledOwn, empty, seats:seats.length, mode:o.mode };
+  return { added, extra, filledOwn, extraOwn, empty, seats:seats.length, mode:o.mode };
 }
 function autoReport(r){
   const c = compute(), P = autoPool().filter(n => !wrongShift(n));
@@ -2098,7 +2112,7 @@ function autoReport(r){
   const line = (ok, txt) => `<li class="${ok ? 'ok' : 'x'}" style="margin:3px 0">${ok ? '✓' : '•'} ${txt}</li>`;
   $('#dlgIn').onclick = null;
   $('#dlgIn').innerHTML = `<h2 style="margin:0 0 6px">Duties created ✓</h2>
-    <div class="sub">${r.added} duties written in ${r.seats} rooms${r.mode === 'all' ? ' (new list)' : ''} · ${r.filledOwn} in teachers’ own subject. Check them in Room-wise / Teacher-wise; ↶ Undo (Ctrl+Z) brings back the list as it was.</div>
+    <div class="sub">${r.added} duties written in ${r.seats} rooms${r.mode === 'all' ? ' (new list)' : ''} · ${r.filledOwn} in teachers’ own subject${r.extraOwn ? ' (' + r.extraOwn + ' permanent teacher' + (r.extraOwn === 1 ? '' : 's') + ' added as one extra in her paper’s room because it was full)' : ''}. Check them in Room-wise / Teacher-wise; ↶ Undo (Ctrl+Z) brings back the list as it was.</div>
     <ul style="padding-left:4px;list-style:none;margin:10px 0">
       ${line(!c.clashes.length, c.clashes.length + ' clashes')}
       ${line(!r.empty, r.empty ? r.empty + ' rooms still short of staff (not enough teachers free that day)' : 'every room has its staff')}
