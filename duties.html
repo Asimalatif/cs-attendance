@@ -795,7 +795,7 @@ function rowsHtml(){
 function checkHtml(c){
   const rowRef = i => { const r = EX.rows[i]; return `<li><button class="lnk" data-go="${i}">Row ${i + 1}</button>: ${esc([r.dt, r.cls, r.sub, r.room && 'Room ' + r.room, r.staff && r.staff.replace(/\n/g, ', ')].filter(Boolean).join(' · '))}</li>`; };
   const sec = (t, body) => `<section class="card"><h3>${t}</h3>${body}</section>`;
-  let h = '';
+  let h = `<section class="card"><h3>⚡ Auto-create duties</h3><div class="sub">Let the app put staff in every room by all the rules (one duty a day, each teacher’s number, morning / evening, own subject, superintendent, preferences).</div><div class="acts"><button class="btn pri" id="bAuto">⚡ Auto-create duties</button></div></section>`;
   h += clashHtml(c) + roomSubjHtml(c) + ownHtml(c) + overHtml(c) + suggestHtml(c) + prefHtml(c) + shiftHtml(c) + yearHtml(c);
   h += sec(`Staff written but no room <span class="${c.check.noRoom.length ? 'x' : 'ok'}">${c.check.noRoom.length}</span>`, c.check.noRoom.length ? '<div class="sub">These were the yellow rows of the old sheet. Add the room in <b>All rows</b>.</div><ul>' + c.check.noRoom.map(rowRef).join('') + '</ul>' : '<div class="note ok">Every row with staff has a room.</div>');
   h += sec(`Rooms with no staff <span class="${c.check.noStaff.length ? 'x' : 'ok'}">${c.check.noStaff.length}</span>`, c.check.noStaff.length ? '<ul>' + c.check.noStaff.map(rowRef).join('') + '</ul>' : '<div class="note ok">Every room has staff.</div>');
@@ -1465,7 +1465,7 @@ function planHtml(){
   let h = `<section class="card"><h3>Plan &amp; edit</h3>
     <div class="sub">One box per exam day. Inside: each <b>paper</b> (subject + class) with its <b>rooms</b>, and the <b>staff</b> of every room. Type new classes, subjects or rooms — no sheet needed. Press <b>Save on server</b> when done.</div>
     <div class="acts"><label class="f" style="flex-direction:row;align-items:center;gap:8px">New exam date <input type="date" id="pDate" class="pin"></label><button class="btn sm pri" id="pAddDate">+ Add date</button>
-      <span style="flex:1"></span><button class="btn sm" id="pOpenAll">Open all days</button><button class="btn sm" id="pCloseAll">Close all</button></div>
+      <button class="btn sm good" id="bAuto">⚡ Auto-create duties</button><span style="flex:1"></span><button class="btn sm" id="pOpenAll">Open all days</button><button class="btn sm" id="pCloseAll">Close all</button></div>
     <div class="chips" style="margin-top:8px">${days.map(iso => { const nost = by[iso].filter(i => EX.rows[i].room && !rowNames(i).length).length; return `<button class="dc" data-pjump="${esc(iso)}" style="cursor:pointer;${nost ? 'border-color:var(--bad);color:var(--bad)' : ''}">${esc(iso ? dayShort(EX.rows[by[iso][0]].day) + ' ' + (EX.rows[by[iso][0]].dt || '').slice(0, 5) : 'No date')} · ${by[iso].length}</button>`; }).join('')}</div></section>${dl}`;
   days.forEach(iso => {
     const idx = by[iso], papers = {};
@@ -1581,6 +1581,7 @@ function wireTab(){
     if(t.id === 'bkSet') return blockRange();
     if(t.id === 'bWaAll') return waAll();
     if(t.id === 'bSwap') return swapDialog('');
+    if(t.id === 'bAuto') return autoDialog();
     if(t.dataset.pfdel !== undefined){ delete SET.pref[t.dataset.pfdel]; saveSet(); return refreshTab(); }
     if(t.id === 'stLoad') return loadStudents();
     if(t.id === 'stCopy') return copy(stuMessage());
@@ -1834,6 +1835,150 @@ function swapDo(){
   $('#wa1').onclick = () => waOpen(nA, msgA); $('#wa2').onclick = () => waOpen(nB, msgB);
   $('#swMore').onclick = () => swapDialog('');
   $('#dClose').onclick = () => { $('#dlg').close(); V.msg = 'Duties swapped: ' + A.label + ' ⇄ ' + B.label + '. Download the PDFs or the corrected Word file again.'; refreshTab(); };
+}
+
+/* ---------- AUTO-CREATE DUTIES: fills every room by all the rules ----------
+   hard: one duty a day · nobody over her number (Settings; fewer for morning + evening teachers) · not left / off duty ·
+         teachers who teach only in the other shift get no duty (evening-only teachers for a morning exam, and the other way round)
+   then: her own subject's paper on its days · a permanent teacher (superintendent) in every room · everyone filled evenly
+         towards her number · permanent and visiting mixed · duty preferences · same-department not needed */
+function autoPool(){
+  const c = compute();
+  return [...new Set(CTS.list.filter(x => CTS.users ? x.users : true).map(x => x.name))].filter(n => !offDuty(n) && !(c.unknown || []).includes(n));
+}
+function autoDialog(){
+  if(!EX || !EX.rows.length) return;
+  if(!CTS){ alert('First load the teacher list (Users sheet) — press “Load the teacher list” in Settings or Names.'); return; }
+  const P = autoPool(), out = P.filter(wrongShift), sh = examShift() === 'M' ? 'morning' : 'evening', both = P.filter(n => !wrongShift(n) && bothShift(n)).length;
+  const seats = seatsAll().filter(sd => sd.iso && vnorm(sd.room)), empty = seats.filter(sd => !sd.staff.length).length;
+  SET.per = SET.per || '2';
+  $('#dlgIn').onclick = null; $('#dlgIn').onchange = null;
+  $('#dlgIn').innerHTML = `<h2 style="margin:0 0 4px">⚡ Auto-create duties</h2>
+    <div class="sub">Puts staff in every room following all the rules: <b>one duty a day</b>; nobody above her number of duties (⚙ Settings); <b>${both}</b> teachers of morning + evening get ${esc(SET.both)} fewer; every teacher in <b>her own subject’s paper</b> on its days; a <b>permanent teacher (superintendent)</b> in every room; duties spread <b>evenly</b> towards each teacher’s number, permanent and visiting mixed; duty preferences followed. Left teachers and staff marked principal / exam staff / on leave get none.</div>
+    <div class="note" style="margin-top:8px">Exam shift: <b>${sh}</b> (from the time “${esc(EX.timing || '')}”). ${out.length ? `<b>${out.length}</b> teacher${out.length === 1 ? ' teaches' : 's teach'} only in the ${sh === 'morning' ? 'evening' : 'morning'} and get no duty: ${out.slice(0, 12).map(esc).join(', ')}${out.length > 12 ? ' …' : ''}.` : 'Every teacher in the list teaches in this shift.'}</div>
+    <div class="grid" style="margin-top:8px"><label class="f">Staff in a room<input class="nm" type="number" min="1" max="9" id="auPer" value="${esc(SET.per)}" style="max-width:110px"></label></div>
+    <label class="li" style="justify-content:flex-start;gap:10px;cursor:pointer"><input type="radio" name="auMode" value="fill" checked style="width:20px;height:20px"><span><b>Fill only what is missing</b><br><span class="sub">Keeps every name already written; adds staff to rooms with fewer than this number (${empty} room${empty === 1 ? ' has' : 's have'} nobody).</span></span></label>
+    <label class="li" style="justify-content:flex-start;gap:10px;cursor:pointer"><input type="radio" name="auMode" value="all" style="width:20px;height:20px"><span><b>Make all duties again</b><br><span class="sub">Removes all staff from the ${seats.length} rooms and makes a new duty list. ↶ Undo brings the old one back.</span></span></label>
+    <label class="li" style="justify-content:flex-start;gap:10px;cursor:pointer"><input type="checkbox" id="auKeep" checked style="width:20px;height:20px"><span>A room that already has more staff keeps that number</span></label>
+    <label class="li" style="justify-content:flex-start;gap:10px;cursor:pointer"><input type="checkbox" id="auOver" checked style="width:20px;height:20px"><span>When nobody is left under her number, give an extra duty (to whoever is least over) instead of leaving a seat empty</span></label>
+    <div class="acts"><button class="btn pri" id="auGo">Create duties</button><button class="btn" id="dClose">Cancel</button></div>`;
+  if(!$('#dlg').open) $('#dlg').showModal();
+  $('#dClose').onclick = () => $('#dlg').close();
+  $('#auGo').onclick = () => {
+    const mode = (document.querySelector('input[name=auMode]:checked') || {}).value || 'fill';
+    if(mode === 'all' && !confirm('Remove all staff from every room and make the duty list again?')) return;
+    SET.per = String(Math.max(1, parseInt($('#auPer').value, 10) || 2)); saveSet();
+    $('#auGo').disabled = true; $('#auGo').textContent = 'Working…';
+    jcwBusy(new Promise(ok => setTimeout(ok, 30)), 'Creating duties…').then(() => {
+      const r = autoRun({ mode, per:+SET.per, keep:$('#auKeep').checked, over:$('#auOver').checked });
+      autoReport(r);
+    });
+  };
+}
+function autoRun(o){
+  const c = compute(), P = autoPool().filter(n => !wrongShift(n));
+  const seats = seatsAll().filter(sd => sd.iso && vnorm(sd.room)).map(sd => {
+    const keepNames = o.mode === 'fill' ? sd.staff.slice() : [];
+    const need = Math.max(o.per, o.keep ? sd.staff.length : 0);
+    return { sd, names:keepNames, need, own:P.filter(n => isOwnSeat(n, sd)).map(nkey) };
+  });
+  const K = {}; P.forEach(n => { K[nkey(n)] = n; });
+  const cnt = {}, busy = {}, add = (S, n) => { S.names.push(n); const k = nkey(n); cnt[k] = (cnt[k] || 0) + 1; (busy[S.sd.iso] = busy[S.sd.iso] || new Set()).add(k); };
+  // what is kept counts: kept names in these rooms + duties in rooms we do not touch (no room / no date)
+  seats.forEach(S => S.names.forEach(n => { const k = nkey(n); cnt[k] = (cnt[k] || 0) + 1; (busy[S.sd.iso] = busy[S.sd.iso] || new Set()).add(k); }));
+  const touched = new Set(seats.map(S => seatKey(S.sd)));
+  c.L.teacher.forEach(t => t.items.forEach(d => { if(!touched.has(seatKey(d))){ const k = nkey(t.label); cnt[k] = (cnt[k] || 0) + 1; if(d.iso) (busy[d.iso] = busy[d.iso] || new Set()).add(k); } }));
+  const totalNeed = seats.reduce((a, S) => a + S.need, 0), fallback = Math.max(1, Math.ceil(totalNeed / Math.max(1, P.length)));
+  const capOf = n => { const m = maxOf(n); return m == null ? fallback : m; };
+  const days = [...new Set(seats.map(S => S.sd.iso))];
+  let openDays = new Set(days);
+  const reOpen = () => { openDays = new Set(seats.filter(S => S.names.length < S.need).map(S => S.sd.iso)); };
+  const freeDaysLeft = n => { let f = 0; openDays.forEach(d => { if(!(busy[d] && busy[d].has(nkey(n)))) f++; }); return f; };
+  const ok = (n, S) => !(busy[S.sd.iso] && busy[S.sd.iso].has(nkey(n))) && !S.names.some(z => nkey(z) === nkey(n));
+  const hasPerm = S => S.names.some(z => typeOf(z) === 'P');
+  const ownHere = (n, S) => S.own.includes(nkey(n));
+  // lower = better
+  const score = (n, S) => {
+    const k = nkey(n), cap = capOf(n), have = cnt[k] || 0;
+    let s = (cap ? have / cap : 1) * 100;                                   // evenly towards her number
+    s += Math.max(0, freeDaysLeft(n) - (cap - have)) * 2;                    // few free days left → earlier
+    if(ownHere(n, S)) s -= 35;                                               // her subject's paper
+    if(!hasPerm(S) && S.names.length >= S.need - 1) s += typeOf(n) === 'P' ? -60 : 60;   // last seat and no superintendent yet
+    if(typeOf(n) === 'V' && S.names.length && S.names.every(z => typeOf(z) === 'V')) s += 15;
+    if(typeOf(n) === 'N' && S.names.some(z => typeOf(z) === 'N')) s += 15;
+    const ps = prefScore(n, S.sd); s += ps > 0 ? 400 : ps * 10;
+    return s;
+  };
+  const under = n => (cnt[nkey(n)] || 0) < capOf(n);
+  let filledOwn = 0;
+  // 1 · her own subject's paper on each of its days (while she is under her number)
+  const T = P.filter(n => catOf(n) !== 'NT' && mySubs(n).length).sort((a, b) => subjDays(a).length - subjDays(b).length || typeRank(a) - typeRank(b));
+  T.forEach(n => {
+    subjDays(n).forEach(iso => {
+      if(!under(n) || (busy[iso] && busy[iso].has(nkey(n)))) return;
+      const R = seats.filter(S => S.sd.iso === iso && ownHere(n, S) && S.names.length < S.need && ok(n, S) && prefScore(n, S.sd) <= 0)
+        .sort((a, b) => a.names.filter(z => ownHere(z, a)).length - b.names.filter(z => ownHere(z, b)).length || (b.need - b.names.length) - (a.need - a.names.length));
+      if(R.length){ add(R[0], n); filledOwn++; }
+    });
+  });
+  reOpen();
+  // 2 · a permanent teacher (superintendent) in every room
+  seats.filter(S => !hasPerm(S) && S.names.length < S.need).forEach(S => {
+    const C = P.filter(n => typeOf(n) === 'P' && under(n) && ok(n, S)).sort((a, b) => score(a, S) - score(b, S));
+    if(C.length) add(S, C[0]);
+  });
+  // 3 · fill every seat — the room with the fewest possible staff first
+  let extra = 0;
+  for(;;){
+    const open = seats.filter(S => S.names.length < S.need); if(!open.length) break;
+    reOpen();
+    let best = null; const perDay = {};
+    open.forEach(S => { const C = perDay[S.sd.iso] || (perDay[S.sd.iso] = P.filter(n => under(n) && !(busy[S.sd.iso] && busy[S.sd.iso].has(nkey(n))))); if(!best || C.length < best.C.length) best = { S, C }; });
+    let C = best.C;
+    if(!C.length){
+      if(!o.over){ best.S.need = best.S.names.length; continue; }
+      C = P.filter(n => ok(n, best.S)).sort((a, b) => ((cnt[nkey(a)] || 0) - capOf(a)) - ((cnt[nkey(b)] || 0) - capOf(b)) || score(a, best.S) - score(b, best.S));
+      if(!C.length){ best.S.need = best.S.names.length; continue; }
+      add(best.S, C[0]); extra++; continue;
+    }
+    C.sort((a, b) => score(a, best.S) - score(b, best.S) || ncmp(a, b));
+    add(best.S, C[0]);
+  }
+  // write into the duty table (superintendent first)
+  let added = 0;
+  seats.forEach(S => {
+    const before = new Set(S.sd.staff.map(nkey)), names = orderStaff(S.names, S.sd);
+    added += names.filter(n => !before.has(nkey(n))).length;
+    S.sd.rows.forEach(i => setRowNames(i, names));
+  });
+  saveLocal();
+  const empty = seats.filter(S => S.names.length < Math.max(o.per, 1)).length;
+  return { added, extra, filledOwn, empty, seats:seats.length, mode:o.mode };
+}
+function autoReport(r){
+  const c = compute(), P = autoPool().filter(n => !wrongShift(n));
+  const less = P.filter(lessOf), more = P.filter(overOf), zero = P.filter(n => !dutyCount(n));
+  const noPerm = seatsAll().filter(sd => sd.iso && vnorm(sd.room) && sd.staff.length && !sd.staff.some(z => typeOf(z) === 'P')).length;
+  const noSubj = roomSubjList().length, own = ownList().need.filter(x => !wrongShift(x.t)).length;
+  const line = (ok, txt) => `<li class="${ok ? 'ok' : 'x'}" style="margin:3px 0">${ok ? '✓' : '•'} ${txt}</li>`;
+  $('#dlgIn').onclick = null;
+  $('#dlgIn').innerHTML = `<h2 style="margin:0 0 6px">Duties created ✓</h2>
+    <div class="sub">${r.added} duties written in ${r.seats} rooms${r.mode === 'all' ? ' (new list)' : ''} · ${r.filledOwn} in teachers’ own subject. Check them in Room-wise / Teacher-wise; ↶ Undo (Ctrl+Z) brings back the list as it was.</div>
+    <ul style="padding-left:4px;list-style:none;margin:10px 0">
+      ${line(!c.clashes.length, c.clashes.length + ' clashes')}
+      ${line(!r.empty, r.empty ? r.empty + ' rooms still short of staff (not enough teachers free that day)' : 'every room has its staff')}
+      ${line(!noPerm, noPerm ? noPerm + ' rooms without a permanent teacher' : 'a permanent teacher (superintendent) in every room')}
+      ${line(!more.length, more.length ? more.length + ' teachers above their number' + (r.extra ? ' (' + r.extra + ' extra duties were needed)' : '') : 'nobody above her number')}
+      ${line(!less.length, less.length ? less.length + ' teachers below their number — not enough rooms / days for everyone' : 'everyone has her number')}
+      ${line(!zero.length, zero.length ? zero.length + ' with no duty' : 'everyone has at least one duty')}
+      ${line(!own, own ? own + ' subject-days where a teacher is not in her subject’s paper (see Check)' : 'everyone in her subject’s paper on its days')}
+      ${line(!noSubj, noSubj ? noSubj + ' rooms with no teacher of the paper’s subject (see Check)' : 'every room has a teacher of its subject')}
+    </ul>
+    <div class="acts"><button class="btn pri" id="auSee">See Teacher-wise</button><button class="btn" id="auChk">Open Check</button><button class="btn" id="auUndo">↶ Undo</button><button class="btn" id="dClose">Done</button></div>`;
+  const go = tab => { $('#dlg').close(); V.tab = tab; ls.set('dut_tab', tab); V.msg = 'Duties created automatically. Download the PDFs or the corrected Word file.'; render(); };
+  $('#auSee').onclick = () => go('teacher'); $('#auChk').onclick = () => go('check');
+  $('#auUndo').onclick = () => { $('#dlg').close(); undo(); };
+  $('#dClose').onclick = () => { $('#dlg').close(); V.msg = 'Duties created automatically. Download the PDFs or the corrected Word file.'; refreshTab(); };
 }
 async function loadCts(quiet){
   try{
