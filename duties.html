@@ -356,13 +356,17 @@ let _ix = null, _ixAt = -1;
 function nameIndex(){
   const at = (CTS && CTS.at || 0) + ':' + PAIRS.length + ':' + JSON.stringify(PAIRS).length;
   if(_ix && _ixAt === at) return _ix;
-  const map = {}, ct = {};
+  const map = {}, ct = {}, exact = {};
+  ((CTS && CTS.list) || []).forEach(c => { const f = fullKey(c.name); if(f && !exact[f]) exact[f] = c.name; });
   PAIRS.forEach(p => { const k = nkey(p[0]); if(k && String(p[1] || '').trim()) map[k] = String(p[1]).trim(); });
   ((CTS && CTS.list) || []).forEach(c => { const k = nkey(c.name); if(k && !ct[k]) ct[k] = c; });
-  _ixAt = at; return (_ix = { map, ct });
+  _ixAt = at; return (_ix = { map, ct, exact });
 }
+/** the whole name with its title (DR. SAEEDA ≠ MS. SAEEDA) */
+const fullKey = n => String(n || '').toUpperCase().replace(/\bMRS\b|\bMISS\b/g, 'MS').replace(/[^A-Z0-9]/g, '');
 function stdName(n){
   const I = nameIndex(), k = nkey(n);
+  if(I.exact[fullKey(n)]) return I.exact[fullKey(n)];          // written exactly as a teacher in the Users sheet: always her (an old fix like “Ms Saeeda → MS. SAEEDA TAJ” must not take DR. SAEEDA)
   if(I.map[k]) return I.map[k];
   if(I.ct[k]) return I.ct[k].name;
   return n;
