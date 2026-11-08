@@ -553,7 +553,7 @@ function groupCards(kind){
   return G.map((g, gi) => {
     const head = kind === 'teacher' && (gi === 0 || typeOf(G[gi - 1].label) !== typeOf(g.label)) ? `<h3 style="margin:18px 0 0;padding:8px 12px;border-radius:12px;background:${typeOf(g.label) === 'V' ? 'var(--mid-bg)' : typeOf(g.label) === 'O' ? 'var(--bad-bg)' : 'var(--good-bg)'}">${TYPE_T[typeOf(g.label)]} <span class="sub">${G.filter(x => typeOf(x.label) === typeOf(g.label)).length}</span></h3>` : '';
     const wa = kind === 'teacher';
-    return head + `<div class="rm"><h3><span>${kind === 'teacher' ? `<button class="lnk" data-t="${esc(g.key)}">${esc(g.label)}</button>${g.clash ? ' <span class="x">⚠ clash</span>' : ''}${wrongShift(g.label) ? ` <span class="dc x">${examShift() === 'M' ? 'EVENING' : 'MORNING'} ONLY</span>` : ''}${kind === 'teacher' ? shareBadge(g.label) + (bothShift(g.label) ? ' <span class="dc">MORNING + EVENING</span>' : '') : ''}${CTS && compute().unknown.includes(g.label) ? ` <span class="dc x">${compute().leftOf[g.label] ? 'LEFT the college' : 'not in Users sheet'}</span>` : ''}` : esc(g.label)}</span><span class="sub">${kind === 'teacher' ? esc(tLine(g.label)) : g.items.length + ' paper' + (g.items.length === 1 ? '' : 's')}${kind === 'teacher' ? ` <button class="btn sm" data-t="${esc(g.key)}">Change</button>` : ''}${wa ? ` <button class="btn sm good" data-wa="${esc(g.key)}">WhatsApp</button>` : ''}</span></h3>
+    return head + `<div class="rm"><h3><span>${kind === 'teacher' ? `<button class="lnk" data-t="${esc(g.key)}">${esc(g.label)}</button>${g.clash ? ' <span class="x">⚠ clash</span>' : ''}${wrongShift(g.label) ? ` <span class="dc x">${examShift() === 'M' ? 'EVENING' : 'MORNING'} ONLY</span>` : ''}${kind === 'teacher' ? shareBadge(g.label) + (bothShift(g.label) ? ' <span class="dc">MORNING + EVENING</span>' : '') : ''}${CTS && compute().unknown.includes(g.label) ? ` <span class="dc x">${compute().leftOf[g.label] ? 'LEFT the college' : 'not in Users sheet'}</span>` : ''}` : esc(g.label)}</span><span class="sub">${kind === 'teacher' ? esc(tLine(g.label)) : g.items.length + ' paper' + (g.items.length === 1 ? '' : 's')}${kind === 'teacher' ? ` <button class="btn sm ${lessOf(g.label) ? 'good' : ''}" data-t="${esc(g.key)}">${lessOf(g.label) ? 'Give more · Change' : 'Change'}</button>` : ''}${wa ? ` <button class="btn sm good" data-wa="${esc(g.key)}">WhatsApp</button>` : ''}</span></h3>
       <div class="tw" style="max-height:none"><table><thead><tr><th>#</th>${cols.map(c => `<th>${COLNAME[c]}</th>`).join('')}</tr></thead><tbody>${g.items.map((it, i) => `<tr><td class="n">${i + 1}</td>${cols.map(c => `<td class="${c === 'date' || c === 'room' ? 'nw' : ''} ${it.x && (c === 'date' || c === 'room') ? 'x' : ''}">${c === 'room' ? '<b>' + esc(cellOf(it, c)) + '</b>' : c === 'staff' && !it.staff.length ? '<span class="x">No staff</span>' : esc(cellOf(it, c))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
   }).join('');
 }
@@ -826,7 +826,7 @@ function overHtml(c){
   const more = pool.filter(overOf).sort((a, b) => typeRank(a) - typeRank(b) || (dutyCount(b) - maxOf(b)) - (dutyCount(a) - maxOf(a)));
   const less = pool.filter(lessOf).sort((a, b) => typeRank(a) - typeRank(b) || (maxOf(b) - dutyCount(b)) - (maxOf(a) - dutyCount(a)));
   const ok = pool.length - more.length - less.length;
-  const row = n => { const t = c.L.teacher.find(x => nkey(x.label) === nkey(n)); return `<tr><td><b>${esc(n)}</b>${shareBadge(n)}<div class="sub">${esc(catName(catOf(n)))} · ${esc(tLine(n))}</div></td><td>${t ? `<button class="btn sm pri" data-t="${esc(t.key)}">Change</button>` : ''}</td></tr>`; };
+  const row = n => { const t = c.L.teacher.find(x => nkey(x.label) === nkey(n)); return `<tr><td><b>${esc(n)}</b>${shareBadge(n)}<div class="sub">${esc(catName(catOf(n)))} · ${esc(tLine(n))}</div></td><td>${t ? `<button class="btn sm pri" data-t="${esc(t.key)}">${lessOf(n) ? 'Give more' : 'Change'}</button>` : `<button class="btn sm good" data-t="${esc(nkey(n))}">Give duties</button>`}</td></tr>`; };
   const part = (L, ty) => L.filter(n => typeOf(n) === ty);
   const block = (L, title, color, note) => !L.length ? '' : `<section class="card" style="border-top-color:${color}"><h3>${title} <span style="color:${color}">${L.length}</span></h3><div class="sub">${note}</div>${[['P', 'Permanent'], ['V', 'Visiting'], ['N', 'Non-teaching staff']].map(([ty, lab]) => part(L, ty).length ? `<h3 style="margin-top:10px">${lab} <span class="sub">${part(L, ty).length}</span></h3><div class="tw" style="max-height:none"><table><tbody>${part(L, ty).map(row).join('')}</tbody></table></div>` : '').join('')}</section>`;
   return `<section class="card"><h3>Duties share</h3><div class="sub">Against the duties each teacher should get (⚙ Settings: by designation, permanent / visiting, ${esc(SET.both || 0)} fewer for teachers of both morning and evening).</div>
@@ -991,7 +991,7 @@ function missingHtml(c){
   const marked = Object.entries(NOTES).filter(([k]) => nameIndex().ct[k]);
   return `<section class="card" style="border-top-color:var(--good)"><h3>Teachers with no duty <span class="ok">${c.missing.length}</span></h3>
     <div class="sub">${CTS.users ? 'Every teacher in the <b>Users</b> sheet (permanent and visiting) who' : 'Teachers in the timetable who'} got no duty in this list — useful for a fair share. When a teacher has no invigilation for a reason (principal, exam / stationery staff, on leave…), choose it: she is then not counted here.</div>
-    ${c.missing.length ? [['P', 'Permanent'], ['V', 'Visiting'], ['N', 'Non-teaching staff']].map(([ty, lab]) => { const L = c.missing.filter(n => typeOf(n) === ty); return L.length ? `<h3 style="margin-top:12px">${lab} <span class="ok">${L.length}</span></h3><div class="tw" style="max-height:none"><table><tbody>${L.map(n => { const ct = contactOf(n) || {}; return `<tr style="background:var(--good-bg)"><td><b class="ok">${esc(n)}</b><div class="sub">${esc(tLine(n))}</div></td><td><select class="sq" data-note="${esc(nkey(n))}" data-name="${esc(n)}" style="height:38px;min-width:210px"><option value="">— no duty —</option>${NOTE_OPTS.map(o => `<option>${esc(o)}</option>`).join('')}</select></td></tr>`; }).join('')}</tbody></table></div>` : ''; }).join('') : '<div class="note ok">Every teacher has a duty.</div>'}
+    ${c.missing.length ? [['P', 'Permanent'], ['V', 'Visiting'], ['N', 'Non-teaching staff']].map(([ty, lab]) => { const L = c.missing.filter(n => typeOf(n) === ty); return L.length ? `<h3 style="margin-top:12px">${lab} <span class="ok">${L.length}</span></h3><div class="tw" style="max-height:none"><table><tbody>${L.map(n => { const ct = contactOf(n) || {}; return `<tr style="background:var(--good-bg)"><td><b class="ok">${esc(n)}</b> <button class="btn sm good" data-t="${esc(nkey(n))}">Give duties</button><div class="sub">${esc(tLine(n))}</div></td><td><select class="sq" data-note="${esc(nkey(n))}" data-name="${esc(n)}" style="height:38px;min-width:210px"><option value="">— no duty —</option>${NOTE_OPTS.map(o => `<option>${esc(o)}</option>`).join('')}</select></td></tr>`; }).join('')}</tbody></table></div>` : ''; }).join('') : '<div class="note ok">Every teacher has a duty.</div>'}
     ${marked.length ? `<div class="sub" style="margin-top:10px">Not on duty lists: ${marked.map(([k, x]) => `<span class="dc">${esc(x.n)} — ${esc(x.v)} <button class="lnk" data-unclr="${esc(k)}" aria-label="Remove">✕</button></span>`).join('')}</div>` : ''}</section>`;
 }
 
@@ -1388,7 +1388,33 @@ function dutyCount(n){ const c = compute(); if(!c._cnt){ c._cnt = {}; c.L.teache
 const tLine = n => { const d = dutyCount(n), m = maxOf(n), i = tInfo(n); return d + (m != null ? '/' + m : '') + ' dut' + (d === 1 && m == null ? 'y' : 'ies') + (m == null ? '' : d > m ? ' (MORE by ' + (d - m) + ')' : d < m ? ' (LESS by ' + (m - d) + ')' : ' ✓') + (bothLess(n) ? ' · ' + bothLess(n) + ' fewer: morning + evening' : '') + (i ? ' · ' + i : ''); };
 /** coloured badge: MORE / LESS / ✓ against the duties she should get */
 function shareBadge(n){ const d = dutyCount(n), m = maxOf(n); if(m == null) return ''; return d > m ? ` <span class="dc x">MORE ${d}/${m}</span>` : d < m ? ` <span class="dc" style="color:var(--mid);border-color:var(--mid);background:var(--mid-bg);font-weight:800">LESS ${d}/${m}</span>` : ` <span class="dc" style="color:var(--good);border-color:var(--good);background:var(--good-bg);font-weight:800">✓ ${d}/${m}</span>`; }
-const tOf = key => compute().L.teacher.find(x => x.key === key);
+const tOf = key => compute().L.teacher.find(x => x.key === key) || (() => { const ct = CTS && CTS.list.find(x => (nkey(x.name) || x.name.toLowerCase()) === key); return ct ? { key, label:ct.name, items:[], clash:0 } : null; })();
+/** duties she could take on dates she is free: from teachers with MORE than their share first (same department, biggest excess), then as an extra invigilator in rooms with the fewest staff */
+function moreOptions(n){
+  const c = compute(), k = nkey(n), me = c.L.teacher.find(t => nkey(t.label) === k), mine = new Set(((me || {}).items || []).map(x => x.iso)), out = [];
+  c.L.teacher.forEach(t => {
+    if(nkey(t.label) === k || !overOf(t.label)) return;
+    const extra = dutyCount(t.label) - maxOf(t.label);
+    t.items.forEach(d => { if(d.iso && !mine.has(d.iso)) out.push({ id:'take|' + dutyId(t, d), kind:'take', from:t.label, extra, dept:sameDeptOf(n, t.label, d), d }); });
+  });
+  out.sort((a, b) => b.dept - a.dept || b.extra - a.extra || ncmp(a.d.iso, b.d.iso));
+  const seen = new Set(), add = [];
+  c.recs.forEach(r => { if(!r.iso || mine.has(r.iso)) return; const kk = r.iso + '|' + (r.time || '') + '|' + vnorm(r.room); if(seen.has(kk)) return; seen.add(kk); add.push({ id:'add|' + r.i, kind:'add', d:Object.assign({}, r, { cls:[r.cls].filter(Boolean), sub:[r.sub].filter(Boolean) }), staffN:r.staff.length, dept:sameDeptOf(n, null, { sub:[r.sub] }) }); });
+  add.sort((a, b) => a.staffN - b.staffN || b.dept - a.dept || ncmp(a.d.iso, b.d.iso));
+  return out.slice(0, 40).concat(add.slice(0, 40));
+}
+function giveMore(n, ids){
+  const c = compute(), opts = moreOptions(n), used = new Set(), map = {}; let skipped = 0, added = 0;
+  ids.forEach(id => {
+    const o = opts.find(x => x.id === id); if(!o) return;
+    if(used.has(o.d.iso)){ skipped++; return; }      // never two duties on one day
+    used.add(o.d.iso);
+    if(o.kind === 'take') map[id.slice(5)] = 'give:' + n;
+    else { const i = +id.slice(4); setRowNames(i, rowNames(i).concat(n)); added++; }
+  });
+  const moved = Object.keys(map).length ? applyDutyChanges(map) : (saveLocal(), 0);
+  return { moved, added, skipped };
+}
 function waMsg(t){
   return `Assalam-o-Alaikum ${t.label},\nYour duties in ${EX.title} (timings ${EX.timing || '08:30-12:30 PM'}):\n` + t.items.map((d, i) => `${i + 1}. ${dutyFull(d)}`).join('\n') + `\nTotal: ${t.items.length} dut${t.items.length === 1 ? 'y' : 'ies'}\n- ${me} (Admin)`;
 }
@@ -1400,12 +1426,24 @@ function openTeacher(key){
   $('#dlgIn').onclick = null;
   $('#dlgIn').innerHTML = `<h2 style="margin:0 0 4px">${esc(t.label)}</h2><div class="sub">${esc(tLine(t.label))} · ${esc(EX.title)}${t.clash ? ' · <span class="x">clash</span>' : ''}</div>
     ${shiftLong(ct) ? `<div class="note ${wrongShift(t.label) ? 'bad' : 'mid'}" style="margin-top:8px">Timetable — ${esc(shiftLong(ct))}${wrongShift(t.label) ? '<br><b>She teaches only in the ' + (examShift() === 'M' ? 'evening' : 'morning') + ' — think before giving her ' + (examShift() === 'M' ? 'morning' : 'evening') + ' duties.</b>' : ''}</div>` : ''}
-    <div class="sub" style="margin-top:8px">To change a duty choose it in <b>Change</b>: give it to a teacher who is free that day, move her to another date, or take her off. Then press <b>Apply changes</b>.</div>
+    ${t.items.length ? `<div class="sub" style="margin-top:8px">To change a duty choose it in <b>Change</b>: give it to a teacher who is free that day, move her to another date, or take her off. Then press <b>Apply changes</b>.</div>
     <div class="tw" style="max-height:52vh"><table><thead><tr><th>Date/Day</th><th>Room</th><th>Class / subject</th><th>Change</th></tr></thead><tbody>${t.items.map(d => `<tr><td class="nw ${d.x ? 'x' : ''}">${esc(dateDay(d))}${d.time ? '<br>' + esc(d.time) : ''}</td><td class="nw"><b>${esc(roomLbl(d.room))}</b></td><td>${esc(d.cls.join(', '))}<div class="sub">${esc(d.sub.join(', '))}</div></td><td><select class="sq" data-dx="${esc(dutyId(t, d))}" style="height:38px;min-width:200px;max-width:280px">${dutyOpts(t, d, '')}</select></td></tr>`).join('')}</tbody></table></div>
-    <div class="acts"><button class="btn pri" id="dApply" disabled>Apply changes</button><button class="btn good" id="dWa">WhatsApp her duties</button><button class="btn" id="dCopy">Copy</button><button class="btn" id="dPdf">Her PDF</button><button class="btn" id="dClose">Close</button></div>`;
+    <div class="acts"><button class="btn pri" id="dApply" disabled>Apply changes</button></div>` : '<div class="note mid" style="margin-top:8px">She has no duty in this list yet.</div>'}
+    ${(() => { const M = moreOptions(t.label), take = M.filter(o => o.kind === 'take'), add = M.filter(o => o.kind === 'add'), need = maxOf(t.label) != null ? Math.max(0, maxOf(t.label) - dutyCount(t.label)) : null;
+      const line = o => `<label class="li" style="padding:6px 4px;cursor:pointer;justify-content:flex-start;gap:10px"><input type="checkbox" data-gm="${esc(o.id)}" data-iso="${esc(o.d.iso)}" style="width:20px;height:20px;flex:none"><span style="flex:1"><b>${esc(dateDay(o.d))}</b> · ${esc(roomLbl(o.d.room))} · ${esc(o.d.cls.join(', '))} ${esc(o.d.sub.join(', '))}<span class="sub" style="display:block">${o.kind === 'take' ? 'take it from <b>' + esc(o.from) + '</b> (' + esc(tLine(o.from).split(' · ')[0]) + ')' + (o.dept === 2 ? ' · ★ same department' : o.dept === 1 ? ' · her department’s paper' : '') : 'join as an extra invigilator · now ' + o.staffN + ' staff' + (o.dept ? ' · her department’s paper' : '')}</span></span></label>`;
+      return `<h3 style="margin-top:14px">Give her more duties${need != null ? ` <span class="sub">${need ? 'she needs ' + need + ' more to reach ' + maxOf(t.label) : 'she already has her share'}</span>` : ''}</h3>
+      <div class="sub">Only dates on which she has no duty. Tick, then press <b>Give</b>. One duty per day.</div>
+      <div class="tw" style="max-height:40vh;padding:0 8px">${take.length ? '<div class="sub" style="margin:6px 0"><b>Take over from teachers with MORE than their share</b></div>' + take.map(line).join('') : '<div class="sub" style="margin:6px 0">No teacher with more than her share has a duty on her free dates.</div>'}
+        ${add.length ? '<div class="sub" style="margin:10px 0 6px"><b>Or join a room as an extra invigilator</b> (fewest staff first)</div>' + add.map(line).join('') : ''}</div>
+      <div class="acts"><button class="btn good" id="gmApply" disabled>Give her the ticked duties</button></div>`; })()}
+    <div class="acts"><button class="btn good" id="dWa">WhatsApp her duties</button><button class="btn" id="dCopy">Copy</button><button class="btn" id="dPdf">Her PDF</button><button class="btn" id="dClose">Close</button></div>`;
   if(!$('#dlg').open) $('#dlg').showModal();
   $('#dlgIn').onchange = e => { const x = e.target; if(x.dataset.dx === undefined) return; DX[x.dataset.dx] = x.value; const n = Object.values(DX).filter(Boolean).length; $('#dApply').disabled = !n; $('#dApply').textContent = n ? 'Apply ' + n + ' change' + (n === 1 ? '' : 's') : 'Apply changes'; };
-  $('#dApply').onclick = () => { const n = applyDutyChanges(DX); DX = {}; $('#dlg').close(); V.msg = n + ' duty change(s) for ' + t.label + '. Download the PDFs or the corrected Word file again to get them.'; V.err = ''; refreshTab(); };
+  $('#dlgIn').addEventListener('change', e => { const x = e.target; if(x.dataset.gm === undefined) return;
+    if(x.checked) document.querySelectorAll('#dlgIn [data-gm]').forEach(o => { if(o !== x && o.dataset.iso === x.dataset.iso && o.checked){ o.checked = false; } });   // one per day
+    const n = document.querySelectorAll('#dlgIn [data-gm]:checked').length; $('#gmApply').disabled = !n; $('#gmApply').textContent = n ? 'Give her ' + n + ' dut' + (n === 1 ? 'y' : 'ies') : 'Give her the ticked duties'; });
+  $('#gmApply') && ($('#gmApply').onclick = () => { const ids = [...document.querySelectorAll('#dlgIn [data-gm]:checked')].map(x => x.dataset.gm); const r = giveMore(t.label, ids); $('#dlg').close(); V.msg = t.label + ': ' + (r.moved + r.added) + ' more dut' + (r.moved + r.added === 1 ? 'y' : 'ies') + ' (' + r.moved + ' taken over, ' + r.added + ' as extra invigilator). Download the PDFs or the corrected Word file again.'; V.err = ''; refreshTab(); });
+  $('#dApply') && ($('#dApply').onclick = () => { const n = applyDutyChanges(DX); DX = {}; $('#dlg').close(); V.msg = n + ' duty change(s) for ' + t.label + '. Download the PDFs or the corrected Word file again to get them.'; V.err = ''; refreshTab(); });
   $('#dClose').onclick = () => $('#dlg').close();
   $('#dCopy').onclick = () => copy(waMsg(t));
   $('#dPdf').onclick = async () => { $('#dlg').close(); try{ deliver([await teacherPdf(t)]); }catch(e){ alert(e.message); } };
