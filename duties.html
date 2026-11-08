@@ -87,7 +87,7 @@ const API = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 const ls = { get(k, d){ try{ const v = localStorage.getItem('csa2_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } }, set(k, v){ try{ localStorage.setItem('csa2_' + k, JSON.stringify(v)); return true; }catch(e){ return false; } } };
-const user = ls.get('user', ''), pass = ls.get('pass', ''), me = ls.get('teacher', '') || user, isAdm = !!ls.get('admin', false);
+const user = ls.get('user', ''), pass = ls.get('pass', ''), me = ls.get('teacher', '') || user, isAdm = !!ls.get('admin', false) || !!ls.get('isCP', false);   // admin or Chief Proctor (duty operator)
 
 /* ---------- state (kept on this phone, works without internet) ---------- */
 let EX = ls.get('dut_cur', null);          // { id, title, rows:[{dt, iso, day, time, cls, sub, room, staff}], saved, sheet }
@@ -457,12 +457,12 @@ const dutyFull = d => `${dateDay(d)}${d.time ? ' (' + d.time + ')' : ''} · ${ro
 /* =====================================================================
    4) SCREEN
    ===================================================================== */
-const TABS = [['teacher', 'Teacher-wise'], ['room', 'Room-wise'], ['date', 'Date-wise'], ['class', 'Class-wise'], ['subject', 'Subject-wise'], ['summary', 'Summary'], ['names', 'Names'], ['places', 'Rooms · Classes · Subjects'], ['students', 'Students’ message'], ['rows', 'All rows'], ['check', 'Check']];
+const TABS = [['teacher', 'Teacher-wise'], ['room', 'Room-wise'], ['date', 'Date-wise'], ['class', 'Class-wise'], ['subject', 'Subject-wise'], ['plan', 'Plan & edit'], ['summary', 'Summary'], ['names', 'Names'], ['places', 'Rooms · Classes · Subjects'], ['students', 'Students’ message'], ['rows', 'All rows'], ['check', 'Check']];
 if(!TABS.some(t => t[0] === V.tab)) V.tab = 'teacher';
 V.newPage = ls.get('dut_newpage', true);
 function render(){
   if(!user){ $('#main').innerHTML = '<section class="card"><h2>Please sign in</h2><div class="sub">Open the attendance app and sign in as admin first, then come back here.</div><div class="acts"><a class="btn pri" href="./">Open the app</a></div></section>'; return; }
-  if(!isAdm){ $('#main').innerHTML = '<section class="card"><h2>Admin only</h2><div class="sub">Exam duty lists are made by the admin. Sign in with the admin account in the app.</div><div class="acts"><a class="btn pri" href="./">Back to the app</a></div></section>'; return; }
+  if(!isAdm){ $('#main').innerHTML = '<section class="card"><h2>Admin / Chief Proctor only</h2><div class="sub">Exam duty lists are made by the admin or a Chief Proctor. Sign in with that account in the app.</div><div class="acts"><a class="btn pri" href="./">Back to the app</a></div></section>'; return; }
   let h = inputCard();
   if(EX && EX.rows.length){
     const c = compute(), probs = c.clashes.length + c.check.noRoom.length + c.check.noDate.length;
@@ -491,6 +491,7 @@ function tabBody(){
   const c = compute();
   if(KINDS[V.tab]) return groupHtml(V.tab);
   if(V.tab === 'summary') return summaryHtml();
+  if(V.tab === 'plan') return planHtml();
   if(V.tab === 'places') return vfixHtml();
   if(V.tab === 'students') return stuHtml();
   if(V.tab === 'names') return namesHtml(c);
@@ -985,6 +986,52 @@ function stuHtml(){
     <div class="sub">Open WhatsApp opens the app (phone) or WhatsApp Web (laptop) with the message typed — choose the class group and send.</div></section>`;
 }
 
+/* ---------- Plan & edit: dates, papers, rooms and staff — everything from here, no sheet needed ---------- */
+const isoToDt = v => { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? m[3] + '/' + m[2] + '/' + m[1] : String(v || ''); };
+function newRow(dt){ const p = parseDate(dt); return { dt:p.dt || dt, iso:p.iso, day:p.day, time:'', cls:'', sub:'', room:'', staff:'' }; }
+function insertAfterDay(iso, row){ let at = -1; EX.rows.forEach((r, i) => { if((r.iso || '') === (iso || '')) at = i; }); if(at < 0) EX.rows.push(row); else EX.rows.splice(at + 1, 0, row); return at < 0 ? EX.rows.length - 1 : at + 1; }
+function planHtml(){
+  const c = compute(), by = {};
+  EX.rows.forEach((r, i) => { const k = r.iso || ''; (by[k] = by[k] || []).push(i); });
+  const days = Object.keys(by).sort((a, b) => ncmp(a || '9', b || '9'));
+  const vals = t => [...new Set([...c.recs.map(r => r[t]), ...EX.rows.map(r => r[t])].filter(Boolean))].sort(ncmp);
+  const dl = `<datalist id="pl-cls">${vals('cls').map(v => `<option value="${esc(v)}">`).join('')}</datalist><datalist id="pl-sub">${vals('sub').map(v => `<option value="${esc(v)}">`).join('')}</datalist><datalist id="pl-room">${vals('room').map(v => `<option value="${esc(v)}">`).join('')}</datalist>`;
+  const tm = hasTime();
+  let h = `<section class="card"><h3>Plan &amp; edit</h3><div class="sub">Change the exam here — no need to open any sheet. Add a <b>date</b>, a <b>paper / room</b> (new section, new class, new subject: just type it), add or remove <b>staff</b> (free teachers with their duties and shift), copy a room, move a whole day to another date. Every list, PDF, WhatsApp message and the corrected Word file follow at once. Press <b>Save on server</b> when done.</div>
+    <div class="grid"><label class="f">New exam date<input type="date" id="pDate"></label></div>
+    <div class="acts"><button class="btn pri" id="pAddDate">+ Add this date</button></div></section>${dl}`;
+  days.forEach(iso => {
+    const L = by[iso].slice().sort((a, b) => ncmp(EX.rows[a].room || 'zzz', EX.rows[b].room || 'zzz')), r0 = EX.rows[L[0]];
+    const staffN = L.reduce((n, i) => n + rowNames(i).length, 0);
+    h += `<section class="card"><h3 style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>${esc(iso ? (r0.day ? r0.day + ', ' : '') + r0.dt : 'No date')}</span><span class="sub">${L.length} room${L.length === 1 ? '' : 's'} · ${staffN} staff</span></h3>
+      <div class="acts" style="margin-top:4px"><button class="btn sm pri" data-pday="${esc(iso)}">+ Paper / room</button><label class="c" style="font-size:13px">Move this whole day to <input type="date" class="sq" data-pmv="${esc(iso)}" style="height:34px;width:auto"></label><button class="btn sm" data-pdel="${esc(iso)}">Delete day</button></div>
+      ${L.map(i => { const r = EX.rows[i], names = rowNames(i); return `<div class="li" style="flex-direction:column;align-items:stretch;border:1.5px solid var(--line);border-radius:14px;padding:8px 10px;margin-top:8px" id="prow${i}">
+        <div class="grid" style="margin-top:0;grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr))">
+          <label class="f">Class<input class="cell" list="pl-cls" data-i="${i}" data-f="cls" value="${esc(r.cls)}" placeholder="e.g. F.Sc-I"></label>
+          <label class="f">Subject<input class="cell" list="pl-sub" data-i="${i}" data-f="sub" value="${esc(r.sub)}" placeholder="e.g. Chemistry"></label>
+          <label class="f">Room<input class="cell" list="pl-room" data-i="${i}" data-f="room" value="${esc(r.room)}" placeholder="e.g. 20"></label>
+          ${tm ? `<label class="f">Time<input class="cell" data-i="${i}" data-f="time" value="${esc(r.time)}"></label>` : ''}
+          <label class="f">Date<input class="cell" data-i="${i}" data-f="dt" value="${esc(r.dt)}" placeholder="dd/mm/yyyy"></label></div>
+        <div style="margin-top:6px">${names.map(n => `<span class="dc ${wrongShift(n) ? 'x' : ''}" title="${esc(tLine(n))}">${esc(n)} <button class="lnk" data-prm="${i}|${esc(nkey(n))}" aria-label="Remove ${esc(n)}">✕</button></span>`).join('') || '<span class="x" style="font-size:13px">No staff yet</span>'}
+          <button class="btn sm good" data-padd="${i}">+ Teacher</button><button class="btn sm" data-pdup="${i}">Copy to another room</button><button class="btn sm" data-del="${i}">Delete</button></div></div>`; }).join('')}</section>`;
+  });
+  return h;
+}
+function pickTeacher(i, msg){
+  const r = EX.rows[i], c = compute(), rec = c.recs[i] || r, free = freeTeachers({ iso:r.iso, time:r.time || '' });
+  $('#dlgIn').onclick = null; $('#dlgIn').onchange = null;
+  $('#dlgIn').innerHTML = `<h2 style="margin:0 0 4px">Add a teacher</h2><div class="sub">${esc(dateDay(r))} · ${esc(roomLbl(rec.room))} · ${esc(rec.cls)} ${esc(rec.sub)} — now: ${esc(rowNames(i).join(', ') || 'no staff')}</div>
+    ${msg ? `<div class="note ok">${esc(msg)}</div>` : ''}
+    <input class="sq" id="ptq" type="search" placeholder="Search teacher, department…" style="margin-top:8px" autocomplete="off">
+    <div class="sub" style="margin-top:6px">Teachers free on this date, fewest duties first. <span class="x">⚠</span> = teaches only in the other shift.</div>
+    <div class="tw" style="max-height:52vh" id="ptl">${free.map(n => `<div class="li" style="padding:6px 8px" data-q="${esc((n + ' ' + tInfo(n)).toLowerCase())}"><div style="flex:1"><b>${wrongShift(n) ? '<span class="x">⚠</span> ' : ''}${esc(n)}</b><div class="sub">${esc(tLine(n))}</div></div><button class="btn sm good" data-pick="${esc(n)}">Add</button></div>`).join('') || '<div class="sub">Every teacher already has a duty on this date.</div>'}</div>
+    <div class="acts"><button class="btn" id="dClose">Done</button></div>`;
+  if(!$('#dlg').open) $('#dlg').showModal();
+  $('#ptq').oninput = e => { const q = e.target.value.trim().toLowerCase(); document.querySelectorAll('#ptl [data-q]').forEach(d => { d.style.display = !q || d.dataset.q.includes(q) ? '' : 'none'; }); };
+  $('#dClose').onclick = () => { $('#dlg').close(); refreshTab(); };
+  $('#dlgIn').onclick = e => { const b = e.target.closest('[data-pick]'); if(!b) return; setRowNames(i, rowNames(i).concat(b.dataset.pick)); saveLocal(); pickTeacher(i, b.dataset.pick + ' added.'); };
+}
+
 /* ---------- events ---------- */
 function wire(){
   const ti = $('#iTitle'); if(ti) ti.onchange = () => { if(EX){ EX.title = ti.value.trim(); saveLocal(); render(); } };
@@ -1030,6 +1077,12 @@ function wireTab(){
     if(t.id === 'fxGo') return fixApply();
     if(t.id === 'unGo') return unkApply();
     if(t.id === 'cxGo') return cxApply();
+    if(t.id === 'pAddDate'){ const v = ($('#pDate') || {}).value; if(!v) return alert('Choose the date first.'); const i = insertAfterDay(parseDate(isoToDt(v)).iso, newRow(isoToDt(v))); saveLocal(); refreshTab(); const el = document.getElementById('prow' + i); el && el.scrollIntoView({ block:'center' }); return; }
+    if(t.dataset.pday !== undefined){ const iso = t.dataset.pday, r0 = EX.rows.find(r => (r.iso || '') === iso) || {}; const i = insertAfterDay(iso, Object.assign(newRow(r0.dt || ''), { time:r0.time || '' })); saveLocal(); refreshTab(); const el = document.getElementById('prow' + i); if(el){ el.scrollIntoView({ block:'center' }); const inp = el.querySelector('input'); inp && inp.focus(); } return; }
+    if(t.dataset.pdel !== undefined){ const iso = t.dataset.pdel, n = EX.rows.filter(r => (r.iso || '') === iso).length; if(!confirm('Delete this whole day (' + n + ' rows)?')) return; EX.rows = EX.rows.filter(r => (r.iso || '') !== iso); saveLocal(); return refreshTab(); }
+    if(t.dataset.padd !== undefined) return pickTeacher(+t.dataset.padd);
+    if(t.dataset.prm){ const [i, k] = t.dataset.prm.split('|'); setRowNames(+i, rowNames(+i).filter(x => nkey(x) !== k)); saveLocal(); return refreshTab(); }
+    if(t.dataset.pdup !== undefined){ const i = +t.dataset.pdup, r = EX.rows[i]; EX.rows.splice(i + 1, 0, Object.assign({}, r, { room:'', staff:'' })); saveLocal(); refreshTab(); const el = document.getElementById('prow' + (i + 1)); if(el){ el.scrollIntoView({ block:'center' }); const inp = el.querySelector('[data-f=room]'); inp && inp.focus(); } return; }
     if(t.id === 'yrFix') return yearFix(t.dataset.y);
     if(t.dataset.unclr){ delete NOTES[t.dataset.unclr]; saveFixes(); return refreshTab(); }
     if(t.dataset.vn){ const g = valGroups(t.dataset.vn.split(':')[0]).find(x => x.id === t.dataset.vn); if(g){ g.members.forEach(a => g.members.forEach(b => { if(a.k < b.k) VNOT.add(g.type + '|' + a.k + '|' + b.k); })); VF.tick.delete(g.id); saveFixes(); } return refreshTab(); }
@@ -1050,6 +1103,7 @@ function wireTab(){
       if(f === 'dt'){ const p = parseDate(t.value); r.iso = p.iso; r.day = p.day; if(p.dt) r.dt = p.dt; }
       saveLocal(); refreshTab(); return;
     }
+    if(t.dataset.pmv !== undefined){ const iso = t.dataset.pmv, dt = isoToDt(t.value); if(!t.value) return; const p = parseDate(dt), n = EX.rows.filter(r => (r.iso || '') === iso).length; if(!confirm('Move ' + n + ' row(s) to ' + p.day + ' ' + p.dt + '?')) return refreshTab(); EX.rows.forEach(r => { if((r.iso || '') === iso){ r.iso = p.iso; r.dt = p.dt; r.day = p.day; } }); saveLocal(); return refreshTab(); }
     if(t.dataset.cx !== undefined){ CX[t.dataset.cx] = t.value; return refreshTab(); }
     if(t.dataset.unk !== undefined){ UNK[t.dataset.unk] = t.value; return refreshTab(); }
     if(t.dataset.note !== undefined){ const k = t.dataset.note; if(t.value) NOTES[k] = { n:t.dataset.name, v:t.value }; else delete NOTES[k]; saveFixes(); return refreshTab(); }

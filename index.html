@@ -3996,6 +3996,7 @@ function openMore(){
       ${item('mytt', I.cal, 'My timetable & workload', 'Your periods, days, rooms and weekly load')}
       ${canFree() ? item('free', I.check, 'Free teachers', 'Who has no class in a period (for duties)') : ''}
       ${canFree() ? item('contacts', I.lock, 'Teacher contacts', 'Private: call or WhatsApp a teacher') : ''}
+      ${isCP && !isAdmin ? item('duties', I.doc, 'Exam duty lists', 'Plan duties from the Word table: teacher, room, date-wise PDFs') : ''}
       ${item('del', I.trash, 'Delete attendance', hasMulti() ? 'Lecture ' + sel.period + ' of day ' + sel.day : 'All marks of day ' + sel.day, 'danger')}
     </div>
     <div class="lb2">Text size</div>${tsHtml()}
@@ -4005,6 +4006,7 @@ function openMore(){
 }
 function doAct(a){
   const dlg = $q('#dlg'); if(dlg.open) dlg.close();
+  if(a === 'duties'){ location.href = 'duties.html'; return; }
   if(a === 'voice') return window.JCWVOICE && window.JCWVOICE.rollCall();
   if(a === 'vabs') return window.JCWVOICE && window.JCWVOICE.sayAbsent();
   if(a === 'vset') return window.JCWVOICE && window.JCWVOICE.settings();
