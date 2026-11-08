@@ -434,7 +434,7 @@ function compute(){
   let missing = [], unknown = [];
   if(CTS && CTS.list && CTS.list.length){
     const have = new Set(teacher.map(t => nkey(t.label)));
-    missing = CTS.list.filter(c => !have.has(nkey(c.name)) && !/visit/i.test(c.status || '') && !noteOf(c.name)).map(c => c.name).sort(ncmp);
+    missing = CTS.list.filter(c => (CTS.tt ? c.tt : !/visit/i.test(c.status || '')) && !have.has(nkey(c.name)) && !noteOf(c.name)).map(c => c.name).sort(ncmp);
     unknown = teacher.filter(t => !contactOf(t.label) && !noteOf(t.label)).map(t => t.label).sort(ncmp);
   }
   return (C = { L, recs, dates, check, variants:Object.values(variants), missing, unknown, clashes:teacher.filter(t => t.clash), duties:teacher.reduce((s, t) => s + t.items.length, 0) });
@@ -523,7 +523,7 @@ function namesHtml(c){
     return `<tr><td>${written.map(esc).join('<br>')}</td><td class="n">${v.n}</td><td><input class="nm" list="ctl" data-k="${esc(v.k)}" data-w="${esc(written[0])}" value="${esc(std)}" placeholder="${esc(app ? app.name : written[0])}">${sug ? `<div class="sub">Maybe <button class="lnk" data-use="${esc(v.k)}" data-name="${esc(sug)}">${esc(sug)}</button>?</div>` : ''}</td><td>${st}</td></tr>`;
   }).join('');
   return fixerHtml() + unknownHtml(c) + `<section class="card"><h3>All names</h3><div class="sub">Every name as it is written in the Word table. When one teacher is written two ways (e.g. “dr.Hamida” and “Dr. BiBi Hamida”), type the correct name in <b>Standard name</b> — both then count as one teacher. Two teachers written together (comma missing)? Type both with a +, e.g. <b>Ms. Naila Gul + Ms. Hina Gul</b>. Names that match the app’s teacher list are joined automatically. This replaces your old “names” sheet and is remembered for the next exam.</div>
-    <div class="acts">${CTS ? `<span class="sub">App teacher list: ${CTS.list.length} names.</span><button class="btn sm" id="bCts">Reload app teachers</button>` : '<button class="btn pri sm" id="bCts">Load the app’s teacher list</button>'}<button class="btn sm pri" id="bNames">Save names &amp; fixes on server</button></div>
+    <div class="acts">${CTS ? `<span class="sub">App teacher list: ${CTS.list.filter(x => x.tt).length} in the timetable, ${CTS.list.length} in all.</span><button class="btn sm" id="bCts">Reload app teachers</button>` : '<button class="btn pri sm" id="bCts">Load the app’s teacher list</button>'}<button class="btn sm pri" id="bNames">Save names &amp; fixes on server</button></div>
     <datalist id="ctl">${opts}</datalist>
     <div class="tw"><table><thead><tr><th>Written in the table</th><th>Rows</th><th>Standard name</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="muted">No names.</td></tr>'}</tbody></table></div></section>`;
 }
@@ -731,8 +731,8 @@ function missingHtml(c){
   if(!CTS) return '';
   const marked = Object.entries(NOTES).filter(([k]) => nameIndex().ct[k]);
   return `<section class="card"><h3>Teachers with no duty <span class="muted">${c.missing.length}</span></h3>
-    <div class="sub">Regular teachers of the app (not visiting) who got no duty in this list — useful for a fair share. When a teacher has no invigilation for a reason (principal, exam / stationery staff, on leave…), choose it: she is then not counted here.</div>
-    ${c.missing.length ? `<div class="tw" style="max-height:none"><table><tbody>${c.missing.map(n => `<tr><td><b>${esc(n)}</b></td><td><select class="sq" data-note="${esc(nkey(n))}" data-name="${esc(n)}" style="height:38px;min-width:210px"><option value="">— no duty —</option>${NOTE_OPTS.map(o => `<option>${esc(o)}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div>` : '<div class="note ok">Every regular teacher has a duty.</div>'}
+    <div class="sub">Teachers in the timetable who got no duty in this list — useful for a fair share. When a teacher has no invigilation for a reason (principal, exam / stationery staff, on leave…), choose it: she is then not counted here.</div>
+    ${c.missing.length ? `<div class="tw" style="max-height:none"><table><tbody>${c.missing.map(n => { const ct = contactOf(n) || {}; return `<tr><td><b>${esc(n)}</b><div class="sub">${esc([ct.dept, /visit/i.test(ct.status || '') ? 'Visiting' : ''].filter(Boolean).join(' · '))}</div></td><td><select class="sq" data-note="${esc(nkey(n))}" data-name="${esc(n)}" style="height:38px;min-width:210px"><option value="">— no duty —</option>${NOTE_OPTS.map(o => `<option>${esc(o)}</option>`).join('')}</select></td></tr>`; }).join('')}</tbody></table></div>` : '<div class="note ok">Every regular teacher has a duty.</div>'}
     ${marked.length ? `<div class="sub" style="margin-top:10px">Not on duty lists: ${marked.map(([k, x]) => `<span class="dc">${esc(x.n)} — ${esc(x.v)} <button class="lnk" data-unclr="${esc(k)}" aria-label="Remove">✕</button></span>`).join('')}</div>` : ''}</section>`;
 }
 
@@ -1073,10 +1073,14 @@ function openTeacher(key){
 async function loadCts(quiet){
   try{
     if(!quiet){ V.busy = 'Loading the app’s teacher list…'; render(); }
-    const r = await api({ action:'contacts' }, 60000);
-    CTS = { user, at:Date.now(), list:(r.list || []).map(c => ({ name:c.name, phone:c.phone || '', wa:c.wa || '', status:c.status || '', dept:c.dept || '' })) };
+    // every teacher of the Timetable sheet (same as the app's Workload screen) + WhatsApp numbers from the contacts list
+    const [r, tt] = await Promise.all([api({ action:'contacts' }, 60000), api({ action:'tt_all' }, 90000).catch(() => null)]);
+    const ttRows = (tt && tt.rows) || (ls.get('ttAll', null) || {}).rows || [], m = {};
+    (r.list || []).forEach(c => { const k = nkey(c.name); if(k && !m[k]) m[k] = { name:c.name, phone:c.phone || '', wa:c.wa || '', status:c.status || '', dept:c.dept || '', tt:false }; });
+    ttRows.forEach(x => { const k = nkey(x.teacher); if(!k) return; if(m[k]){ m[k].tt = true; if(!m[k].dept) m[k].dept = x.dept || ''; } else m[k] = { name:x.teacher, phone:'', wa:'', status:'', dept:x.dept || '', tt:true }; });
+    CTS = { user, at:Date.now(), tt:ttRows.length > 0, list:Object.values(m) };
     ls.set('dut_cts', CTS); C = null; _ix = null;
-    if(!quiet){ V.busy = ''; V.msg = CTS.list.length + ' teachers loaded from the app.'; }
+    if(!quiet){ V.busy = ''; V.msg = CTS.list.filter(x => x.tt).length + ' teachers from the timetable loaded' + (CTS.tt ? '' : ' (timetable not reachable — only the contacts list)') + '.'; }
   }catch(e){ if(!quiet){ V.busy = ''; V.err = e.message; } }
   refreshTab();
 }
@@ -1407,6 +1411,7 @@ async function makeSheet(){
 }
 
 render();
+if(CTS && !CTS.tt && navigator.onLine) setTimeout(() => loadCts(true), 1500);   // a teacher list saved before the timetable was used
 </script>
 </body>
 </html>
