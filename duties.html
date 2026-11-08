@@ -509,7 +509,7 @@ function groupCards(kind){
   if(!G.length) return '<div class="note mid">Nothing found.</div>';
   return G.map(g => {
     const wa = kind === 'teacher';
-    return `<div class="rm"><h3><span>${kind === 'teacher' ? `<button class="lnk" data-t="${esc(g.key)}">${esc(g.label)}</button>${g.clash ? ' <span class="x">⚠ clash</span>' : ''}${CTS && compute().unknown.includes(g.label) ? ` <span class="dc x">${compute().leftOf[g.label] ? 'LEFT the college' : 'not in Users sheet'}</span>` : ''}` : esc(g.label)}</span><span class="sub">${kind === 'teacher' ? esc(tLine(g.label)) : g.items.length + ' paper' + (g.items.length === 1 ? '' : 's')}${wa ? ` <button class="btn sm good" data-wa="${esc(g.key)}">WhatsApp</button>` : ''}</span></h3>
+    return `<div class="rm"><h3><span>${kind === 'teacher' ? `<button class="lnk" data-t="${esc(g.key)}">${esc(g.label)}</button>${g.clash ? ' <span class="x">⚠ clash</span>' : ''}${wrongShift(g.label) ? ` <span class="dc x">${examShift() === 'M' ? 'EVENING' : 'MORNING'} ONLY</span>` : ''}${CTS && compute().unknown.includes(g.label) ? ` <span class="dc x">${compute().leftOf[g.label] ? 'LEFT the college' : 'not in Users sheet'}</span>` : ''}` : esc(g.label)}</span><span class="sub">${kind === 'teacher' ? esc(tLine(g.label)) : g.items.length + ' paper' + (g.items.length === 1 ? '' : 's')}${kind === 'teacher' ? ` <button class="btn sm" data-t="${esc(g.key)}">Change</button>` : ''}${wa ? ` <button class="btn sm good" data-wa="${esc(g.key)}">WhatsApp</button>` : ''}</span></h3>
       <div class="tw" style="max-height:none"><table><thead><tr><th>#</th>${cols.map(c => `<th>${COLNAME[c]}</th>`).join('')}</tr></thead><tbody>${g.items.map((it, i) => `<tr><td class="n">${i + 1}</td>${cols.map(c => `<td class="${c === 'date' || c === 'room' ? 'nw' : ''} ${it.x && (c === 'date' || c === 'room') ? 'x' : ''}">${c === 'room' ? '<b>' + esc(cellOf(it, c)) + '</b>' : c === 'staff' && !it.staff.length ? '<span class="x">No staff</span>' : esc(cellOf(it, c))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
   }).join('');
 }
@@ -680,7 +680,7 @@ function checkHtml(c){
   const rowRef = i => { const r = EX.rows[i]; return `<li><button class="lnk" data-go="${i}">Row ${i + 1}</button>: ${esc([r.dt, r.cls, r.sub, r.room && 'Room ' + r.room, r.staff && r.staff.replace(/\n/g, ', ')].filter(Boolean).join(' · '))}</li>`; };
   const sec = (t, body) => `<section class="card"><h3>${t}</h3>${body}</section>`;
   let h = '';
-  h += clashHtml(c) + yearHtml(c);
+  h += clashHtml(c) + shiftHtml(c) + yearHtml(c);
   h += sec(`Staff written but no room <span class="${c.check.noRoom.length ? 'x' : 'ok'}">${c.check.noRoom.length}</span>`, c.check.noRoom.length ? '<div class="sub">These were the yellow rows of the old sheet. Add the room in <b>All rows</b>.</div><ul>' + c.check.noRoom.map(rowRef).join('') + '</ul>' : '<div class="note ok">Every row with staff has a room.</div>');
   h += sec(`Rooms with no staff <span class="${c.check.noStaff.length ? 'x' : 'ok'}">${c.check.noStaff.length}</span>`, c.check.noStaff.length ? '<ul>' + c.check.noStaff.map(rowRef).join('') + '</ul>' : '<div class="note ok">Every room has staff.</div>');
   h += sec(`Rows without a date <span class="${c.check.noDate.length ? 'x' : 'ok'}">${c.check.noDate.length}</span>`, c.check.noDate.length ? '<ul>' + c.check.noDate.map(rowRef).join('') + '</ul>' : '<div class="note ok">Every row has a date.</div>');
@@ -697,8 +697,17 @@ function freeTeachers(d){
   const pool = CTS ? CTS.list.filter(x => CTS.users ? x.users : true).map(x => x.name) : c.L.teacher.map(t => t.label);
   const seen = new Set();
   return pool.filter(n => { const k = nkey(n); if(!k || seen.has(k) || busy.has(k) || (noteOf(n) && noteOf(n) !== '')) return false; seen.add(k); return !c.unknown || !c.unknown.includes(n); })
-    .sort((a, b) => dutyCount(a) - dutyCount(b) || ncmp(a, b));
+    .sort((a, b) => (wrongShift(a) ? 1 : 0) - (wrongShift(b) ? 1 : 0) || dutyCount(a) - dutyCount(b) || ncmp(a, b));
 }
+/** choices for one duty of a teacher: give it to a free teacher, move her to another date, take her off */
+function dutyOpts(t, d, sel){
+  const free = freeTeachers(d), mv = moveTargets(t, d);
+  return `<option value="">— keep —</option>
+    <optgroup label="Give this duty to a teacher free that day (fewest duties first)">${free.map(x => `<option value="give:${esc(x)}" ${sel === 'give:' + x ? 'selected' : ''}>${wrongShift(x) ? '⚠ ' : ''}${esc(x)} — ${esc(tLine(x))}</option>`).join('')}</optgroup>
+    <optgroup label="Move ${esc(t.label)} to another date (she is free then)">${mv.map(r => `<option value="move:${r.i}" ${sel === 'move:' + r.i ? 'selected' : ''}>${esc(dayShort(r.day) + ' ' + r.dt + (r.time ? ' ' + r.time : '') + ' · ' + roomLbl(r.room) + ' · ' + r.cls)} (${r.staff.length} staff)</option>`).join('')}</optgroup>
+    <optgroup label="Other"><option value="drop" ${sel === 'drop' ? 'selected' : ''}>Take her off this room (others stay)</option></optgroup>`;
+}
+const dutyId = (t, d) => nkey(t.label) + '|' + slotK(d) + '|' + vnorm(d.room);
 function moveTargets(t, d){
   const c = compute(), mine = new Set(t.items.map(slotK)), out = [], seen = new Set();
   c.recs.forEach(r => { if(!r.iso || mine.has(slotK(r))) return; const k = slotK(r) + '|' + vnorm(r.room); if(seen.has(k)) return; seen.add(k); out.push(r); });
@@ -709,12 +718,9 @@ function clashHtml(c){
   if(!L.length) return `<section class="card"><h3>Clashes <span class="ok">0</span></h3><div class="note ok">No teacher is in two rooms at the same time.</div></section>`;
   let n = 0;
   const rows = L.map(t => t.items.filter(d => d.x).map(d => {
-    const id = nkey(t.label) + '|' + slotK(d) + '|' + vnorm(d.room), sel = CX[id] || '', free = freeTeachers(d), mv = moveTargets(t, d); if(sel) n++;
+    const id = dutyId(t, d), sel = CX[id] || ''; if(sel) n++;
     return `<tr><td class="nw"><b>${esc(t.label)}</b><div class="sub">${esc(tLine(t.label))}</div></td><td class="nw x">${esc(dateDay(d))}${d.time ? '<br>' + esc(d.time) : ''}</td><td><b>${esc(roomLbl(d.room))}</b><div class="sub">${esc(d.cls.join(', '))}${d.sub.length ? ' · ' + esc(d.sub.join(', ')) : ''}<br>${d.staff.length} staff: ${esc(d.staff.join(', '))}</div></td>
-      <td><select class="sq" data-cx="${esc(id)}" style="height:40px;min-width:250px"><option value="">— keep —</option>
-      <optgroup label="Give this duty to a teacher free that day (fewest duties first)">${free.map(x => `<option value="give:${esc(x)}" ${sel === 'give:' + x ? 'selected' : ''}>${esc(x)} — ${esc(tLine(x))}</option>`).join('')}</optgroup>
-      <optgroup label="Move ${esc(t.label)} to another date (she is free then)">${mv.map(r => `<option value="move:${r.i}" ${sel === 'move:' + r.i ? 'selected' : ''}>${esc(dayShort(r.day) + ' ' + r.dt + (r.time ? ' ' + r.time : '') + ' · ' + roomLbl(r.room) + ' · ' + r.cls)} (${r.staff.length} staff)</option>`).join('')}</optgroup>
-      <optgroup label="Other"><option value="drop" ${sel === 'drop' ? 'selected' : ''}>Take her off this room (others stay)</option></optgroup></select></td></tr>`;
+      <td><select class="sq" data-cx="${esc(id)}" style="height:40px;min-width:250px">${dutyOpts(t, d, sel)}</select></td></tr>`;
   }).join('')).join('');
   return `<section class="card" style="border-top-color:var(--bad)"><h3>Clashes <span class="x">${L.length}</span></h3>
     <div class="sub">The same teacher is written in two rooms at the same date and time. For <b>one</b> of her two rooms choose: give that duty to a teacher who is free that day (fewest duties first, with designation and department), move her to another date where she is free, or take her off that room. Then press <b>Resolve</b>. The change goes into the duty table — lists, PDFs and the corrected Word file follow.</div>
@@ -723,9 +729,9 @@ function clashHtml(c){
 }
 function rowNames(i){ return splitStaff(EX.rows[i].staff).flatMap(stdList); }
 function setRowNames(i, names){ const seen = new Set(); EX.rows[i].staff = names.filter(n => { const k = nkey(n); if(!k || seen.has(k)) return false; seen.add(k); return true; }).join(', '); }
-function cxApply(){
+function applyDutyChanges(map){
   const c = compute(); let n = 0;
-  Object.entries(CX).forEach(([id, sel]) => {
+  Object.entries(map).forEach(([id, sel]) => {
     if(!sel) return;
     const [tk, iso, time, rk] = id.split('|'), t = c.L.teacher.find(x => nkey(x.label) === tk); if(!t) return;
     const d = t.items.find(x => slotK(x) === iso + '|' + time && vnorm(x.room) === rk); if(!d) return;
@@ -734,9 +740,21 @@ function cxApply(){
     if(sel.startsWith('move:')) { const j = +sel.slice(5); if(EX.rows[j]) setRowNames(j, rowNames(j).concat(t.label)); }
     n++;
   });
-  CX = {}; saveLocal();
+  saveLocal();
+  return n;
+}
+function cxApply(){
+  const n = applyDutyChanges(CX); CX = {};
   V.msg = n + ' clash(es) resolved. Download the corrected Word file or the PDFs again to get the changes.'; V.err = '';
   refreshTab();
+}
+/* evening-only teachers with morning duties (or the other way round for an evening exam) */
+function shiftHtml(c){
+  if(!CTS) return '';
+  const L = c.L.teacher.filter(t => wrongShift(t.label)), other = examShift() === 'M' ? 'evening' : 'morning';
+  if(!L.length) return '';
+  return `<section class="card" style="border-top-color:var(--bad)"><h3>${other[0].toUpperCase() + other.slice(1)}-only teachers with duties <span class="x">${L.length}</span></h3><div class="sub">These teachers teach only in the ${other} (timetable), but have duties in this ${other === 'evening' ? 'morning' : 'evening'} exam. Tap <b>Change</b> to give their duties to someone else.</div>
+    <div class="tw" style="max-height:none"><table><tbody>${L.map(t => `<tr><td><b>${esc(t.label)}</b><div class="sub">${esc(tLine(t.label))}</div></td><td class="nw">${t.items.map(d => esc(dayShort(d.day) + ' ' + (d.dt || '').slice(0, 5))).join(', ')}</td><td><button class="btn sm pri" data-t="${esc(t.key)}">Change</button></td></tr>`).join('')}</tbody></table></div></section>`;
 }
 /* dates typed with another year (e.g. 24/02/2025 in a 2026 exam) */
 function yearHtml(c){
@@ -1137,23 +1155,36 @@ function waAll(){
     if(b.dataset.wc){ const t = tOf(b.dataset.wc); markSent(t.key); waOpen(waNum(contactOf(t.label)), waMsg(t) + '\n(Duty list PDF attached.)'); b.textContent = 'Chat ✓'; }
   };
 }
-const tInfo = n => { const ct = contactOf(n) || {}; return [ct.desig, ct.dept, /visit/i.test(ct.status || '') ? 'Visiting' : ''].filter(Boolean).join(' · '); };
+const examShift = () => /evening/i.test((EX && EX.timing) || '') ? 'E' : 'M';
+/** "EVENING ONLY (3 classes)" / "Morning 4 · Evening 2 classes" from the timetable */
+function shiftTxt(ct){ const s = (ct || {}).sh; if(!s) return ''; const m = s.M ? s.M[0] : 0, e = s.E ? s.E[0] : 0; if(e && !m) return 'EVENING ONLY (' + e + ' class' + (e === 1 ? '' : 'es') + ')'; if(m && !e && examShift() === 'E') return 'MORNING ONLY (' + m + ' classes)'; if(e && m) return 'Morning ' + m + ' · Evening ' + e + ' classes'; return m ? 'Morning ' + m + ' class' + (m === 1 ? '' : 'es') : ''; }
+function shiftLong(ct){ const s = (ct || {}).sh; if(!s) return ''; return ['M', 'E'].filter(q => s[q]).map(q => (q === 'M' ? 'Morning' : 'Evening') + ': ' + s[q][0] + ' class' + (s[q][0] === 1 ? '' : 'es') + ', ' + s[q][1] + ' period' + (s[q][1] === 1 ? '' : 's') + ' a week').join(' · '); }
+/** she teaches only in the other shift (e.g. evening-only teacher for a morning exam) */
+const wrongShift = n => { const s = (contactOf(n) || {}).sh; return !!(s && !s[examShift()] && s[examShift() === 'M' ? 'E' : 'M']); };
+const tInfo = n => { const ct = contactOf(n) || {}; return [ct.desig, ct.dept, /visit/i.test(ct.status || '') ? 'Visiting' : '', shiftTxt(ct)].filter(Boolean).join(' · '); };
 function dutyCount(n){ const c = compute(); if(!c._cnt){ c._cnt = {}; c.L.teacher.forEach(t => { c._cnt[nkey(t.label)] = t.items.length; }); } return c._cnt[nkey(n)] || 0; }
 const tLine = n => { const d = dutyCount(n), i = tInfo(n); return d + ' dut' + (d === 1 ? 'y' : 'ies') + (i ? ' · ' + i : ''); };
 const tOf = key => compute().L.teacher.find(x => x.key === key);
 function waMsg(t){
   return `Assalam-o-Alaikum ${t.label},\nYour duties in ${EX.title} (timings ${EX.timing || '08:30-12:30 PM'}):\n` + t.items.map((d, i) => `${i + 1}. ${dutyFull(d)}`).join('\n') + `\nTotal: ${t.items.length} dut${t.items.length === 1 ? 'y' : 'ies'}\n- ${me} (Admin)`;
 }
+let DX = {};
 function openTeacher(key){
   const t = tOf(key); if(!t) return;
+  DX = {};
+  const ct = contactOf(t.label) || {};
   $('#dlgIn').onclick = null;
   $('#dlgIn').innerHTML = `<h2 style="margin:0 0 4px">${esc(t.label)}</h2><div class="sub">${esc(tLine(t.label))} · ${esc(EX.title)}${t.clash ? ' · <span class="x">clash</span>' : ''}</div>
-    <div class="tw" style="max-height:50vh"><table><thead><tr><th>Date/Day</th><th>Room</th><th>Class</th><th>Subject</th></tr></thead><tbody>${t.items.map(d => `<tr><td class="nw ${d.x ? 'x' : ''}">${esc(dateDay(d))}${d.time ? '<br>' + esc(d.time) : ''}</td><td class="nw"><b>${esc(d.room || '—')}</b></td><td>${esc(d.cls.join(', '))}</td><td>${esc(d.sub.join(', '))}</td></tr>`).join('')}</tbody></table></div>
-    <div class="acts"><button class="btn good" id="dWa">WhatsApp her duties</button><button class="btn" id="dCopy">Copy</button><button class="btn" id="dPdf">Her PDF</button><button class="btn" id="dClose">Close</button></div>`;
-  $('#dlg').showModal();
+    ${shiftLong(ct) ? `<div class="note ${wrongShift(t.label) ? 'bad' : 'mid'}" style="margin-top:8px">Timetable — ${esc(shiftLong(ct))}${wrongShift(t.label) ? '<br><b>She teaches only in the ' + (examShift() === 'M' ? 'evening' : 'morning') + ' — think before giving her ' + (examShift() === 'M' ? 'morning' : 'evening') + ' duties.</b>' : ''}</div>` : ''}
+    <div class="sub" style="margin-top:8px">To change a duty choose it in <b>Change</b>: give it to a teacher who is free that day, move her to another date, or take her off. Then press <b>Apply changes</b>.</div>
+    <div class="tw" style="max-height:52vh"><table><thead><tr><th>Date/Day</th><th>Room</th><th>Class / subject</th><th>Change</th></tr></thead><tbody>${t.items.map(d => `<tr><td class="nw ${d.x ? 'x' : ''}">${esc(dateDay(d))}${d.time ? '<br>' + esc(d.time) : ''}</td><td class="nw"><b>${esc(roomLbl(d.room))}</b></td><td>${esc(d.cls.join(', '))}<div class="sub">${esc(d.sub.join(', '))}</div></td><td><select class="sq" data-dx="${esc(dutyId(t, d))}" style="height:38px;min-width:200px;max-width:280px">${dutyOpts(t, d, '')}</select></td></tr>`).join('')}</tbody></table></div>
+    <div class="acts"><button class="btn pri" id="dApply" disabled>Apply changes</button><button class="btn good" id="dWa">WhatsApp her duties</button><button class="btn" id="dCopy">Copy</button><button class="btn" id="dPdf">Her PDF</button><button class="btn" id="dClose">Close</button></div>`;
+  if(!$('#dlg').open) $('#dlg').showModal();
+  $('#dlgIn').onchange = e => { const x = e.target; if(x.dataset.dx === undefined) return; DX[x.dataset.dx] = x.value; const n = Object.values(DX).filter(Boolean).length; $('#dApply').disabled = !n; $('#dApply').textContent = n ? 'Apply ' + n + ' change' + (n === 1 ? '' : 's') : 'Apply changes'; };
+  $('#dApply').onclick = () => { const n = applyDutyChanges(DX); DX = {}; $('#dlg').close(); V.msg = n + ' duty change(s) for ' + t.label + '. Download the PDFs or the corrected Word file again to get them.'; V.err = ''; refreshTab(); };
   $('#dClose').onclick = () => $('#dlg').close();
   $('#dCopy').onclick = () => copy(waMsg(t));
-  $('#dPdf').onclick = async () => { $('#dlg').close(); try{ const r = await buildPdf('teacher', [t]); r.name = 'DUTY_' + t.label.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '') + '_' + stamp() + '.pdf'; deliver([r]); }catch(e){ alert(e.message); } };
+  $('#dPdf').onclick = async () => { $('#dlg').close(); try{ deliver([await teacherPdf(t)]); }catch(e){ alert(e.message); } };
   $('#dWa').onclick = () => waDialog(key);
 }
 async function loadCts(quiet){
@@ -1166,8 +1197,11 @@ async function loadCts(quiet){
     if(st) left.push(...(st.left || []));
     const isLeft = k => left.some(l => nkey(l.name) === k);
     (r.list || []).forEach(c => { const k = nkey(c.name); if(!k) return; if(m[k]){ if(c.wa) m[k].wa = c.wa; if(!m[k].phone) m[k].phone = c.phone || ''; } else if(!isLeft(k)) m[k] = { name:c.name, phone:c.phone || '', wa:c.wa || '', status:c.status || '', dept:c.dept || '', tt:false, users:!st }; });
+    const SH = {};   // teacher -> { M:{ cls:Set, p }, E:{ cls:Set, p } } — classes and periods a week, morning / evening (as on the Workload screen)
+    ttRows.forEach(x => { const k = nkey(x.teacher); if(!k) return; const sh = x.sh === 'E' || (!x.sh && /EVENING/i.test(x.room || '')) ? 'E' : 'M'; const a = ((SH[k] = SH[k] || {})[sh] = SH[k][sh] || { cls:new Set(), p:0 }); a.cls.add(String(x.cls || '').toUpperCase().replace(/[^A-Z0-9]/g, '') + '|' + x.sub); const days = new Set([...(x.th || []), ...(x.pr || [])]); a.p += (x.ps || [1]).length * days.size; });
     ttRows.forEach(x => { const k = nkey(x.teacher); if(!k) return; if(m[k]){ m[k].tt = true; if(!m[k].dept) m[k].dept = x.dept || ''; } else if(!isLeft(k)) m[k] = { name:x.teacher, phone:'', wa:'', status:'', dept:x.dept || '', tt:true, users:false }; });
-    CTS = { user, at:Date.now(), tt:ttRows.length > 0, users:!!st, left, list:Object.values(m) };
+    Object.entries(SH).forEach(([k, v]) => { if(m[k]) m[k].sh = Object.fromEntries(Object.entries(v).map(([q, a]) => [q, [a.cls.size, a.p]])); });
+    CTS = { user, at:Date.now(), tt:ttRows.length > 0, users:!!st, shv:1, left, list:Object.values(m) };
     ls.set('dut_cts', CTS); C = null; _ix = null;
     if(!quiet){ V.busy = ''; V.msg = CTS.users ? CTS.list.filter(x => x.users).length + ' teachers from the Users sheet, ' + left.length + ' who left (X-Users).' : 'Teacher list loaded from the timetable / contacts. Update Duties.gs in Apps Script to use the Users and X-Users sheets.'; }
   }catch(e){ if(!quiet){ V.busy = ''; V.err = e.message; } }
@@ -1500,7 +1534,7 @@ async function makeSheet(){
 }
 
 render();
-if(CTS && !CTS.users && navigator.onLine) setTimeout(() => loadCts(true), 1500);   // a teacher list saved before the timetable was used
+if(CTS && (!CTS.users || !CTS.shv) && navigator.onLine) setTimeout(() => loadCts(true), 1500);   // a teacher list saved before the timetable was used
 </script>
 </body>
 </html>
