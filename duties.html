@@ -1986,6 +1986,8 @@ function autoDialog(){
     <div class="grid" style="margin-top:8px"><label class="f">A new room with no number gets<input class="nm" type="number" min="1" max="9" id="auPer" value="${esc(SET.per)}" style="max-width:110px"></label></div>
     <label class="li" style="justify-content:flex-start;gap:10px;cursor:pointer"><input type="radio" name="auMode" value="fill" checked style="width:20px;height:20px"><span><b>Fill only what is missing</b><br><span class="sub">Keeps every name already written; adds staff to rooms with fewer than their number (${empty} room${empty === 1 ? ' has' : 's have'} nobody).</span></span></label>
     <label class="li" style="justify-content:flex-start;gap:10px;cursor:pointer"><input type="radio" name="auMode" value="all" style="width:20px;height:20px"><span><b>Make all duties again</b><br><span class="sub">Removes all staff from the ${seats.length} rooms and makes a new duty list. ↶ Undo brings the old one back.</span></span></label>
+    <div class="grid" style="margin-top:6px"><label class="f">Who gets duties first<select class="sq" id="auOrder" style="height:40px">${[['PVN', 'Permanent teachers, then visiting, then non-teaching staff'], ['PNV', 'Permanent teachers, then non-teaching staff, then visiting'], ['EVEN', 'Everyone evenly towards her number']].map(([v, l]) => `<option value="${v}" ${(SET.order || 'PVN') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
+    <div class="sub">Each teacher first gets a duty in <b>her own subject’s paper</b> on its days; then the rooms are filled in this order, each group up to her number. Teachers left without a duty are fine — they are free for other exam work.</div>
     <label class="li" style="justify-content:flex-start;gap:10px;cursor:pointer"><input type="checkbox" id="auKeep" checked style="width:20px;height:20px"><span>Fill only: a room that already has more staff keeps them</span></label>
     <label class="li" style="justify-content:flex-start;gap:10px;cursor:pointer"><input type="checkbox" id="auOver" checked style="width:20px;height:20px"><span>When nobody is left under her number, give an extra duty (to whoever is least over) instead of leaving a seat empty</span></label>
     <div class="acts"><button class="btn pri" id="auGo">Create duties</button><button class="btn" id="dClose">Cancel</button></div>`;
@@ -1999,7 +2001,8 @@ function autoDialog(){
     saveRooms();
     $('#auGo').disabled = true; $('#auGo').textContent = 'Working…';
     jcwBusy(new Promise(ok => setTimeout(ok, 30)), 'Creating duties…').then(() => {
-      const r = autoRun({ mode, keep:$('#auKeep').checked, over:$('#auOver').checked });
+      SET.order = $('#auOrder').value; saveSet();
+      const r = autoRun({ mode, keep:$('#auKeep').checked, over:$('#auOver').checked, order:SET.order });
       autoReport(r);
     });
   };
@@ -2026,10 +2029,13 @@ function autoRun(o){
   const ok = (n, S) => !(busy[S.sd.iso] && busy[S.sd.iso].has(nkey(n))) && !S.names.some(z => nkey(z) === nkey(n));
   const hasPerm = S => S.names.some(z => typeOf(z) === 'P');
   const ownHere = (n, S) => S.own.includes(nkey(n));
+  // who first: permanent → visiting → non-teaching (or as chosen); 'EVEN' = everyone together
+  const ORD = (o.order || SET.order || 'PVN'), tier = n => ORD === 'EVEN' ? 0 : Math.max(0, ORD.indexOf(typeOf(n) === 'O' ? 'V' : typeOf(n)));
   // lower = better
   const score = (n, S) => {
     const k = nkey(n), cap = capOf(n), have = cnt[k] || 0;
-    let s = (cap ? have / cap : 1) * 100;                                   // evenly towards her number
+    let s = tier(n) * 10000;                                                 // the next group only when this one is full (or busy that day)
+    s += (cap ? have / cap : 1) * 100;                                       // evenly towards her number inside the group
     s += Math.max(0, freeDaysLeft(n) - (cap - have)) * 2;                    // few free days left → earlier
     if(ownHere(n, S)) s -= 35;                                               // her subject's paper
     if(!hasPerm(S) && S.names.length >= S.need - 1) s += typeOf(n) === 'P' ? -60 : 60;   // last seat and no superintendent yet
@@ -2041,7 +2047,7 @@ function autoRun(o){
   const under = n => (cnt[nkey(n)] || 0) < capOf(n);
   let filledOwn = 0;
   // 1 · her own subject's paper on each of its days (while she is under her number)
-  const T = P.filter(n => catOf(n) !== 'NT' && mySubs(n).length).sort((a, b) => subjDays(a).length - subjDays(b).length || typeRank(a) - typeRank(b));
+  const T = P.filter(n => catOf(n) !== 'NT' && mySubs(n).length).sort((a, b) => tier(a) - tier(b) || subjDays(a).length - subjDays(b).length || typeRank(a) - typeRank(b));
   T.forEach(n => {
     subjDays(n).forEach(iso => {
       if(!under(n) || (busy[iso] && busy[iso].has(nkey(n)))) return;
@@ -2098,8 +2104,11 @@ function autoReport(r){
       ${line(!r.empty, r.empty ? r.empty + ' rooms still short of staff (not enough teachers free that day)' : 'every room has its staff')}
       ${line(!noPerm, noPerm ? noPerm + ' rooms without a permanent teacher' : 'a permanent teacher (superintendent) in every room')}
       ${line(!more.length, more.length ? more.length + ' teachers above their number' + (r.extra ? ' (' + r.extra + ' extra duties were needed)' : '') : 'nobody above her number')}
-      ${line(!less.length, less.length ? less.length + ' teachers below their number — not enough rooms / days for everyone' : 'everyone has her number')}
-      ${line(!zero.length, zero.length ? zero.length + ' with no duty' : 'everyone has at least one duty')}
+      ${(() => { const cnt = L => { const m = {}; L.forEach(n => { const t = { P:'permanent', V:'visiting', N:'non-teaching' }[typeOf(n)] || 'other'; m[t] = (m[t] || 0) + 1; }); return Object.entries(m).map(([t, k]) => k + ' ' + t).join(', '); };
+        const lp = less.filter(n => typeOf(n) === 'P');
+        return line(!lp.length, lp.length ? lp.length + ' permanent teachers below their number (not enough rooms on their free days)' : 'every permanent teacher has her number')
+          + (zero.length ? `<li style="margin:3px 0;color:var(--mid);font-weight:700">• No duty: ${cnt(zero)} — free for other exam work</li>` : '')
+          + (less.length - lp.length ? `<li style="margin:3px 0;color:var(--muted, #7c6159)">• Below their number: ${cnt(less.filter(n => typeOf(n) !== 'P'))} (fine — rooms were already full)</li>` : ''); })()}
       ${line(!own, own ? own + ' subject-days where a teacher is not in her subject’s paper (see Check)' : 'everyone in her subject’s paper on its days')}
       ${line(!noSubj, noSubj ? noSubj + ' rooms with no teacher of the paper’s subject (see Check)' : 'every room has a teacher of its subject')}
     </ul>
