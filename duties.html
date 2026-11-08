@@ -1113,9 +1113,13 @@ function ownList(){
     if(!mySubs(n).length){ noSub.push(n); return; }
     const days = subjDays(n); if(!days.length){ noPaper.push(n); return; }
     const me = myItems(n);
-    days.forEach(iso => { if(!me.some(d => d.iso === iso && isOwnSeat(n, d))) need.push({ t:n, iso, busy:me.some(d => d.iso === iso) }); });
+    const none = !me.some(d => isOwnSeat(n, d));
+    days.forEach(iso => { if(me.some(d => d.iso === iso && isOwnSeat(n, d))) return;
+      // another teacher of her subject already in one of that paper's rooms that day?
+      const cov = [...new Set(seatsAll().filter(sd => sd.iso === iso && isOwnSeat(n, sd)).flatMap(sd => sd.staff.filter(z => nkey(z) !== nkey(n) && paperSubs(sd).some(ps => mySubs(n).some(ms => subjMatch(ps, ms)) && mySubs(z).some(zs => subjMatch(ps, zs))))))];
+      need.push({ t:n, iso, busy:me.some(d => d.iso === iso), none, cov, grp:none ? 0 : cov.length ? 2 : 1 }); });
   });
-  need.sort((a, b) => typeRank(a.t) - typeRank(b.t) || ncmp(nkey(a.t), nkey(b.t)) || ncmp(a.iso, b.iso));
+  need.sort((a, b) => a.grp - b.grp || typeRank(a.t) - typeRank(b.t) || ncmp(nkey(a.t), nkey(b.t)) || ncmp(a.iso, b.iso));
   return (c._own = { need, noSub, noPaper, total:L.length });
 }
 let OWN = {};
@@ -1125,13 +1129,16 @@ function ownHtml(c){
   const O = ownList();
   if(!O.need.length) return `<section class="card"><h3>Duty on her subject’s paper days <span class="ok">✓</span></h3><div class="note ok">On every day a subject’s paper is held, its teachers are on duty in one of its rooms.</div>${O.noPaper.length ? `<div class="sub" style="margin-top:6px">No paper of their subject in this exam: ${O.noPaper.map(esc).join(', ')}.</div>` : ''}</section>`;
   let n = 0;
-  const rows = O.need.map(x => {
-    const opts = ownOptions(x.t, x.iso), k = ownKey(x), sel = OWN[k] !== undefined ? OWN[k] : (opts[0] ? opts[0].id : ''); if(sel) n++;
+  const GT = ['Has NO duty on any of her paper days', 'Her subject has no teacher in that paper’s rooms that day', 'Her subject is already covered that day (another teacher of it is in the room) — only if you want her there too'];
+  const G = [0, 1, 2].map(g => O.need.filter(x => x.grp === g).length);
+  const rows = O.need.map((x, q) => {
+    const opts = ownOptions(x.t, x.iso), k = ownKey(x), sel = OWN[k] !== undefined ? OWN[k] : (x.grp < 2 && opts[0] ? opts[0].id : ''); if(sel) n++;
+    const head = !q || O.need[q - 1].grp !== x.grp ? `<tr><td colspan="3" style="background:${x.grp === 0 ? 'var(--bad-bg)' : x.grp === 1 ? 'var(--mid-bg)' : 'var(--surface2)'}"><b>${GT[x.grp]}</b> <span class="sub">${G[x.grp]}</span></td></tr>` : '';
     const r0 = compute().recs.find(r => r.iso === x.iso) || {};
-    return `<tr><td class="nw"><b>${esc(x.t)}</b>${shareBadge(x.t)}<div class="sub">${esc(mySubs(x.t).join(', '))}</div></td><td class="nw">${esc(dayShort(r0.day) + ' ' + (r0.dt || x.iso))}<div class="sub">${x.busy ? 'on duty in another room' : '<span class="x">no duty that day</span>'}</div></td>
+    return head + `<tr><td class="nw"><b>${esc(x.t)}</b>${shareBadge(x.t)}<div class="sub">${esc(mySubs(x.t).join(', '))}${x.cov.length ? '<br>covered by ' + esc(x.cov.slice(0, 3).join(', ')) : ''}</div></td><td class="nw">${esc(dayShort(r0.day) + ' ' + (r0.dt || x.iso))}<div class="sub">${x.busy ? 'on duty in another room' : '<span class="x">no duty that day</span>'}</div></td>
       <td>${opts.length ? `<select class="sq" data-own="${esc(k)}" style="height:40px;min-width:240px;max-width:440px"><option value="">— leave —</option>${opts.map(o => `<option value="${esc(o.id)}" ${sel === o.id ? 'selected' : ''}>${esc(ownLbl(o))}</option>`).join('')}</select>` : '<span class="x">No way found — add her in Plan &amp; edit</span>'}</td></tr>`;
   }).join('');
-  return `<section class="card" style="border-top-color:var(--mid)"><h3>Duty on her subject’s paper days <span style="color:var(--mid)">${O.need.length}</span></h3>
+  return `<section class="card" style="border-top-color:var(--mid)"><h3>Duty on her subject’s paper days <span class="${G[0] ? 'x' : ''}" style="${G[0] ? '' : 'color:var(--mid)'}">${G[0] + G[1]}</span> <span class="sub">(+${G[2]} already covered)</span></h3>
     <div class="sub">On every day her subject’s paper is held, a teacher should be on duty <b>in one of that paper’s rooms</b> (subject = department in the Users sheet + subjects in the timetable). The best way is picked for each: <b>switch rooms</b> the same day or <b>swap a day</b> with a teacher of another subject (★ = she gets her own subject too; counts stay the same), <b>move</b> to her subject’s room, <b>take</b> from a teacher with MORE, or <b>join as extra</b>. Nobody is moved out of her own subject’s paper.</div>
     <div class="tw" style="max-height:none"><table><thead><tr><th>Teacher</th><th>Her paper day</th><th>Fix</th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="acts"><button class="btn pri" id="ownGo" ${n ? '' : 'disabled'}>Fix ${n} in one go</button></div>
@@ -1153,7 +1160,7 @@ function ownApplyOne(t, iso, id){
   saveLocal(); return true;
 }
 function ownApply(){
-  const want = ownList().need.map(x => { const opts = ownOptions(x.t, x.iso), k = ownKey(x); return { x, id:OWN[k] !== undefined ? OWN[k] : (opts[0] ? opts[0].id : '') }; });
+  const want = ownList().need.map(x => { const opts = ownOptions(x.t, x.iso), k = ownKey(x); return { x, id:OWN[k] !== undefined ? OWN[k] : (x.grp < 2 && opts[0] ? opts[0].id : '') }; });
   let n = 0, again = 0;
   want.forEach(({ x, id }) => {
     if(!id) return;
@@ -2054,6 +2061,20 @@ function autoRun(o){
   const seatsFor = (n, iso, extra) => seats.filter(S => S.sd.iso === iso && ownHere(n, S) && (extra || S.names.length < S.need) && ok(n, S) && prefScore(n, S.sd) <= 0)
     .sort((a, b) => a.names.filter(z => ownHere(z, a)).length - b.names.filter(z => ownHere(z, b)).length || (b.need - b.names.length) - (a.need - a.names.length) || a.names.length - b.names.length);
   const hasOwn = n => seats.some(S => ownHere(n, S) && S.names.some(z => nkey(z) === nkey(n)));
+  const base = new Map(seats.map(S => [S, S.need]));
+  //   0 · every subject of a paper gets ONE of its teachers in the room (a shared room like Mini Hall with five
+  //       subjects gets one place per subject, even above its staff number); rare subjects first
+  const subjTeachers = sub => P.filter(n => catOf(n) !== 'NT' && mySubs(n).some(ms => subjMatch(sub, ms)));
+  const ownCnt = n => seats.filter(S => ownHere(n, S) && S.names.some(z => nkey(z) === nkey(n))).length;
+  let extraSubj = 0;
+  seats.flatMap(S => [...new Set(paperSubs(S.sd))].map(sub => ({ S, sub, T:subjTeachers(sub) }))).filter(x => x.T.length).sort((a, b) => a.T.length - b.T.length || ncmp(a.S.sd.iso, b.S.sd.iso))
+    .forEach(({ S, sub, T: ST }) => {
+      if(S.names.some(z => mySubs(z).some(zs => subjMatch(sub, zs)))) return;                       // already there
+      const C = ST.filter(n => under(n) && ok(n, S) && prefScore(n, S.sd) <= 0).sort((a, b) => tier(a) - tier(b) || ownCnt(a) - ownCnt(b) || subjDays(a).length - subjDays(b).length || ((cnt[nkey(a)] || 0) / capOf(a)) - ((cnt[nkey(b)] || 0) / capOf(b)) || ncmp(a, b));
+      if(!C.length) return;
+      if(S.names.length >= S.need){ if(S.need >= base.get(S) + Math.max(0, new Set(paperSubs(S.sd).map(subjK)).size - 1)) return; S.need++; extraSubj++; }
+      add(S, C[0]); filledOwn++;
+    });
   for(let more = true; more;){
     more = false;
     T.forEach(n => {
@@ -2065,7 +2086,6 @@ function autoRun(o){
   }
   //   a permanent teacher whose paper rooms were all full still gets ONE duty there (one extra place in that room)
   let extraOwn = 0;
-  const base = new Map(seats.map(S => [S, S.need]));
   T.filter(n => typeOf(n) === 'P' && under(n) && ownDays[nkey(n)].length && !hasOwn(n)).forEach(n => {
     const R = ownDays[nkey(n)].flatMap(iso => seatsFor(n, iso, true)).filter(S => S.need < base.get(S) + 3)   // at most 3 extra in one room.sort((a, b) => (a.names.length - a.need) - (b.names.length - b.need) || a.names.length - b.names.length);
     if(R.length){ R[0].need++; add(R[0], n); filledOwn++; extraOwn++; }
@@ -2102,7 +2122,7 @@ function autoRun(o){
   });
   saveLocal();
   const empty = seats.filter(S => S.names.length < (o.per || staffNeed(S.sd.room))).length;
-  return { added, extra, filledOwn, extraOwn, empty, seats:seats.length, mode:o.mode };
+  return { added, extra, filledOwn, extraOwn:extraOwn + extraSubj, empty, seats:seats.length, mode:o.mode };
 }
 function autoReport(r){
   const c = compute(), P = autoPool().filter(n => !wrongShift(n));
