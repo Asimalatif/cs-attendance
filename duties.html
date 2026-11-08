@@ -357,21 +357,25 @@ function loadFixItems(items){   // from the server: fill what this device does n
   ls.set('dut_notes', NOTES); ls.set('dut_vmap', VMAP); ls.set('dut_block', BLOCK); ls.set('dut_set', SET); C = null;
 }
 /* ---------- settings: maximum duties per category; elderly / weak staff; permanent and visiting kept apart ---------- */
-const CATS = [['L', 'Lecturer'], ['AP', 'Assistant Professor'], ['ASP', 'Associate Professor'], ['P', 'Professor'], ['VL', 'Visiting Lecturer'], ['VAP', 'Visiting Assistant Professor'], ['VASP', 'Visiting Associate Professor'], ['VP', 'Visiting Professor'], ['W', 'Elderly or weak (ill / disabled)']];
+const CATS = [['L', 'Lecturer'], ['AP', 'Assistant Professor'], ['ASP', 'Associate Professor'], ['P', 'Professor'], ['VL', 'Visiting Lecturer'], ['VAP', 'Visiting Assistant Professor'], ['VASP', 'Visiting Associate Professor'], ['VP', 'Visiting Professor'], ['NT', 'Non-teaching staff'], ['W', 'Elderly or weak (ill / disabled)']];
 let SET = Object.assign({ max:{}, weak:{}, cat:{} }, ls.get('dut_set', {}));   // max: cat -> n · weak: nkey -> name · cat: nkey -> { n, c }
-const SET_DEFAULT = { L:'5', AP:'5', ASP:'3', P:'3', VL:'9', VAP:'5', VASP:'4', VP:'3', W:'' };
+const SET_DEFAULT = { L:'5', AP:'5', ASP:'3', P:'3', VL:'9', VAP:'5', VASP:'4', VP:'3', NT:'6', W:'' };
 Object.keys(SET_DEFAULT).forEach(k => { if(SET.max[k] == null) SET.max[k] = SET_DEFAULT[k]; });
 if(SET.both == null) SET.both = '2';      // teaches morning AND evening: this many duties fewer (she also has evening exam duties)
 function saveSet(){ ls.set('dut_set', SET); C = null; }
 const rankOf = d => { d = String(d || '').toLowerCase(); return /assoc/.test(d) ? 'ASP' : /assist|asst|\ba\.?\s*p\b/.test(d) ? 'AP' : /prof/.test(d) ? 'P' : 'L'; };
 const isVisStatus = n => /visit/i.test((contactOf(n) || {}).status || '');
-function catAuto(n){ return (isVisStatus(n) ? 'V' : '') + rankOf((contactOf(n) || {}).desig); }
+const NT_NOTE = 'Lab staff (not teaching)';
+const NT_RX = /non[\s-]*teach|\blab\b|laborator|librar|clerk|attendant|naib|operator|accountant|superintendent|steno|qasid|peon|store\s*keeper|office\s*(assistant|staff)/i;
+/** off duty = marked principal, exam staff, on leave … (non-teaching staff DO get duties, with their own number) */
+const offDuty = n => { const v = noteOf(n); return !!v && v !== NT_NOTE; };
+function catAuto(n){ const ct = contactOf(n) || {}; if(noteOf(n) === NT_NOTE || NT_RX.test(ct.desig || '')) return 'NT'; return (isVisStatus(n) ? 'V' : '') + rankOf(ct.desig); }
 function catOf(n){ const k = nkey(n); if(SET.weak[k]) return 'W'; const o = SET.cat[k]; return o && o.c ? o.c : catAuto(n); }
 const catName = c => (CATS.find(x => x[0] === c) || ['', ''])[1];
 /** P = permanent, V = visiting, O = not in the teacher list */
-function typeOf(n){ if(!contactOf(n)) return 'O'; const c = catOf(n); return c === 'W' ? (isVisStatus(n) ? 'V' : 'P') : c[0] === 'V' ? 'V' : 'P'; }
-const TYPE_T = { P:'Permanent teachers', V:'Visiting teachers', O:'Not in the teacher list' };
-const typeRank = n => ({ P:0, V:1, O:2 })[typeOf(n)];
+function typeOf(n){ if(catOf(n) === 'NT') return 'N'; if(!contactOf(n)) return 'O'; const c = catOf(n); return c === 'W' ? (isVisStatus(n) ? 'V' : 'P') : c[0] === 'V' ? 'V' : 'P'; }
+const TYPE_T = { P:'Permanent teachers', V:'Visiting teachers', N:'Non-teaching staff', O:'Not in the teacher list' };
+const typeRank = n => ({ P:0, V:1, N:2, O:3 })[typeOf(n)];
 /** she teaches in the morning AND in the evening (timetable) */
 const bothShift = n => { const s = (contactOf(n) || {}).sh; return !!(s && s.M && s.E); };
 const bothLess = n => bothShift(n) ? Math.max(0, parseInt(SET.both, 10) || 0) : 0;
@@ -470,8 +474,8 @@ function compute(){
   if(CTS && CTS.list && CTS.list.length){
     const have = new Set(teacher.map(t => nkey(t.label)));
     const inUsers = n => { const ct = contactOf(n); return !!(ct && (CTS.users ? ct.users : true)); }, LEFT = CTS.left || [];
-    missing = CTS.list.filter(c => (CTS.users ? c.users : CTS.tt ? c.tt : !/visit/i.test(c.status || '')) && !have.has(nkey(c.name)) && !noteOf(c.name)).map(c => c.name).sort(ncmp);
-    unknown = teacher.filter(t => !inUsers(t.label) && (!noteOf(t.label) || noteOf(t.label) === 'Left the college')).map(t => t.label).sort(ncmp);
+    missing = CTS.list.filter(c => (CTS.users ? c.users : CTS.tt ? c.tt : !/visit/i.test(c.status || '')) && !have.has(nkey(c.name)) && !offDuty(c.name)).map(c => c.name).sort(ncmp);
+    unknown = teacher.filter(t => !inUsers(t.label) && (!noteOf(t.label) || noteOf(t.label) === 'Left the college') && catOf(t.label) !== 'NT').map(t => t.label).sort(ncmp);
     unknown.forEach(n => {                                                     // left the college: in X-Users (or marked so)
       let x = LEFT.find(l => nkey(l.name) === nkey(n));
       if(!x){ const b = LEFT.map(l => [appScore(n, l.name), l]).sort((p, q) => q[0] - p[0])[0]; if(b && b[0] >= .9) x = b[1]; }
@@ -748,7 +752,7 @@ function freeTeachers(d, from){
   c.L.teacher.forEach(t => { if(t.items.some(x => (x.iso || '?') === (d.iso || '?'))) busy.add(nkey(t.label)); });
   const pool = CTS ? CTS.list.filter(x => CTS.users ? x.users : true).map(x => x.name) : c.L.teacher.map(t => t.label);
   const seen = new Set();
-  return pool.filter(n => { const k = nkey(n); if(!k || seen.has(k) || busy.has(k) || (noteOf(n) && noteOf(n) !== '')) return false; seen.add(k); return !c.unknown || !c.unknown.includes(n); })
+  return pool.filter(n => { const k = nkey(n); if(!k || seen.has(k) || busy.has(k) || offDuty(n)) return false; seen.add(k); return !c.unknown || !c.unknown.includes(n); })
     .sort(candCmp(from, d));
 }
 function freeGroups(d, from){
@@ -756,7 +760,7 @@ function freeGroups(d, from){
   const same = F.filter(n => !fullOf(n) && !wrongShift(n) && sameDeptOf(n, from, d) > 0), S = new Set(same);
   const rest = F.filter(n => !S.has(n));
   return [[from && dep ? '★ Same department as ' + from + ' (' + dep + ')' : '★ Department of this paper', same],
-    ['Permanent teachers free that day', rest.filter(n => !fullOf(n) && typeOf(n) === 'P')], ['Visiting teachers free that day', rest.filter(n => !fullOf(n) && typeOf(n) === 'V')],
+    ['Permanent teachers free that day', rest.filter(n => !fullOf(n) && typeOf(n) === 'P')], ['Visiting teachers free that day', rest.filter(n => !fullOf(n) && typeOf(n) === 'V')], ['Non-teaching staff free that day', rest.filter(n => !fullOf(n) && typeOf(n) === 'N')],
     ['Already have their share of duties', rest.filter(n => fullOf(n))]].filter(g => g[1].length);
 }
 function dutyOpts(t, d, sel){
@@ -818,13 +822,13 @@ function shiftHtml(c){
 /* teachers with more duties than the maximum of their category (Settings) */
 function overHtml(c){
   if(!CTS) return '';
-  const pool = [...new Set(CTS.list.filter(x => CTS.users ? x.users : true).map(x => x.name))].filter(n => !noteOf(n) && maxOf(n) != null);
+  const pool = [...new Set(CTS.list.filter(x => CTS.users ? x.users : true).map(x => x.name))].filter(n => !offDuty(n) && maxOf(n) != null);
   const more = pool.filter(overOf).sort((a, b) => typeRank(a) - typeRank(b) || (dutyCount(b) - maxOf(b)) - (dutyCount(a) - maxOf(a)));
   const less = pool.filter(lessOf).sort((a, b) => typeRank(a) - typeRank(b) || (maxOf(b) - dutyCount(b)) - (maxOf(a) - dutyCount(a)));
   const ok = pool.length - more.length - less.length;
   const row = n => { const t = c.L.teacher.find(x => nkey(x.label) === nkey(n)); return `<tr><td><b>${esc(n)}</b>${shareBadge(n)}<div class="sub">${esc(catName(catOf(n)))} · ${esc(tLine(n))}</div></td><td>${t ? `<button class="btn sm pri" data-t="${esc(t.key)}">Change</button>` : ''}</td></tr>`; };
   const part = (L, ty) => L.filter(n => typeOf(n) === ty);
-  const block = (L, title, color, note) => !L.length ? '' : `<section class="card" style="border-top-color:${color}"><h3>${title} <span style="color:${color}">${L.length}</span></h3><div class="sub">${note}</div>${[['P', 'Permanent'], ['V', 'Visiting']].map(([ty, lab]) => part(L, ty).length ? `<h3 style="margin-top:10px">${lab} <span class="sub">${part(L, ty).length}</span></h3><div class="tw" style="max-height:none"><table><tbody>${part(L, ty).map(row).join('')}</tbody></table></div>` : '').join('')}</section>`;
+  const block = (L, title, color, note) => !L.length ? '' : `<section class="card" style="border-top-color:${color}"><h3>${title} <span style="color:${color}">${L.length}</span></h3><div class="sub">${note}</div>${[['P', 'Permanent'], ['V', 'Visiting'], ['N', 'Non-teaching staff']].map(([ty, lab]) => part(L, ty).length ? `<h3 style="margin-top:10px">${lab} <span class="sub">${part(L, ty).length}</span></h3><div class="tw" style="max-height:none"><table><tbody>${part(L, ty).map(row).join('')}</tbody></table></div>` : '').join('')}</section>`;
   return `<section class="card"><h3>Duties share</h3><div class="sub">Against the duties each teacher should get (⚙ Settings: by designation, permanent / visiting, ${esc(SET.both || 0)} fewer for teachers of both morning and evening).</div>
     <div class="chips"><div class="chip bad"><b>${more.length}</b>more than share</div><div class="chip mid"><b>${less.length}</b>less than share</div><div class="chip good"><b>${ok}</b>right number ✓</div></div></section>`
     + block(more, 'More duties than their share', 'var(--bad)', 'Tap <b>Change</b>, or use <b>Suggestions</b> below, to give the extra duties to teachers who have less.')
@@ -850,7 +854,7 @@ function scoreCand(n, from, d, cnt){
 function suggestPlan(){
   const c = compute(); if(c._sg) return c._sg;
   const all = CTS ? CTS.list.filter(x => CTS.users ? x.users : true).map(x => x.name) : c.L.teacher.map(t => t.label);
-  const avail = [...new Set(all)].filter(n => !noteOf(n) && !(c.unknown || []).includes(n));
+  const avail = [...new Set(all)].filter(n => !offDuty(n) && !(c.unknown || []).includes(n));
   const cnt = {}; avail.forEach(n => { cnt[nkey(n)] = 0; }); c.L.teacher.forEach(t => { cnt[nkey(t.label)] = t.items.length; });
   const avg = avail.length ? avail.reduce((a, n) => a + cnt[nkey(n)], 0) / avail.length : 0;
   const target = n => { const m = maxOf(n); return m != null ? m : Math.ceil(avg) + 1; };
@@ -897,13 +901,13 @@ function setHtml(){
   const people = CTS ? CTS.list.filter(x => CTS.users ? x.users : true).map(x => x.name) : compute().L.teacher.map(t => t.label);
   const L = [...new Set(people)].sort((a, b) => typeRank(a) - typeRank(b) || ncmp(nkey(a), nkey(b)));
   const inCat = cc => L.filter(n => catOf(n) === cc);
-  const cnt = (cc, f) => inCat(cc).filter(n => !noteOf(n) && f(n)).length, okF = n => maxOf(n) != null && !lessOf(n) && !overOf(n);
+  const cnt = (cc, f) => inCat(cc).filter(n => !offDuty(n) && f(n)).length, okF = n => maxOf(n) != null && !lessOf(n) && !overOf(n);
   return `<section class="card"><h3>Duties for each teacher</h3><div class="sub">How many duties a teacher of each designation should get in this exam. Every teacher is then marked <b class="x">MORE</b>, <b style="color:var(--mid)">LESS</b> or <b class="ok">✓</b> everywhere, and the Suggestions in <b>Check</b> move duties from teachers with more to teachers with less. Leave a box empty for no number.</div>
-    <div class="tw" style="max-height:none"><table><thead><tr><th>Designation</th><th>Duties</th><th>Teachers</th><th>Less</th><th>✓</th><th>More</th></tr></thead><tbody>${CATS.map(([cc, lab], q) => `${q === 0 ? '<tr><td colspan="6" style="background:var(--good-bg)"><b>Permanent</b></td></tr>' : q === 4 ? '<tr><td colspan="6" style="background:var(--mid-bg)"><b>Visiting</b></td></tr>' : q === 8 ? '<tr><td colspan="6"><b>Others</b></td></tr>' : ''}<tr><td><b>${esc(lab.replace(/^Visiting /, ''))}</b></td><td><input class="nm" type="number" min="0" inputmode="numeric" data-smax="${cc}" value="${esc(SET.max[cc] == null ? '' : SET.max[cc])}" style="width:80px;min-width:0"></td><td class="n">${inCat(cc).length}</td><td class="n" style="color:var(--mid)">${cnt(cc, lessOf)}</td><td class="n ok">${cnt(cc, okF)}</td><td class="n x">${cnt(cc, overOf)}</td></tr>`).join('')}</tbody></table></div>
+    <div class="tw" style="max-height:none"><table><thead><tr><th>Designation</th><th>Duties</th><th>Teachers</th><th>Less</th><th>✓</th><th>More</th></tr></thead><tbody>${CATS.map(([cc, lab], q) => `${q === 0 ? '<tr><td colspan="6" style="background:var(--good-bg)"><b>Permanent</b></td></tr>' : q === 4 ? '<tr><td colspan="6" style="background:var(--mid-bg)"><b>Visiting</b></td></tr>' : q === 8 ? '<tr><td colspan="6" style="background:var(--surface2)"><b>Others</b></td></tr>' : ''}<tr><td><b>${esc(lab.replace(/^Visiting /, ''))}</b></td><td><input class="nm" type="number" min="0" inputmode="numeric" data-smax="${cc}" value="${esc(SET.max[cc] == null ? '' : SET.max[cc])}" style="width:80px;min-width:0"></td><td class="n">${inCat(cc).length}</td><td class="n" style="color:var(--mid)">${cnt(cc, lessOf)}</td><td class="n ok">${cnt(cc, okF)}</td><td class="n x">${cnt(cc, overOf)}</td></tr>`).join('')}</tbody></table></div>
     <div class="grid"><label class="f">Teachers of both morning and evening get this many duties fewer<input class="nm" type="number" min="0" inputmode="numeric" data-sboth="1" value="${esc(SET.both)}" style="max-width:120px"></label></div>
     <div class="sub">They also invigilate the evening exam. Morning / evening comes from the Timetable sheet (e.g. a permanent lecturer with evening classes: ${Math.max(0, (parseInt(SET.max.L, 10) || 0) - (parseInt(SET.both, 10) || 0))} instead of ${esc(SET.max.L || '—')}).</div>
-    <div class="acts"><button class="btn sm" id="sReset">Use the college numbers (5, 5, 3, 3 · 9, 5, 4, 3 · 2 fewer)</button></div></section>
-    <section class="card"><h3>Teachers</h3><div class="sub">Category is worked out from <b>designation</b> and <b>Status</b> (Visiting) in the Users sheet — change it here if it is wrong. Tick <b>Elderly / weak</b> for ill or disabled staff: they get the “Elderly or weak” number of duties.</div>
+    <div class="acts"><button class="btn sm" id="sReset">Use the college numbers (5, 5, 3, 3 · 9, 5, 4, 3 · non-teaching 6 · 2 fewer)</button></div></section>
+    <section class="card"><h3>Teachers</h3><div class="sub">Category is worked out from <b>designation</b> and <b>Status</b> (Visiting) in the Users sheet — lab staff, librarian, clerk, attendant … are <b>Non-teaching staff</b>. Change it here if it is wrong. Tick <b>Elderly / weak</b> for ill or disabled staff: they get the “Elderly or weak” number of duties.</div>
     ${CTS ? '' : '<div class="acts"><button class="btn sm pri" id="bCts">Load the teacher list</button></div>'}
     <input class="sq" id="sq2" type="search" placeholder="Search teacher" style="margin-top:8px" autocomplete="off">
     <div class="tw" id="setL"><table><thead><tr><th>Teacher</th><th>Category</th><th>Elderly / weak</th><th>Duties</th></tr></thead><tbody>${L.map(n => { const k = nkey(n), ct = contactOf(n) || {}, o = (SET.cat[k] || {}).c || '';
@@ -955,7 +959,7 @@ function unknownHtml(c){
       const sc = usersAll.map(x => [appScore(n, x.name), x.name]).sort((a, b) => b[0] - a[0] || ncmp(a[1], b[1]));
       return `<tr style="${L ? 'background:var(--bad-bg)' : ''}"><td class="nw"><b>${esc(n)}</b><div class="sub">${L ? `<span class="x">LEFT${L.name !== n ? ' (X-Users: ' + esc(L.name) + ')' : ''}${L.dept ? ' · ' + esc(L.dept) : ''}</span>` : '<span style="color:var(--mid);font-weight:800">not in Users sheet</span>'}</div></td><td class="n">${cnt[n] || 0}</td>
         <td><select class="sq" data-unk="${esc(k)}" style="height:40px;min-width:240px"><option value="">— leave as it is —</option>
-        ${[['P', 'Permanent'], ['V', 'Visiting']].map(([ty, lab]) => `<optgroup label="Give her duties to · ${lab} teacher with no duty">${cand.filter(x => typeOf(x.name) === ty).map(x => `<option value="app:${esc(x.name)}" ${sel === 'app:' + x.name ? 'selected' : ''}>${esc(x.name)}${tag(x) ? ' · ' + esc(tag(x)) : ''}</option>`).join('')}</optgroup>`).join('')}
+        ${[['P', 'Permanent'], ['V', 'Visiting'], ['N', 'Non-teaching']].map(([ty, lab]) => `<optgroup label="Give her duties to · ${lab} with no duty">${cand.filter(x => typeOf(x.name) === ty).map(x => `<option value="app:${esc(x.name)}" ${sel === 'app:' + x.name ? 'selected' : ''}>${esc(x.name)}${tag(x) ? ' · ' + esc(tag(x)) : ''}</option>`).join('')}</optgroup>`).join('')}
         <optgroup label="She is this Users teacher (spelling only)">${sc.map(([v, a]) => `<option value="app:${esc(a)}" ${sel === 'app:' + a && !cand.some(x => x.name === a) ? 'selected' : ''}>${esc(a)}${v >= .6 ? ' · ' + Math.round(v * 100) + '%' : ''}</option>`).join('')}</optgroup>
         <optgroup label="Not a teacher (keeps her duties)">${NOTE_OPTS.filter(o => o !== 'Left the college').map(o => `<option value="note:${esc(o)}" ${sel === 'note:' + o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</optgroup></select></td></tr>`; }).join('')}</tbody></table></div>
     <div class="acts"><button class="btn pri" id="unGo" ${todo ? '' : 'disabled'}>Fix ${todo} name${todo === 1 ? '' : 's'} in one go</button></div>` : '<div class="note ok">Everyone in the duty list is in the Users sheet (or marked).</div>'}
@@ -987,7 +991,7 @@ function missingHtml(c){
   const marked = Object.entries(NOTES).filter(([k]) => nameIndex().ct[k]);
   return `<section class="card" style="border-top-color:var(--good)"><h3>Teachers with no duty <span class="ok">${c.missing.length}</span></h3>
     <div class="sub">${CTS.users ? 'Every teacher in the <b>Users</b> sheet (permanent and visiting) who' : 'Teachers in the timetable who'} got no duty in this list — useful for a fair share. When a teacher has no invigilation for a reason (principal, exam / stationery staff, on leave…), choose it: she is then not counted here.</div>
-    ${c.missing.length ? [['P', 'Permanent'], ['V', 'Visiting']].map(([ty, lab]) => { const L = c.missing.filter(n => typeOf(n) === ty); return L.length ? `<h3 style="margin-top:12px">${lab} <span class="ok">${L.length}</span></h3><div class="tw" style="max-height:none"><table><tbody>${L.map(n => { const ct = contactOf(n) || {}; return `<tr style="background:var(--good-bg)"><td><b class="ok">${esc(n)}</b><div class="sub">${esc(tLine(n))}</div></td><td><select class="sq" data-note="${esc(nkey(n))}" data-name="${esc(n)}" style="height:38px;min-width:210px"><option value="">— no duty —</option>${NOTE_OPTS.map(o => `<option>${esc(o)}</option>`).join('')}</select></td></tr>`; }).join('')}</tbody></table></div>` : ''; }).join('') : '<div class="note ok">Every teacher has a duty.</div>'}
+    ${c.missing.length ? [['P', 'Permanent'], ['V', 'Visiting'], ['N', 'Non-teaching staff']].map(([ty, lab]) => { const L = c.missing.filter(n => typeOf(n) === ty); return L.length ? `<h3 style="margin-top:12px">${lab} <span class="ok">${L.length}</span></h3><div class="tw" style="max-height:none"><table><tbody>${L.map(n => { const ct = contactOf(n) || {}; return `<tr style="background:var(--good-bg)"><td><b class="ok">${esc(n)}</b><div class="sub">${esc(tLine(n))}</div></td><td><select class="sq" data-note="${esc(nkey(n))}" data-name="${esc(n)}" style="height:38px;min-width:210px"><option value="">— no duty —</option>${NOTE_OPTS.map(o => `<option>${esc(o)}</option>`).join('')}</select></td></tr>`; }).join('')}</tbody></table></div>` : ''; }).join('') : '<div class="note ok">Every teacher has a duty.</div>'}
     ${marked.length ? `<div class="sub" style="margin-top:10px">Not on duty lists: ${marked.map(([k, x]) => `<span class="dc">${esc(x.n)} — ${esc(x.v)} <button class="lnk" data-unclr="${esc(k)}" aria-label="Remove">✕</button></span>`).join('')}</div>` : ''}</section>`;
 }
 
