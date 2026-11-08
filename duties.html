@@ -591,7 +591,7 @@ const dutyFull = d => `${dateDay(d)}${d.time ? ' (' + d.time + ')' : ''} · ${ro
 /* =====================================================================
    4) SCREEN
    ===================================================================== */
-const TABS = [['teacher', 'Teacher-wise'], ['room', 'Room-wise'], ['date', 'Date-wise'], ['class', 'Class-wise'], ['subject', 'Subject-wise'], ['plan', 'Plan & edit'], ['free', 'Free rooms'], ['summary', 'Summary'], ['names', 'Names'], ['places', 'Rooms · Classes · Subjects'], ['students', 'Students’ message'], ['settings', '⚙ Settings'], ['rows', 'All rows'], ['check', 'Check']];
+const TABS = [['teacher', 'Teacher-wise'], ['room', 'Room-wise'], ['date', 'Date-wise'], ['class', 'Class-wise'], ['subject', 'Subject-wise'], ['plan', 'Plan & edit'], ['free', 'Free rooms'], ['summary', 'Summary'], ['names', 'Names'], ['places', 'Rooms · Classes · Subjects'], ['students', 'Students’ message'], ['pclash', 'Paper clashes'], ['settings', '⚙ Settings'], ['rows', 'All rows'], ['check', 'Check']];
 if(!TABS.some(t => t[0] === V.tab)) V.tab = 'teacher';
 V.newPage = ls.get('dut_newpage', true);
 /* never a blank page: show what went wrong and a way out */
@@ -646,6 +646,7 @@ function tabBody(){
   if(V.tab === 'settings') return setHtml();
   if(V.tab === 'places') return vfixHtml();
   if(V.tab === 'students') return stuHtml();
+  if(V.tab === 'pclash') return pcHtml();
   if(V.tab === 'names') return namesHtml(c);
   if(V.tab === 'rows') return rowsHtml();
   return checkHtml(c);
@@ -664,7 +665,7 @@ function groupCards(kind){
     const head = kind === 'teacher' && (gi === 0 || typeOf(G[gi - 1].label) !== typeOf(g.label)) ? `<h3 style="margin:18px 0 0;padding:8px 12px;border-radius:12px;background:${typeOf(g.label) === 'V' ? 'var(--mid-bg)' : typeOf(g.label) === 'O' ? 'var(--bad-bg)' : 'var(--good-bg)'}">${TYPE_T[typeOf(g.label)]} <span class="sub">${G.filter(x => typeOf(x.label) === typeOf(g.label)).length}</span></h3>` : '';
     const wa = kind === 'teacher';
     return head + `<div class="rm"><h3><span>${kind === 'teacher' ? `<button class="lnk" data-t="${esc(g.key)}">${esc(g.label)}</button>${g.clash ? ' <span class="x">⚠ clash</span>' : ''}${wrongShift(g.label) ? ` <span class="dc x">${examShift() === 'M' ? 'EVENING' : 'MORNING'} ONLY</span>` : ''}${kind === 'teacher' ? shareBadge(g.label) + (bothShift(g.label) ? ' <span class="dc">MORNING + EVENING</span>' : '') : ''}${CTS && compute().unknown.includes(g.label) ? ` <span class="dc x">${compute().leftOf[g.label] ? 'LEFT the college' : 'not in Users sheet'}</span>` : ''}` : esc(g.label)}</span><span class="sub">${kind === 'teacher' ? esc(tLine(g.label)) : g.items.length + ' paper' + (g.items.length === 1 ? '' : 's')}${kind === 'teacher' ? ` <button class="btn sm ${lessOf(g.label) ? 'good' : ''}" data-t="${esc(g.key)}">${lessOf(g.label) ? 'Give more · Change' : 'Change'}</button>` : ''}${wa ? ` <button class="btn sm good" data-wa="${esc(g.key)}">WhatsApp</button>` : ''}</span></h3>
-      <div class="tw" style="max-height:none"><table><thead><tr><th>#</th>${cols.map(c => `<th>${COLNAME[c]}</th>`).join('')}${kind === 'teacher' ? '<th></th>' : ''}</tr></thead><tbody>${g.items.map((it, i) => `<tr><td class="n">${i + 1}</td>${cols.map(c => `<td class="${c === 'date' || c === 'room' ? 'nw' : ''} ${it.x && (c === 'date' || c === 'room') ? 'x' : ''}">${c === 'room' ? '<b>' + esc(cellOf(it, c)) + '</b>' : c === 'staff' ? staffHtml(it.staff) + (CTS && it.staff.length && !roomHasSubj(it) ? '<div class="sub" style="color:var(--mid);font-weight:800">⚠ no teacher of this subject</div>' : '') : esc(cellOf(it, c))}</td>`).join('')}${kind === 'teacher' ? `<td class="nw"><button class="btn sm" data-rsw="${esc(g.key)}|${esc(seatKey(it))}" title="Exchange this duty with a colleague (same or another day)">⇄ Swap</button> <button class="btn sm" data-rrel="${esc(g.key)}|${esc(seatKey(it))}" title="Give this duty to someone free that day">Release</button></td>` : ''}</tr>`).join('')}</tbody></table></div></div>`;
+      <div class="tw" style="max-height:none"><table><thead><tr><th>#</th>${cols.map(c => `<th>${COLNAME[c]}</th>`).join('')}${kind === 'teacher' ? '<th></th>' : ''}</tr></thead><tbody>${g.items.map((it, i) => `<tr><td class="n">${i + 1}</td>${cols.map(c => `<td class="${c === 'date' || c === 'room' ? 'nw' : ''} ${it.x && (c === 'date' || c === 'room') ? 'x' : ''}">${c === 'room' ? '<b>' + esc(cellOf(it, c)) + '</b>' : c === 'staff' ? (!it.room && !it.staff.length ? '<span class="x">No room — give it a room in Plan &amp; edit, or delete this row (often an empty line of a merged Word cell)</span>' : staffHtml(it.staff)) + (CTS && it.staff.length && !roomHasSubj(it) ? '<div class="sub" style="color:var(--mid);font-weight:800">⚠ no teacher of this subject</div>' : '') : esc(cellOf(it, c))}</td>`).join('')}${kind === 'teacher' ? `<td class="nw"><button class="btn sm" data-rsw="${esc(g.key)}|${esc(seatKey(it))}" title="Exchange this duty with a colleague (same or another day)">⇄ Swap</button> <button class="btn sm" data-rrel="${esc(g.key)}|${esc(seatKey(it))}" title="Give this duty to someone free that day">Release</button></td>` : ''}</tr>`).join('')}</tbody></table></div></div>`;
   }).join('');
 }
 function summaryHtml(){
@@ -1757,6 +1758,12 @@ function wireTab(){
     if(t.id === 'bkSet') return blockRange();
     if(t.id === 'bWaAll') return waAll();
     if(t.id === 'bSwap') return swapDialog('');
+    if(t.id === 'pcCols') return pcLoadCols();
+    if(t.id === 'pcReload') return pcLoad(PC.cols);
+    if(t.id === 'pcCancel'){ PCCOLS = null; return refreshTab(); }
+    if(t.id === 'pcGo'){ const cols = [...document.querySelectorAll('.pcCol:checked')].map(x => +x.value); if(!cols.length) return alert('Tick at least one subject column.'); return pcLoad(cols); }
+    if(t.id === 'pcCopy'){ const x = pcText(); (navigator.clipboard ? navigator.clipboard.writeText(x) : Promise.reject()).then(() => { t.textContent = 'Copied ✓'; }).catch(() => prompt('Copy:', x)); return; }
+    if(t.dataset.pcun !== undefined){ delete SUBMAP[t.dataset.pcun]; ls.set('dut_submap', SUBMAP); return refreshTab(); }
     if(t.id === 'frCopy'){ const x = freeText(compute()); (navigator.clipboard ? navigator.clipboard.writeText(x) : Promise.reject()).then(() => { t.textContent = 'Copied ✓'; }).catch(() => prompt('Copy:', x)); return; }
     if(t.id === 'frPrint') return freePrint(compute());
     if(t.id === 'frWa') return waOpen('', freeText(compute()));
@@ -1790,6 +1797,7 @@ function wireTab(){
     if(t.dataset.pfadd){ if(!t.value) return; SET.pref[nkey(t.value)] = { n:t.value, a:[], r:[], s:[], x:[], m:false }; saveSet(); return refreshTab(); }
     if(t.dataset.pfpick !== undefined){ const [k, f] = t.dataset.pfpick.split('|'), x = SET.pref[k]; if(x && t.value){ x[f] = (x[f] || []).concat(t.value); const o = { r:'a', a:'r', s:'x', x:'s' }[f]; x[o] = (x[o] || []).filter(z => z !== t.value); saveSet(); } return refreshTab(); }
     if(t.dataset.pfm !== undefined){ const x = SET.pref[t.dataset.pfm]; if(x){ x.m = t.checked; saveSet(); } return refreshTab(); }
+    if(t.dataset.pcmap !== undefined){ if(t.value) SUBMAP[t.dataset.pcmap] = t.value; else delete SUBMAP[t.dataset.pcmap]; ls.set('dut_submap', SUBMAP); return refreshTab(); }
     if(t.dataset.sweak !== undefined){ const k = t.dataset.sweak; if(t.checked) SET.weak[k] = t.dataset.name; else delete SET.weak[k]; saveSet(); return refreshTab(); }
     if(t.dataset.cx !== undefined){ CX[t.dataset.cx] = t.value; return refreshTab(); }
     if(t.dataset.unk !== undefined){ UNK[t.dataset.unk] = t.value; return refreshTab(); }
@@ -2199,7 +2207,8 @@ function autoRun(o){
   });
   saveLocal();
   const empty = seats.filter(S => S.names.length < (o.per || staffNeed(S.sd.room))).length;
-  return { added, extra, filledOwn, extraOwn:extraOwn + extraSubj, empty, seats:seats.length, mode:o.mode };
+  const noRoom = EX.rows.filter(r => r.iso && (r.cls || r.sub) && !String(r.room || '').trim()).length;
+  return { added, extra, filledOwn, extraOwn:extraOwn + extraSubj, empty, noRoom, seats:seats.length, mode:o.mode };
 }
 function autoReport(r){
   const c = compute(), P = autoPool().filter(n => !wrongShift(n));
@@ -2212,6 +2221,7 @@ function autoReport(r){
     <div class="sub">${r.added} duties written in ${r.seats} rooms${r.mode === 'all' ? ' (new list)' : ''} · ${r.filledOwn} in teachers’ own subject${r.extraOwn ? ' (' + r.extraOwn + ' permanent teacher' + (r.extraOwn === 1 ? '' : 's') + ' added as one extra in her paper’s room because it was full)' : ''}. Check them in Room-wise / Teacher-wise; ↶ Undo (Ctrl+Z) brings back the list as it was.</div>
     <ul style="padding-left:4px;list-style:none;margin:10px 0">
       ${line(!c.clashes.length, c.clashes.length + ' clashes')}
+      ${r.noRoom ? line(false, r.noRoom + ' paper row' + (r.noRoom === 1 ? '' : 's') + ' with no room were skipped — give them a room in Plan &amp; edit (or delete empty lines), then run again') : ''}
       ${line(!r.empty, r.empty ? r.empty + ' rooms still short of staff (not enough teachers free that day)' : 'every room has its staff')}
       ${line(!noPerm, noPerm ? noPerm + ' rooms without a permanent teacher' : 'a permanent teacher (superintendent) in every room')}
       ${line(!more.length, more.length ? more.length + ' teachers above their number' + (r.extra ? ' (' + r.extra + ' extra duties were needed)' : '') : 'nobody above her number')}
@@ -2228,6 +2238,108 @@ function autoReport(r){
   $('#auSee').onclick = () => go('teacher'); $('#auChk').onclick = () => go('check');
   $('#auUndo').onclick = () => { $('#dlg').close(); undo(); };
   $('#dClose').onclick = () => { $('#dlg').close(); V.msg = 'Duties created automatically. Download the PDFs or the corrected Word file.'; refreshTab(); };
+}
+/* ---------- PAPER CLASHES: a student with two papers on the same day (subjects from Transform-ALL-COLLEGE-STRENGTH) ---------- */
+let PC = ls.get('dut_pc', null);                 // { cols:[i], list:[{cls, section, program, group, pcs, subs, rolls}], at }
+let PCCOLS = null;                               // headings from the sheet (to choose the subject columns)
+let SUBMAP = ls.get('dut_submap', {});           // student subject (normalised) → paper subject as in the date sheet, or '-' = no paper
+/** programme + year from any class text: "FCS-1 D2" → FCS1, "F.Sc-I" / "Pre-Medical 1st year" → FSC1, "F.A II" → FA2 */
+function pyLoose(t){
+  const u = ' ' + String(t || '').toUpperCase().replace(/[._\-]/g, ' ').replace(/\s+/g, ' ') + ' ';
+  const P = [[/\b(F ?CS|ICS|COMPUTER(?: SCIENCE)?)\b/, 'FCS'], [/\b(F ?SC|PRE ?MED(?:ICAL)?|PRE ?ENG(?:INEERING)?|MEDICAL|ENGINEERING)\b/, 'FSC'], [/\b(F ?A|ARTS?|HUMANITIES|GENERAL SCIENCE)\b/, 'FA']];
+  const Y = { XII:2, XI:1, II:2, I:1, 2:2, 1:1, '2ND':2, '1ST':1, SECOND:2, FIRST:1 };
+  const g = u.match(/\b(F ?CS|ICS|F ?SC|F ?A)\s?(XII|XI|II|I|2ND|1ST|2|1)(?![0-9A-Z])/);   // "F.ScII", "F.AII" (no space)
+  if(g) return ({ FCS:'FCS', ICS:'FCS', FSC:'FSC', FA:'FA' })[g[1].replace(' ', '')] + Y[g[2]];
+  for(const [rx, prog] of P){
+    const m = u.match(new RegExp(rx.source + '\\s?(XII|XI|II|I|2ND|1ST|2|1)(?![0-9A-Z])'));   // the year right after the programme: "FCS 1 D2" → 1, not the 2 of D2
+    if(m) return prog + Y[m[m.length - 1]];
+  }
+  const prog = (P.find(([rx]) => rx.test(u)) || [])[1]; if(!prog) return '';
+  const y = u.match(/\b(1ST|FIRST|2ND|SECOND)\b|\bPART (II|I)\b|\b(XII|XI)\b/); if(!y) return '';
+  return prog + Y[y[1] || y[2] || y[3]];
+}
+/** every programme + year written in one cell: "F.AII FCS I" → FA2, FCS1 */
+function pyAll(t){
+  const u = ' ' + String(t || '').toUpperCase().replace(/[._\-]/g, ' ').replace(/\s+/g, ' ') + ' ', out = new Set();
+  const Y = { XII:2, XI:1, II:2, I:1, 2:2, 1:1, '2ND':2, '1ST':1 };
+  for(const m of u.matchAll(/\b(F ?CS|ICS|F ?SC|F ?A)\s?(XII|XI|II|I|2ND|1ST|2|1)(?![0-9A-Z])/g)) out.add(({ FCS:'FCS', ICS:'FCS', FSC:'FSC', FA:'FA' })[m[1].replace(' ', '')] + Y[m[2]]);
+  if(!out.size){ const one = pyLoose(t); if(one) out.add(one); }
+  return [...out];
+}
+/** subject key for clashes: "Urdu Comp" = Urdu, "Islamiyat Ele" ≠ Islamiyat, "English Adv" ≠ English */
+function skey(x){
+  let u = vnorm(x).replace(/(COMPULSORY|COMPUL|COMP)$/, '').replace(/(ADVANCED|ADVANCE|ADV)$/, 'ADV').replace(/(ELECTIVE|ELEC|ELE)$/, 'ELE');
+  return SUBALIAS[u] || u;
+}
+const sEq = (a, b) => { const x = skey(a), y = skey(b); if(!x || !y) return false; if(x === y || (x.length > 4 && y.length > 4 && ratio(x, y) >= .86)) return true;
+  const [S, L] = x.length <= y.length ? [x, y] : [y, x]; return S.length >= 6 && L.startsWith(S) && !/^(ADV|ELE)$/.test(L.slice(S.length)); };   // "Computer sci" = "Computer Science"
+/** the date sheet as papers: date → [{ py:[FSC1…], subs:[…], label }] */
+function pcPapers(){
+  const out = {};
+  compute().recs.forEach(r => { if(!r.iso || !(r.sub || r.cls)) return;
+    const py = [...new Set(String(r.cls).split(/[\/,&+\n]+/).flatMap(pyAll))], subs = paperSubs({ sub:[r.sub] });
+    const L = (out[r.iso] = out[r.iso] || []), k = py.join(',') + '|' + subs.map(skey).join(',');
+    if(!L.some(x => x.k === k)) L.push({ k, py, subs, label:(r.cls + ' · ' + r.sub).replace(/\s+/g, ' ') }); });
+  // a row without a class (an empty line of a merged Word cell): the class of the same subject that day
+  Object.values(out).forEach(L => L.forEach(p => { if(p.py.length) return; const o = L.find(q => q.py.length && q.subs.some(a => p.subs.some(b => sEq(a, b)))); if(o) p.py = o.py.slice(); }));
+  return out;
+}
+/** a student's subject as it is in the date sheet ('' = no paper / not examined) */
+function pcSub(x){ const m = SUBMAP[skey(x)]; return m === '-' ? '' : m || x; }
+function pcAnalyse(){
+  const P = pcPapers(), days = Object.keys(P).sort(), clashes = {}, missing = {}, noClass = [];
+  (PC.list || []).forEach(g => {
+    const py = pyLoose([g.pcs, g.cls, g.program, g.group].join(' ')); if(!py){ noClass.push(g); return; }
+    const subs = [...new Set(g.subs.map(pcSub).filter(Boolean))];
+    days.forEach(d => {
+      const hit = []; P[d].forEach(p => { if(!p.py.includes(py)) return; p.subs.forEach(ps => { const s = subs.find(x => sEq(x, ps)); if(s && !hit.some(h => sEq(h.s, s))) hit.push({ s:ps, label:p.label }); }); });
+      if(hit.length > 1){ const k = d + '|' + py + '|' + hit.map(h => skey(h.s)).sort().join(','); const c = (clashes[k] = clashes[k] || { d, py, hit, groups:[], n:0 }); c.groups.push(g); c.n += g.rolls.length; }
+    });
+    subs.forEach(s => { if(days.some(d => P[d].some(p => p.py.includes(py) && p.subs.some(ps => sEq(s, ps))))) return;
+      const k = py + '|' + skey(s); const m = (missing[k] = missing[k] || { py, s, n:0, raw:new Set() }); m.n += g.rolls.length; g.subs.filter(x => pcSub(x) === s).forEach(x => m.raw.add(x)); });
+  });
+  return { clashes:Object.values(clashes).sort((a, b) => ncmp(a.d, b.d) || ncmp(a.py, b.py)), missing:Object.values(missing).sort((a, b) => ncmp(a.py, b.py) || b.n - a.n), noClass, P, days };
+}
+const pyName = py => ({ FSC:'F.Sc', FCS:'FCS', FA:'F.A' })[py.slice(0, -1)] + '-' + (py.slice(-1) === '1' ? 'I' : 'II');
+async function pcLoadCols(){
+  V.busy = 'Reading the headings of Transform-ALL-COLLEGE-STRENGTH…'; render();
+  try{ const r = await api({ action:'dut_stu_cols' }, 90000); if(!r.ok) throw new Error(r.error || 'not found'); PCCOLS = r; V.err = ''; }
+  catch(e){ V.err = 'Could not read the student sheet: ' + e.message + (/UNKNOWN_ACTION/.test(e.message) ? ' — paste the latest Duties.gs into Apps Script and deploy a new version.' : ''); }
+  V.busy = ''; render();
+}
+async function pcLoad(cols){
+  V.busy = 'Reading students’ subjects…'; render();
+  try{ const r = await api({ action:'dut_stu_subj', cols }, 120000); if(!r.ok) throw new Error(r.error || 'failed'); PC = { cols, list:r.list, at:r.at }; ls.set('dut_pc', PC); PCCOLS = null; V.msg = r.list.reduce((a, g) => a + g.rolls.length, 0) + ' students read.'; V.err = ''; }
+  catch(e){ V.err = 'Could not read students’ subjects: ' + e.message + (/UNKNOWN_ACTION/.test(e.message) ? ' — paste the latest Duties.gs into Apps Script and deploy a new version.' : ''); }
+  V.busy = ''; render();
+}
+function pcHtml(){
+  if(!EX || !EX.rows.length) return '<section class="card"><div class="sub">Open the date sheet / duty table first.</div></section>';
+  let h = `<section class="card"><h3>Paper clashes — two papers of one student on the same day</h3>
+    <div class="sub">The students and their subjects come from <b>Transform-ALL-COLLEGE-STRENGTH</b>; the papers from this date sheet. A clash = a student whose two subjects have papers on the same date. Also shown: subjects students take that have <b>no paper</b> in the date sheet.</div>`;
+  if(PCCOLS){
+    const sel = new Set((PC && PC.cols) || PCCOLS.cols.filter(c => /SUBJ|ELECT|OPTION|COMBIN|OPT\b/i.test(c.h)).map(c => c.i));
+    h += `<h3 style="margin-top:12px">Which columns hold the subjects?</h3><div class="sub">Tick every column with a subject of the student (e.g. Subject 1 … Subject 7, Elective, Optional). ${PCCOLS.rows} rows in the sheet.</div>
+      <div class="tw" style="max-height:50vh"><table><tbody>${PCCOLS.cols.map(c => `<tr><td style="width:40px"><input type="checkbox" class="pcCol" value="${c.i}" ${sel.has(c.i) ? 'checked' : ''} style="width:20px;height:20px"></td><td class="nw"><b>${esc(c.h || '(column ' + (c.i + 1) + ')')}</b></td><td class="sub">${esc(c.ex.join(' · '))}</td></tr>`).join('')}</tbody></table></div>
+      <div class="acts"><button class="btn pri" id="pcGo">Read the students’ subjects</button><button class="btn" id="pcCancel">Cancel</button></div></section>`;
+    return h;
+  }
+  h += `<div class="acts">${PC ? `<span class="sub">${PC.list.reduce((a, g) => a + g.rolls.length, 0)} students · read ${esc(new Date(PC.at).toLocaleString('en-GB'))}</span><button class="btn sm" id="pcReload">Read again</button>` : ''}<button class="btn sm ${PC ? '' : 'pri'}" id="pcCols">${PC ? 'Choose subject columns' : 'Read students from the sheet'}</button></div></section>`;
+  if(!PC) return h;
+  const A = pcAnalyse(), papSubs = py => [...new Set(A.days.flatMap(d => A.P[d].filter(p => p.py.includes(py)).flatMap(p => p.subs)))].sort(ncmp);
+  h += `<section class="card" style="border-top-color:${A.clashes.length ? 'var(--bad)' : 'var(--good)'}"><h3>Students with two papers on one day <span class="${A.clashes.length ? 'x' : 'ok'}">${A.clashes.length}</span></h3>
+    ${A.clashes.length ? `<div class="sub">Change the date of one of the two papers (Plan &amp; edit), or arrange a separate sitting for these students.</div><div class="tw" style="max-height:none"><table><thead><tr><th>Date</th><th>Class</th><th>Papers the same day</th><th>Students</th></tr></thead><tbody>${A.clashes.map(c => { const r0 = compute().recs.find(r => r.iso === c.d) || {};
+      return `<tr><td class="nw x"><b>${esc(dayShort(r0.day) + ' ' + (r0.dt || c.d))}</b></td><td class="nw">${esc(pyName(c.py))}</td><td>${c.hit.map(x => `<div><b>${esc(x.s)}</b> <span class="sub">${esc(x.label)}</span></div>`).join('')}</td><td><b class="x">${c.n}</b><details><summary class="sub">Enroll#</summary><div class="sub" style="max-width:420px">${c.groups.map(g => esc([g.pcs || g.cls, g.section].filter(Boolean).join(' ') + ': ' + g.rolls.join(', '))).join('<br>')}</div></details></td></tr>`; }).join('')}</tbody></table></div>
+      <div class="acts"><button class="btn sm" id="pcCopy">Copy as text</button></div>` : '<div class="note ok">No student has two papers on the same day.</div>'}</section>`;
+  h += `<section class="card" style="border-top-color:${A.missing.length ? 'var(--mid)' : 'var(--good)'}"><h3>Subjects with no paper in the date sheet <span style="color:var(--mid)">${A.missing.length}</span></h3>
+    ${A.missing.length ? `<div class="sub">Students of this class take the subject, but the date sheet has no paper for it. Either the paper is missing, or the subject is written differently — choose the paper it is (remembered), or “not examined”.</div><div class="tw" style="max-height:none"><table><thead><tr><th>Class</th><th>Subject (students’ sheet)</th><th>Students</th><th>It is the paper …</th></tr></thead><tbody>${A.missing.map(m => `<tr><td class="nw">${esc(pyName(m.py))}</td><td><b>${esc([...m.raw].join(' / ') || m.s)}</b></td><td class="n">${m.n}</td><td><select class="sq" data-pcmap="${esc(skey([...m.raw][0] || m.s))}" style="height:38px;min-width:200px"><option value="">— no paper (missing) —</option><option value="-">Not examined / no paper needed</option>${papSubs(m.py).map(x => `<option>${esc(x)}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div>` : '<div class="note ok">Every subject the students take has a paper in the date sheet.</div>'}
+    ${Object.keys(SUBMAP).length ? `<div class="sub" style="margin-top:8px">Same subject: ${Object.entries(SUBMAP).map(([k, v]) => `<span class="dc">${esc(k)} → ${esc(v === '-' ? 'not examined' : v)} <button class="lnk" data-pcun="${esc(k)}" aria-label="Remove">✕</button></span>`).join('')}</div>` : ''}</section>`;
+  if(A.noClass.length) h += `<section class="card"><h3>Class not recognised <span class="x">${A.noClass.length}</span></h3><div class="sub">These groups were skipped (programme / year not found): ${A.noClass.slice(0, 20).map(g => esc([g.pcs, g.cls, g.program, g.group].filter(Boolean).join(' ') + ' (' + g.rolls.length + ')')).join(', ')}</div></section>`;
+  return h;
+}
+function pcText(){
+  const A = pcAnalyse();
+  return (EX.title || 'Date sheet') + ' — students with two papers on one day\n' + A.clashes.map(c => { const r0 = compute().recs.find(r => r.iso === c.d) || {}; return `\n${r0.dt || c.d} ${r0.day || ''} · ${pyName(c.py)}: ${c.hit.map(x => x.s).join(' + ')} — ${c.n} students\n` + c.groups.map(g => [g.pcs || g.cls, g.section].filter(Boolean).join(' ') + ': ' + g.rolls.join(', ')).join('\n'); }).join('\n');
 }
 async function loadCts(quiet){
   try{

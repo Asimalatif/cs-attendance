@@ -46,6 +46,8 @@ function dutRoute_(user, req) {
       case 'dut_sheet':      return dutMakeSheet_(req);
       case 'dut_fix_save':   return dutFixSave_(req.items || []);
       case 'dut_students':   return dutStudents_();
+      case 'dut_stu_cols':   return dutStuCols_();
+      case 'dut_stu_subj':   return dutStuSubj_(req.cols || []);
       case 'dut_staff':      return dutStaff_();
     }
     return { ok: false, error: 'UNKNOWN_ACTION' };
@@ -240,6 +242,41 @@ function dutStudents_() {
     var grp = /^null$/i.test(g(r, 'group')) ? '' : g(r, 'group');
     var key = [g(r, 'cls'), g(r, 'section'), g(r, 'program'), grp].join('|');
     (by[key] = by[key] || { cls: g(r, 'cls'), section: g(r, 'section'), program: g(r, 'program'), group: grp, rolls: [] }).rolls.push(roll);
+  }
+  return { ok: true, list: Object.keys(by).map(function (k) { return by[k]; }), at: new Date().toISOString() };
+}
+
+/* ---------- students' subjects (for paper clashes: two papers of one student on the same day) ----------
+   dut_stu_cols: the headings + a few sample rows, so the operator ticks which columns hold subjects.
+   dut_stu_subj: students grouped by class / section / programme / group / PCS + their subjects (enroll numbers included). */
+function dutStuSheet_() {
+  var sh = SpreadsheetApp.openById(DUT_CFG.USERS).getSheetByName(DUT_CFG.STRENGTH);
+  if (!sh) throw new Error('Sheet ' + DUT_CFG.STRENGTH + ' not found.');
+  return sh.getDataRange().getDisplayValues();
+}
+function dutStuCols_() {
+  var v = dutStuSheet_(), head = v[0].map(dutS_), cols = [];
+  for (var j = 0; j < head.length; j++) {
+    var seen = {}, ex = [];
+    for (var i = 1; i < v.length && ex.length < 6; i++) { var x = dutS_(v[i][j]); if (x && !seen[x]) { seen[x] = 1; ex.push(x); } }
+    cols.push({ i: j, h: head[j], ex: ex });
+  }
+  return { ok: true, cols: cols, rows: v.length - 1 };
+}
+function dutStuSubj_(cols) {
+  var v = dutStuSheet_(), K = function (x) { return dutS_(x).toUpperCase().replace(/[^A-Z0-9]/g, ''); };
+  var head = v[0].map(K), c = function () { for (var i = 0; i < arguments.length; i++) { var j = head.indexOf(arguments[i]); if (j >= 0) return j; } return -1; };
+  var C = { roll: c('ENROLL', 'ENROLLNO', 'REG'), cls: c('CLASS'), section: c('SECTION'), program: c('PROGRAM'), group: c('GROUPONLY', 'GROUP'), pcs: c('PCS'), status: c('STATUS') };
+  var g = function (r, k) { return C[k] >= 0 ? dutS_(r[C[k]]) : ''; }, by = {};
+  cols = (cols || []).map(Number).filter(function (j) { return j >= 0 && j < v[0].length; });
+  for (var i = 1; i < v.length; i++) {
+    var r = v[i], roll = g(r, 'roll');
+    if (!roll || /migrat|cancel|disenrol|left|struck/i.test(g(r, 'status'))) continue;
+    var subs = [];
+    cols.forEach(function (j) { dutS_(r[j]).split(/\s*[,\/;+]\s*|\s+&\s+/).forEach(function (x) { x = dutS_(x); if (x && !/^(null|n\/?a|-|none|0)$/i.test(x) && subs.indexOf(x) < 0) subs.push(x); }); });
+    var grp = /^null$/i.test(g(r, 'group')) ? '' : g(r, 'group');
+    var key = [g(r, 'cls'), g(r, 'section'), g(r, 'program'), grp, g(r, 'pcs'), subs.slice().sort().join('|')].join('#');
+    (by[key] = by[key] || { cls: g(r, 'cls'), section: g(r, 'section'), program: g(r, 'program'), group: grp, pcs: g(r, 'pcs'), subs: subs, rolls: [] }).rolls.push(roll);
   }
   return { ok: true, list: Object.keys(by).map(function (k) { return by[k]; }), at: new Date().toISOString() };
 }
