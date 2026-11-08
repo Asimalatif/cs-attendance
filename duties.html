@@ -75,6 +75,25 @@ textarea{width:100%;min-height:150px;border:1.5px solid var(--line);border-radiu
 .hidden{display:none!important}
 .li{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
 .li:first-child{border-top:none}
+/* Plan & edit */
+.pday{background:var(--surface);border:1.5px solid var(--line);border-radius:16px;margin-bottom:10px;overflow:hidden}
+.pday>summary{list-style:none;cursor:pointer;padding:12px 14px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center}
+.pday>summary::-webkit-details-marker{display:none}
+.pday>summary::before{content:'▸';font-weight:900;color:var(--brown);margin-right:6px}
+.pday[open]>summary::before{content:'▾'}
+.pday[open]>summary{border-bottom:1px solid var(--line);background:var(--surface2)}
+.pday .dt{font-weight:800;font-size:16px;flex:1}
+.pbody{padding:10px 12px}
+.ppaper{border:1.5px solid var(--line);border-radius:14px;margin-bottom:12px;overflow:hidden}
+.pph{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;padding:8px 10px;background:var(--surface2)}
+.prr{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;padding:8px 10px;border-top:1px solid var(--line)}
+.prr.nostaff{background:var(--bad-bg)}
+.pst{flex:1;min-width:220px;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.pf{display:flex;flex-direction:column;gap:2px;font-size:11px;font-weight:700;color:var(--muted)}
+input.pin{height:36px;border:1.5px solid var(--line);border-radius:10px;padding:0 8px;background:var(--surface);font-weight:600;color:var(--ink);font-size:14px}
+input.pin:focus{border-color:var(--brown);outline:none}
+.pfoot{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 12px;border-top:1px dashed var(--line)}
+.ico{height:34px;min-width:34px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);cursor:pointer;font-weight:800;padding:0 8px}
 </style>
 </head>
 <body>
@@ -1303,32 +1322,45 @@ function freeHtml(){
   });
   return h;
 }
+let PLAN_OPEN = new Set(ls.get('dut_plan_open', []));
 function planHtml(){
   const c = compute(), by = {};
   EX.rows.forEach((r, i) => { const k = r.iso || ''; (by[k] = by[k] || []).push(i); });
   const days = Object.keys(by).sort((a, b) => ncmp(a || '9', b || '9'));
   const vals = t => [...new Set([...c.recs.map(r => r[t]), ...EX.rows.map(r => r[t])].filter(Boolean))].sort(ncmp);
-  const dl = `<datalist id="pl-cls">${vals('cls').map(v => `<option value="${esc(v)}">`).join('')}</datalist><datalist id="pl-sub">${vals('sub').map(v => `<option value="${esc(v)}">`).join('')}</datalist><datalist id="pl-room">${vals('room').map(v => `<option value="${esc(v)}">`).join('')}</datalist>`;
+  const dl = `<datalist id="pl-cls">${vals('cls').map(v => `<option value="${esc(v)}">`).join('')}</datalist><datalist id="pl-sub">${vals('sub').map(v => `<option value="${esc(v)}">`).join('')}</datalist><datalist id="pl-room">${stdRooms().map(v => `<option value="${esc(v)}">`).join('')}</datalist>`;
   const tm = hasTime();
-  let h = `<section class="card"><h3>Plan &amp; edit</h3><div class="sub">Change the exam here — no need to open any sheet. Add a <b>date</b>, a <b>paper / room</b> (new section, new class, new subject: just type it), add or remove <b>staff</b> (free teachers with their duties and shift), copy a room, move a whole day to another date. Every list, PDF, WhatsApp message and the corrected Word file follow at once. Press <b>Save on server</b> when done.</div>
-    <div class="grid"><label class="f">New exam date<input type="date" id="pDate"></label></div>
-    <div class="acts"><button class="btn pri" id="pAddDate">+ Add this date</button></div></section>${dl}`;
+  const dayName = iso => { const r0 = EX.rows[by[iso][0]]; return iso ? (r0.day ? r0.day + ', ' : '') + r0.dt : 'No date'; };
+  let h = `<section class="card"><h3>Plan &amp; edit</h3>
+    <div class="sub">One box per exam day. Inside: each <b>paper</b> (subject + class) with its <b>rooms</b>, and the <b>staff</b> of every room. Type new classes, subjects or rooms — no sheet needed. Press <b>Save on server</b> when done.</div>
+    <div class="acts"><label class="f" style="flex-direction:row;align-items:center;gap:8px">New exam date <input type="date" id="pDate" class="pin"></label><button class="btn sm pri" id="pAddDate">+ Add date</button>
+      <span style="flex:1"></span><button class="btn sm" id="pOpenAll">Open all days</button><button class="btn sm" id="pCloseAll">Close all</button></div>
+    <div class="chips" style="margin-top:8px">${days.map(iso => { const nost = by[iso].filter(i => EX.rows[i].room && !rowNames(i).length).length; return `<button class="dc" data-pjump="${esc(iso)}" style="cursor:pointer;${nost ? 'border-color:var(--bad);color:var(--bad)' : ''}">${esc(iso ? dayShort(EX.rows[by[iso][0]].day) + ' ' + (EX.rows[by[iso][0]].dt || '').slice(0, 5) : 'No date')} · ${by[iso].length}</button>`; }).join('')}</div></section>${dl}`;
   days.forEach(iso => {
-    const L = by[iso].slice().sort((a, b) => ncmp(EX.rows[a].room || 'zzz', EX.rows[b].room || 'zzz')), r0 = EX.rows[L[0]];
-    const staffN = L.reduce((n, i) => n + rowNames(i).length, 0);
-    h += `<section class="card"><h3 style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>${esc(iso ? (r0.day ? r0.day + ', ' : '') + r0.dt : 'No date')}</span><span class="sub">${L.length} room${L.length === 1 ? '' : 's'} · ${staffN} staff</span></h3>
-      <div class="acts" style="margin-top:4px"><button class="btn sm pri" data-pday="${esc(iso)}">+ Paper / room</button><label class="c" style="font-size:13px">Move this whole day to <input type="date" class="sq" data-pmv="${esc(iso)}" style="height:34px;width:auto"></label><button class="btn sm" data-pdel="${esc(iso)}">Delete day</button></div>
-      ${(() => { if(!iso) return ''; const D = roomDay(iso), fr = D.filter(x => !x.used), sp = D.filter(x => x.used && x.free != null && x.free > 0); return fr.length || sp.length ? `<div class="sub" style="margin-top:6px">${fr.length ? 'Free rooms (tap to put one of today’s papers there): ' + fr.slice(0, 20).map(x => `<button class="dc" style="cursor:pointer;color:var(--good);border-color:var(--good)" data-pfree="${esc(iso)}|${esc(x.room)}">${esc(x.room)}${x.cap != null ? ' · ' + x.cap + ' seats' : ''}</button>`).join('') : ''}${sp.length ? '<br>Space left: ' + sp.slice(0, 12).map(x => `<span class="dc">${esc(x.room)} · ${x.free} seats free</span>`).join('') : ''}</div>` : ''; })()}
-      ${L.map(i => { const r = EX.rows[i], names = rowNames(i); return `<div class="li" style="flex-direction:column;align-items:stretch;border:1.5px solid var(--line);border-radius:14px;padding:8px 10px;margin-top:8px" id="prow${i}">
-        <div class="grid" style="margin-top:0;grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr))">
-          <label class="f">Class<input class="cell" list="pl-cls" data-i="${i}" data-f="cls" value="${esc(r.cls)}" placeholder="e.g. F.Sc-I"></label>
-          <label class="f">Subject<input class="cell" list="pl-sub" data-i="${i}" data-f="sub" value="${esc(r.sub)}" placeholder="e.g. Chemistry"></label>
-          <label class="f">Room<input class="cell" list="pl-room" data-i="${i}" data-f="room" value="${esc(r.room)}" placeholder="e.g. 20"></label>
-          ${tm ? `<label class="f">Time<input class="cell" data-i="${i}" data-f="time" value="${esc(r.time)}"></label>` : ''}
-          <label class="f">Students${roomCap(r.room) != null ? ' (room ' + roomCap(r.room) + ')' : ''}<input class="cell" type="number" min="0" inputmode="numeric" data-i="${i}" data-f="n" value="${esc(r.n == null ? '' : r.n)}" placeholder="optional"></label>
-          <label class="f">Date<input class="cell" data-i="${i}" data-f="dt" value="${esc(r.dt)}" placeholder="dd/mm/yyyy"></label></div>
-        <div style="margin-top:6px">${names.map(n => `<span class="dc ${wrongShift(n) ? 'x' : ''}" title="${esc(tLine(n))}">${esc(n)} <button class="lnk" data-prm="${i}|${esc(nkey(n))}" aria-label="Remove ${esc(n)}">✕</button></span>`).join('') || '<span class="x" style="font-size:13px">No staff yet</span>'}
-          <button class="btn sm good" data-padd="${i}">+ Teacher</button><button class="btn sm" data-pdup="${i}">Copy to another room</button><button class="btn sm" data-del="${i}">Delete</button></div></div>`; }).join('')}</section>`;
+    const idx = by[iso], papers = {};
+    idx.forEach(i => { const r = EX.rows[i], k = vnorm(r.sub) + '|' + vnorm(r.cls); (papers[k] = papers[k] || []).push(i); });
+    const P = Object.values(papers).sort((a, b) => ncmp(EX.rows[a[0]].sub || 'zzz', EX.rows[b[0]].sub || 'zzz') || ncmp(EX.rows[a[0]].cls, EX.rows[b[0]].cls));
+    const staffN = idx.reduce((n, i) => n + rowNames(i).length, 0), nost = idx.filter(i => !rowNames(i).length).length, open = PLAN_OPEN.has(iso);
+    const free = iso ? roomDay(iso).filter(x => !x.used) : [];
+    h += `<details class="pday" id="pday-${esc(iso || 'none')}" data-pdo="${esc(iso)}" ${open ? 'open' : ''}><summary><span class="dt">${esc(dayName(iso))}</span>
+        <span class="sub">${P.length} paper${P.length === 1 ? '' : 's'} · ${idx.length} room${idx.length === 1 ? '' : 's'} · ${staffN} staff${nost ? ` · <b class="x">${nost} room${nost === 1 ? '' : 's'} without staff</b>` : ''}</span></summary>
+      <div class="pbody">${P.map(L => { const r0 = EX.rows[L[0]], ids = L.join(','), pst = L.reduce((n, i) => n + rowNames(i).length, 0);
+        return `<div class="ppaper"><div class="pph">
+            <label class="pf">Subject<input class="pin" list="pl-sub" data-pg="${ids}" data-f="sub" value="${esc(r0.sub)}" placeholder="e.g. Chemistry" style="width:180px"></label>
+            <label class="pf">Class<input class="pin" list="pl-cls" data-pg="${ids}" data-f="cls" value="${esc(r0.cls)}" placeholder="e.g. F.Sc-I" style="width:150px"></label>
+            ${tm ? `<label class="pf">Time<input class="pin" data-pg="${ids}" data-f="time" value="${esc(r0.time)}" style="width:110px"></label>` : ''}
+            <span class="sub" style="flex:1;align-self:center">${L.length} room${L.length === 1 ? '' : 's'} · ${pst} staff</span>
+            <button class="btn sm" data-pdup="${L[L.length - 1]}">+ Room for this paper</button><button class="ico" data-pdelg="${ids}" title="Delete this paper" aria-label="Delete this paper">🗑</button></div>
+          ${L.map(i => { const r = EX.rows[i], names = rowNames(i), cap = roomCap(r.room); return `<div class="prr ${names.length ? '' : 'nostaff'}" id="prow${i}">
+            <label class="pf">Room<input class="pin cell" list="pl-room" data-i="${i}" data-f="room" value="${esc(r.room)}" placeholder="e.g. 20" style="width:120px"></label>
+            <label class="pf">Students${cap != null ? ' / ' + cap : ''}<input class="pin cell" type="number" min="0" inputmode="numeric" data-i="${i}" data-f="n" value="${esc(r.n == null ? '' : r.n)}" placeholder="—" style="width:80px"></label>
+            <div class="pst">${names.map(n => `<span class="dc ${wrongShift(n) ? 'x' : ''}" title="${esc(tLine(n))}">${esc(n)} <button class="lnk" data-prm="${i}|${esc(nkey(n))}" aria-label="Remove ${esc(n)}">✕</button></span>`).join('') || '<span class="x" style="font-size:13px;font-weight:800">No staff yet</span>'}<button class="btn sm good" data-padd="${i}">+ Teacher</button></div>
+            <button class="ico" data-del="${i}" title="Delete this room" aria-label="Delete this room">✕</button></div>`; }).join('')}</div>`; }).join('')}
+      </div>
+      <div class="pfoot"><button class="btn sm pri" data-pday="${esc(iso)}">+ New paper on this day</button>
+        ${free.length ? `<span class="sub">Free rooms: ${free.slice(0, 12).map(x => `<button class="dc" style="cursor:pointer;color:var(--good);border-color:var(--good)" data-pfree="${esc(iso)}|${esc(x.room)}">${esc(x.room)}${x.cap != null ? ' · ' + x.cap : ''}</button>`).join('')}</span>` : ''}
+        <span style="flex:1"></span>
+        ${iso ? `<label class="sub" style="display:flex;align-items:center;gap:6px">Move day to <input type="date" class="pin" data-pmv="${esc(iso)}"></label>` : ''}<button class="btn sm" data-pdel="${esc(iso)}">Delete day</button></div></details>`;
   });
   return h;
 }
@@ -1374,6 +1406,7 @@ function wire(){
 }
 function wireTab(){
   const B = $('#tabBody'); if(!B) return;
+  if(!B._tg){ B._tg = true; B.addEventListener('toggle', e => { const d = e.target; if(!d.matches || !d.matches('details[data-pdo]')) return; d.open ? PLAN_OPEN.add(d.dataset.pdo) : PLAN_OPEN.delete(d.dataset.pdo); ls.set('dut_plan_open', [...PLAN_OPEN]); }, true); }
   const sq2 = $('#sq2'); if(sq2) sq2.oninput = () => { const q = sq2.value.trim().toLowerCase(); document.querySelectorAll('#setL [data-q]').forEach(r => { r.style.display = !q || r.dataset.q.includes(q) ? '' : 'none'; }); };
   const gq = $('#gq'); if(gq) gq.oninput = () => { V.q = gq.value; $('#gBody').innerHTML = groupCards(V.tab); };
   const ts = $('#tsort'); if(ts) ts.onchange = () => { V.sort = ts.value; $('#gBody').innerHTML = groupCards(V.tab); };
@@ -1397,14 +1430,17 @@ function wireTab(){
     if(t.id === 'sgGo') return sgApply();
     if(t.id === 'ownGo') return ownApply();
     if(t.id === 'sReset'){ SET.max = Object.assign({}, SET_DEFAULT); SET.both = '2'; saveSet(); return refreshTab(); }
+    if(t.dataset.pjump !== undefined){ PLAN_OPEN.add(t.dataset.pjump); ls.set('dut_plan_open', [...PLAN_OPEN]); const d = document.getElementById('pday-' + (t.dataset.pjump || 'none')); if(d){ d.open = true; d.scrollIntoView({ block:'start' }); } return; }
+    if(t.id === 'pOpenAll' || t.id === 'pCloseAll'){ PLAN_OPEN = new Set(t.id === 'pOpenAll' ? EX.rows.map(r => r.iso || '') : []); ls.set('dut_plan_open', [...PLAN_OPEN]); return refreshTab(); }
+    if(t.dataset.pdelg){ const L = t.dataset.pdelg.split(',').map(Number); if(!confirm('Delete this paper (' + L.length + ' room' + (L.length === 1 ? '' : 's') + ')?')) return; L.sort((a, b) => b - a).forEach(i => EX.rows.splice(i, 1)); saveLocal(); return refreshTab(); }
     if(t.dataset.pfree){ const [iso, room] = t.dataset.pfree.split('|'); return freeRoomPick(iso, room); }
     if(t.id === 'rmAdd'){ const r = String(($('#rmNew') || {}).value || '').trim(), cap = String(($('#rmCap') || {}).value || '').trim(); if(!r) return alert('Write the room first.'); ROOMS[vnorm(r)] = { r, cap }; saveRooms(); V.msg = 'Room ' + r + ' added.'; return refreshTab(); }
-    if(t.id === 'pAddDate'){ const v = ($('#pDate') || {}).value; if(!v) return alert('Choose the date first.'); const i = insertAfterDay(parseDate(isoToDt(v)).iso, newRow(isoToDt(v))); saveLocal(); refreshTab(); const el = document.getElementById('prow' + i); el && el.scrollIntoView({ block:'center' }); return; }
-    if(t.dataset.pday !== undefined){ const iso = t.dataset.pday, r0 = EX.rows.find(r => (r.iso || '') === iso) || {}; const i = insertAfterDay(iso, Object.assign(newRow(r0.dt || ''), { time:r0.time || '' })); saveLocal(); refreshTab(); const el = document.getElementById('prow' + i); if(el){ el.scrollIntoView({ block:'center' }); const inp = el.querySelector('input'); inp && inp.focus(); } return; }
+    if(t.id === 'pAddDate'){ const v = ($('#pDate') || {}).value; if(!v) return alert('Choose the date first.'); const i = insertAfterDay(parseDate(isoToDt(v)).iso, newRow(isoToDt(v))); PLAN_OPEN.add(parseDate(isoToDt(v)).iso || ''); ls.set('dut_plan_open', [...PLAN_OPEN]); saveLocal(); refreshTab(); const el = document.getElementById('prow' + i); el && el.scrollIntoView({ block:'center' }); return; }
+    if(t.dataset.pday !== undefined){ const iso = t.dataset.pday, r0 = EX.rows.find(r => (r.iso || '') === iso) || {}; const i = insertAfterDay(iso, Object.assign(newRow(r0.dt || ''), { time:r0.time || '' })); PLAN_OPEN.add(iso); saveLocal(); refreshTab(); const el = document.getElementById('prow' + i); if(el){ el.scrollIntoView({ block:'center' }); const inp = el.closest('.ppaper').querySelector('[data-f=sub]'); inp && inp.focus(); } return; }
     if(t.dataset.pdel !== undefined){ const iso = t.dataset.pdel, n = EX.rows.filter(r => (r.iso || '') === iso).length; if(!confirm('Delete this whole day (' + n + ' rows)?')) return; EX.rows = EX.rows.filter(r => (r.iso || '') !== iso); saveLocal(); return refreshTab(); }
     if(t.dataset.padd !== undefined) return pickTeacher(+t.dataset.padd);
     if(t.dataset.prm){ const [i, k] = t.dataset.prm.split('|'); setRowNames(+i, rowNames(+i).filter(x => nkey(x) !== k)); saveLocal(); return refreshTab(); }
-    if(t.dataset.pdup !== undefined){ const i = +t.dataset.pdup, r = EX.rows[i]; EX.rows.splice(i + 1, 0, Object.assign({}, r, { room:'', staff:'' })); saveLocal(); refreshTab(); const el = document.getElementById('prow' + (i + 1)); if(el){ el.scrollIntoView({ block:'center' }); const inp = el.querySelector('[data-f=room]'); inp && inp.focus(); } return; }
+    if(t.dataset.pdup !== undefined){ const i = +t.dataset.pdup, r = EX.rows[i]; PLAN_OPEN.add(r.iso || ''); EX.rows.splice(i + 1, 0, Object.assign({}, r, { room:'', staff:'' })); saveLocal(); refreshTab(); const el = document.getElementById('prow' + (i + 1)); if(el){ el.scrollIntoView({ block:'center' }); const inp = el.querySelector('[data-f=room]'); inp && inp.focus(); } return; }
     if(t.id === 'yrFix') return yearFix(t.dataset.y);
     if(t.dataset.unclr){ delete NOTES[t.dataset.unclr]; saveFixes(); return refreshTab(); }
     if(t.dataset.vn){ const g = valGroups(t.dataset.vn.split(':')[0]).find(x => x.id === t.dataset.vn); if(g){ g.members.forEach(a => g.members.forEach(b => { if(a.k < b.k) VNOT.add(g.type + '|' + a.k + '|' + b.k); })); VF.tick.delete(g.id); saveFixes(); } return refreshTab(); }
@@ -1425,6 +1461,7 @@ function wireTab(){
       if(f === 'dt'){ const p = parseDate(t.value); r.iso = p.iso; r.day = p.day; if(p.dt) r.dt = p.dt; }
       saveLocal(); refreshTab(); return;
     }
+    if(t.dataset.pg){ t.dataset.pg.split(',').forEach(i => { EX.rows[+i][t.dataset.f] = t.value.trim(); }); saveLocal(); return refreshTab(); }
     if(t.dataset.pmv !== undefined){ const iso = t.dataset.pmv, dt = isoToDt(t.value); if(!t.value) return; const p = parseDate(dt), n = EX.rows.filter(r => (r.iso || '') === iso).length; if(!confirm('Move ' + n + ' row(s) to ' + p.day + ' ' + p.dt + '?')) return refreshTab(); EX.rows.forEach(r => { if((r.iso || '') === iso){ r.iso = p.iso; r.dt = p.dt; r.day = p.day; } }); saveLocal(); return refreshTab(); }
     if(t.dataset.own !== undefined){ OWN[t.dataset.own] = t.value; return refreshTab(); }
     if(t.dataset.sgx !== undefined){ SGX[t.dataset.sgx] = t.value; return refreshTab(); }
