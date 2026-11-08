@@ -45,6 +45,7 @@ function dutRoute_(user, req) {
       case 'dut_sheet':      return dutMakeSheet_(req);
       case 'dut_fix_save':   return dutFixSave_(req.items || []);
       case 'dut_students':   return dutStudents_();
+      case 'dut_staff':      return dutStaff_();
     }
     return { ok: false, error: 'UNKNOWN_ACTION' };
   } catch (e) {
@@ -216,4 +217,23 @@ function dutStudents_() {
     (by[key] = by[key] || { cls: g(r, 'cls'), section: g(r, 'section'), program: g(r, 'program'), group: grp, rolls: [] }).rolls.push(roll);
   }
   return { ok: true, list: Object.keys(by).map(function (k) { return by[k]; }), at: new Date().toISOString() };
+}
+
+/* ---------- staff: Users sheet = teachers now in the college, X-Users = teachers who left ----------
+   Users columns: teacher, Status, designation, Department, User Name, Password, Contact (found by heading).
+   Passwords and user names are never sent. */
+function dutStaff_() {
+  var book = SpreadsheetApp.openById(DUT_CFG.USERS), K = function (x) { return dutS_(x).toUpperCase().replace(/[^A-Z0-9]/g, ''); };
+  var read = function (name) {
+    var sh = book.getSheetByName(name); if (!sh) return [];
+    var v = sh.getDataRange().getDisplayValues(); if (v.length < 2) return [];
+    var head = v[0].map(K), c = function () { for (var i = 0; i < arguments.length; i++) { var j = head.indexOf(arguments[i]); if (j >= 0) return j; } return -1; };
+    var C = { name: c('TEACHER', 'TEACHERNAME', 'NAME'), status: c('STATUS'), desig: c('DESIGNATION'), dept: c('DEPARTMENT', 'DEPT'), user: c('USERNAME', 'USER'), phone: c('CONTACT', 'PHONE', 'MOBILE', 'WHATSAPP') };
+    if (C.name < 0) C.name = 0;
+    var g = function (r, k) { return C[k] >= 0 ? dutS_(r[C[k]]) : ''; };
+    return v.slice(1).map(function (r) { return { name: g(r, 'name'), status: g(r, 'status'), desig: g(r, 'desig'), dept: g(r, 'dept'), phone: g(r, 'phone'), user: g(r, 'user') }; })
+      .filter(function (x) { return x.name && !/^admin$/i.test(x.name) && !/^admin$/i.test(x.user); })
+      .map(function (x) { delete x.user; return x; });
+  };
+  return { ok: true, users: read('Users'), left: read('X-Users').map(function (x) { return { name: x.name, dept: x.dept, desig: x.desig }; }) };
 }

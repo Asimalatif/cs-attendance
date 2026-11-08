@@ -431,13 +431,19 @@ function compute(){
   };
   L.date.forEach(g => g.items.sort((a, b) => ncmp(a.room || 'zzz', b.room || 'zzz')));
   const dates = [...new Set(recs.map(r => r.iso).filter(Boolean))].sort();
-  let missing = [], unknown = [];
+  let missing = [], unknown = [], leftOf = {};
   if(CTS && CTS.list && CTS.list.length){
     const have = new Set(teacher.map(t => nkey(t.label)));
-    missing = CTS.list.filter(c => (CTS.tt ? c.tt : !/visit/i.test(c.status || '')) && !have.has(nkey(c.name)) && !noteOf(c.name)).map(c => c.name).sort(ncmp);
-    unknown = teacher.filter(t => !contactOf(t.label) && !noteOf(t.label)).map(t => t.label).sort(ncmp);
+    const inUsers = n => { const ct = contactOf(n); return !!(ct && (CTS.users ? ct.users : true)); }, LEFT = CTS.left || [];
+    missing = CTS.list.filter(c => (CTS.users ? c.users : CTS.tt ? c.tt : !/visit/i.test(c.status || '')) && !have.has(nkey(c.name)) && !noteOf(c.name)).map(c => c.name).sort(ncmp);
+    unknown = teacher.filter(t => !inUsers(t.label) && (!noteOf(t.label) || noteOf(t.label) === 'Left the college')).map(t => t.label).sort(ncmp);
+    unknown.forEach(n => {                                                     // left the college: in X-Users (or marked so)
+      let x = LEFT.find(l => nkey(l.name) === nkey(n));
+      if(!x){ const b = LEFT.map(l => [appScore(n, l.name), l]).sort((p, q) => q[0] - p[0])[0]; if(b && b[0] >= .9) x = b[1]; }
+      leftOf[n] = x || (noteOf(n) === 'Left the college' ? { name:n } : null);
+    });
   }
-  return (C = { L, recs, dates, check, variants:Object.values(variants), missing, unknown, clashes:teacher.filter(t => t.clash), duties:teacher.reduce((s, t) => s + t.items.length, 0) });
+  return (C = { L, recs, dates, check, variants:Object.values(variants), missing, unknown, leftOf, clashes:teacher.filter(t => t.clash), duties:teacher.reduce((s, t) => s + t.items.length, 0) });
 }
 const tSort = (a, b) => V.sort === 'few' ? a.items.length - b.items.length || ncmp(nkey(a.label), nkey(b.label)) : V.sort === 'many' ? b.items.length - a.items.length || ncmp(nkey(a.label), nkey(b.label)) : ncmp(nkey(a.label), nkey(b.label));
 function groups(kind){ const g = compute().L[kind].slice(); return kind === 'teacher' ? g.sort(tSort) : g; }
@@ -461,7 +467,7 @@ function render(){
     const c = compute(), probs = c.clashes.length + c.check.noRoom.length + c.check.noDate.length;
     h += `<section class="card"><h2>${esc(EX.title || 'Duty list')}</h2>
       <div class="chips"><div class="chip"><b>${c.L.teacher.length}</b>teachers</div><div class="chip"><b>${c.duties}</b>duties</div><div class="chip"><b>${c.L.room.length}</b>rooms</div><div class="chip"><b>${c.L.class.length}</b>classes</div><div class="chip"><b>${c.dates.length}</b>days${c.dates.length ? '<br><span class="muted" style="font-weight:600">' + esc(fmtIso(c.dates[0])) + ' – ' + esc(fmtIso(c.dates[c.dates.length - 1])) + '</span>' : ''}</div>
-      <div class="chip ${c.clashes.length ? 'bad' : 'good'}"><b>${c.clashes.length}</b>clashes</div>${c.check.noRoom.length ? `<div class="chip mid"><b>${c.check.noRoom.length}</b>staff with no room</div>` : ''}${fxCount() ? `<button class="chip bad" data-tab="names" style="cursor:pointer;text-align:left;font:inherit;font-weight:700"><b>${fxCount()}</b>names to fix ›</button>` : ''}</div>
+      <div class="chip ${c.clashes.length ? 'bad' : 'good'}"><b>${c.clashes.length}</b>clashes</div>${c.check.noRoom.length ? `<div class="chip mid"><b>${c.check.noRoom.length}</b>staff with no room</div>` : ''}${fxCount() ? `<button class="chip bad" data-tab="names" style="cursor:pointer;text-align:left;font:inherit;font-weight:700"><b>${fxCount()}</b>names to fix ›</button>` : ''}${CTS && c.unknown.length ? `<button class="chip bad" data-tab="check" style="cursor:pointer;text-align:left;font:inherit;font-weight:700"><b>${c.unknown.length}</b>left / not in Users ›</button>` : ''}${CTS && c.missing.length ? `<button class="chip good" data-tab="check" style="cursor:pointer;text-align:left;font:inherit;font-weight:700"><b>${c.missing.length}</b>teachers with no duty ›</button>` : ''}</div>
       <div class="grid"><label class="f">Duty timings (printed on every list)<input id="iTime" value="${esc(EX.timing || '08:30-12:30 PM (morning)')}" autocomplete="off"></label><label class="c" style="align-self:end;padding-bottom:10px"><input type="checkbox" id="iNp" ${V.newPage ? 'checked' : ''}> Each teacher / room / date / class on a new page</label></div>
       <h3 style="margin-top:14px">PDF lists <span class="sub">(file names carry today’s date, e.g. ${esc(fileName('teacher', 'pdf'))})</span></h3>
       <div class="acts">${Object.keys(KINDS).map(k => `<button class="btn sm pri" data-pdf="${k}">${KINDS[k].tab}</button>`).join('')}<button class="btn sm pri" data-pdf="sumdates">Teacher · Day/Date</button><button class="btn sm pri" data-pdf="sumcount">Teacher · Total duties</button></div>
@@ -502,7 +508,7 @@ function groupCards(kind){
   if(!G.length) return '<div class="note mid">Nothing found.</div>';
   return G.map(g => {
     const wa = kind === 'teacher';
-    return `<div class="rm"><h3><span>${kind === 'teacher' ? `<button class="lnk" data-t="${esc(g.key)}">${esc(g.label)}</button>${g.clash ? ' <span class="x">⚠ clash</span>' : ''}` : esc(g.label)}</span><span class="sub">${g.items.length} ${kind === 'teacher' ? 'dut' + (g.items.length === 1 ? 'y' : 'ies') : 'paper' + (g.items.length === 1 ? '' : 's')}${wa ? ` <button class="btn sm good" data-wa="${esc(g.key)}">WhatsApp</button>` : ''}</span></h3>
+    return `<div class="rm"><h3><span>${kind === 'teacher' ? `<button class="lnk" data-t="${esc(g.key)}">${esc(g.label)}</button>${g.clash ? ' <span class="x">⚠ clash</span>' : ''}${CTS && compute().unknown.includes(g.label) ? ` <span class="dc x">${compute().leftOf[g.label] ? 'LEFT the college' : 'not in Users sheet'}</span>` : ''}` : esc(g.label)}</span><span class="sub">${g.items.length} ${kind === 'teacher' ? 'dut' + (g.items.length === 1 ? 'y' : 'ies') : 'paper' + (g.items.length === 1 ? '' : 's')}${wa ? ` <button class="btn sm good" data-wa="${esc(g.key)}">WhatsApp</button>` : ''}</span></h3>
       <div class="tw" style="max-height:none"><table><thead><tr><th>#</th>${cols.map(c => `<th>${COLNAME[c]}</th>`).join('')}</tr></thead><tbody>${g.items.map((it, i) => `<tr><td class="n">${i + 1}</td>${cols.map(c => `<td class="${c === 'date' || c === 'room' ? 'nw' : ''} ${it.x && (c === 'date' || c === 'room') ? 'x' : ''}">${c === 'room' ? '<b>' + esc(cellOf(it, c)) + '</b>' : c === 'staff' && !it.staff.length ? '<span class="x">No staff</span>' : esc(cellOf(it, c))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
   }).join('');
 }
@@ -523,7 +529,7 @@ function namesHtml(c){
     return `<tr><td>${written.map(esc).join('<br>')}</td><td class="n">${v.n}</td><td><input class="nm" list="ctl" data-k="${esc(v.k)}" data-w="${esc(written[0])}" value="${esc(std)}" placeholder="${esc(app ? app.name : written[0])}">${sug ? `<div class="sub">Maybe <button class="lnk" data-use="${esc(v.k)}" data-name="${esc(sug)}">${esc(sug)}</button>?</div>` : ''}</td><td>${st}</td></tr>`;
   }).join('');
   return fixerHtml() + unknownHtml(c) + `<section class="card"><h3>All names</h3><div class="sub">Every name as it is written in the Word table. When one teacher is written two ways (e.g. “dr.Hamida” and “Dr. BiBi Hamida”), type the correct name in <b>Standard name</b> — both then count as one teacher. Two teachers written together (comma missing)? Type both with a +, e.g. <b>Ms. Naila Gul + Ms. Hina Gul</b>. Names that match the app’s teacher list are joined automatically. This replaces your old “names” sheet and is remembered for the next exam.</div>
-    <div class="acts">${CTS ? `<span class="sub">App teacher list: ${CTS.list.filter(x => x.tt).length} in the timetable, ${CTS.list.length} in all.</span><button class="btn sm" id="bCts">Reload app teachers</button>` : '<button class="btn pri sm" id="bCts">Load the app’s teacher list</button>'}<button class="btn sm pri" id="bNames">Save names &amp; fixes on server</button></div>
+    <div class="acts">${CTS ? `<span class="sub">Teacher list: ${CTS.users ? CTS.list.filter(x => x.users).length + ' in Users, ' + (CTS.left || []).length + ' left (X-Users)' : CTS.list.length + ' names'}.</span><button class="btn sm" id="bCts">Reload teacher list</button>` : '<button class="btn pri sm" id="bCts">Load the app’s teacher list</button>'}<button class="btn sm pri" id="bNames">Save names &amp; fixes on server</button></div>
     <datalist id="ctl">${opts}</datalist>
     <div class="tw"><table><thead><tr><th>Written in the table</th><th>Rows</th><th>Standard name</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="muted">No names.</td></tr>'}</tbody></table></div></section>`;
 }
@@ -691,20 +697,29 @@ function appScore(name, app){
 }
 function unkChoice(name){
   const k = nkey(name); if(UNK[k] !== undefined) return UNK[k];
-  const best = CTS.list.map(x => [appScore(name, x.name), x.name]).sort((a, b) => b[0] - a[0])[0];
+  const best = CTS.list.filter(x => CTS.users ? x.users : true).map(x => [appScore(name, x.name), x.name]).sort((a, b) => b[0] - a[0])[0];
   return best && best[0] >= .9 ? 'app:' + best[1] : '';
 }
 function unknownHtml(c){
-  if(!CTS) return `<section class="card"><h3>Names not in the app’s teacher list</h3><div class="sub">Load the app’s teacher list to see which names are written differently, who is lab staff and who got no duty.</div><div class="acts"><button class="btn sm pri" id="bCts">Load the app’s teacher list</button></div></section>`;
+  if(!CTS) return `<section class="card"><h3>Teachers who left · teachers with no duty</h3><div class="sub">Load the teacher list (Users sheet) to see who in this duty list has left the college and which teachers got no duty.</div><div class="acts"><button class="btn sm pri" id="bCts">Load the teacher list</button></div></section>`;
   const U = c.unknown, cnt = Object.fromEntries(c.L.teacher.map(t => [t.label, t.items.length]));
-  const marked = Object.entries(NOTES).filter(([k]) => !nameIndex().ct[k]);
-  const todo = U.filter(n => unkChoice(n)).length;
-  return `<section class="card"><h3>Names not in the app’s teacher list <span class="${U.length ? 'x' : 'ok'}">${U.length}</span></h3>
-    <div class="sub">For each name choose the app teacher she really is (best guesses first, e.g. Dr. Muska → DR. MAIRMAN MUSKA YOUSAFZAI), or say why she is not in the timetable (lab staff, left the college, on leave). Then press <b>Fix</b>. Remembered for the next exam.</div>
-    ${U.length ? `<div class="tw" style="max-height:none"><table><thead><tr><th>Written in the table</th><th>Duties</th><th>She is…</th></tr></thead><tbody>${U.map(n => { const k = nkey(n), sel = unkChoice(n), sc = CTS.list.map(x => [appScore(n, x.name), x.name]).sort((a, b) => b[0] - a[0] || ncmp(a[1], b[1]));
-      return `<tr><td class="nw"><b>${esc(n)}</b></td><td class="n">${cnt[n] || 0}</td><td><select class="sq" data-unk="${esc(k)}" style="height:40px;min-width:230px"><option value="">— leave as it is —</option><optgroup label="Not a teacher in the timetable">${NOTE_OPTS.map(o => `<option value="note:${esc(o)}" ${sel === 'note:' + o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</optgroup><optgroup label="Same as this app teacher (best first)">${sc.map(([v, a]) => `<option value="app:${esc(a)}" ${sel === 'app:' + a ? 'selected' : ''}>${esc(a)}${v >= .6 ? ' · ' + Math.round(v * 100) + '%' : ''}</option>`).join('')}</optgroup></select></td></tr>`; }).join('')}</tbody></table></div>
-    <div class="acts"><button class="btn pri" id="unGo" ${todo ? '' : 'disabled'}>Fix ${todo} name${todo === 1 ? '' : 's'} in one go</button></div>` : '<div class="note ok">Every name is an app teacher or marked.</div>'}
-    ${marked.length ? `<div class="sub" style="margin-top:10px">Marked (not counted as missing): ${marked.map(([k, x]) => `<span class="dc">${esc(x.n)} — ${esc(x.v)} <button class="lnk" data-unclr="${esc(k)}" aria-label="Remove">✕</button></span>`).join('')}</div>` : ''}</section>`;
+  const usersAll = CTS.list.filter(x => CTS.users ? x.users : true), miss = c.missing.map(n => contactOf(n) || { name:n });
+  const marked = Object.entries(NOTES).filter(([k, x]) => !nameIndex().ct[k] && x.v !== 'Left the college');
+  const todo = U.filter(n => unkChoice(n)).length, nLeft = U.filter(n => c.leftOf[n]).length;
+  const tag = x => [x.desig, x.dept, /visit/i.test(x.status || '') ? 'Visiting' : ''].filter(Boolean).join(' · ');
+  return `<section class="card" style="border-top-color:var(--bad)"><h3>Left the college / not in the Users sheet <span class="${U.length ? 'x' : 'ok'}">${U.length}</span></h3>
+    <div class="sub">${CTS.users ? 'These names have duties but are not in the <b>Users</b> sheet' + (nLeft ? ` — <b class="x">${nLeft}</b> of them are in <b>X-Users</b> (left the college)` : '') + '.' : 'These names are not in the app’s teacher list.'} Give each one’s duties to a <b class="ok">teacher with no duty</b> (same department first), or choose the Users teacher she really is when only the spelling differs (e.g. Dr. Muska → DR. MAIRMAN MUSKA YOUSAFZAI). Then press <b>Fix</b> — every list, PDF and the corrected Word file change.</div>
+    ${U.length ? `<div class="tw" style="max-height:none"><table><thead><tr><th>In the duty list</th><th>Duties</th><th>What to do</th></tr></thead><tbody>${U.map(n => {
+      const k = nkey(n), L = c.leftOf[n], sel = unkChoice(n), dept = (L && L.dept) || '';
+      const cand = miss.slice().sort((a, b) => ((dept && b.dept === dept) ? 1 : 0) - ((dept && a.dept === dept) ? 1 : 0) || (/visit/i.test(a.status || '') ? 1 : 0) - (/visit/i.test(b.status || '') ? 1 : 0) || ncmp(a.name, b.name));
+      const sc = usersAll.map(x => [appScore(n, x.name), x.name]).sort((a, b) => b[0] - a[0] || ncmp(a[1], b[1]));
+      return `<tr style="${L ? 'background:var(--bad-bg)' : ''}"><td class="nw"><b>${esc(n)}</b><div class="sub">${L ? `<span class="x">LEFT${L.name !== n ? ' (X-Users: ' + esc(L.name) + ')' : ''}${L.dept ? ' · ' + esc(L.dept) : ''}</span>` : '<span style="color:var(--mid);font-weight:800">not in Users sheet</span>'}</div></td><td class="n">${cnt[n] || 0}</td>
+        <td><select class="sq" data-unk="${esc(k)}" style="height:40px;min-width:240px"><option value="">— leave as it is —</option>
+        <optgroup label="Give her duties to a teacher with no duty">${cand.map(x => `<option value="app:${esc(x.name)}" ${sel === 'app:' + x.name ? 'selected' : ''}>${esc(x.name)}${tag(x) ? ' · ' + esc(tag(x)) : ''}</option>`).join('')}</optgroup>
+        <optgroup label="She is this Users teacher (spelling only)">${sc.map(([v, a]) => `<option value="app:${esc(a)}" ${sel === 'app:' + a && !cand.some(x => x.name === a) ? 'selected' : ''}>${esc(a)}${v >= .6 ? ' · ' + Math.round(v * 100) + '%' : ''}</option>`).join('')}</optgroup>
+        <optgroup label="Not a teacher (keeps her duties)">${NOTE_OPTS.filter(o => o !== 'Left the college').map(o => `<option value="note:${esc(o)}" ${sel === 'note:' + o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</optgroup></select></td></tr>`; }).join('')}</tbody></table></div>
+    <div class="acts"><button class="btn pri" id="unGo" ${todo ? '' : 'disabled'}>Fix ${todo} name${todo === 1 ? '' : 's'} in one go</button></div>` : '<div class="note ok">Everyone in the duty list is in the Users sheet (or marked).</div>'}
+    ${marked.length ? `<div class="sub" style="margin-top:10px">Marked as not teaching (keep their duties): ${marked.map(([k, x]) => `<span class="dc">${esc(x.n)} — ${esc(x.v)} <button class="lnk" data-unclr="${esc(k)}" aria-label="Remove">✕</button></span>`).join('')}</div>` : ''}</section>`;
 }
 function renameTeacher(keys, std){
   const c = compute(); let n = 0; _ix = null;
@@ -730,9 +745,9 @@ function unkApply(){
 function missingHtml(c){
   if(!CTS) return '';
   const marked = Object.entries(NOTES).filter(([k]) => nameIndex().ct[k]);
-  return `<section class="card"><h3>Teachers with no duty <span class="muted">${c.missing.length}</span></h3>
-    <div class="sub">Teachers in the timetable who got no duty in this list — useful for a fair share. When a teacher has no invigilation for a reason (principal, exam / stationery staff, on leave…), choose it: she is then not counted here.</div>
-    ${c.missing.length ? `<div class="tw" style="max-height:none"><table><tbody>${c.missing.map(n => { const ct = contactOf(n) || {}; return `<tr><td><b>${esc(n)}</b><div class="sub">${esc([ct.dept, /visit/i.test(ct.status || '') ? 'Visiting' : ''].filter(Boolean).join(' · '))}</div></td><td><select class="sq" data-note="${esc(nkey(n))}" data-name="${esc(n)}" style="height:38px;min-width:210px"><option value="">— no duty —</option>${NOTE_OPTS.map(o => `<option>${esc(o)}</option>`).join('')}</select></td></tr>`; }).join('')}</tbody></table></div>` : '<div class="note ok">Every regular teacher has a duty.</div>'}
+  return `<section class="card" style="border-top-color:var(--good)"><h3>Teachers with no duty <span class="ok">${c.missing.length}</span></h3>
+    <div class="sub">${CTS.users ? 'Every teacher in the <b>Users</b> sheet (permanent and visiting) who' : 'Teachers in the timetable who'} got no duty in this list — useful for a fair share. When a teacher has no invigilation for a reason (principal, exam / stationery staff, on leave…), choose it: she is then not counted here.</div>
+    ${c.missing.length ? `<div class="tw" style="max-height:none"><table><tbody>${c.missing.map(n => { const ct = contactOf(n) || {}; return `<tr style="background:var(--good-bg)"><td><b class="ok">${esc(n)}</b><div class="sub">${esc([ct.desig, ct.dept, /visit/i.test(ct.status || '') ? 'Visiting' : ''].filter(Boolean).join(' · '))}</div></td><td><select class="sq" data-note="${esc(nkey(n))}" data-name="${esc(n)}" style="height:38px;min-width:210px"><option value="">— no duty —</option>${NOTE_OPTS.map(o => `<option>${esc(o)}</option>`).join('')}</select></td></tr>`; }).join('')}</tbody></table></div>` : '<div class="note ok">Every regular teacher has a duty.</div>'}
     ${marked.length ? `<div class="sub" style="margin-top:10px">Not on duty lists: ${marked.map(([k, x]) => `<span class="dc">${esc(x.n)} — ${esc(x.v)} <button class="lnk" data-unclr="${esc(k)}" aria-label="Remove">✕</button></span>`).join('')}</div>` : ''}</section>`;
 }
 
@@ -1073,14 +1088,17 @@ function openTeacher(key){
 async function loadCts(quiet){
   try{
     if(!quiet){ V.busy = 'Loading the app’s teacher list…'; render(); }
-    // every teacher of the Timetable sheet (same as the app's Workload screen) + WhatsApp numbers from the contacts list
-    const [r, tt] = await Promise.all([api({ action:'contacts' }, 60000), api({ action:'tt_all' }, 90000).catch(() => null)]);
-    const ttRows = (tt && tt.rows) || (ls.get('ttAll', null) || {}).rows || [], m = {};
-    (r.list || []).forEach(c => { const k = nkey(c.name); if(k && !m[k]) m[k] = { name:c.name, phone:c.phone || '', wa:c.wa || '', status:c.status || '', dept:c.dept || '', tt:false }; });
-    ttRows.forEach(x => { const k = nkey(x.teacher); if(!k) return; if(m[k]){ m[k].tt = true; if(!m[k].dept) m[k].dept = x.dept || ''; } else m[k] = { name:x.teacher, phone:'', wa:'', status:'', dept:x.dept || '', tt:true }; });
-    CTS = { user, at:Date.now(), tt:ttRows.length > 0, list:Object.values(m) };
+    // Users sheet = teachers now in the college (X-Users = left), timetable teachers, WhatsApp numbers from contacts
+    const [r, tt, st] = await Promise.all([api({ action:'contacts' }, 60000).catch(() => ({ list:[] })), api({ action:'tt_all' }, 90000).catch(() => null), api({ action:'dut_staff' }, 60000).catch(() => null)]);
+    const ttRows = (tt && tt.rows) || (ls.get('ttAll', null) || {}).rows || [], m = {}, left = [];
+    if(st) (st.users || []).forEach(u => { const k = nkey(u.name); if(!k || m[k]) return; if(/left|retire|transfer|resign/i.test(u.status || '')){ left.push(u); return; } m[k] = { name:u.name, phone:u.phone || '', wa:'', status:u.status || '', dept:u.dept || '', desig:u.desig || '', tt:false, users:true }; });
+    if(st) left.push(...(st.left || []));
+    const isLeft = k => left.some(l => nkey(l.name) === k);
+    (r.list || []).forEach(c => { const k = nkey(c.name); if(!k) return; if(m[k]){ if(c.wa) m[k].wa = c.wa; if(!m[k].phone) m[k].phone = c.phone || ''; } else if(!isLeft(k)) m[k] = { name:c.name, phone:c.phone || '', wa:c.wa || '', status:c.status || '', dept:c.dept || '', tt:false, users:!st }; });
+    ttRows.forEach(x => { const k = nkey(x.teacher); if(!k) return; if(m[k]){ m[k].tt = true; if(!m[k].dept) m[k].dept = x.dept || ''; } else if(!isLeft(k)) m[k] = { name:x.teacher, phone:'', wa:'', status:'', dept:x.dept || '', tt:true, users:false }; });
+    CTS = { user, at:Date.now(), tt:ttRows.length > 0, users:!!st, left, list:Object.values(m) };
     ls.set('dut_cts', CTS); C = null; _ix = null;
-    if(!quiet){ V.busy = ''; V.msg = CTS.list.filter(x => x.tt).length + ' teachers from the timetable loaded' + (CTS.tt ? '' : ' (timetable not reachable — only the contacts list)') + '.'; }
+    if(!quiet){ V.busy = ''; V.msg = CTS.users ? CTS.list.filter(x => x.users).length + ' teachers from the Users sheet, ' + left.length + ' who left (X-Users).' : 'Teacher list loaded from the timetable / contacts. Update Duties.gs in Apps Script to use the Users and X-Users sheets.'; }
   }catch(e){ if(!quiet){ V.busy = ''; V.err = e.message; } }
   refreshTab();
 }
@@ -1411,7 +1429,7 @@ async function makeSheet(){
 }
 
 render();
-if(CTS && !CTS.tt && navigator.onLine) setTimeout(() => loadCts(true), 1500);   // a teacher list saved before the timetable was used
+if(CTS && !CTS.users && navigator.onLine) setTimeout(() => loadCts(true), 1500);   // a teacher list saved before the timetable was used
 </script>
 </body>
 </html>
