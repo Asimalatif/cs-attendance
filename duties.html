@@ -664,7 +664,7 @@ function groupCards(kind){
     const head = kind === 'teacher' && (gi === 0 || typeOf(G[gi - 1].label) !== typeOf(g.label)) ? `<h3 style="margin:18px 0 0;padding:8px 12px;border-radius:12px;background:${typeOf(g.label) === 'V' ? 'var(--mid-bg)' : typeOf(g.label) === 'O' ? 'var(--bad-bg)' : 'var(--good-bg)'}">${TYPE_T[typeOf(g.label)]} <span class="sub">${G.filter(x => typeOf(x.label) === typeOf(g.label)).length}</span></h3>` : '';
     const wa = kind === 'teacher';
     return head + `<div class="rm"><h3><span>${kind === 'teacher' ? `<button class="lnk" data-t="${esc(g.key)}">${esc(g.label)}</button>${g.clash ? ' <span class="x">⚠ clash</span>' : ''}${wrongShift(g.label) ? ` <span class="dc x">${examShift() === 'M' ? 'EVENING' : 'MORNING'} ONLY</span>` : ''}${kind === 'teacher' ? shareBadge(g.label) + (bothShift(g.label) ? ' <span class="dc">MORNING + EVENING</span>' : '') : ''}${CTS && compute().unknown.includes(g.label) ? ` <span class="dc x">${compute().leftOf[g.label] ? 'LEFT the college' : 'not in Users sheet'}</span>` : ''}` : esc(g.label)}</span><span class="sub">${kind === 'teacher' ? esc(tLine(g.label)) : g.items.length + ' paper' + (g.items.length === 1 ? '' : 's')}${kind === 'teacher' ? ` <button class="btn sm ${lessOf(g.label) ? 'good' : ''}" data-t="${esc(g.key)}">${lessOf(g.label) ? 'Give more · Change' : 'Change'}</button>` : ''}${wa ? ` <button class="btn sm good" data-wa="${esc(g.key)}">WhatsApp</button>` : ''}</span></h3>
-      <div class="tw" style="max-height:none"><table><thead><tr><th>#</th>${cols.map(c => `<th>${COLNAME[c]}</th>`).join('')}</tr></thead><tbody>${g.items.map((it, i) => `<tr><td class="n">${i + 1}</td>${cols.map(c => `<td class="${c === 'date' || c === 'room' ? 'nw' : ''} ${it.x && (c === 'date' || c === 'room') ? 'x' : ''}">${c === 'room' ? '<b>' + esc(cellOf(it, c)) + '</b>' : c === 'staff' ? staffHtml(it.staff) + (CTS && it.staff.length && !roomHasSubj(it) ? '<div class="sub" style="color:var(--mid);font-weight:800">⚠ no teacher of this subject</div>' : '') : esc(cellOf(it, c))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
+      <div class="tw" style="max-height:none"><table><thead><tr><th>#</th>${cols.map(c => `<th>${COLNAME[c]}</th>`).join('')}${kind === 'teacher' ? '<th></th>' : ''}</tr></thead><tbody>${g.items.map((it, i) => `<tr><td class="n">${i + 1}</td>${cols.map(c => `<td class="${c === 'date' || c === 'room' ? 'nw' : ''} ${it.x && (c === 'date' || c === 'room') ? 'x' : ''}">${c === 'room' ? '<b>' + esc(cellOf(it, c)) + '</b>' : c === 'staff' ? staffHtml(it.staff) + (CTS && it.staff.length && !roomHasSubj(it) ? '<div class="sub" style="color:var(--mid);font-weight:800">⚠ no teacher of this subject</div>' : '') : esc(cellOf(it, c))}</td>`).join('')}${kind === 'teacher' ? `<td class="nw"><button class="btn sm" data-rsw="${esc(g.key)}|${esc(seatKey(it))}" title="Exchange this duty with a colleague (same or another day)">⇄ Swap</button> <button class="btn sm" data-rrel="${esc(g.key)}|${esc(seatKey(it))}" title="Give this duty to someone free that day">Release</button></td>` : ''}</tr>`).join('')}</tbody></table></div></div>`;
   }).join('');
 }
 function summaryHtml(){
@@ -1727,6 +1727,8 @@ function wireTab(){
     if(t.id === 'bkSet') return blockRange();
     if(t.id === 'bWaAll') return waAll();
     if(t.id === 'bSwap') return swapDialog('');
+    if(t.dataset.rsw){ const [k, ...sk] = t.dataset.rsw.split('|'); return swapDialog(k, sk.join('|')); }
+    if(t.dataset.rrel){ const [k, ...sk] = t.dataset.rrel.split('|'); return releaseDialog(k, sk.join('|')); }
     if(t.id === 'bAuto') return autoDialog();
     if(t.id === 'rsLearn'){ let n = 0; stdRooms().forEach(r => { const v = learnedStaff(r); if(v){ const k = vnorm(r); ROOMS[k] = Object.assign({ r, cap:'' }, ROOMS[k] || {}, { st:String(v) }); n++; } }); saveRooms(); V.msg = 'Staff numbers taken from this duty list for ' + n + ' rooms. Press “Save names & fixes on server” to keep them for the next exam.'; V.err = ''; return refreshTab(); }
     if(t.dataset.pfrm !== undefined){ const [k, f, ...v] = t.dataset.pfrm.split('|'), x = SET.pref[k]; if(x){ x[f] = (x[f] || []).filter(z => z !== v.join('|')); saveSet(); } return refreshTab(); }
@@ -1938,24 +1940,27 @@ function openTeacher(key){
 }
 /* ---------- swap: a teacher asks to exchange one of her duties with a colleague (outside commitment …) ---------- */
 let SW = { a:'', da:'', b:'', db:'', q:'' };
-function swapDialog(aKey){
-  SW = { a:aKey || '', da:'', b:'', db:'', q:'' }; swapDraw();
+function swapDialog(aKey, da){
+  SW = { a:aKey || '', da:da || '', b:'', db:'', q:'' }; swapDraw();
 }
 function swapDraw(){
   const c = compute(), T = c.L.teacher.slice().sort((x, y) => ncmp(nkey(x.label), nkey(y.label)));
   const A = T.find(t => t.key === SW.a), B = T.find(t => t.key === SW.b);
   const busy = (t, iso) => t.items.some(x => x.iso === iso);
   const dA = A && A.items.find(x => seatKey(x) === SW.da);
-  const okB = dA ? T.filter(t => t.key !== SW.a && !wrongShift(t.label) && !busy(t, dA.iso) && t.items.some(e => e.iso && e.iso !== dA.iso && !busy(A, e.iso))) : [];
+  // B's duty e can be exchanged with A's dA: another day (A free that day, B free on A's day) or the SAME day in another room (they switch rooms)
+  const validE = (t, e) => e.iso && seatKey(e) !== seatKey(dA) && !e.staff.some(z => nkey(z) === nkey(A.label)) && !dA.staff.some(z => nkey(z) === nkey(t.label))
+    && (e.iso === dA.iso || (!busy(A, e.iso) && !busy(t, dA.iso)));
+  const okB = dA ? T.filter(t => t.key !== SW.a && !wrongShift(t.label) && t.items.some(e => validE(t, e))).sort((x, y) => (x.items.some(e => e.iso === dA.iso) ? 0 : 1) - (y.items.some(e => e.iso === dA.iso) ? 0 : 1) || ncmp(nkey(x.label), nkey(y.label))) : [];
   const q = SW.q.trim().toLowerCase();
   const line = (d, attr, on) => `<label class="li" style="padding:6px 4px;cursor:pointer;justify-content:flex-start;gap:10px"><input type="radio" ${attr} ${on ? 'checked' : ''} style="width:20px;height:20px;flex:none"><span><b>${esc(dateDay(d))}</b> · ${esc(roomLbl(d.room))} · ${esc(d.cls.join(', '))} ${esc(d.sub.join(', '))}</span></label>`;
   $('#dlgIn').onclick = null; $('#dlgIn').onchange = null;
-  $('#dlgIn').innerHTML = `<h2 style="margin:0 0 4px">⇄ Swap duties</h2><div class="sub">When a teacher cannot come on her duty day (e.g. a commitment outside the college), exchange it with a colleague’s duty. Only swaps where both are free on the other day are shown. ↶ Undo works too.</div>
+  $('#dlgIn').innerHTML = `<h2 style="margin:0 0 4px">⇄ Swap duties</h2><div class="sub">When a teacher cannot come on her duty day (e.g. a commitment outside the college), exchange it with a colleague’s duty. Only swaps that make no clash are shown: another day when both are free, or the same day in another room (they switch rooms). ↶ Undo works too.</div>
     <h3 style="margin-top:12px">1 · Teacher who asks</h3>
     ${A ? `<div class="li"><b>${esc(A.label)}</b><span class="sub">${esc(tLine(A.label).split(' · ')[0])}</span><button class="btn sm" data-sw="a:">change</button></div>` : `<input class="sq" id="swq" type="search" placeholder="Search teacher" value="${esc(SW.q)}" autocomplete="off"><div class="tw" style="max-height:30vh">${T.filter(t => !q || t.label.toLowerCase().includes(q)).map(t => `<div class="li" style="padding:5px 8px"><span>${esc(t.label)} <span class="sub">${t.items.length}</span></span><button class="btn sm" data-sw="a:${esc(t.key)}">Choose</button></div>`).join('')}</div>`}
     ${A ? `<h3 style="margin-top:12px">2 · Her duty to give away</h3><div>${A.items.map(d => line(d, `name="swa" data-sw="da:${esc(seatKey(d))}"`, SW.da === seatKey(d))).join('')}</div>` : ''}
-    ${dA ? `<h3 style="margin-top:12px">3 · Colleague who takes it <span class="sub">free on ${esc(dA.dt)}</span></h3>${okB.length ? `<select class="sq" id="swb" style="height:40px"><option value="">— choose —</option>${okB.map(t => `<option value="${esc(t.key)}" ${SW.b === t.key ? 'selected' : ''}>${esc(t.label)} — ${esc(tLine(t.label).split(' · ').slice(0, 2).join(' · '))}</option>`).join('')}</select>` : '<div class="note bad">No colleague with a duty on another day is free on this date.</div>'}` : ''}
-    ${dA && B ? `<h3 style="margin-top:12px">4 · Duty of ${esc(B.label)} that ${esc(A.label)} takes instead</h3><div>${B.items.filter(e => e.iso && e.iso !== dA.iso && !busy(A, e.iso)).map(e => line(e, `name="swb" data-sw="db:${esc(seatKey(e))}"`, SW.db === seatKey(e))).join('')}</div>` : ''}
+    ${dA ? `<h3 style="margin-top:12px">3 · Colleague who takes it <span class="sub">free on ${esc(dA.dt)}, or on duty that day in another room (they switch rooms)</span></h3>${okB.length ? `<select class="sq" id="swb" style="height:40px"><option value="">— choose —</option>${okB.map(t => `<option value="${esc(t.key)}" ${SW.b === t.key ? 'selected' : ''}>${t.items.some(e => e.iso === dA.iso) ? '⇄ same day · ' : ''}${esc(t.label)} — ${esc(tLine(t.label).split(' · ').slice(0, 2).join(' · '))}</option>`).join('')}</select>` : '<div class="note bad">No colleague with a duty on another day is free on this date.</div>'}` : ''}
+    ${dA && B ? `<h3 style="margin-top:12px">4 · Duty of ${esc(B.label)} that ${esc(A.label)} takes instead</h3><div>${B.items.filter(e => validE(B, e)).map(e => line(e, `name="swb" data-sw="db:${esc(seatKey(e))}"`, SW.db === seatKey(e)) + (e.iso === dA.iso ? '<div class="sub" style="margin:-4px 0 4px 34px">same day — they switch rooms</div>' : '')).join('')}</div>` : ''}
     <div class="acts"><button class="btn pri" id="swGo" ${dA && B && SW.db ? '' : 'disabled'}>Swap</button><button class="btn" id="dClose">Close</button></div>
     ${(EX.swaps || []).length ? `<h3 style="margin-top:12px">Swaps made</h3><div class="sub">${EX.swaps.slice().reverse().slice(0, 15).map(w => esc(w.at + ': ' + w.a + ' (' + w.da + ') ⇄ ' + w.b + ' (' + w.db + ')')).join('<br>')}</div>` : ''}`;
   if(!$('#dlg').open) $('#dlg').showModal();
@@ -1967,9 +1972,27 @@ function swapDraw(){
     if(e.target.id === 'swGo') swapDo();
   };
 }
+/* release one duty: give it to a teacher free that day, move her to another date, or just take her off the room */
+function releaseDialog(key, sk){
+  const t = compute().L.teacher.find(x => x.key === key), d = t && t.items.find(x => seatKey(x) === sk); if(!d) return;
+  $('#dlgIn').onclick = null; $('#dlgIn').onchange = null;
+  $('#dlgIn').innerHTML = `<h2 style="margin:0 0 4px">Release a duty</h2><div class="sub"><b>${esc(t.label)}</b> ${shareBadge(t.label)} · ${esc(dateDay(d))} · ${esc(roomLbl(d.room))} · ${esc(d.cls.join(', '))} ${esc(d.sub.join(', '))}<br>Now ${d.staff.length} staff: ${esc(d.staff.join(', '))} · the room needs ${staffNeed(d.room)}.</div>
+    <div class="sub" style="margin-top:8px">Only teachers <b>free that day</b> are offered (no clash), teachers with LESS first.</div>
+    <select class="sq" id="relSel" style="height:42px;margin-top:6px">${dutyOpts(t, d, '')}</select>
+    <div class="acts"><button class="btn pri" id="relGo">Release</button><button class="btn" id="dClose">Cancel</button></div>`;
+  if(!$('#dlg').open) $('#dlg').showModal();
+  $('#dClose').onclick = () => $('#dlg').close();
+  $('#relGo').onclick = () => {
+    const v = $('#relSel').value; if(!v) return alert('Choose who takes it, or “Take her off this room”.');
+    const n = applyDutyChanges({ [dutyId(t, d)]: v }); $('#dlg').close();
+    V.msg = n ? t.label + '’s duty on ' + dateDay(d) + ' released' + (v.startsWith('give:') ? ' to ' + v.slice(5) : v === 'drop' ? ' (room keeps ' + (d.staff.length - 1) + ' staff)' : '') + '. Download the PDFs again.' : 'Not changed — that teacher is already on duty that day.';
+    refreshTab();
+  };
+}
 function swapDo(){
   const c = compute(), A = c.L.teacher.find(t => t.key === SW.a), B = c.L.teacher.find(t => t.key === SW.b); if(!A || !B) return;
   const dA = A.items.find(x => seatKey(x) === SW.da), dB = B.items.find(x => seatKey(x) === SW.db); if(!dA || !dB) return;
+  if(dA.iso !== dB.iso && (A.items.some(x => x.iso === dB.iso) || B.items.some(x => x.iso === dA.iso))) return alert('This swap would put a teacher in two rooms on one day.');
   dA.rows.forEach(i => setRowNames(i, rowNames(i).filter(z => nkey(z) !== nkey(A.label)).concat(B.label)));
   dB.rows.forEach(i => setRowNames(i, rowNames(i).filter(z => nkey(z) !== nkey(B.label)).concat(A.label)));
   EX.swaps = EX.swaps || []; EX.swaps.push({ at:fmtIso(new Date().toISOString().slice(0, 10)), a:A.label, da:dateDay(dA) + ' ' + roomLbl(dA.room), b:B.label, db:dateDay(dB) + ' ' + roomLbl(dB.room) });
