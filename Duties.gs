@@ -35,7 +35,7 @@ function dutAuthorize() {
 
 function dutRoute_(user, req) {
   try {
-    if (!isAdmin_(user)) return { ok: false, error: 'Only the admin can make duty lists.' };
+    if (!isAdmin_(user) && !dutCP_(user)) return { ok: false, error: 'Only the admin or a Chief Proctor can make duty lists.' };
     switch (String(req.action || '')) {
       case 'dut_list':       return dutList_();
       case 'dut_load':       return dutLoad_(dutS_(req.id));
@@ -52,6 +52,8 @@ function dutRoute_(user, req) {
     return { ok: false, error: String(e && e.message || e) };
   }
 }
+
+function dutCP_(user) { try { return !!isCP_(user); } catch (e) { return false; } }   // Chief Proctor = duty operator
 
 function dutS_(v) { return String(v == null ? '' : v).trim(); }
 
