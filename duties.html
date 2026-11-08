@@ -87,7 +87,9 @@ const API = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 const ls = { get(k, d){ try{ const v = localStorage.getItem('csa2_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } }, set(k, v){ try{ localStorage.setItem('csa2_' + k, JSON.stringify(v)); return true; }catch(e){ return false; } } };
-const user = ls.get('user', ''), pass = ls.get('pass', ''), me = ls.get('teacher', '') || user, isAdm = !!ls.get('admin', false) || !!ls.get('isCP', false);   // admin or Chief Proctor (duty operator)
+const user = ls.get('user', ''), pass = ls.get('pass', ''), me = ls.get('teacher', '') || user, isAdmin0 = !!ls.get('admin', false);
+let isAdm = isAdmin0 || !!ls.get('dsAdmin', false);   // admin or DS ADMIN (role in the Users sheet) = duty operator
+let roleChecked = false;
 
 /* ---------- state (kept on this phone, works without internet) ---------- */
 let EX = ls.get('dut_cur', null);          // { id, title, rows:[{dt, iso, day, time, cls, sub, room, staff}], saved, sheet }
@@ -336,16 +338,38 @@ function fixItems(){
   Object.values(NOTES).forEach(x => out.push(['note', x.n, x.v]));
   Object.keys(FIXT).forEach(t => Object.values(VMAP[t]).forEach(x => out.push([FIXT[t], x.w, x.s])));
   Object.values(BLOCK).forEach(x => out.push(['block', x.r, x.b]));
+  Object.entries(SET.max).forEach(([c, v]) => { if(v !== '' && v != null) out.push(['max', c, String(v)]); });
+  Object.values(SET.weak).forEach(n => out.push(['weak', n, '1']));
+  Object.values(SET.cat).forEach(x => { if(x.c) out.push(['cat', x.n, x.c]); });
   return out;
 }
 function loadFixItems(items){   // from the server: fill what this device does not have yet
   (items || []).forEach(([t, w, v]) => {
     if(t === 'note'){ const k = nkey(w); if(k && !NOTES[k]) NOTES[k] = { n:w, v }; }
+    else if(t === 'max'){ if(SET.max[w] == null || SET.max[w] === '') SET.max[w] = v; }
+    else if(t === 'weak'){ const k = nkey(w); if(k && !SET.weak[k]) SET.weak[k] = w; }
+    else if(t === 'cat'){ const k = nkey(w); if(k && !SET.cat[k]) SET.cat[k] = { n:w, c:v }; }
     else if(t === 'block'){ const k = vnorm(w); if(k && !BLOCK[k]) BLOCK[k] = { r:w, b:v }; }
     else { const ty = Object.keys(FIXT).find(x => FIXT[x] === t); const k = vnorm(w); if(ty && k && !VMAP[ty][k]) VMAP[ty][k] = { w, s:v }; }
   });
-  ls.set('dut_notes', NOTES); ls.set('dut_vmap', VMAP); ls.set('dut_block', BLOCK); C = null;
+  ls.set('dut_notes', NOTES); ls.set('dut_vmap', VMAP); ls.set('dut_block', BLOCK); ls.set('dut_set', SET); C = null;
 }
+/* ---------- settings: maximum duties per category; elderly / weak staff; permanent and visiting kept apart ---------- */
+const CATS = [['L', 'Lecturer'], ['AP', 'Assistant Professor'], ['ASP', 'Associate Professor'], ['P', 'Professor'], ['VL', 'Visiting Lecturer'], ['VAP', 'Visiting Assistant Professor'], ['VASP', 'Visiting Associate Professor'], ['VP', 'Visiting Professor'], ['W', 'Elderly or weak (ill / disabled)']];
+let SET = Object.assign({ max:{}, weak:{}, cat:{} }, ls.get('dut_set', {}));   // max: cat -> n · weak: nkey -> name · cat: nkey -> { n, c }
+function saveSet(){ ls.set('dut_set', SET); C = null; }
+const rankOf = d => { d = String(d || '').toLowerCase(); return /assoc/.test(d) ? 'ASP' : /assist|asst|\ba\.?\s*p\b/.test(d) ? 'AP' : /prof/.test(d) ? 'P' : 'L'; };
+const isVisStatus = n => /visit/i.test((contactOf(n) || {}).status || '');
+function catAuto(n){ return (isVisStatus(n) ? 'V' : '') + rankOf((contactOf(n) || {}).desig); }
+function catOf(n){ const k = nkey(n); if(SET.weak[k]) return 'W'; const o = SET.cat[k]; return o && o.c ? o.c : catAuto(n); }
+const catName = c => (CATS.find(x => x[0] === c) || ['', ''])[1];
+/** P = permanent, V = visiting, O = not in the teacher list */
+function typeOf(n){ if(!contactOf(n)) return 'O'; const c = catOf(n); return c === 'W' ? (isVisStatus(n) ? 'V' : 'P') : c[0] === 'V' ? 'V' : 'P'; }
+const TYPE_T = { P:'Permanent teachers', V:'Visiting teachers', O:'Not in the teacher list' };
+const typeRank = n => ({ P:0, V:1, O:2 })[typeOf(n)];
+const maxOf = n => { const v = SET.max[catOf(n)]; return v === '' || v == null || isNaN(+v) ? null : +v; };
+const fullOf = n => { const m = maxOf(n); return m != null && dutyCount(n) >= m; };
+const overOf = n => { const m = maxOf(n); return m != null && dutyCount(n) > m; };
 /** the teacher(s) behind one written name. A standard name "Ms. Naila Gul + Ms. Hina Gul" = two teachers written together. */
 function stdList(n){
   const v = String(stdName(n));
@@ -447,22 +471,25 @@ function compute(){
   return (C = { L, recs, dates, check, variants:Object.values(variants), missing, unknown, leftOf, clashes:teacher.filter(t => t.clash), duties:teacher.reduce((s, t) => s + t.items.length, 0) });
 }
 const tSort = (a, b) => V.sort === 'few' ? a.items.length - b.items.length || ncmp(nkey(a.label), nkey(b.label)) : V.sort === 'many' ? b.items.length - a.items.length || ncmp(nkey(a.label), nkey(b.label)) : ncmp(nkey(a.label), nkey(b.label));
-function groups(kind){ const g = compute().L[kind].slice(); return kind === 'teacher' ? g.sort(tSort) : g; }
+function groups(kind){ const g = compute().L[kind].slice(); return kind === 'teacher' ? g.sort((a, b) => typeRank(a.label) - typeRank(b.label) || tSort(a, b)) : g; }
 /* the two short lists of the old sheets */
 const dateDay = d => (d.dt || '?') + (d.day ? ' ' + d.day : '');
-function summaryDates(){ return groups('teacher').slice().sort((a, b) => ncmp(nkey(a.label), nkey(b.label))).map(t => [t.label, t.items.map(dateDay).join(',  ')]); }   // Teacher | DAY/DATE
-function summaryCount(){ return groups('teacher').slice().sort((a, b) => a.items.length - b.items.length || ncmp(nkey(a.label), nkey(b.label))).map(t => [t.label, t.items.map(d => d.iso ? d.iso.slice(8) : '?').join(', '), t.items.length]); }   // Teacher | Duties | Total Duties
+function summaryDates(){ return groups('teacher').slice().sort((a, b) => typeRank(a.label) - typeRank(b.label) || ncmp(nkey(a.label), nkey(b.label))).map(t => [t.label, t.items.map(dateDay).join(',  ')]); }   // Teacher | DAY/DATE
+function summaryCount(){ return groups('teacher').slice().sort((a, b) => typeRank(a.label) - typeRank(b.label) || a.items.length - b.items.length || ncmp(nkey(a.label), nkey(b.label))).map(t => [t.label, t.items.map(d => d.iso ? d.iso.slice(8) : '?').join(', '), t.items.length]); }   // Teacher | Duties | Total Duties
 const dutyFull = d => `${dateDay(d)}${d.time ? ' (' + d.time + ')' : ''} · ${roomLbl(d.room)}${d.cls.length ? ' · ' + d.cls.join(', ') : ''}${d.sub.length ? ' (' + d.sub.join(', ') + ')' : ''}`;
 
 /* =====================================================================
    4) SCREEN
    ===================================================================== */
-const TABS = [['teacher', 'Teacher-wise'], ['room', 'Room-wise'], ['date', 'Date-wise'], ['class', 'Class-wise'], ['subject', 'Subject-wise'], ['plan', 'Plan & edit'], ['summary', 'Summary'], ['names', 'Names'], ['places', 'Rooms · Classes · Subjects'], ['students', 'Students’ message'], ['rows', 'All rows'], ['check', 'Check']];
+const TABS = [['teacher', 'Teacher-wise'], ['room', 'Room-wise'], ['date', 'Date-wise'], ['class', 'Class-wise'], ['subject', 'Subject-wise'], ['plan', 'Plan & edit'], ['summary', 'Summary'], ['names', 'Names'], ['places', 'Rooms · Classes · Subjects'], ['students', 'Students’ message'], ['settings', '⚙ Settings'], ['rows', 'All rows'], ['check', 'Check']];
 if(!TABS.some(t => t[0] === V.tab)) V.tab = 'teacher';
 V.newPage = ls.get('dut_newpage', true);
 function render(){
   if(!user){ $('#main').innerHTML = '<section class="card"><h2>Please sign in</h2><div class="sub">Open the attendance app and sign in as admin first, then come back here.</div><div class="acts"><a class="btn pri" href="./">Open the app</a></div></section>'; return; }
-  if(!isAdm){ $('#main').innerHTML = '<section class="card"><h2>Admin / Chief Proctor only</h2><div class="sub">Exam duty lists are made by the admin or a Chief Proctor. Sign in with that account in the app.</div><div class="acts"><a class="btn pri" href="./">Back to the app</a></div></section>'; return; }
+  if(!isAdm){
+    if(!roleChecked && navigator.onLine){ roleChecked = true; $('#main').innerHTML = '<section class="card"><h2>Checking your role…</h2></section>'; api({ action:'dut_whoami' }, 30000).then(r => { if(r && (r.ds || r.admin)){ isAdm = true; ls.set('dsAdmin', !!r.ds); } render(); }).catch(() => render()); return; }
+    $('#main').innerHTML = '<section class="card"><h2>Admin / DS ADMIN only</h2><div class="sub">Exam duty lists are made by the admin or a teacher whose role is <b>DS ADMIN</b> in the Users sheet. Sign in with that account in the app.</div><div class="acts"><a class="btn pri" href="./">Back to the app</a></div></section>'; return;
+  }
   let h = inputCard();
   if(EX && EX.rows.length){
     const c = compute(), probs = c.clashes.length + c.check.noRoom.length + c.check.noDate.length;
@@ -492,6 +519,7 @@ function tabBody(){
   if(KINDS[V.tab]) return groupHtml(V.tab);
   if(V.tab === 'summary') return summaryHtml();
   if(V.tab === 'plan') return planHtml();
+  if(V.tab === 'settings') return setHtml();
   if(V.tab === 'places') return vfixHtml();
   if(V.tab === 'students') return stuHtml();
   if(V.tab === 'names') return namesHtml(c);
@@ -508,9 +536,10 @@ function gMatch(g){ const q = V.q.trim().toLowerCase(); return !q || g.label.toL
 function groupCards(kind){
   const G = groups(kind).filter(gMatch), cols = colsOf(kind);
   if(!G.length) return '<div class="note mid">Nothing found.</div>';
-  return G.map(g => {
+  return G.map((g, gi) => {
+    const head = kind === 'teacher' && (gi === 0 || typeOf(G[gi - 1].label) !== typeOf(g.label)) ? `<h3 style="margin:18px 0 0;padding:8px 12px;border-radius:12px;background:${typeOf(g.label) === 'V' ? 'var(--mid-bg)' : typeOf(g.label) === 'O' ? 'var(--bad-bg)' : 'var(--good-bg)'}">${TYPE_T[typeOf(g.label)]} <span class="sub">${G.filter(x => typeOf(x.label) === typeOf(g.label)).length}</span></h3>` : '';
     const wa = kind === 'teacher';
-    return `<div class="rm"><h3><span>${kind === 'teacher' ? `<button class="lnk" data-t="${esc(g.key)}">${esc(g.label)}</button>${g.clash ? ' <span class="x">⚠ clash</span>' : ''}${wrongShift(g.label) ? ` <span class="dc x">${examShift() === 'M' ? 'EVENING' : 'MORNING'} ONLY</span>` : ''}${CTS && compute().unknown.includes(g.label) ? ` <span class="dc x">${compute().leftOf[g.label] ? 'LEFT the college' : 'not in Users sheet'}</span>` : ''}` : esc(g.label)}</span><span class="sub">${kind === 'teacher' ? esc(tLine(g.label)) : g.items.length + ' paper' + (g.items.length === 1 ? '' : 's')}${kind === 'teacher' ? ` <button class="btn sm" data-t="${esc(g.key)}">Change</button>` : ''}${wa ? ` <button class="btn sm good" data-wa="${esc(g.key)}">WhatsApp</button>` : ''}</span></h3>
+    return head + `<div class="rm"><h3><span>${kind === 'teacher' ? `<button class="lnk" data-t="${esc(g.key)}">${esc(g.label)}</button>${g.clash ? ' <span class="x">⚠ clash</span>' : ''}${wrongShift(g.label) ? ` <span class="dc x">${examShift() === 'M' ? 'EVENING' : 'MORNING'} ONLY</span>` : ''}${kind === 'teacher' && overOf(g.label) ? ' <span class="dc x">OVER MAX</span>' : ''}${CTS && compute().unknown.includes(g.label) ? ` <span class="dc x">${compute().leftOf[g.label] ? 'LEFT the college' : 'not in Users sheet'}</span>` : ''}` : esc(g.label)}</span><span class="sub">${kind === 'teacher' ? esc(tLine(g.label)) : g.items.length + ' paper' + (g.items.length === 1 ? '' : 's')}${kind === 'teacher' ? ` <button class="btn sm" data-t="${esc(g.key)}">Change</button>` : ''}${wa ? ` <button class="btn sm good" data-wa="${esc(g.key)}">WhatsApp</button>` : ''}</span></h3>
       <div class="tw" style="max-height:none"><table><thead><tr><th>#</th>${cols.map(c => `<th>${COLNAME[c]}</th>`).join('')}</tr></thead><tbody>${g.items.map((it, i) => `<tr><td class="n">${i + 1}</td>${cols.map(c => `<td class="${c === 'date' || c === 'room' ? 'nw' : ''} ${it.x && (c === 'date' || c === 'room') ? 'x' : ''}">${c === 'room' ? '<b>' + esc(cellOf(it, c)) + '</b>' : c === 'staff' && !it.staff.length ? '<span class="x">No staff</span>' : esc(cellOf(it, c))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
   }).join('');
 }
@@ -681,7 +710,7 @@ function checkHtml(c){
   const rowRef = i => { const r = EX.rows[i]; return `<li><button class="lnk" data-go="${i}">Row ${i + 1}</button>: ${esc([r.dt, r.cls, r.sub, r.room && 'Room ' + r.room, r.staff && r.staff.replace(/\n/g, ', ')].filter(Boolean).join(' · '))}</li>`; };
   const sec = (t, body) => `<section class="card"><h3>${t}</h3>${body}</section>`;
   let h = '';
-  h += clashHtml(c) + shiftHtml(c) + yearHtml(c);
+  h += clashHtml(c) + overHtml(c) + suggestHtml(c) + shiftHtml(c) + yearHtml(c);
   h += sec(`Staff written but no room <span class="${c.check.noRoom.length ? 'x' : 'ok'}">${c.check.noRoom.length}</span>`, c.check.noRoom.length ? '<div class="sub">These were the yellow rows of the old sheet. Add the room in <b>All rows</b>.</div><ul>' + c.check.noRoom.map(rowRef).join('') + '</ul>' : '<div class="note ok">Every row with staff has a room.</div>');
   h += sec(`Rooms with no staff <span class="${c.check.noStaff.length ? 'x' : 'ok'}">${c.check.noStaff.length}</span>`, c.check.noStaff.length ? '<ul>' + c.check.noStaff.map(rowRef).join('') + '</ul>' : '<div class="note ok">Every room has staff.</div>');
   h += sec(`Rows without a date <span class="${c.check.noDate.length ? 'x' : 'ok'}">${c.check.noDate.length}</span>`, c.check.noDate.length ? '<ul>' + c.check.noDate.map(rowRef).join('') + '</ul>' : '<div class="note ok">Every row has a date.</div>');
@@ -700,11 +729,12 @@ function freeTeachers(d){
   return pool.filter(n => { const k = nkey(n); if(!k || seen.has(k) || busy.has(k) || (noteOf(n) && noteOf(n) !== '')) return false; seen.add(k); return !c.unknown || !c.unknown.includes(n); })
     .sort((a, b) => (wrongShift(a) ? 1 : 0) - (wrongShift(b) ? 1 : 0) || dutyCount(a) - dutyCount(b) || ncmp(a, b));
 }
+function freeGroups(d){ const F = freeTeachers(d); return [['Permanent teachers free that day', F.filter(n => !fullOf(n) && typeOf(n) === 'P')], ['Visiting teachers free that day', F.filter(n => !fullOf(n) && typeOf(n) === 'V')], ['Already at their maximum duties', F.filter(n => fullOf(n))]].filter(g => g[1].length); }
 /** choices for one duty of a teacher: give it to a free teacher, move her to another date, take her off */
 function dutyOpts(t, d, sel){
-  const free = freeTeachers(d), mv = moveTargets(t, d);
+  const mv = moveTargets(t, d);
   return `<option value="">— keep —</option>
-    <optgroup label="Give this duty to a teacher free that day (fewest duties first)">${free.map(x => `<option value="give:${esc(x)}" ${sel === 'give:' + x ? 'selected' : ''}>${wrongShift(x) ? '⚠ ' : ''}${esc(x)} — ${esc(tLine(x))}</option>`).join('')}</optgroup>
+    ${freeGroups(d).map(([lab, L]) => `<optgroup label="Give it to · ${esc(lab)} (fewest duties first)">${L.map(x => `<option value="give:${esc(x)}" ${sel === 'give:' + x ? 'selected' : ''}>${wrongShift(x) || fullOf(x) ? '⚠ ' : ''}${esc(x)} — ${esc(tLine(x))}</option>`).join('')}</optgroup>`).join('')}
     <optgroup label="Move ${esc(t.label)} to another date (she is free then)">${mv.map(r => `<option value="move:${r.i}" ${sel === 'move:' + r.i ? 'selected' : ''}>${esc(dayShort(r.day) + ' ' + r.dt + (r.time ? ' ' + r.time : '') + ' · ' + roomLbl(r.room) + ' · ' + r.cls)} (${r.staff.length} staff)</option>`).join('')}</optgroup>
     <optgroup label="Other"><option value="drop" ${sel === 'drop' ? 'selected' : ''}>Take her off this room (others stay)</option></optgroup>`;
 }
@@ -757,6 +787,90 @@ function shiftHtml(c){
   return `<section class="card" style="border-top-color:var(--bad)"><h3>${other[0].toUpperCase() + other.slice(1)}-only teachers with duties <span class="x">${L.length}</span></h3><div class="sub">These teachers teach only in the ${other} (timetable), but have duties in this ${other === 'evening' ? 'morning' : 'evening'} exam. Tap <b>Change</b> to give their duties to someone else.</div>
     <div class="tw" style="max-height:none"><table><tbody>${L.map(t => `<tr><td><b>${esc(t.label)}</b><div class="sub">${esc(tLine(t.label))}</div></td><td class="nw">${t.items.map(d => esc(dayShort(d.day) + ' ' + (d.dt || '').slice(0, 5))).join(', ')}</td><td><button class="btn sm pri" data-t="${esc(t.key)}">Change</button></td></tr>`).join('')}</tbody></table></div></section>`;
 }
+/* teachers with more duties than the maximum of their category (Settings) */
+function overHtml(c){
+  const L = c.L.teacher.filter(t => overOf(t.label));
+  if(!L.length) return Object.keys(SET.max).some(k => SET.max[k] !== '' && SET.max[k] != null) ? `<section class="card"><h3>Over the maximum <span class="ok">0</span></h3><div class="note ok">No teacher has more duties than the maximum set in Settings.</div></section>` : '';
+  return `<section class="card" style="border-top-color:var(--bad)"><h3>Over the maximum <span class="x">${L.length}</span></h3><div class="sub">More duties than the maximum for their category (Settings). Tap <b>Change</b> and give the extra duties to someone else.</div>
+    <div class="tw" style="max-height:none"><table><tbody>${L.sort((a, b) => typeRank(a.label) - typeRank(b.label)).map(t => `<tr><td><b>${esc(t.label)}</b><div class="sub">${esc(catName(catOf(t.label)))} · ${esc(tLine(t.label))}</div></td><td><button class="btn sm pri" data-t="${esc(t.key)}">Change</button></td></tr>`).join('')}</tbody></table></div></section>`;
+}
+/* ---------- suggestions: who should take the extra duties ----------
+   From: teachers over their maximum (Settings) — or, without a maximum, well above the average.
+   To: free that day, under their own maximum, fewest duties, same shift as the exam, same department
+   (or the paper's subject department), permanent for permanent / visiting for visiting. */
+let SGX = {};
+function scoreCand(n, from, d, cnt){
+  const ct = contactOf(n) || {}, fc = contactOf(from) || {}, why = [], k = cnt[nkey(n)] || 0;
+  let s = k * 10; why.push(k + ' dut' + (k === 1 ? 'y' : 'ies'));
+  if(wrongShift(n)){ s += 100; why.push('⚠ teaches only in the other shift'); } else if(ct.sh) why.push('teaches ' + (examShift() === 'M' ? 'morning' : 'evening'));
+  const dk = vnorm(ct.dept);
+  if(dk && fc.dept && dk === vnorm(fc.dept)){ s -= 8; why.push('same department'); }
+  else if(dk && d.sub.some(x => { const sx = vnorm(x); return sx && (sx.includes(dk) || dk.includes(sx)); })){ s -= 6; why.push('department of this paper'); }
+  if(typeOf(n) === typeOf(from)) s -= 3; else why.push(typeOf(n) === 'V' ? 'visiting' : 'permanent');
+  return { s, why:why.join(' · ') };
+}
+function suggestPlan(){
+  const c = compute(); if(c._sg) return c._sg;
+  const all = CTS ? CTS.list.filter(x => CTS.users ? x.users : true).map(x => x.name) : c.L.teacher.map(t => t.label);
+  const avail = [...new Set(all)].filter(n => !noteOf(n) && !(c.unknown || []).includes(n));
+  const cnt = {}; avail.forEach(n => { cnt[nkey(n)] = 0; }); c.L.teacher.forEach(t => { cnt[nkey(t.label)] = t.items.length; });
+  const avg = avail.length ? avail.reduce((a, n) => a + cnt[nkey(n)], 0) / avail.length : 0;
+  const target = n => { const m = maxOf(n); return m != null ? m : Math.ceil(avg) + 1; };
+  const busy = {}; c.L.teacher.forEach(t => t.items.forEach(d => { (busy[slotK(d)] = busy[slotK(d)] || new Set()).add(nkey(t.label)); }));
+  const out = [];
+  c.L.teacher.filter(t => !(c.unknown || []).includes(t.label) && cnt[nkey(t.label)] > target(t.label))
+    .sort((a, b) => (cnt[nkey(b.label)] - target(b.label)) - (cnt[nkey(a.label)] - target(a.label)))
+    .forEach(t => {
+      let extra = cnt[nkey(t.label)] - target(t.label);
+      for(const d of t.items.slice().reverse()){
+        if(extra <= 0) break;
+        const B = busy[slotK(d)] || new Set();
+        const ranked = avail.filter(n => nkey(n) !== nkey(t.label) && !B.has(nkey(n)) && cnt[nkey(n)] < target(n)).map(n => Object.assign({ n }, scoreCand(n, t.label, d, cnt))).sort((a, b) => a.s - b.s || ncmp(a.n, b.n));
+        if(!ranked.length) continue;
+        out.push({ t, d, id:dutyId(t, d), ranked:ranked.slice(0, 15) });
+        cnt[nkey(ranked[0].n)]++; cnt[nkey(t.label)]--; extra--; (busy[slotK(d)] = B).add(nkey(ranked[0].n));
+      }
+    });
+  const low = avail.filter(n => (c.L.teacher.find(t => nkey(t.label) === nkey(n)) || { items:[] }).items.length < Math.min(target(n), Math.max(1, Math.floor(avg)))).sort((a, b) => typeRank(a) - typeRank(b) || dutyCount(a) - dutyCount(b) || ncmp(a, b));
+  return (c._sg = { out, avg, low, hasMax:Object.values(SET.max).some(v => v !== '' && v != null) });
+}
+function suggestHtml(c){
+  if(!CTS) return '';
+  const P = suggestPlan();
+  const lowTxt = P.low.length ? `<div class="sub" style="margin-top:8px">Below their share (average ${P.avg.toFixed(1)}): ${P.low.slice(0, 40).map(n => `<span class="dc">${esc(n)} · ${dutyCount(n)}${maxOf(n) != null ? '/' + maxOf(n) : ''}</span>`).join('')}${P.low.length > 40 ? ' …' : ''}</div>` : '';
+  if(!P.out.length) return `<section class="card"><h3>Suggestions — balance duties <span class="ok">0</span></h3><div class="note ok">${P.hasMax ? 'Nobody is over her maximum.' : 'Nobody has many more duties than the average (' + P.avg.toFixed(1) + ').'} </div>${lowTxt}</section>`;
+  const n = P.out.filter(x => (SGX[x.id] !== undefined ? SGX[x.id] : 'give:' + x.ranked[0].n)).length;
+  return `<section class="card" style="border-top-color:var(--mid)"><h3>Suggestions — balance duties <span style="color:var(--mid)">${P.out.length}</span></h3>
+    <div class="sub">${P.hasMax ? 'Teachers over their maximum (Settings)' : 'Teachers with many more duties than the average (' + P.avg.toFixed(1) + ')'} give their extra duties to the best free teacher: fewest duties and under her own maximum, teaching in the ${examShift() === 'M' ? 'morning' : 'evening'}, same department (or the paper’s department), permanent for permanent and visiting for visiting. Change any choice, then press <b>Apply</b>.</div>
+    <div class="tw" style="max-height:none"><table><thead><tr><th>From</th><th>Duty</th><th>Give it to</th></tr></thead><tbody>${P.out.map(x => { const sel = SGX[x.id] !== undefined ? SGX[x.id] : 'give:' + x.ranked[0].n, best = x.ranked.find(r => 'give:' + r.n === sel);
+      return `<tr><td class="nw"><b>${esc(x.t.label)}</b><div class="sub">${esc(tLine(x.t.label))}</div></td><td class="nw">${esc(dateDay(x.d))}<div class="sub">${esc(roomLbl(x.d.room))} · ${esc(x.d.cls.join(', '))} · ${esc(x.d.sub.join(', '))}</div></td>
+        <td><select class="sq" data-sgx="${esc(x.id)}" style="height:40px;min-width:230px;max-width:340px"><option value="" ${!sel ? 'selected' : ''}>— don’t change —</option>${x.ranked.map(r => `<option value="give:${esc(r.n)}" ${sel === 'give:' + r.n ? 'selected' : ''}>${esc(r.n)} — ${esc(r.why)}</option>`).join('')}</select>${best ? `<div class="sub ok">${esc(best.why)}${tInfo(best.n) ? ' · ' + esc(tInfo(best.n)) : ''}</div>` : ''}</td></tr>`; }).join('')}</tbody></table></div>
+    <div class="acts"><button class="btn pri" id="sgGo" ${n ? '' : 'disabled'}>Apply ${n} suggestion${n === 1 ? '' : 's'}</button></div>${lowTxt}</section>`;
+}
+function sgApply(){
+  const P = suggestPlan(), map = {};
+  P.out.forEach(x => { const v = SGX[x.id] !== undefined ? SGX[x.id] : 'give:' + x.ranked[0].n; if(v) map[x.id] = v; });
+  const n = applyDutyChanges(map); SGX = {};
+  V.msg = n + ' duty(ies) moved to balance the load. Download the PDFs or the corrected Word file again.'; V.err = '';
+  refreshTab();
+}
+/* ---------- Settings tab ---------- */
+function setHtml(){
+  const people = CTS ? CTS.list.filter(x => CTS.users ? x.users : true).map(x => x.name) : compute().L.teacher.map(t => t.label);
+  const L = [...new Set(people)].sort((a, b) => typeRank(a) - typeRank(b) || ncmp(nkey(a), nkey(b)));
+  const inCat = cc => L.filter(n => catOf(n) === cc);
+  return `<section class="card"><h3>Maximum duties</h3><div class="sub">The most duties a teacher of each category should get in this exam. Leave empty for no limit. Teachers at the maximum go to the end of every “give this duty to” list (marked ⚠, FULL); teachers over it are listed in <b>Check</b>.</div>
+    <div class="tw" style="max-height:none"><table><thead><tr><th>Category</th><th>Maximum</th><th>Teachers</th><th>Over</th></tr></thead><tbody>${CATS.map(([cc, lab]) => `<tr><td><b>${esc(lab)}</b></td><td><input class="nm" type="number" min="0" inputmode="numeric" data-smax="${cc}" value="${esc(SET.max[cc] == null ? '' : SET.max[cc])}" style="width:90px;min-width:0"></td><td class="n">${inCat(cc).length}</td><td class="n ${inCat(cc).some(overOf) ? 'x' : ''}">${inCat(cc).filter(overOf).length}</td></tr>`).join('')}</tbody></table></div></section>
+    <section class="card"><h3>Teachers</h3><div class="sub">Category is worked out from <b>designation</b> and <b>Status</b> (Visiting) in the Users sheet — change it here if it is wrong. Tick <b>Elderly / weak</b> for ill or disabled staff: they get the “Elderly or weak” maximum.</div>
+    ${CTS ? '' : '<div class="acts"><button class="btn sm pri" id="bCts">Load the teacher list</button></div>'}
+    <input class="sq" id="sq2" type="search" placeholder="Search teacher" style="margin-top:8px" autocomplete="off">
+    <div class="tw" id="setL"><table><thead><tr><th>Teacher</th><th>Category</th><th>Elderly / weak</th><th>Duties</th></tr></thead><tbody>${L.map(n => { const k = nkey(n), ct = contactOf(n) || {}, o = (SET.cat[k] || {}).c || '';
+      return `<tr data-q="${esc((n + ' ' + (ct.desig || '') + ' ' + (ct.dept || '')).toLowerCase())}"><td class="nw"><b>${esc(n)}</b><div class="sub">${esc([ct.desig, ct.dept, ct.status].filter(Boolean).join(' · '))}</div></td>
+        <td><select class="sq" data-scat="${esc(k)}" data-name="${esc(n)}" style="height:36px;min-width:190px"><option value="">Auto: ${esc(catName(catAuto(n)))}</option>${CATS.filter(x => x[0] !== 'W').map(([cc, lab]) => `<option value="${cc}" ${o === cc ? 'selected' : ''}>${esc(lab)}</option>`).join('')}</select></td>
+        <td style="text-align:center"><input type="checkbox" data-sweak="${esc(k)}" data-name="${esc(n)}" ${SET.weak[k] ? 'checked' : ''} style="width:22px;height:22px"></td>
+        <td class="nw ${overOf(n) ? 'x' : ''}">${esc(dutyCount(n) + (maxOf(n) != null ? ' / ' + maxOf(n) : ''))}</td></tr>`; }).join('')}</tbody></table></div>
+    <div class="acts"><button class="btn pri" id="bNames">Save settings on server</button></div></section>`;
+}
 /* dates typed with another year (e.g. 24/02/2025 in a 2026 exam) */
 function yearHtml(c){
   const ys = {}; EX.rows.forEach(r => { if(r.iso){ const y = r.iso.slice(0, 4); ys[y] = (ys[y] || 0) + 1; } });
@@ -799,7 +913,7 @@ function unknownHtml(c){
       const sc = usersAll.map(x => [appScore(n, x.name), x.name]).sort((a, b) => b[0] - a[0] || ncmp(a[1], b[1]));
       return `<tr style="${L ? 'background:var(--bad-bg)' : ''}"><td class="nw"><b>${esc(n)}</b><div class="sub">${L ? `<span class="x">LEFT${L.name !== n ? ' (X-Users: ' + esc(L.name) + ')' : ''}${L.dept ? ' · ' + esc(L.dept) : ''}</span>` : '<span style="color:var(--mid);font-weight:800">not in Users sheet</span>'}</div></td><td class="n">${cnt[n] || 0}</td>
         <td><select class="sq" data-unk="${esc(k)}" style="height:40px;min-width:240px"><option value="">— leave as it is —</option>
-        <optgroup label="Give her duties to a teacher with no duty">${cand.map(x => `<option value="app:${esc(x.name)}" ${sel === 'app:' + x.name ? 'selected' : ''}>${esc(x.name)}${tag(x) ? ' · ' + esc(tag(x)) : ''}</option>`).join('')}</optgroup>
+        ${[['P', 'Permanent'], ['V', 'Visiting']].map(([ty, lab]) => `<optgroup label="Give her duties to · ${lab} teacher with no duty">${cand.filter(x => typeOf(x.name) === ty).map(x => `<option value="app:${esc(x.name)}" ${sel === 'app:' + x.name ? 'selected' : ''}>${esc(x.name)}${tag(x) ? ' · ' + esc(tag(x)) : ''}</option>`).join('')}</optgroup>`).join('')}
         <optgroup label="She is this Users teacher (spelling only)">${sc.map(([v, a]) => `<option value="app:${esc(a)}" ${sel === 'app:' + a && !cand.some(x => x.name === a) ? 'selected' : ''}>${esc(a)}${v >= .6 ? ' · ' + Math.round(v * 100) + '%' : ''}</option>`).join('')}</optgroup>
         <optgroup label="Not a teacher (keeps her duties)">${NOTE_OPTS.filter(o => o !== 'Left the college').map(o => `<option value="note:${esc(o)}" ${sel === 'note:' + o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</optgroup></select></td></tr>`; }).join('')}</tbody></table></div>
     <div class="acts"><button class="btn pri" id="unGo" ${todo ? '' : 'disabled'}>Fix ${todo} name${todo === 1 ? '' : 's'} in one go</button></div>` : '<div class="note ok">Everyone in the duty list is in the Users sheet (or marked).</div>'}
@@ -831,7 +945,7 @@ function missingHtml(c){
   const marked = Object.entries(NOTES).filter(([k]) => nameIndex().ct[k]);
   return `<section class="card" style="border-top-color:var(--good)"><h3>Teachers with no duty <span class="ok">${c.missing.length}</span></h3>
     <div class="sub">${CTS.users ? 'Every teacher in the <b>Users</b> sheet (permanent and visiting) who' : 'Teachers in the timetable who'} got no duty in this list — useful for a fair share. When a teacher has no invigilation for a reason (principal, exam / stationery staff, on leave…), choose it: she is then not counted here.</div>
-    ${c.missing.length ? `<div class="tw" style="max-height:none"><table><tbody>${c.missing.map(n => { const ct = contactOf(n) || {}; return `<tr style="background:var(--good-bg)"><td><b class="ok">${esc(n)}</b><div class="sub">${esc(tLine(n))}</div></td><td><select class="sq" data-note="${esc(nkey(n))}" data-name="${esc(n)}" style="height:38px;min-width:210px"><option value="">— no duty —</option>${NOTE_OPTS.map(o => `<option>${esc(o)}</option>`).join('')}</select></td></tr>`; }).join('')}</tbody></table></div>` : '<div class="note ok">Every regular teacher has a duty.</div>'}
+    ${c.missing.length ? [['P', 'Permanent'], ['V', 'Visiting']].map(([ty, lab]) => { const L = c.missing.filter(n => typeOf(n) === ty); return L.length ? `<h3 style="margin-top:12px">${lab} <span class="ok">${L.length}</span></h3><div class="tw" style="max-height:none"><table><tbody>${L.map(n => { const ct = contactOf(n) || {}; return `<tr style="background:var(--good-bg)"><td><b class="ok">${esc(n)}</b><div class="sub">${esc(tLine(n))}</div></td><td><select class="sq" data-note="${esc(nkey(n))}" data-name="${esc(n)}" style="height:38px;min-width:210px"><option value="">— no duty —</option>${NOTE_OPTS.map(o => `<option>${esc(o)}</option>`).join('')}</select></td></tr>`; }).join('')}</tbody></table></div>` : ''; }).join('') : '<div class="note ok">Every teacher has a duty.</div>'}
     ${marked.length ? `<div class="sub" style="margin-top:10px">Not on duty lists: ${marked.map(([k, x]) => `<span class="dc">${esc(x.n)} — ${esc(x.v)} <button class="lnk" data-unclr="${esc(k)}" aria-label="Remove">✕</button></span>`).join('')}</div>` : ''}</section>`;
 }
 
@@ -1023,8 +1137,8 @@ function pickTeacher(i, msg){
   $('#dlgIn').innerHTML = `<h2 style="margin:0 0 4px">Add a teacher</h2><div class="sub">${esc(dateDay(r))} · ${esc(roomLbl(rec.room))} · ${esc(rec.cls)} ${esc(rec.sub)} — now: ${esc(rowNames(i).join(', ') || 'no staff')}</div>
     ${msg ? `<div class="note ok">${esc(msg)}</div>` : ''}
     <input class="sq" id="ptq" type="search" placeholder="Search teacher, department…" style="margin-top:8px" autocomplete="off">
-    <div class="sub" style="margin-top:6px">Teachers free on this date, fewest duties first. <span class="x">⚠</span> = teaches only in the other shift.</div>
-    <div class="tw" style="max-height:52vh" id="ptl">${free.map(n => `<div class="li" style="padding:6px 8px" data-q="${esc((n + ' ' + tInfo(n)).toLowerCase())}"><div style="flex:1"><b>${wrongShift(n) ? '<span class="x">⚠</span> ' : ''}${esc(n)}</b><div class="sub">${esc(tLine(n))}</div></div><button class="btn sm good" data-pick="${esc(n)}">Add</button></div>`).join('') || '<div class="sub">Every teacher already has a duty on this date.</div>'}</div>
+    <div class="sub" style="margin-top:6px">Teachers free on this date — permanent, then visiting, fewest duties first. <span class="x">⚠</span> = at her maximum duties, or teaches only in the other shift.</div>
+    <div class="tw" style="max-height:52vh" id="ptl">${freeGroups({ iso:r.iso, time:r.time || '' }).map(([lab, L]) => `<div class="li" style="padding:6px 8px;background:var(--surface2)"><b>${esc(lab)}</b><span class="sub">${L.length}</span></div>` + L.map(n => `<div class="li" style="padding:6px 8px" data-q="${esc((n + ' ' + tInfo(n)).toLowerCase())}"><div style="flex:1"><b>${wrongShift(n) || fullOf(n) ? '<span class="x">⚠</span> ' : ''}${esc(n)}</b><div class="sub">${esc(tLine(n))}</div></div><button class="btn sm good" data-pick="${esc(n)}">Add</button></div>`).join('')).join('') || '<div class="sub">Every teacher already has a duty on this date.</div>'}</div>
     <div class="acts"><button class="btn" id="dClose">Done</button></div>`;
   if(!$('#dlg').open) $('#dlg').showModal();
   $('#ptq').oninput = e => { const q = e.target.value.trim().toLowerCase(); document.querySelectorAll('#ptl [data-q]').forEach(d => { d.style.display = !q || d.dataset.q.includes(q) ? '' : 'none'; }); };
@@ -1058,6 +1172,7 @@ function wire(){
 }
 function wireTab(){
   const B = $('#tabBody'); if(!B) return;
+  const sq2 = $('#sq2'); if(sq2) sq2.oninput = () => { const q = sq2.value.trim().toLowerCase(); document.querySelectorAll('#setL [data-q]').forEach(r => { r.style.display = !q || r.dataset.q.includes(q) ? '' : 'none'; }); };
   const gq = $('#gq'); if(gq) gq.oninput = () => { V.q = gq.value; $('#gBody').innerHTML = groupCards(V.tab); };
   const ts = $('#tsort'); if(ts) ts.onchange = () => { V.sort = ts.value; $('#gBody').innerHTML = groupCards(V.tab); };
   B.onclick = e => {
@@ -1077,6 +1192,7 @@ function wireTab(){
     if(t.id === 'fxGo') return fixApply();
     if(t.id === 'unGo') return unkApply();
     if(t.id === 'cxGo') return cxApply();
+    if(t.id === 'sgGo') return sgApply();
     if(t.id === 'pAddDate'){ const v = ($('#pDate') || {}).value; if(!v) return alert('Choose the date first.'); const i = insertAfterDay(parseDate(isoToDt(v)).iso, newRow(isoToDt(v))); saveLocal(); refreshTab(); const el = document.getElementById('prow' + i); el && el.scrollIntoView({ block:'center' }); return; }
     if(t.dataset.pday !== undefined){ const iso = t.dataset.pday, r0 = EX.rows.find(r => (r.iso || '') === iso) || {}; const i = insertAfterDay(iso, Object.assign(newRow(r0.dt || ''), { time:r0.time || '' })); saveLocal(); refreshTab(); const el = document.getElementById('prow' + i); if(el){ el.scrollIntoView({ block:'center' }); const inp = el.querySelector('input'); inp && inp.focus(); } return; }
     if(t.dataset.pdel !== undefined){ const iso = t.dataset.pdel, n = EX.rows.filter(r => (r.iso || '') === iso).length; if(!confirm('Delete this whole day (' + n + ' rows)?')) return; EX.rows = EX.rows.filter(r => (r.iso || '') !== iso); saveLocal(); return refreshTab(); }
@@ -1104,6 +1220,10 @@ function wireTab(){
       saveLocal(); refreshTab(); return;
     }
     if(t.dataset.pmv !== undefined){ const iso = t.dataset.pmv, dt = isoToDt(t.value); if(!t.value) return; const p = parseDate(dt), n = EX.rows.filter(r => (r.iso || '') === iso).length; if(!confirm('Move ' + n + ' row(s) to ' + p.day + ' ' + p.dt + '?')) return refreshTab(); EX.rows.forEach(r => { if((r.iso || '') === iso){ r.iso = p.iso; r.dt = p.dt; r.day = p.day; } }); saveLocal(); return refreshTab(); }
+    if(t.dataset.sgx !== undefined){ SGX[t.dataset.sgx] = t.value; return refreshTab(); }
+    if(t.dataset.smax !== undefined){ SET.max[t.dataset.smax] = t.value === '' ? '' : String(Math.max(0, parseInt(t.value, 10) || 0)); saveSet(); if(EX){ EX.saved = false; ls.set('dut_cur', EX); } return refreshTab(); }
+    if(t.dataset.scat !== undefined){ const k = t.dataset.scat; if(t.value) SET.cat[k] = { n:t.dataset.name, c:t.value }; else delete SET.cat[k]; saveSet(); return refreshTab(); }
+    if(t.dataset.sweak !== undefined){ const k = t.dataset.sweak; if(t.checked) SET.weak[k] = t.dataset.name; else delete SET.weak[k]; saveSet(); return refreshTab(); }
     if(t.dataset.cx !== undefined){ CX[t.dataset.cx] = t.value; return refreshTab(); }
     if(t.dataset.unk !== undefined){ UNK[t.dataset.unk] = t.value; return refreshTab(); }
     if(t.dataset.note !== undefined){ const k = t.dataset.note; if(t.value) NOTES[k] = { n:t.dataset.name, v:t.value }; else delete NOTES[k]; saveFixes(); return refreshTab(); }
@@ -1215,9 +1335,9 @@ function shiftTxt(ct){ const s = (ct || {}).sh; if(!s) return ''; const m = s.M 
 function shiftLong(ct){ const s = (ct || {}).sh; if(!s) return ''; return ['M', 'E'].filter(q => s[q]).map(q => (q === 'M' ? 'Morning' : 'Evening') + ': ' + s[q][0] + ' class' + (s[q][0] === 1 ? '' : 'es') + ', ' + s[q][1] + ' period' + (s[q][1] === 1 ? '' : 's') + ' a week').join(' · '); }
 /** she teaches only in the other shift (e.g. evening-only teacher for a morning exam) */
 const wrongShift = n => { const s = (contactOf(n) || {}).sh; return !!(s && !s[examShift()] && s[examShift() === 'M' ? 'E' : 'M']); };
-const tInfo = n => { const ct = contactOf(n) || {}; return [ct.desig, ct.dept, /visit/i.test(ct.status || '') ? 'Visiting' : '', shiftTxt(ct)].filter(Boolean).join(' · '); };
+const tInfo = n => { const ct = contactOf(n) || {}; return [ct.desig, ct.dept, /visit/i.test(ct.status || '') ? 'Visiting' : '', SET.weak[nkey(n)] ? 'Elderly / weak' : '', shiftTxt(ct)].filter(Boolean).join(' · '); };
 function dutyCount(n){ const c = compute(); if(!c._cnt){ c._cnt = {}; c.L.teacher.forEach(t => { c._cnt[nkey(t.label)] = t.items.length; }); } return c._cnt[nkey(n)] || 0; }
-const tLine = n => { const d = dutyCount(n), i = tInfo(n); return d + ' dut' + (d === 1 ? 'y' : 'ies') + (i ? ' · ' + i : ''); };
+const tLine = n => { const d = dutyCount(n), m = maxOf(n), i = tInfo(n); return d + (m != null ? '/' + m : '') + ' dut' + (d === 1 && m == null ? 'y' : 'ies') + (m != null && d > m ? ' (OVER MAX)' : m != null && d >= m ? ' (FULL)' : '') + (i ? ' · ' + i : ''); };
 const tOf = key => compute().L.teacher.find(x => x.key === key);
 function waMsg(t){
   return `Assalam-o-Alaikum ${t.label},\nYour duties in ${EX.title} (timings ${EX.timing || '08:30-12:30 PM'}):\n` + t.items.map((d, i) => `${i + 1}. ${dutyFull(d)}`).join('\n') + `\nTotal: ${t.items.length} dut${t.items.length === 1 ? 'y' : 'ies'}\n- ${me} (Admin)`;

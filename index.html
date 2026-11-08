@@ -3996,7 +3996,7 @@ function openMore(){
       ${item('mytt', I.cal, 'My timetable & workload', 'Your periods, days, rooms and weekly load')}
       ${canFree() ? item('free', I.check, 'Free teachers', 'Who has no class in a period (for duties)') : ''}
       ${canFree() ? item('contacts', I.lock, 'Teacher contacts', 'Private: call or WhatsApp a teacher') : ''}
-      ${isCP && !isAdmin ? item('duties', I.doc, 'Exam duty lists', 'Plan duties from the Word table: teacher, room, date-wise PDFs') : ''}
+      ${!isAdmin && store.get('dsAdmin', false) ? item('duties', I.doc, 'Exam duty lists', 'Plan duties from the Word table: teacher, room, date-wise PDFs') : ''}
       ${item('del', I.trash, 'Delete attendance', hasMulti() ? 'Lecture ' + sel.period + ' of day ' + sel.day : 'All marks of day ' + sel.day, 'danger')}
     </div>
     <div class="lb2">Text size</div>${tsHtml()}
@@ -5378,6 +5378,15 @@ function ttPdf(){
 }
 
 /* ----- admin / HOD: workload of every teacher ----- */
+/* exam duty lists: is this user a DS ADMIN (role in the Users sheet)? asked once a day, so the More menu can show Exam duty lists */
+setTimeout(async () => {
+  try{
+    if(!authed() || isAdmin || !navigator.onLine) return;
+    const d = new Date().toDateString(); if(store.get('dsAdminAt', '') === d + '|' + user) return;
+    const r = await api({ action:'dut_whoami' }, 30000);
+    if(r && r.ok){ store.set('dsAdmin', !!r.ds); store.set('dsAdminAt', d + '|' + user); }
+  }catch(e){}
+}, 9000);
 async function loadTTAll(){
   if(ttAllBusy || !authed()) return;
   if(!navigator.onLine){ if(!ttAll) ttAllErr = 'This needs internet once (then it also works offline).'; if(appView === 'free') rerender(); else refreshABody(); return; }

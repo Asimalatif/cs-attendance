@@ -35,7 +35,8 @@ function dutAuthorize() {
 
 function dutRoute_(user, req) {
   try {
-    if (!isAdmin_(user) && !dutCP_(user)) return { ok: false, error: 'Only the admin or a Chief Proctor can make duty lists.' };
+    if (String(req.action || '') === 'dut_whoami') return { ok: true, admin: !!isAdmin_(user), ds: dutDsAdmin_(user) };
+    if (!isAdmin_(user) && !dutDsAdmin_(user)) return { ok: false, error: 'Only the admin or a DS ADMIN can make duty lists.' };
     switch (String(req.action || '')) {
       case 'dut_list':       return dutList_();
       case 'dut_load':       return dutLoad_(dutS_(req.id));
@@ -53,7 +54,27 @@ function dutRoute_(user, req) {
   }
 }
 
-function dutCP_(user) { try { return !!isCP_(user); } catch (e) { return false; } }   // Chief Proctor = duty operator
+/** role DS ADMIN in the Users sheet (column "Role", or a cell reading DS ADMIN in her row) = duty operator */
+function dutDsAdmin_(user) {
+  var u = String(user && user.username || '').trim().toLowerCase(); if (!u) return false;
+  var cache = CacheService.getScriptCache(), ck = 'dutds_' + u, hit = cache.get(ck);
+  if (hit) return hit === '1';
+  var ok = false;
+  try {
+    var v = SpreadsheetApp.openById(DUT_CFG.USERS).getSheetByName('Users').getDataRange().getDisplayValues();
+    var head = v[0].map(function (x) { return String(x).toUpperCase().replace(/[^A-Z]/g, ''); });
+    var cu = head.indexOf('USERNAME'); if (cu < 0) cu = 4;
+    var cr = head.indexOf('ROLE');
+    for (var i = 1; i < v.length; i++) {
+      if (String(v[i][cu]).trim().toLowerCase() !== u) continue;
+      var cells = cr >= 0 ? [v[i][cr]] : v[i];
+      ok = cells.some(function (x) { return /\bDS\s*-?\s*ADMIN\b/i.test(String(x)); });
+      break;
+    }
+  } catch (e) { ok = false; }
+  cache.put(ck, ok ? '1' : '0', 600);
+  return ok;
+}
 
 function dutS_(v) { return String(v == null ? '' : v).trim(); }
 
