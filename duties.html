@@ -385,6 +385,7 @@ function fixItems(){
   Object.keys(FIXT).forEach(t => Object.values(VMAP[t]).forEach(x => out.push([FIXT[t], x.w, x.s])));
   Object.values(BLOCK).forEach(x => out.push(['block', x.r, x.b]));
   Object.values(ROOMS).forEach(x => out.push(['room+', x.r, String(x.cap == null ? '' : x.cap)]));
+  Object.values(ROOMS).forEach(x => { if(x.st) out.push(['room staff', x.r, String(x.st)]); });
   Object.entries(SET.max).forEach(([c, v]) => { if(v !== '' && v != null) out.push(['max', c, String(v)]); });
   Object.values(SET.weak).forEach(n => out.push(['weak', n, '1']));
   out.push(['both', 'fewer duties for morning + evening', String(SET.both)]);
@@ -401,6 +402,7 @@ function loadFixItems(items){   // from the server: fill what this device does n
     else if(t === 'pref'){ const k = nkey(w); if(k && !SET.pref[k]){ try { const o = JSON.parse(v); SET.pref[k] = { n:w, a:o.a || [], s:o.s || [], m:!!o.m }; } catch(e){} } }
     else if(t === 'cat'){ const k = nkey(w); if(k && !SET.cat[k]) SET.cat[k] = { n:w, c:v }; }
     else if(t === 'room+'){ const k = vnorm(w); if(k && !ROOMS[k]) ROOMS[k] = { r:w, cap:v }; }
+    else if(t === 'room staff'){ const k = vnorm(w); if(k){ ROOMS[k] = ROOMS[k] || { r:w, cap:'' }; if(!ROOMS[k].st) ROOMS[k].st = v; } }
     else if(t === 'block'){ const k = vnorm(w); if(k && !BLOCK[k]) BLOCK[k] = { r:w, b:v }; }
     else { const ty = Object.keys(FIXT).find(x => FIXT[x] === t); const k = vnorm(w); if(ty && k && !VMAP[ty][k]) VMAP[ty][k] = { w, s:v }; }
   });
@@ -1320,6 +1322,15 @@ function vApply(){
 }
 let ROOMS = ls.get('dut_rooms', {});   // vnorm(room) -> { r, cap }
 const roomCap = r => { const x = ROOMS[vnorm(r)]; return x && x.cap !== '' && x.cap != null && !isNaN(+x.cap) ? +x.cap : null; };
+/* staff needed in a room: the number in Rooms (st), else what this duty list mostly has there, else the default (SET.per) */
+const roomStaff = r => { const x = ROOMS[vnorm(r)]; return x && x.st !== '' && x.st != null && !isNaN(+x.st) && +x.st > 0 ? +x.st : null; };
+function learnedStaff(r){
+  const c = compute(); if(!c._ls){ c._ls = {}; seatsAll().forEach(sd => { if(!sd.room || !sd.staff.length) return; const k = vnorm(sd.room), m = (c._ls[k] = c._ls[k] || {}); m[sd.staff.length] = (m[sd.staff.length] || 0) + 1; }); }
+  const m = c._ls[vnorm(r)]; if(!m) return null;
+  return +Object.keys(m).sort((a, b) => m[b] - m[a] || b - a)[0];      // the most common number (a tie: the bigger)
+}
+const staffNeed = r => roomStaff(r) || learnedStaff(r) || Math.max(1, parseInt(SET.per, 10) || 2);
+const staffFrom = r => roomStaff(r) ? 'set in Rooms' : learnedStaff(r) ? 'as in this duty list' : 'default';
 function saveRooms(){ ls.set('dut_rooms', ROOMS); C = null; if(EX){ EX.saved = false; ls.set('dut_cur', EX); } }
 function stdRooms(){ const m = {}; compute().recs.forEach(r => { if(r.room && !m[vnorm(r.room)]) m[vnorm(r.room)] = r.room; }); Object.values(ROOMS).forEach(x => { if(x.r && !m[vnorm(x.r)]) m[vnorm(x.r)] = x.r; }); return Object.values(m).sort(ncmp); }
 /** every room on one date: free all day, or in use with its classes, students, seats and staff */
@@ -1359,10 +1370,11 @@ function vfixHtml(){
   h += `<section class="card"><h3>Rooms &amp; blocks</h3><div class="sub">Where a room is — shown with the room on every list and in the students’ message (e.g. rooms 20 to 24 are in Ayesha Sadiqa Block).</div>
     <div class="grid"><label class="f">From room<input id="bkFrom" inputmode="numeric" placeholder="20"></label><label class="f">To room<input id="bkTo" inputmode="numeric" placeholder="24"></label><label class="f">Block<input id="bkName" placeholder="Ayesha Sadiqa Block"></label></div>
     <div class="acts"><button class="btn sm pri" id="bkSet">Set block</button></div>
-    <h3 style="margin-top:14px">Rooms</h3><div class="sub">Seats = how many students fit (for the <b>Free rooms</b> tab). Add new rooms here even before they are used in a paper.</div>
+    <h3 style="margin-top:14px">Rooms</h3><div class="sub">Seats = how many students fit (for the <b>Free rooms</b> tab). <b>Staff</b> = how many teachers are needed in the room (used by ⚡ Auto-create duties; e.g. S.H Hall 8, Mini Hall 3, Room 18 3, other rooms 2). Empty = as in this duty list (shown in grey), else ${esc(SET.per || '2')}. Add new rooms here even before they are used in a paper.</div>
+    <div class="acts"><button class="btn sm" id="rsLearn">Take staff numbers from this duty list</button></div>
     <div class="grid"><label class="f">New room<input id="rmNew" placeholder="e.g. 25 or Chemistry Lab 2"></label><label class="f">Seats<input id="rmCap" type="number" min="0" inputmode="numeric" placeholder="40"></label></div>
     <div class="acts"><button class="btn sm pri" id="rmAdd">+ Add room</button></div>
-    <div class="tw"><table><thead><tr><th>Room</th><th>Seats</th><th>Block / where</th></tr></thead><tbody>${R.map(r => `<tr><td class="nw"><b>${esc(r)}</b></td><td><input class="nm" type="number" min="0" inputmode="numeric" data-rcap="${esc(r)}" value="${esc(roomCap(r) == null ? '' : roomCap(r))}" placeholder="—" style="width:90px;min-width:0"></td><td><input class="nm" data-blk="${esc(r)}" value="${esc(blockOf(r))}" placeholder="—"></td></tr>`).join('')}</tbody></table></div></section>`;
+    <div class="tw"><table><thead><tr><th>Room</th><th>Seats</th><th>Staff</th><th>Block / where</th></tr></thead><tbody>${R.map(r => `<tr><td class="nw"><b>${esc(r)}</b></td><td><input class="nm" type="number" min="0" inputmode="numeric" data-rcap="${esc(r)}" value="${esc(roomCap(r) == null ? '' : roomCap(r))}" placeholder="—" style="width:90px;min-width:0"></td><td><input class="nm" type="number" min="1" max="20" inputmode="numeric" data-rst="${esc(r)}" value="${esc(roomStaff(r) == null ? '' : roomStaff(r))}" placeholder="${esc(learnedStaff(r) || SET.per || 2)}" title="${esc(staffFrom(r))}" style="width:80px;min-width:0"></td><td><input class="nm" data-blk="${esc(r)}" value="${esc(blockOf(r))}" placeholder="—"></td></tr>`).join('')}</tbody></table></div></section>`;
   return h;
 }
 
@@ -1600,6 +1612,7 @@ function wireTab(){
     if(t.id === 'bWaAll') return waAll();
     if(t.id === 'bSwap') return swapDialog('');
     if(t.id === 'bAuto') return autoDialog();
+    if(t.id === 'rsLearn'){ let n = 0; stdRooms().forEach(r => { const v = learnedStaff(r); if(v){ const k = vnorm(r); ROOMS[k] = Object.assign({ r, cap:'' }, ROOMS[k] || {}, { st:String(v) }); n++; } }); saveRooms(); V.msg = 'Staff numbers taken from this duty list for ' + n + ' rooms. Press “Save names & fixes on server” to keep them for the next exam.'; V.err = ''; return refreshTab(); }
     if(t.dataset.pfdel !== undefined){ delete SET.pref[t.dataset.pfdel]; saveSet(); return refreshTab(); }
     if(t.id === 'stLoad') return loadStudents();
     if(t.id === 'stCopy') return copy(stuMessage());
@@ -1633,6 +1646,7 @@ function wireTab(){
     if(t.dataset.vt){ t.checked ? VF.tick.add(t.dataset.vt) : VF.tick.delete(t.dataset.vt); return refreshTab(); }
     if(t.dataset.vp){ VF.std[t.dataset.vp] = t.value.trim(); VF.tick.add(t.dataset.vp); return refreshTab(); }
     if(t.dataset.vstd){ const [ty, k] = t.dataset.vstd.split('|'), v = t.value.trim(); if(v && v !== t.dataset.w) VMAP[ty][k] = { w:t.dataset.w, s:v }; else delete VMAP[ty][k]; saveFixes(); return refreshTab(); }
+    if(t.dataset.rst !== undefined){ const r = t.dataset.rst, k = vnorm(r); ROOMS[k] = Object.assign({ r, cap:'' }, ROOMS[k] || {}, { st:t.value.trim() }); saveRooms(); return refreshTab(); }
     if(t.dataset.rcap !== undefined){ const r = t.dataset.rcap, k = vnorm(r); ROOMS[k] = Object.assign({ r }, ROOMS[k] || {}, { cap:t.value.trim() }); saveRooms(); return refreshTab(); }
     if(t.dataset.blk !== undefined){ const k = vnorm(t.dataset.blk), v = t.value.trim(); if(v) BLOCK[k] = { r:t.dataset.blk, b:v }; else delete BLOCK[k]; saveFixes(); return refreshTab(); }
     if(t.dataset.g){ const G = guide(); G[t.dataset.g] = t.value; if(t.dataset.g === 'cls'){ G.head = ''; } ls.set('dut_cur', EX); return refreshTab(); }
@@ -1874,10 +1888,12 @@ function autoDialog(){
   $('#dlgIn').innerHTML = `<h2 style="margin:0 0 4px">⚡ Auto-create duties</h2>
     <div class="sub">Puts staff in every room following all the rules: <b>one duty a day</b>; nobody above her number of duties (⚙ Settings); <b>${both}</b> teachers of morning + evening get ${esc(SET.both)} fewer; every teacher in <b>her own subject’s paper</b> on its days; a <b>permanent teacher (superintendent)</b> in every room; duties spread <b>evenly</b> towards each teacher’s number, permanent and visiting mixed; duty preferences followed. Left teachers and staff marked principal / exam staff / on leave get none.</div>
     <div class="note" style="margin-top:8px">Exam shift: <b>${sh}</b> (from the time “${esc(EX.timing || '')}”). ${out.length ? `<b>${out.length}</b> teacher${out.length === 1 ? ' teaches' : 's teach'} only in the ${sh === 'morning' ? 'evening' : 'morning'} and get no duty: ${out.slice(0, 12).map(esc).join(', ')}${out.length > 12 ? ' …' : ''}.` : 'Every teacher in the list teaches in this shift.'}</div>
-    <div class="grid" style="margin-top:8px"><label class="f">Staff in a room<input class="nm" type="number" min="1" max="9" id="auPer" value="${esc(SET.per)}" style="max-width:110px"></label></div>
-    <label class="li" style="justify-content:flex-start;gap:10px;cursor:pointer"><input type="radio" name="auMode" value="fill" checked style="width:20px;height:20px"><span><b>Fill only what is missing</b><br><span class="sub">Keeps every name already written; adds staff to rooms with fewer than this number (${empty} room${empty === 1 ? ' has' : 's have'} nobody).</span></span></label>
+    <h3 style="margin-top:10px">Staff in each room</h3><div class="sub">From <b>Rooms · Classes · Subjects › Rooms</b> (Staff column); a room with no number gets what it mostly has in this duty list. Change a number here or there.</div>
+    <div class="tw" style="max-height:30vh"><table><tbody>${[...new Set(seats.map(sd => sd.room))].sort(ncmp).map(r => `<tr><td class="nw"><b>${esc(roomLbl(r))}</b></td><td><input class="nm" type="number" min="1" max="20" inputmode="numeric" data-aust="${esc(r)}" value="${esc(staffNeed(r))}" style="width:80px;min-width:0"></td><td class="sub">${esc(staffFrom(r))}</td></tr>`).join('')}</tbody></table></div>
+    <div class="grid" style="margin-top:8px"><label class="f">A new room with no number gets<input class="nm" type="number" min="1" max="9" id="auPer" value="${esc(SET.per)}" style="max-width:110px"></label></div>
+    <label class="li" style="justify-content:flex-start;gap:10px;cursor:pointer"><input type="radio" name="auMode" value="fill" checked style="width:20px;height:20px"><span><b>Fill only what is missing</b><br><span class="sub">Keeps every name already written; adds staff to rooms with fewer than their number (${empty} room${empty === 1 ? ' has' : 's have'} nobody).</span></span></label>
     <label class="li" style="justify-content:flex-start;gap:10px;cursor:pointer"><input type="radio" name="auMode" value="all" style="width:20px;height:20px"><span><b>Make all duties again</b><br><span class="sub">Removes all staff from the ${seats.length} rooms and makes a new duty list. ↶ Undo brings the old one back.</span></span></label>
-    <label class="li" style="justify-content:flex-start;gap:10px;cursor:pointer"><input type="checkbox" id="auKeep" checked style="width:20px;height:20px"><span>A room that already has more staff keeps that number</span></label>
+    <label class="li" style="justify-content:flex-start;gap:10px;cursor:pointer"><input type="checkbox" id="auKeep" checked style="width:20px;height:20px"><span>Fill only: a room that already has more staff keeps them</span></label>
     <label class="li" style="justify-content:flex-start;gap:10px;cursor:pointer"><input type="checkbox" id="auOver" checked style="width:20px;height:20px"><span>When nobody is left under her number, give an extra duty (to whoever is least over) instead of leaving a seat empty</span></label>
     <div class="acts"><button class="btn pri" id="auGo">Create duties</button><button class="btn" id="dClose">Cancel</button></div>`;
   if(!$('#dlg').open) $('#dlg').showModal();
@@ -1886,9 +1902,11 @@ function autoDialog(){
     const mode = (document.querySelector('input[name=auMode]:checked') || {}).value || 'fill';
     if(mode === 'all' && !confirm('Remove all staff from every room and make the duty list again?')) return;
     SET.per = String(Math.max(1, parseInt($('#auPer').value, 10) || 2)); saveSet();
+    document.querySelectorAll('#dlgIn [data-aust]').forEach(i => { const r = i.dataset.aust, v = parseInt(i.value, 10); if(v > 0 && v !== staffNeed(r)){ const k = vnorm(r); ROOMS[k] = Object.assign({ r, cap:'' }, ROOMS[k] || {}, { st:String(v) }); } });
+    saveRooms();
     $('#auGo').disabled = true; $('#auGo').textContent = 'Working…';
     jcwBusy(new Promise(ok => setTimeout(ok, 30)), 'Creating duties…').then(() => {
-      const r = autoRun({ mode, per:+SET.per, keep:$('#auKeep').checked, over:$('#auOver').checked });
+      const r = autoRun({ mode, keep:$('#auKeep').checked, over:$('#auOver').checked });
       autoReport(r);
     });
   };
@@ -1897,7 +1915,7 @@ function autoRun(o){
   const c = compute(), P = autoPool().filter(n => !wrongShift(n));
   const seats = seatsAll().filter(sd => sd.iso && vnorm(sd.room)).map(sd => {
     const keepNames = o.mode === 'fill' ? sd.staff.slice() : [];
-    const need = Math.max(o.per, o.keep ? sd.staff.length : 0);
+    const need = Math.max(o.per || staffNeed(sd.room), o.keep && o.mode === 'fill' ? sd.staff.length : 0);
     return { sd, names:keepNames, need, own:P.filter(n => isOwnSeat(n, sd)).map(nkey) };
   });
   const K = {}; P.forEach(n => { K[nkey(n)] = n; });
@@ -1970,7 +1988,7 @@ function autoRun(o){
     S.sd.rows.forEach(i => setRowNames(i, names));
   });
   saveLocal();
-  const empty = seats.filter(S => S.names.length < Math.max(o.per, 1)).length;
+  const empty = seats.filter(S => S.names.length < (o.per || staffNeed(S.sd.room))).length;
   return { added, extra, filledOwn, empty, seats:seats.length, mode:o.mode };
 }
 function autoReport(r){
