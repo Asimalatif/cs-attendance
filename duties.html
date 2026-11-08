@@ -566,7 +566,7 @@ function compute(){
   if(CTS && CTS.list && CTS.list.length){
     const have = new Set(teacher.map(t => nkey(t.label)));
     const inUsers = n => { const ct = contactOf(n); return !!(ct && (CTS.users ? ct.users : true)); }, LEFT = CTS.left || [];
-    missing = CTS.list.filter(c => (CTS.users ? c.users : CTS.tt ? c.tt : !/visit/i.test(c.status || '')) && !have.has(nkey(c.name)) && !offDuty(c.name)).map(c => c.name).sort(ncmp);
+    missing = CTS.list.filter(c => (CTS.users ? c.users : CTS.tt ? c.tt : !/visit/i.test(c.status || '')) && !have.has(nkey(c.name)) && !offDuty(c.name) && !wrongShift(c.name)).map(c => c.name).sort(ncmp);
     unknown = teacher.filter(t => !inUsers(t.label) && (!noteOf(t.label) || noteOf(t.label) === 'Left the college') && catOf(t.label) !== 'NT').map(t => t.label).sort(ncmp);
     unknown.forEach(n => {                                                     // left the college: in X-Users (or marked so)
       let x = LEFT.find(l => nkey(l.name) === nkey(n));
@@ -856,7 +856,7 @@ const candCmp = (from, d) => (a, b) => (wrongShift(a) ? 1 : 0) - (wrongShift(b) 
 /** teachers below their share who are NOT offered because they already have a duty on that date */
 function busyLess(d){
   const c = compute(), out = [];
-  c.L.teacher.forEach(t => { if(t.items.some(x => (x.iso || '?') === (d.iso || '?')) && lessOf(t.label) && !offDuty(t.label) && !(c.unknown || []).includes(t.label)) out.push(t.label); });
+  c.L.teacher.forEach(t => { if(t.items.some(x => (x.iso || '?') === (d.iso || '?')) && lessOf(t.label) && !offDuty(t.label) && !wrongShift(t.label) && !(c.unknown || []).includes(t.label)) out.push(t.label); });
   return out.sort((a, b) => needOf(a) - needOf(b) || ncmp(a, b));
 }
 /** teachers with NO duty on that date (any room, any time) */
@@ -865,7 +865,7 @@ function freeTeachers(d, from){
   c.L.teacher.forEach(t => { if(t.items.some(x => (x.iso || '?') === (d.iso || '?'))) busy.add(nkey(t.label)); });
   const pool = CTS ? CTS.list.filter(x => CTS.users ? x.users : true).map(x => x.name) : c.L.teacher.map(t => t.label);
   const seen = new Set();
-  return pool.filter(n => { const k = nkey(n); if(!k || seen.has(k) || busy.has(k) || offDuty(n)) return false; seen.add(k); return !c.unknown || !c.unknown.includes(n); })
+  return pool.filter(n => { const k = nkey(n); if(!k || seen.has(k) || busy.has(k) || offDuty(n) || wrongShift(n)) return false; seen.add(k); return !c.unknown || !c.unknown.includes(n); })
     .sort(candCmp(from, d));
 }
 function freeGroups(d, from){
@@ -936,7 +936,7 @@ function shiftHtml(c){
 /* teachers with more duties than the maximum of their category (Settings) */
 function overHtml(c){
   if(!CTS) return '';
-  const pool = [...new Set(CTS.list.filter(x => CTS.users ? x.users : true).map(x => x.name))].filter(n => !offDuty(n) && maxOf(n) != null);
+  const pool = [...new Set(CTS.list.filter(x => CTS.users ? x.users : true).map(x => x.name))].filter(n => !offDuty(n) && !wrongShift(n) && maxOf(n) != null);
   const more = pool.filter(overOf).sort((a, b) => typeRank(a) - typeRank(b) || (dutyCount(b) - maxOf(b)) - (dutyCount(a) - maxOf(a)));
   const less = pool.filter(lessOf).sort((a, b) => typeRank(a) - typeRank(b) || (maxOf(b) - dutyCount(b)) - (maxOf(a) - dutyCount(a)));
   const ok = pool.length - more.length - less.length;
@@ -969,7 +969,7 @@ function scoreCand(n, from, d, cnt){
 function suggestPlan(){
   const c = compute(); if(c._sg) return c._sg;
   const all = CTS ? CTS.list.filter(x => CTS.users ? x.users : true).map(x => x.name) : c.L.teacher.map(t => t.label);
-  const avail = [...new Set(all)].filter(n => !offDuty(n) && !(c.unknown || []).includes(n));
+  const avail = [...new Set(all)].filter(n => !offDuty(n) && !wrongShift(n) && !(c.unknown || []).includes(n));
   const cnt = {}; avail.forEach(n => { cnt[nkey(n)] = 0; }); c.L.teacher.forEach(t => { cnt[nkey(t.label)] = t.items.length; });
   const avg = avail.length ? avail.reduce((a, n) => a + cnt[nkey(n)], 0) / avail.length : 0;
   const target = n => { const m = maxOf(n); return m != null ? m : Math.ceil(avg) + 1; };
@@ -1056,7 +1056,7 @@ const ownLbl = o => `${roomLbl(o.sd.room)} · ${o.sd.cls.join(', ')} ${o.sd.sub.
 function ownList(){
   const c = compute(); if(c._own) return c._own;
   const pool = CTS ? [...new Set(CTS.list.filter(x => CTS.users ? x.users : true).map(x => x.name))] : c.L.teacher.map(t => t.label);
-  const L = pool.filter(n => !offDuty(n) && catOf(n) !== 'NT' && !(c.unknown || []).includes(n));
+  const L = pool.filter(n => !offDuty(n) && !wrongShift(n) && catOf(n) !== 'NT' && !(c.unknown || []).includes(n));
   const need = [], noSub = [], noPaper = [];
   L.forEach(n => {
     if(!mySubs(n).length){ noSub.push(n); return; }
@@ -1116,7 +1116,7 @@ function ownApply(){
 }
 
 /* ---------- rooms where no teacher of the paper's subject is on duty ---------- */
-const subjPool = () => { const c = compute(); return CTS ? [...new Set(CTS.list.filter(x => CTS.users ? x.users : true).map(x => x.name))].filter(n => !offDuty(n) && catOf(n) !== 'NT' && !(c.unknown || []).includes(n)) : []; };
+const subjPool = () => { const c = compute(); return CTS ? [...new Set(CTS.list.filter(x => CTS.users ? x.users : true).map(x => x.name))].filter(n => !offDuty(n) && !wrongShift(n) && catOf(n) !== 'NT' && !(c.unknown || []).includes(n)) : []; };
 /** a room has a teacher of its paper's subject (unknown when no teacher of that subject exists) */
 const roomHasSubj = sd => !paperSubs(sd).length || sd.staff.some(x => isOwnSeat(x, sd));
 function roomSubjList(){
@@ -1255,7 +1255,7 @@ function unkChoice(name){
 function unknownHtml(c){
   if(!CTS) return `<section class="card"><h3>Teachers who left · teachers with no duty</h3><div class="sub">Load the teacher list (Users sheet) to see who in this duty list has left the college and which teachers got no duty.</div><div class="acts"><button class="btn sm pri" id="bCts">Load the teacher list</button></div></section>`;
   const U = c.unknown, cnt = Object.fromEntries(c.L.teacher.map(t => [t.label, t.items.length]));
-  const usersAll = CTS.list.filter(x => CTS.users ? x.users : true), miss = c.missing.map(n => contactOf(n) || { name:n });
+  const usersAll = CTS.list.filter(x => CTS.users ? x.users : true), miss = c.missing.filter(n => !wrongShift(n)).map(n => contactOf(n) || { name:n });
   const marked = Object.entries(NOTES).filter(([k, x]) => !nameIndex().ct[k] && x.v !== 'Left the college');
   const todo = U.filter(n => unkChoice(n)).length, nLeft = U.filter(n => c.leftOf[n]).length;
   const tag = x => tLine(x.name);
@@ -1554,7 +1554,7 @@ function pickTeacher(i, msg){
   $('#dlgIn').innerHTML = `<h2 style="margin:0 0 4px">Add a teacher</h2><div class="sub">${esc(dateDay(r))} · ${esc(roomLbl(rec.room))} · ${esc(rec.cls)} ${esc(rec.sub)} — now: ${esc(rowNames(i).join(', ') || 'no staff')}</div>
     ${msg ? `<div class="note ok">${esc(msg)}</div>` : ''}
     <input class="sq" id="ptq" type="search" placeholder="Search teacher, department…" style="margin-top:8px" autocomplete="off">
-    <div class="sub" style="margin-top:6px">Only teachers with <b>no duty on this date</b>, closest to their number of duties first (e.g. 6/9 before 0/5). <span class="x">⚠</span> = at her maximum duties, or teaches only in the other shift.</div>
+    <div class="sub" style="margin-top:6px">Only teachers with <b>no duty on this date</b>, closest to their number of duties first (e.g. 6/9 before 0/5). Teachers who teach only in the ${examShift() === 'M' ? 'evening' : 'morning'} are not shown. <span class="x">⚠</span> = at her maximum duties, or teaches only in the other shift.</div>
     <div class="tw" style="max-height:52vh" id="ptl">${freeGroups({ iso:r.iso, time:r.time || '', sub:[rec.sub], room:rec.room, staff:rowNames(i) }, null).map(([lab, L]) => `<div class="li" style="padding:6px 8px;background:var(--surface2)"><b>${esc(lab)}</b><span class="sub">${L.length}</span></div>` + L.map(n => `<div class="li" style="padding:6px 8px" data-q="${esc((n + ' ' + tInfo(n)).toLowerCase())}"><div style="flex:1"><b>${wrongShift(n) || fullOf(n) ? '<span class="x">⚠</span> ' : ''}${prefScore(n, { room:rec.room, sub:[rec.sub], staff:rowNames(i) }) > 0 ? '<span class="x">✗ against her preference</span> ' : prefScore(n, { room:rec.room, sub:[rec.sub], staff:rowNames(i) }) < 0 ? '<span class="ok">♥</span> ' : ''}${esc(n)}</b><div class="sub">${esc(tLine(n))}</div></div><button class="btn sm good" data-pick="${esc(n)}">Add</button></div>`).join('')).join('') || '<div class="sub">Every teacher already has a duty on this date.</div>'}</div>
     ${(() => { const B = busyLess({ iso:r.iso }); return B.length ? `<div class="sub" style="margin-top:8px">Not offered — they already have a duty on ${esc(r.dt)}: ${B.slice(0, 40).map(x => esc(x) + ' (' + esc(tLine(x).split(' · ')[0].split(' (')[0]) + ')').join(', ')}</div>` : ''; })()}
     <div class="acts"><button class="btn" id="dClose">Done</button></div>`;
@@ -1853,7 +1853,7 @@ function swapDraw(){
   const A = T.find(t => t.key === SW.a), B = T.find(t => t.key === SW.b);
   const busy = (t, iso) => t.items.some(x => x.iso === iso);
   const dA = A && A.items.find(x => seatKey(x) === SW.da);
-  const okB = dA ? T.filter(t => t.key !== SW.a && !busy(t, dA.iso) && t.items.some(e => e.iso && e.iso !== dA.iso && !busy(A, e.iso))) : [];
+  const okB = dA ? T.filter(t => t.key !== SW.a && !wrongShift(t.label) && !busy(t, dA.iso) && t.items.some(e => e.iso && e.iso !== dA.iso && !busy(A, e.iso))) : [];
   const q = SW.q.trim().toLowerCase();
   const line = (d, attr, on) => `<label class="li" style="padding:6px 4px;cursor:pointer;justify-content:flex-start;gap:10px"><input type="radio" ${attr} ${on ? 'checked' : ''} style="width:20px;height:20px;flex:none"><span><b>${esc(dateDay(d))}</b> · ${esc(roomLbl(d.room))} · ${esc(d.cls.join(', '))} ${esc(d.sub.join(', '))}</span></label>`;
   $('#dlgIn').onclick = null; $('#dlgIn').onchange = null;
