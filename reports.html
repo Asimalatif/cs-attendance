@@ -1,0 +1,790 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#6B3423">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<title>JCW College Reports</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root{--bg:#F7EDEA;--surface:#fff;--surface2:#FBEDEA;--ink:#2B1912;--muted:#7C6159;--line:#E2C0B8;--brown:#6B3423;--brown2:#8A4A35;--dark:#4A2418;--tea:#E7B7AE;
+  --pos:#0E8A5F;--pos-bg:#E3F4EC;--neg:#C0392B;--neg-bg:#FDE3E1;--mid:#B4740E;--mid-bg:#FFF2DA;--head:#6B3423;--grid:#C9A79E;--sub:#F6E3DE;--tot:#FFF0C2;--shadow:0 1px 2px rgba(74,36,24,.06),0 4px 16px rgba(74,36,24,.07)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1A110F;--surface:#261915;--surface2:#30201B;--ink:#F6E9E5;--muted:#C4A8A0;--line:#4A3029;--tea:#8A5A50;
+  --pos-bg:#14302A;--neg-bg:#3A1C1F;--mid-bg:#3A2F14;--grid:#5A3A31;--sub:#3A2620;--tot:#3D3216;--shadow:none}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+button,select,input{font:inherit;color:inherit}
+
+/* ---------- layout ---------- */
+#sidebar{position:fixed;inset:0 auto 0 0;width:250px;background:linear-gradient(180deg,#4A2418,#2E150D);color:#EBD3CC;overflow-y:auto;z-index:30;transition:transform .2s;padding-bottom:30px}
+.brand{display:flex;gap:10px;align-items:center;padding:calc(14px + env(safe-area-inset-top,0px)) 16px 14px;border-bottom:1px solid rgba(255,255,255,.1)}
+.brand img{width:40px;height:40px;border-radius:50%;background:#fff;padding:3px;flex:none}
+.brand b{display:block;color:#fff;font-size:16px}.brand small{color:#D4B2A8;font-size:12px}
+.nav-group{padding:14px 10px 2px}
+.nav-group-title{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#B08B80;padding:0 10px 6px;font-weight:700}
+.nav-item{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border:0;background:none;color:#EBD3CC;font-size:13.5px;border-radius:10px;cursor:pointer;text-align:left}
+.nav-item:hover{background:rgba(255,255,255,.08);color:#fff}
+.nav-item.active{background:#fff;color:var(--dark);font-weight:700}
+.nav-item svg{width:17px;height:17px;flex:none}
+.nav-dot{margin-left:auto;width:7px;height:7px;border-radius:50%;flex:none}
+.nav-dot.done{background:#5FD3A1}
+#main{margin-left:250px;min-height:100vh}
+.topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:calc(10px + env(safe-area-inset-top,0px)) 22px 10px;background:linear-gradient(120deg,#4A2418,#8A4A35);color:#fff}
+.topbar h1{font-size:18px;margin:0}.crumb{font-size:12px;opacity:.8}
+.topbar .spacer{flex:1}
+.topbar .tb{height:36px;border-radius:999px;border:0;background:rgba(255,255,255,.15);color:#fff;font-weight:700;padding:0 14px;cursor:pointer;white-space:nowrap;text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-size:13px}
+.topbar .tb:hover{background:rgba(255,255,255,.25)}.topbar .tb:disabled{opacity:.5;cursor:default}
+#menuBtn{display:none}
+.switch{display:inline-flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none;font-weight:600}
+.switch input{display:none}
+.switch .track{width:36px;height:20px;border-radius:20px;background:rgba(255,255,255,.3);position:relative;transition:.2s}
+.switch .track::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.2s}
+.switch input:checked+.track{background:#5FD3A1}.switch input:checked+.track::after{left:18px}
+.page{display:none;padding:20px 22px 48px;max-width:1400px}
+.page.active{display:block}
+.page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.page-head h2{margin:0 0 4px;font-size:21px;color:var(--brown)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .page-head h2{color:var(--tea)}}
+.page-head p{margin:0;color:var(--muted);max-width:720px}
+.banner{margin:12px 22px 0}
+
+/* ---------- buttons ---------- */
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 14px;border-radius:12px;font-size:13.5px;font-weight:800;cursor:pointer;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);white-space:nowrap;text-decoration:none}
+.btn svg{width:15px;height:15px}
+.btn-primary{background:linear-gradient(180deg,#8A4A35,#6B3423);border-color:#6B3423;color:#fff}
+.btn-ghost:hover{background:var(--surface2)}
+.btn:disabled{opacity:.55;cursor:default}
+.btn-sm{height:32px;padding:0 10px;font-size:12px;font-weight:700;border-radius:9px}
+.hidden{display:none!important}
+
+/* ---------- status ---------- */
+.status{display:none;align-items:center;gap:10px;margin:0 0 14px;padding:10px 13px;border-radius:12px;font-size:13px;background:var(--mid-bg);color:var(--mid)}
+.status.show{display:flex}.status.ok{background:var(--pos-bg);color:var(--pos)}.status.err{background:var(--neg-bg);color:var(--neg)}
+.spin{width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- cards / KPIs ---------- */
+.card{background:var(--surface);border:1.5px solid var(--line);border-top:5px solid var(--brown);border-radius:18px;box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line)}
+.card-title{font-weight:800;font-size:15px}
+.card-body{padding:14px 16px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:var(--surface);border:1.5px solid var(--line);border-radius:16px;padding:14px 16px;border-left:5px solid var(--brown2);box-shadow:var(--shadow)}
+.kpi.pos{border-left-color:var(--pos)}.kpi.neg{border-left-color:var(--neg)}
+.kpi-label{font-size:12.5px;color:var(--muted);font-weight:700}
+.kpi-value{font-size:25px;font-weight:800;margin-top:4px}
+.kpi.pos .kpi-value{color:var(--pos)}.kpi.neg .kpi-value{color:var(--neg)}
+.notes{margin:0 0 16px;padding:10px 14px;background:var(--surface);border:1.5px dashed var(--line);border-radius:12px;color:var(--muted);font-size:12.5px;line-height:1.6}
+.notes div::before{content:'• '}
+.empty{text-align:center;color:var(--muted);padding:44px 20px;border:2px dashed var(--line);border-radius:18px;background:var(--surface)}
+.empty b{display:block;color:var(--ink);font-size:15px;margin-bottom:4px}
+
+/* ---------- charts ---------- */
+.chart-tabs{display:inline-flex;background:var(--surface2);border-radius:10px;padding:3px;gap:2px;flex-wrap:wrap}
+.chart-tabs button{border:0;background:none;font-size:12px;padding:5px 10px;border-radius:8px;cursor:pointer;color:var(--muted);font-weight:600}
+.chart-tabs button.on{background:var(--surface);color:var(--ink);font-weight:800;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.chart-box{position:relative;height:320px}
+.dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(460px,100%),1fr));gap:16px}
+.dash-grid .card{margin:0}
+.muted-sm{font-size:12px;color:var(--muted)}
+
+/* ---------- tables: strong borders + shading ---------- */
+.tbl-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.search{height:32px;padding:0 10px;border:1.5px solid var(--line);border-radius:9px;font-size:12.5px;width:170px;background:var(--surface)}
+.scroll-x{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px;border:2px solid var(--brown)}
+th{background:var(--head);color:#fff;font-weight:700;text-align:center;padding:9px 11px;border:1px solid var(--grid);white-space:nowrap;font-size:12px;text-transform:uppercase;letter-spacing:.3px}
+td{padding:7px 11px;border:1px solid var(--grid);text-align:center}
+tbody tr:nth-child(even) td{background:var(--surface2)}
+tbody tr:hover td{background:var(--sub)}
+td.key{text-align:left;font-weight:600}
+td.pos{color:var(--pos);font-weight:800}td.neg{color:var(--neg);font-weight:800}
+tr.subtotal td{background:var(--sub)!important;font-weight:800}
+tr.total td,tr.totalRow td{background:var(--tot)!important;font-weight:800;border-top:2px solid var(--mid)}
+.pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11.5px;font-weight:800}
+.pill.pos{background:var(--pos-bg);color:var(--pos)}.pill.neg{background:var(--neg-bg);color:var(--neg)}.pill.neu{background:var(--surface2);color:var(--muted)}
+.grid-table{width:auto}
+.grid-table td{padding:6px 12px;min-width:40px}
+.grid-table td.gt-bold{font-weight:800;background:var(--sub)}
+.grid-table td.gt-highlight{background:#F3D3E0;color:#2B1912}
+.grid-table td.gt-big{font-size:16px;background:var(--surface2)}
+.highlightX{background:var(--neg-bg)!important;color:var(--neg);font-weight:800}
+.select{height:40px;padding:0 10px;font-size:13.5px;border:1.5px solid var(--line);border-radius:12px;min-width:220px;background:var(--surface)}
+dialog{border:none;border-radius:18px;padding:0;max-width:min(460px,94vw);width:100%;background:var(--surface);color:var(--ink)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog .in{padding:18px}
+dialog label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:700;color:var(--muted);margin-top:10px}
+dialog input{height:42px;border:1.5px solid var(--line);border-radius:12px;padding:0 10px;background:var(--surface);font-size:15px;font-weight:700}
+
+@media(max-width:900px){
+  #sidebar{transform:translateX(-100%)}
+  body.nav-open #sidebar{transform:none;box-shadow:0 0 40px rgba(0,0,0,.4)}
+  #main{margin-left:0}
+  #menuBtn{display:inline-flex}
+  .page{padding:16px 12px 40px}.banner{margin:10px 12px 0}
+  .topbar{padding-left:12px;padding-right:12px}
+}
+@media print{
+  #sidebar,.topbar,.actions,.chart-tabs,.tbl-tools,.banner{display:none!important}
+  #main{margin:0}.page{padding:0}
+  .card,.kpi{box-shadow:none;break-inside:avoid}
+  body{background:#fff}
+}
+</style>
+<script src="spinner.js"></script>
+</head>
+<body>
+<aside id="sidebar">
+  <div class="brand"><img src="jcw-logo.png" alt=""><div><b>College Reports</b><small>Jinnah College for Women</small></div></div>
+  <nav id="nav"></nav>
+</aside>
+
+<div id="main">
+  <div class="topbar">
+    <button id="menuBtn" class="tb" onclick="document.body.classList.toggle('nav-open')">☰</button>
+    <div><div class="crumb" id="crumb">Dashboard</div><h1 id="pageTitle">Overview</h1></div>
+    <div class="spacer"></div>
+    <label class="switch" title="Applies to the comparison, admission and fee reports"><input type="checkbox" id="exHomic"><span class="track"></span>Exclude HOMIC</label>
+    <button class="tb" id="sessBtn" onclick="openSessions()">Sessions</button>
+    <button class="tb" id="allBtn" onclick="runAll()">⟳ Generate all</button>
+    <button class="tb hidden" id="allDl" onclick="downloadAll()">⬇ All in Excel</button>
+    <a class="tb" href="./">← App</a>
+  </div>
+  <div class="banner"><div id="allStatus" class="status"></div></div>
+  <div id="pages"></div>
+</div>
+
+<dialog id="dlg"><div class="in">
+  <h3 style="margin:0 0 4px">Session years</h3>
+  <div class="muted-sm">Used in the headings of every report (e.g. “SESSION (2026-27) (FIRST YEAR)”). Change them once a year.</div>
+  <label>Current session · 1st Year<input id="sCur" placeholder="2026-27"></label>
+  <label>Previous session · 2nd Year<input id="sPrev" placeholder="2025-26"></label>
+  <div id="sMsg" class="status" style="margin-top:12px"></div>
+  <div class="actions" style="margin-top:14px">
+    <button class="btn btn-primary" onclick="saveSessions(false)">Save</button>
+    <button class="btn" onclick="saveSessions(true)">Follow the calendar</button>
+    <button class="btn" onclick="$('dlg').close()">Close</button>
+  </div>
+</div></dialog>
+
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm7d7-UKg0W-OoWAiuRBHe4mjlRgMQXIHuLm6zi--i/exec';
+const $ = id => document.getElementById(id);
+const esc = s => String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const ls = { get(k, d){ try{ const v = localStorage.getItem('csa2_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } } };
+const user = ls.get('user', ''), pass = ls.get('pass', ''), isAdmin = ls.get('admin', false) === true;
+const urls = {}, charts = {}, done = new Set();
+let META = { sessions: null, columns: [] };
+
+async function api(payload, ms = 330000){
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms);
+  try{
+    const r = await fetch(API, { method: 'POST', body: JSON.stringify({ username: user, password: pass, ...payload }), signal: ctl.signal, redirect: 'follow' });
+    const txt = await r.text(); let j; try{ j = JSON.parse(txt); }catch(e){ throw new Error('The server sent a web page instead of data. Check the deployment.'); }
+    if(j && j.error === 'UNKNOWN_ACTION') throw new Error('The server does not know the reports yet: paste Reports.gs, add the rpt_ line to doPost and deploy a new version.');
+    if(j && j.error === 'BAD_LOGIN') throw new Error('Your saved login was refused. Open the app, sign out and sign in again.');
+    if(j && j.ok === false) throw new Error(j.error || 'Server error');
+    return j;
+  }catch(e){
+    if(e.name === 'AbortError') throw new Error('The server took too long. Try again.');
+    if(e instanceof TypeError) throw new Error(navigator.onLine ? 'The Apps Script server did not answer. Try again in a minute.' : 'No internet.');
+    throw e;
+  }finally{ clearTimeout(t); }
+}
+
+  const ICON = {
+    dash: '<path d="M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z"/>',
+    users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+    flow: '<path d="M3 6h13M3 12h9M3 18h5"/><path d="M17 14l4 4-4 4"/><path d="M21 18h-8"/>',
+    pie: '<path d="M21.2 15.9A10 10 0 1 1 8 2.8"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>',
+    layers: '<path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/>',
+    grid: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>',
+    trend: '<path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/>',
+    book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15z"/><path d="M6.5 17A2.5 2.5 0 0 0 4 19.5 2.5 2.5 0 0 0 6.5 22H20v-5"/>',
+    columns: '<path d="M12 3v18M3 3h18v18H3z"/>',
+    award: '<circle cx="12" cy="8" r="6"/><path d="M15.5 13 17 22l-5-3-5 3 1.5-9"/>',
+    file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/>',
+    check: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+    money: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
+    search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+    filter: '<path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>',
+    play: '<path d="m5 3 14 9-14 9V3z"/>', sheet: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8M12 13v8"/>',
+    dl: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>', print: '<path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/>'
+  };
+  const svg = n => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + (ICON[n] || '') + '</svg>';
+
+
+
+/* ================================================================
+   MENU (one line per report)
+   type 'cmp'  = drawn with KPI cards, charts and searchable tables
+   type 'off'  = the official layouts of the old reports app
+   ================================================================ */
+const NAV = [
+  { group: 'Dashboard', items: [
+    { id: 'overview', type: 'cmp', icon: 'dash', label: 'Overview', dashboard: true,
+      desc: 'Headline strength figures with charts by program, category and quota.' }
+  ]},
+  { group: 'Admissions', items: [
+    { id: 'admissionFlow', type: 'cmp', icon: 'flow', label: 'Admission Flow',
+      desc: 'All admissions (before) → cancelled & migrated (Left Students sheet) → present strength (after), by class, program, section and quota.' },
+    { id: 'meritQuota', type: 'cmp', icon: 'award', label: 'Merit vs Quota',
+      desc: 'Open-quota merit students (Sections A–D) versus quota / other admissions.' },
+    { id: 'quota', type: 'cmp', icon: 'pie', label: 'Quota Comparison',
+      desc: 'Quota-wise strength, current vs previous year, with Quota › Program breakdown.' },
+    { id: 'quotaStrength', type: 'cmp', icon: 'pie', label: 'Quota Strength',
+      desc: 'College-wide strength by Quota, Program and Class with totals.' },
+    { id: 'homic', type: 'cmp', icon: 'users', label: 'HOMIC vs Regular',
+      desc: 'HOMIC (Enroll# containing -HC) versus regular students. Switch off "Exclude HOMIC" to include them.' }
+  ]},
+  { group: 'Strength Analysis', items: [
+    { id: 'programCategory', type: 'cmp', icon: 'layers', label: 'Program & Category',
+      desc: 'Program-wise, Program › Category (with subtotals) and Category-wise comparison.' },
+    { id: 'sections', type: 'cmp', icon: 'grid', label: 'Section-wise',
+      desc: 'Every section of every program, current vs previous. Shows new and closed sections.' },
+    { id: 'movers', type: 'cmp', icon: 'trend', label: 'Top Movers',
+      desc: 'The 10 sections with the biggest increase and the 10 with the biggest decrease.' },
+    { id: 'subjects', type: 'cmp', icon: 'book', label: 'Subject-wise',
+      desc: 'Students per subject (Sub1–Sub7), all programs and Program › Subject.' },
+    { id: 'custom', type: 'cmp', icon: 'filter', label: 'Custom Column',
+      desc: 'Compare current vs previous year by ANY column of the Transform sheet (district, board, city…).' }
+  ]},
+  { group: 'Official Reports', items: [
+    { id: 'fancy', type: 'off', render: 'fancy', icon: 'file', label: 'PCS & Category (Fancy)',
+      desc: 'Class / Program / Category strength, PCS section strength, seat increase/decrease and year-wise quota summary.',
+      msg: r => 'Report ready · sheet "' + r.sheetName + '" updated · ' + r.totalStudents + ' students.' },
+    { id: 'jcwSum', type: 'off', render: 'grid', icon: 'columns', label: 'JCW Strength Summary',
+      desc: 'Totals, HOMIC breakdown, per-program 1st/2nd year splits and year-over-year seat changes.' },
+    { id: 'enroll', type: 'off', render: 'grid', icon: 'columns', label: 'Enrollment Report',
+      desc: '1st Year vs 2nd Year class-wise enrollment, side by side.' }
+  ]},
+  { group: 'F.A Program', items: [
+    { id: 'faStrength', type: 'cmp', icon: 'book', label: 'FA Subject Strength',
+      desc: 'F.A students per subject and per section, 1st and 2nd Year.' },
+    { id: 'faLists', type: 'cmp', icon: 'users', label: 'FA Subject Lists',
+      desc: 'One student list per subject + class (Enroll#, Name, Father Name, Section, PCS). Tap “Show table” to open a list.' }
+  ]},
+  { group: 'Fee & Records', items: [
+    { id: 'fee', type: 'cmp', icon: 'money', label: 'Fee Details',
+      desc: 'Fee challan details of every student, read from the CHALLAN DETAILS column of the Transform sheet.' },
+    { id: 'att', type: 'off', render: 'table', field: 'data', highlight: '✖', icon: 'check', label: 'Attendance Availability',
+      busy: 'Scanning the old monthly backup files… this can take a few minutes.',
+      desc: 'Old reports app check: which teacher / subject / class had attendance in the monthly backup files (September to January).',
+      msg: r => 'Report ready · ' + r.rowCount + ' rows.' }
+  ]}
+];
+/* Not in the menu because other reports already show the same thing:
+   'seats'     (Seat Increase/Decrease) → inside PCS & Category (Fancy) and JCW Strength Summary
+   Quota Wise Summary                   → Quota Strength
+   Cancelled sheet viewer               → Admission Flow (list of cancelled & migrated students) */
+
+const ALL = [];
+NAV.forEach(g => g.items.forEach(it => { it.group = g.group; ALL.push(it); }));
+const byId = id => ALL.find(x => x.id === id);
+
+/* ================================================================
+   BUILD UI
+   ================================================================ */
+function buildUI() {
+  const nav = $('nav'), pages = $('pages');
+  NAV.forEach(g => {
+    const grp = document.createElement('div'); grp.className = 'nav-group';
+    grp.innerHTML = '<div class="nav-group-title">' + esc(g.group) + '</div>';
+    g.items.forEach(it => {
+      const b = document.createElement('button');
+      b.className = 'nav-item'; b.id = 'nav_' + it.id;
+      b.innerHTML = svg(it.icon) + '<span>' + esc(it.label) + '</span><span class="nav-dot" id="dot_' + it.id + '"></span>';
+      b.onclick = () => showPage(it.id);
+      grp.appendChild(b);
+    });
+    nav.appendChild(grp);
+  });
+  ALL.forEach(it => {
+    const p = document.createElement('section');
+    p.className = 'page'; p.id = 'page_' + it.id;
+    p.innerHTML =
+      '<div class="page-head"><div><h2>' + esc(it.label) + '</h2><p>' + esc(it.desc) + '</p></div>' +
+      '<div class="actions">' +
+        (it.id === 'custom' ? '<select id="cmpColumn" class="select"><option value="">— choose a column —</option></select>' : '') +
+        '<button id="gen_' + it.id + '" class="btn btn-primary" onclick="runReport(\'' + it.id + '\')">' + svg('play') + 'Generate</button>' +
+        '<button id="open_' + it.id + '" class="btn btn-ghost hidden" onclick="openUrl(\'' + it.id + '\')">' + svg('sheet') + 'Open in Sheet</button>' +
+        '<button id="dl_' + it.id + '" class="btn btn-ghost hidden" onclick="downloadOne(\'' + it.id + '\')">' + svg('dl') + 'Excel</button>' +
+        '<button id="pr_' + it.id + '" class="btn btn-ghost hidden" onclick="window.print()">' + svg('print') + 'Print</button>' +
+      '</div></div>' +
+      '<div class="status" id="st_' + it.id + '"></div>' +
+      '<div id="out_' + it.id + '"><div class="empty"><b>No data yet</b>Tap <i>Generate</i> to build this report.</div></div>';
+    pages.appendChild(p);
+  });
+  showPage(location.hash.slice(1) && byId(location.hash.slice(1)) ? location.hash.slice(1) : 'overview');
+}
+
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(e => e.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
+  $('page_' + id).classList.add('active'); $('nav_' + id).classList.add('active');
+  const it = byId(id);
+  $('crumb').textContent = it.group; $('pageTitle').textContent = it.label;
+  document.body.classList.remove('nav-open');
+  history.replaceState(null, '', '#' + id);
+  window.scrollTo(0, 0);
+}
+
+/* ================================================================
+   HELPERS
+   ================================================================ */
+function setStatus(el, kind, text) {
+  el = typeof el === 'string' ? $(el) : el;
+  el.className = 'status show' + (kind === 'busy' ? '' : ' ' + kind);
+  el.innerHTML = (kind === 'busy' ? '<div class="spin"></div>' : '') + '<span></span>';
+  el.lastChild.textContent = text;
+}
+const showBtns = (id, on) => ['open_', 'dl_', 'pr_'].forEach(p => { const b = $(p + id); if (b) b.classList.toggle('hidden', !on); });
+function markDone(id) { done.add(id); const d = $('dot_' + id); if (d) d.classList.add('done'); $('allDl').classList.remove('hidden'); }
+
+function triggerDownload(result) {
+  const bytes = atob(result.base64), arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([arr], { type: result.mimeType }));
+  a.download = result.filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+async function withBtn(btn, busyText, fn) {
+  const label = btn.innerHTML; btn.disabled = true; btn.textContent = busyText;
+  try { await fn(); } catch (e) { alert(e.message); } finally { btn.disabled = false; btn.innerHTML = label; }
+}
+function downloadOne(id) { withBtn($('dl_' + id), 'Preparing…', async () => triggerDownload(await api({ action: 'rpt_xlsx', key: id }))); }
+function downloadAll() { withBtn($('allDl'), 'Preparing…', async () => triggerDownload(await api({ action: 'rpt_xlsx_all', keys: Array.from(done) }))); }
+function openUrl(k) { if (urls[k]) window.open(urls[k], '_blank'); else alert('Generate the report first.'); }
+
+function downloadCsv(name, data) {
+  const csv = data.map(r => r.map(c => '"' + String(c === null || c === undefined ? '' : c).replace(/"/g, '""') + '"').join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' }));
+  a.download = name.replace(/[^\w\- ]+/g, '').trim() + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+function filterRows(input, table) {
+  const q = input.value.trim().toLowerCase();
+  table.querySelectorAll('tbody tr').forEach(tr => {
+    if (tr.classList.contains('total') || tr.classList.contains('totalRow')) return;
+    tr.style.display = !q || tr.textContent.toLowerCase().indexOf(q) >= 0 ? '' : 'none';
+  });
+}
+
+/* ================================================================
+   SESSIONS
+   ================================================================ */
+function showSessions() { const s = META.sessions; if (s) $('sessBtn').textContent = 'Sessions ' + s.cur + ' / ' + s.prev; }
+function openSessions() {
+  const s = META.sessions || {};
+  $('sCur').value = s.cur || ''; $('sPrev').value = s.prev || ''; $('sMsg').className = 'status';
+  $('dlg').showModal();
+}
+async function saveSessions(reset) {
+  try {
+    const r = await api(reset ? { action: 'rpt_sessions', reset: true } : { action: 'rpt_sessions', cur: $('sCur').value.trim(), prev: $('sPrev').value.trim() });
+    META.sessions = r.sessions; showSessions();
+    $('sCur').value = r.sessions.cur; $('sPrev').value = r.sessions.prev;
+    setStatus('sMsg', 'ok', 'Saved. Generate the reports again to use the new years.');
+  } catch (e) { setStatus('sMsg', 'err', e.message); }
+}
+
+/* ================================================================
+   RUN REPORTS
+   ================================================================ */
+async function runReport(id, quiet) {
+  const it = byId(id), extra = {};
+  if (id === 'custom') {
+    extra.column = $('cmpColumn').value;
+    if (!extra.column) { alert('Please choose a column first.'); return false; }
+  }
+  const btn = $('gen_' + id);
+  btn.disabled = true; showBtns(id, false);
+  setStatus('st_' + id, 'busy', it.busy || 'Generating report… this may take a moment.');
+  try {
+    const r = await api({ action: 'rpt_run', key: id, opts: { excludeHomic: $('exHomic').checked }, extra: extra });
+    urls[id] = r.sheetUrl;
+    if (it.type === 'cmp') { renderCmp(id, r); setStatus('st_' + id, 'ok', 'Report ready · sheet "' + r.sheetName + '" updated · ' + (r.subtitle || '')); }
+    else { renderOfficial(it, r); setStatus('st_' + id, 'ok', it.msg ? it.msg(r) : 'Report ready · sheet "' + r.sheetName + '" updated.'); }
+    showBtns(id, true); markDone(id);
+    return true;
+  } catch (e) {
+    setStatus('st_' + id, 'err', 'Error: ' + e.message);
+    return false;
+  } finally { btn.disabled = false; }
+}
+
+async function runAll() {
+  const keys = ALL.filter(x => x.id !== 'custom' && x.id !== 'att').map(x => x.id);
+  const btn = $('allBtn'); btn.disabled = true;
+  let ok = 0;
+  for (let i = 0; i < keys.length; i++) {
+    setStatus('allStatus', 'busy', 'Generating ' + (i + 1) + ' of ' + keys.length + ': ' + byId(keys[i]).label + '…');
+    if (await runReport(keys[i], true)) ok++;
+  }
+  btn.disabled = false;
+  setStatus('allStatus', ok === keys.length ? 'ok' : 'err', ok + ' of ' + keys.length + ' reports ready. Open any report from the menu, or download them all in one Excel workbook. (Attendance Availability and Custom Column run on their own pages.)');
+}
+
+  function fmtCell(v, type) {
+    if (v === '' || v === null || v === undefined) return { h: '', c: '' };
+    if (type === 'diff') { const n = +v; return { h: n > 0 ? '+' + n : String(n), c: n > 0 ? 'pos' : n < 0 ? 'neg' : '' }; }
+    if (type === 'pct') {
+      if (typeof v === 'number') return { h: (v > 0 ? '+' : '') + (v * 100).toFixed(1) + '%', c: v > 0 ? 'pos' : v < 0 ? 'neg' : '' };
+      return { h: esc(v), c: 'pos' };
+    }
+    if (type === 'status') {
+      const s = String(v), c = s.indexOf('▲') === 0 ? 'pos' : s.indexOf('▼') === 0 ? 'neg' : 'neu';
+      return { h: '<span class="pill ' + c + '">' + esc(s) + '</span>', c: '' };
+    }
+    if (type === 'int' && typeof v === 'number') return { h: v.toLocaleString(), c: '' };
+    if (v === 'Migrated' || v === 'Cancelled') return { h: '<span class="pill ' + (v === 'Migrated' ? 'neg' : 'neu') + '">' + v + '</span>', c: '' };
+    return { h: esc(v), c: '' };
+  }
+
+  function renderCmp(key, r) {
+    const it = byId(key), host = $('out_' + key);
+    Object.keys(charts).filter(k => k.indexOf(key + '_') === 0).forEach(k => { charts[k].destroy(); delete charts[k]; });
+    host.innerHTML = '';
+
+    if ((r.kpis || []).length) {
+      const k = document.createElement('div'); k.className = 'kpis';
+      r.kpis.forEach(x => {
+        const d = document.createElement('div'); d.className = 'kpi ' + (x.tone || '');
+        d.innerHTML = '<div class="kpi-label"></div><div class="kpi-value"></div>';
+        d.children[0].textContent = x.label; d.children[1].textContent = x.value;
+        k.appendChild(d);
+      });
+      host.appendChild(k);
+    }
+    if ((r.notes || []).length) {
+      const n = document.createElement('div'); n.className = 'notes';
+      r.notes.forEach(t => { const d = document.createElement('div'); d.textContent = t; n.appendChild(d); });
+      host.appendChild(n);
+    }
+
+    if (it.dashboard) {
+      const grid = document.createElement('div'); grid.className = 'dash-grid';
+      r.tables.forEach((t, i) => grid.appendChild(tableCard(key, i, t, { tableHidden: true })));
+      host.appendChild(grid);
+    } else {
+      r.tables.forEach((t, i) => host.appendChild(tableCard(key, i, t, { tableHidden: !!r.collapse })));
+    }
+  }
+
+  /* One card = optional chart (with type switch) + searchable table */
+  function tableCard(key, i, t, o) {
+    const id = key + '_' + i;
+    const cd = chartData(t);
+    const card = document.createElement('div'); card.className = 'card';
+    const types = !cd ? [] : cd.kind === 'flow'
+        ? [['stack', 'Stacked'], ['bar', 'Before vs After'], ['doughnut', 'Share'], ['loss', 'Loss %']]
+        : cd.kind === 'count'
+        ? [['bar', 'Bar'], ['stack', 'Stacked'], ['hbar', 'Horizontal'], ['doughnut', 'Share']]
+        : [['bar', 'Bar'], ['hbar', 'Horizontal'], ['line', 'Line'], ['doughnut', 'Share'], ['diff', 'Change']];
+
+    card.innerHTML =
+      '<div class="card-head"><div><div class="card-title"></div>' + (cd && cd.cut ? '<div class="muted-sm">Chart shows the top 30 by size</div>' : '') + '</div>' +
+      '<div class="tbl-tools">' +
+        (types.length ? '<div class="chart-tabs">' + types.map((x, j) => '<button data-t="' + x[0] + '"' + (j === 0 ? ' class="on"' : '') + '>' + x[1] + '</button>').join('') + '</div>' : '') +
+        '<input class="search" placeholder="Filter rows…">' +
+        '<button class="btn btn-ghost btn-sm" data-act="csv">CSV</button>' +
+        '<button class="btn btn-ghost btn-sm" data-act="tbl">' + (o.tableHidden ? 'Show table' : 'Hide table') + '</button>' +
+      '</div></div>' +
+      '<div class="card-body">' +
+        (types.length ? '<div class="chart-box"><canvas></canvas></div>' : '') +
+        '<div class="scroll-x tbl-wrap" style="' + (types.length ? 'margin-top:14px;' : '') + (o.tableHidden ? 'display:none' : '') + '"></div>' +
+      '</div>';
+    card.querySelector('.card-title').textContent = t.title;
+
+    // table
+    const table = document.createElement('table');
+    const thead = document.createElement('thead'), tbody = document.createElement('tbody');
+    t.data.forEach((row, ri) => {
+      const type = t.types[ri], tr = document.createElement('tr');
+      if (type === 'subtotal' || type === 'total') tr.className = type;
+      row.forEach((cell, c) => {
+        const el = document.createElement(type === 'header' ? 'th' : 'td');
+        if (type === 'header') el.textContent = cell;
+        else {
+          const f = fmtCell(cell, t.colTypes[c]);
+          el.innerHTML = f.h;
+          if (c < t.nKeys) el.className = 'key'; else if (f.c) el.className = f.c;
+        }
+        tr.appendChild(el);
+      });
+      (type === 'header' ? thead : tbody).appendChild(tr);
+    });
+    table.appendChild(thead); table.appendChild(tbody);
+    card.querySelector('.tbl-wrap').appendChild(table);
+
+    const search = card.querySelector('.search');
+    search.oninput = () => {
+      filterRows(search, table);
+      const w = card.querySelector('.tbl-wrap');
+      if (search.value && w.style.display === 'none') { w.style.display = ''; const b = card.querySelector('[data-act="tbl"]'); if (b) b.textContent = 'Hide table'; }
+    };
+    card.querySelector('[data-act="csv"]').onclick = () => downloadCsv(t.title, t.data);
+    const tb = card.querySelector('[data-act="tbl"]');
+    if (tb) tb.onclick = () => {
+      const w = card.querySelector('.tbl-wrap'), hid = w.style.display === 'none';
+      w.style.display = hid ? '' : 'none'; tb.textContent = hid ? 'Hide table' : 'Show table';
+    };
+
+    // chart
+    if (types.length) {
+      const canvas = card.querySelector('canvas'), box = card.querySelector('.chart-box');
+      const draw = type => {
+        if (charts[id]) charts[id].destroy();
+        if (typeof Chart === 'undefined') { box.innerHTML = '<div class="empty">Charts could not load (no internet access to the chart library).</div>'; return; }
+        box.style.height = (type === 'hbar' && cd.kind !== 'flow' ? Math.max(320, cd.labels.length * 24 + 60) : 320) + 'px';
+        charts[id] = new Chart(canvas, chartConfig(cd, type));
+      };
+      card.querySelectorAll('.chart-tabs button').forEach(b => b.onclick = () => {
+        card.querySelectorAll('.chart-tabs button').forEach(x => x.classList.remove('on'));
+        b.classList.add('on'); draw(b.dataset.t);
+      });
+      setTimeout(() => draw(types[0][0]), 0);
+    }
+    return card;
+  }
+
+  /* Pick the rows to chart: subtotals for grouped tables, data rows otherwise */
+  function chartData(t) {
+    if (!t.colTypes || t.colTypes.indexOf('int') < 0) return null;
+    const nk = t.nKeys, hdr = t.data[0];
+    const kind = hdr.indexOf('Present Strength (After)') >= 0 ? 'flow' : t.colTypes.indexOf('diff') >= 0 ? 'cmp' : 'count';
+    const hasSub = t.types.indexOf('subtotal') >= 0;
+    let rows = [];
+    t.data.forEach((r, i) => {
+      const ty = t.types[i];
+      if (hasSub ? ty !== 'subtotal' : ty !== 'data') return;
+      const label = hasSub ? String(r[0]).replace(/^Subtotal:\s*/, '') : r.slice(0, nk).filter(x => x !== '').join(' · ');
+      rows.push({ label: label, r: r });
+    });
+    if (!rows.length) return null;
+    // count tables: every number column except the last one (Total)
+    let vals = [];
+    t.colTypes.forEach((c, i) => { if (c === 'int') vals.push(i); });
+    const totalCol = vals[vals.length - 1];
+    if (kind === 'count' && vals.length > 1) vals = vals.slice(0, -1);
+    const sizeCol = kind === 'count' ? totalCol : nk;
+    let cut = false;
+    if (rows.length > 30) { rows = rows.slice().sort((a, b) => (+b.r[sizeCol]) - (+a.r[sizeCol])).slice(0, 30); cut = true; }
+    return { kind: kind, nk: nk, hdr: hdr, rows: rows, labels: rows.map(x => x.label), cut: cut, vals: vals, totalCol: totalCol };
+  }
+
+  const PALETTE = ['#8A4A35', '#E0A458', '#2E8B6F', '#C0392B', '#5B6BBF', '#2A9DB5', '#C2577E', '#7FA33A', '#D9822B', '#7C6159', '#3E7CB1', '#9B59B6'];
+
+  function chartConfig(cd, type) {
+    const at = c => cd.rows.map(x => +x.r[c] || 0);
+    const col = j => at(cd.nk + j);
+    const short = s => s.length > 28 ? s.slice(0, 27) + '…' : s;
+    const labels = cd.labels.map(short);
+    const ink = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#7C6159';
+    const grid = getComputedStyle(document.documentElement).getPropertyValue('--line').trim() || '#E2C0B8';
+    const base = {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, color: ink } }, tooltip: { mode: 'index', intersect: false } },
+      scales: { x: { grid: { display: false }, ticks: { font: { size: 11 }, color: ink } }, y: { beginAtZero: true, grid: { color: grid }, ticks: { font: { size: 11 }, color: ink } } }
+    };
+    const noLegend = Object.assign({}, base, { plugins: Object.assign({}, base.plugins, { legend: { display: false } }) });
+    const stacked = Object.assign({}, base, { scales: { x: Object.assign({ stacked: true }, base.scales.x), y: Object.assign({ stacked: true }, base.scales.y) } });
+    const horiz = Object.assign({}, base, { indexAxis: 'y', scales: { x: base.scales.y, y: Object.assign({}, base.scales.x, { ticks: { autoSkip: false, font: { size: 11 }, color: ink } }) } });
+    const bar = (label, data, color) => ({ label: label, data: data, backgroundColor: color, borderRadius: 4, maxBarThickness: 34 });
+    const donut = (lbls, data, colors) => ({
+      type: 'doughnut',
+      data: { labels: lbls, datasets: [{ data: data, backgroundColor: colors || lbls.map((_, i) => PALETTE[i % PALETTE.length]), borderWidth: 2, borderColor: '#fff' }] },
+      options: { responsive: true, maintainAspectRatio: false, cutout: '58%', plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 }, color: ink } } } }
+    });
+
+    if (cd.kind === 'flow') {
+      if (type === 'stack') return { type: 'bar', data: { labels: labels, datasets: [
+          bar('Present', col(1), '#2E8B6F'), bar('Cancelled', col(2), '#C0392B'), bar('Migrated', col(3), '#E0A458')] }, options: stacked };
+      if (type === 'bar') return { type: 'bar', data: { labels: labels, datasets: [
+          bar('Total Admitted (Before)', col(0), '#8A4A35'), bar('Present Strength (After)', col(1), '#2E8B6F')] }, options: base };
+      if (type === 'doughnut') {
+        const s = j => col(j).reduce((a, b) => a + b, 0);
+        return donut(['Present', 'Cancelled', 'Migrated'], [s(1), s(2), s(3)], ['#2E8B6F', '#C0392B', '#E0A458']);
+      }
+      return { type: 'bar', data: { labels: labels, datasets: [bar('Loss %', col(5).map(v => +(Math.abs(v) * 100).toFixed(1)), '#C0392B')] }, options: noLegend };
+    }
+
+    if (cd.kind === 'count') {
+      if (type === 'doughnut') return donut(labels, at(cd.totalCol));
+      const ds = cd.vals.map((c, i) => bar(cd.hdr[c], at(c), PALETTE[i % PALETTE.length]));
+      if (type === 'stack') return { type: 'bar', data: { labels: labels, datasets: ds }, options: stacked };
+      if (type === 'hbar') return { type: 'bar', data: { labels: labels, datasets: ds }, options: horiz };
+      return { type: 'bar', data: { labels: labels, datasets: ds }, options: base };
+    }
+
+    const curL = cd.hdr[cd.nk], prevL = cd.hdr[cd.nk + 1];
+    if (type === 'doughnut') return donut(labels, col(0));
+    if (type === 'diff') {
+      const d = col(2);
+      return { type: 'bar', data: { labels: labels, datasets: [{ label: cd.hdr[cd.nk + 2], data: d, backgroundColor: d.map(v => v >= 0 ? '#2E8B6F' : '#C0392B'), borderRadius: 4, maxBarThickness: 34 }] },
+        options: Object.assign({}, noLegend, { scales: { x: base.scales.x, y: Object.assign({}, base.scales.y, { beginAtZero: false }) } }) };
+    }
+    if (type === 'line') return { type: 'line', data: { labels: labels, datasets: [
+        { label: curL, data: col(0), borderColor: '#8A4A35', backgroundColor: 'rgba(138,74,53,.12)', fill: true, tension: .3, pointRadius: 3 },
+        { label: prevL, data: col(1), borderColor: '#E0A458', backgroundColor: 'rgba(224,164,88,.12)', fill: true, tension: .3, pointRadius: 3 }] }, options: base };
+    const ds = [bar(curL, col(0), '#8A4A35'), bar(prevL, col(1), '#E0A458')];
+    return { type: 'bar', data: { labels: labels, datasets: ds }, options: type === 'hbar' ? horiz : base };
+  }
+
+
+
+/* ================================================================
+   OFFICIAL LAYOUTS
+   ================================================================ */
+function offCard(title, bodyId, data) {
+  const c = document.createElement('div'); c.className = 'card';
+  c.innerHTML = '<div class="card-head"><div class="card-title"></div><div class="tbl-tools">' +
+    (data ? '<input class="search" placeholder="Filter rows…"><button class="btn btn-ghost btn-sm">CSV</button>' : '') +
+    '</div></div><div class="card-body" id="' + bodyId + '"></div>';
+  c.querySelector('.card-title').textContent = title;
+  if (data) {
+    c.querySelector('.search').oninput = e => { const t = c.querySelector('table'); if (t) filterRows(e.target, t); };
+    c.querySelector('.btn').onclick = () => downloadCsv(title, data);
+  }
+  return c;
+}
+function renderOfficial(it, r) {
+  const host = $('out_' + it.id); host.innerHTML = '';
+  if (it.render === 'grid') {
+    host.appendChild(offCard(it.label, 'ob_' + it.id));
+    renderGridTable(r, 'ob_' + it.id);
+  } else if (it.render === 'table') {
+    host.appendChild(offCard(it.label, 'ob_' + it.id, r[it.field]));
+    renderTable(r[it.field], 'ob_' + it.id, it.highlight ? { highlightValue: it.highlight } : {});
+  } else if (it.render === 'fancy') {
+    const k = document.createElement('div'); k.className = 'kpis';
+    k.innerHTML = '<div class="kpi"><div class="kpi-label">Total students processed</div><div class="kpi-value">' + esc(r.totalStudents) + '</div></div>';
+    host.appendChild(k);
+    [['Class / Program / Category Strength', r.tables.classCategory, { mergeCols: [0, 1, 4, 5, 6] }],
+     ['Section (PCS) Level Strength', r.tables.pcsSection, { mergeCols: [0, 1, 2, 5, 6, 7] }],
+     ['Seat Increase / Decrease', r.tables.seatIncreaseDecrease, { totalMarker: 'INCREASED SEATS' }],
+     ['Year-Wise Quota Summary', r.tables.yearWise, { totalMarker: 'JCW Total:', mergeCols: [0, 4, 5, 6, 7] }]
+    ].forEach((p, i) => {
+      if (!p[1]) return;
+      host.appendChild(offCard(p[0], 'ob_fancy' + i, p[1]));
+      renderTable(p[1], 'ob_fancy' + i, p[2]);
+    });
+  }
+}
+
+  /* ---------------- Plain table renderer (merged-cell support) ---------------- */
+  function renderTable(data, containerId, options) {
+    options = options || {};
+    const totalMarker = options.totalMarker || null;
+    const mergeCols = options.mergeCols || [];
+    const highlightValue = options.highlightValue;
+    const table = document.createElement('table');
+    const numRows = data.length;
+    const isTotalRow = row => totalMarker !== null && row.indexOf(totalMarker) !== -1;
+    const span = {}, skip = {};
+
+    mergeCols.forEach(col => {
+      let i = 1;
+      while (i < numRows) {
+        if (isTotalRow(data[i])) { i++; continue; }
+        const val = data[i][col];
+        let j = i + 1;
+        while (j < numRows && !isTotalRow(data[j]) && data[j][col] === val) j++;
+        if (j - i > 1) { span[i + '_' + col] = j - i; for (let k = i + 1; k < j; k++) skip[k + '_' + col] = true; }
+        i = j;
+      }
+    });
+
+    const thead = document.createElement('thead'), tbody = document.createElement('tbody');
+    data.forEach((row, i) => {
+      const tr = document.createElement('tr');
+      const isHeader = i === 0;
+      if (!isHeader && isTotalRow(row)) tr.classList.add('totalRow');
+      row.forEach((cell, col) => {
+        if (!isHeader && skip[i + '_' + col]) return;
+        const el = document.createElement(isHeader ? 'th' : 'td');
+        el.innerText = cell;
+        if (!isHeader && span[i + '_' + col]) el.rowSpan = span[i + '_' + col];
+        if (!isHeader && highlightValue !== undefined && cell === highlightValue) el.classList.add('highlightX');
+        tr.appendChild(el);
+      });
+      (isHeader ? thead : tbody).appendChild(tr);
+    });
+    table.appendChild(thead); table.appendChild(tbody);
+    const container = $(containerId);
+    container.innerHTML = '';
+    const wrap = document.createElement('div'); wrap.className = 'scroll-x';
+    wrap.appendChild(table); container.appendChild(wrap);
+  }
+
+  /* ---------------- Positioned-grid renderer (arbitrary merges) ---------------- */
+  function renderGridTable(g, containerId) {
+    const { rowsCount, colsCount, grid, bold, merges, highlights, bigCells, styles } = g;
+    const spanMap = {}, skipMap = {};
+    (merges || []).forEach(([r1, c1, r2, c2]) => {
+      spanMap[r1 + '_' + c1] = { rowSpan: r2 - r1 + 1, colSpan: c2 - c1 + 1 };
+      for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) if (!(r === r1 && c === c1)) skipMap[r + '_' + c] = true;
+    });
+    const hl = new Set((highlights || []).map(([r, c]) => r + '_' + c));
+    const big = new Set((bigCells || []).map(([r, c]) => r + '_' + c));
+    const table = document.createElement('table');
+    table.className = 'grid-table';
+    for (let r = 1; r <= rowsCount; r++) {
+      const tr = document.createElement('tr');
+      for (let c = 1; c <= colsCount; c++) {
+        const key = r + '_' + c;
+        if (skipMap[key]) continue;
+        const td = document.createElement('td');
+        const v = grid[r - 1][c - 1];
+        td.innerText = (v === null || v === undefined) ? '' : v;
+        if (spanMap[key]) { td.rowSpan = spanMap[key].rowSpan; td.colSpan = spanMap[key].colSpan; }
+        if (bold && bold[r - 1] && bold[r - 1][c - 1]) td.classList.add('gt-bold');
+        if (hl.has(key)) td.classList.add('gt-highlight');
+        if (big.has(key)) td.classList.add('gt-big');
+        if (styles && styles[key]) {
+          const st = styles[key];
+          if (st.bold) td.style.fontWeight = 'bold';
+          if (st.background) td.style.backgroundColor = st.background;
+          if (st.fontSize) td.style.fontSize = st.fontSize + 'px';
+          if (st.align) td.style.textAlign = st.align;
+          td.style.whiteSpace = 'pre-line';
+        }
+        tr.appendChild(td);
+      }
+      table.appendChild(tr);
+    }
+    const container = $(containerId);
+    container.innerHTML = '';
+    const wrap = document.createElement('div'); wrap.className = 'scroll-x';
+    wrap.appendChild(table); container.appendChild(wrap);
+  }
+
+
+
+/* ================================================================
+   START
+   ================================================================ */
+(async function start() {
+  if (!user || !pass || !isAdmin) {
+    $('pages').innerHTML = '<div class="page active"><div class="empty"><b>Admin only</b>Open the attendance app and sign in with the admin account, then come back to College reports.</div></div>';
+    $('nav').innerHTML = ''; ['allBtn', 'sessBtn'].forEach(i => $(i).disabled = true);
+    return;
+  }
+  buildUI();
+  try {
+    META = await api({ action: 'rpt_meta' });
+    showSessions();
+    const sel = $('cmpColumn');
+    (META.columns || []).forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; sel.appendChild(o); });
+  } catch (e) { setStatus('allStatus', 'err', e.message); }
+})();
+</script>
+</body>
+</html>
