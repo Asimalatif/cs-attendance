@@ -2,8 +2,8 @@
 // ==UserScript==
 // @name         JCW Portal Sync
 // @namespace    jcw-attendance
-// @version      1.0
-// @description  Reads Jinnah College students from the UOP portal (read-only) and sends them to the JCW attendance system: fills only the empty cells of Transform-ALL-COLLEGE-STRENGTH and feeds the health check.
+// @version      1.1
+// @description  Reads Jinnah College students from the UOP portal (read-only) and sends them to the JCW attendance system: fills only the empty cells of Transform-ALL-COLLEGE-STRENGTH, moves cancelled / migrated / disenrolled / transferred students to Left Students and feeds the health check.
 // @match        https://portal.uop.edu.pk/Student/Students*
 // @match        https://portal.uop.edu.pk/student/students*
 // @grant        GM_xmlhttpRequest
@@ -72,7 +72,7 @@
     <button class="p" id="jsQuick">Quick sync (list only, 1–2 min)</button>
     <button id="jsFull">Full sync (all details)</button>
     <button id="jsResume" style="display:none">Resume the full sync</button>
-    <div class="bar"><i id="jsBar"></i></div><div class="s" id="jsMsg">Reads the portal only. Fills empty cells in the strength sheet; nothing already there is changed.</div>
+    <div class="bar"><i id="jsBar"></i></div><div class="s" id="jsMsg">Reads the portal only. Fills empty cells in the strength sheet and moves students who are no longer Enrolled to Left Students.</div>
     <button class="k" id="jsKey">Change sync key</button>`;
   document.body.appendChild(box);
   const $ = id => box.querySelector('#' + id);
@@ -275,6 +275,10 @@
       if (f.added && f.added.length) L.push('New columns: ' + f.added.join(', ') + '.');
       if (f.formulaCols && f.formulaCols.length) L.push('Not written (made by a formula): ' + f.formulaCols.join(', ') + '.');
     }
+    const lf = r.left;
+    if (lf && lf.moved) L.push(lf.moved + ' student(s) no longer Enrolled moved to Left Students (undo: College > Students who left > List / restore):\n' + (lf.who || []).slice(0, 40).join('\n') + ((lf.who || []).length > 40 ? '\n…' : ''));
+    else if (lf && lf.note) L.push('Left Students: ' + lf.note);
+    else if (lf) L.push('Left Students: nobody to move.');
     L.push('Now run the health check in the app (College > System health check).');
     say(L.join('\n'), 100);
   }
