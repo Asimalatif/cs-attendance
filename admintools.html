@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#6B3423">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<title>JCW Admin tools</title>
+<style>
+:root{--bg:#F7EDEA;--surface:#fff;--surface2:#FBEDEA;--ink:#2B1912;--muted:#7C6159;--line:#E2C0B8;--brown:#6B3423;--brown2:#8A4A35;
+  --pos:#0E8A5F;--pos-bg:#E3F4EC;--neg:#C0392B;--neg-bg:#FDE3E1;--mid:#B4740E;--mid-bg:#FFF2DA;--grid:#C9A79E;--shadow:0 1px 2px rgba(74,36,24,.06),0 4px 16px rgba(74,36,24,.07)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1A110F;--surface:#261915;--surface2:#30201B;--ink:#F6E9E5;--muted:#C4A8A0;--line:#4A3029;
+  --pos-bg:#14302A;--neg-bg:#3A1C1F;--mid-bg:#3A2F14;--grid:#5A3A31;--shadow:none}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;padding-bottom:40px}
+button,select,input{font:inherit;color:inherit}
+header{position:sticky;top:0;z-index:10;background:linear-gradient(120deg,#4A2418,#8A4A35);color:#fff;padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header h1{margin:0;font-size:18px}header small{display:block;opacity:.8;font-size:12px}
+header .sp{flex:1}
+.tb{height:36px;border-radius:999px;border:0;background:rgba(255,255,255,.15);color:#fff;font-weight:700;padding:0 14px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;font-size:13px}
+.wrap{max-width:1100px;margin:0 auto;padding:16px 12px}
+.tabs{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto}
+.tabs button{flex:1;min-width:64px;height:42px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-weight:800;cursor:pointer}
+.tabs button.on{background:var(--brown);border-color:var(--brown);color:#fff}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.bar input,.bar select{height:40px;border:1.5px solid var(--line);border-radius:12px;padding:0 10px;background:var(--surface);min-width:0}
+.bar .grow{flex:1;min-width:150px}
+.bar label{font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px}
+.bar input[type=number]{width:84px}
+.bar input[type=checkbox]{width:20px;height:20px;accent-color:var(--brown)}
+.btn{height:40px;padding:0 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-weight:800;cursor:pointer;white-space:nowrap}
+.btn.p{background:linear-gradient(180deg,#8A4A35,#6B3423);border-color:#6B3423;color:#fff}
+.btn:disabled{opacity:.5;cursor:default}
+.status{display:none;align-items:center;gap:10px;padding:10px 13px;border-radius:12px;font-size:13px;margin-bottom:12px;background:var(--mid-bg);color:var(--mid)}
+.status.show{display:flex}.status.err{background:var(--neg-bg);color:var(--neg)}.status.ok{background:var(--pos-bg);color:var(--pos)}
+.status a{color:inherit;font-weight:800}
+.spin{width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.kpi{background:var(--surface);border:1.5px solid var(--line);border-left:5px solid var(--brown2);border-radius:16px;padding:12px 14px;box-shadow:var(--shadow)}
+.kpi b{display:block;font-size:24px}.kpi span{font-size:12.5px;color:var(--muted);font-weight:700}
+.kpi.neg{border-left-color:var(--neg)}.kpi.neg b{color:var(--neg)}.kpi.pos{border-left-color:var(--pos)}.kpi.pos b{color:var(--pos)}
+.sec{background:var(--surface);border:1.5px solid var(--line);border-top:5px solid var(--brown);border-radius:18px;margin-bottom:14px;box-shadow:var(--shadow);overflow:hidden}
+.sec h3{margin:0;padding:10px 14px;font-size:15px;display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--line)}
+.sec h3 .n{background:var(--neg-bg);color:var(--neg);border-radius:20px;padding:2px 10px;font-size:12px}
+table{border-collapse:collapse;width:100%;font-size:13px;background:var(--surface)}
+th{background:var(--brown);color:#fff;padding:7px 8px;border:1px solid var(--grid);font-size:11.5px;text-transform:uppercase;white-space:nowrap}
+td{padding:6px 8px;border:1px solid var(--grid);text-align:center;vertical-align:top}
+td.l{text-align:left}
+tbody tr:nth-child(even) td{background:var(--surface2)}
+.scroll{overflow-x:auto}
+.s{display:inline-block;margin:1px 3px 1px 0;white-space:nowrap}
+.s b{font-weight:800}.s.low{color:var(--neg)}.s.ok{color:var(--pos)}.s.ok b{color:var(--pos)}
+.empty{text-align:center;color:var(--muted);padding:40px 16px;border:2px dashed var(--line);border-radius:18px;background:var(--surface)}
+.empty b{display:block;color:var(--ink);font-size:15px;margin-bottom:4px}
+.note{font-size:12.5px;color:var(--muted);background:var(--surface);border:1.5px dashed var(--line);border-radius:12px;padding:9px 12px;margin-bottom:12px;line-height:1.55}
+.card{background:var(--surface);border:1.5px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:12px;box-shadow:var(--shadow)}
+.card h2{margin:0 0 6px;font-size:15px}
+.gtabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.gtabs button{height:34px;padding:0 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);font-weight:700;font-size:12.5px;cursor:pointer}
+.gtabs button.on{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.hidden{display:none!important}
+@media print{header,.tabs,.bar,.gtabs,.note,.card,.status{display:none!important}.sec,.kpi{box-shadow:none;break-inside:avoid}body{background:#fff}}
+.sht{border-collapse:collapse;width:100%;font-size:12px}
+.sht td{border:1px solid var(--grid);padding:4px 6px;text-align:left;vertical-align:middle;white-space:pre-wrap}
+.sht tbody tr td{background:var(--surface)}
+.sht tbody tr.head td{background:var(--brown)!important;color:#fff!important;font-weight:800;text-align:center}
+.sht tbody tr.band td{background:var(--surface2)!important;color:var(--brown);font-weight:800;text-align:center;font-size:14px}
+.sht tbody tr.gap td{border:0;height:8px;background:transparent!important}
+.more{color:var(--muted);font-size:12.5px;text-align:center}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}
+.chips label{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line);border-radius:999px;padding:5px 11px;background:var(--surface);font-weight:700;font-size:12.5px;cursor:pointer}
+.chips input{accent-color:var(--brown)}
+.chips label.on{background:var(--surface2);border-color:var(--brown2)}
+.links{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-bottom:12px}
+.links a{display:block;text-decoration:none;color:inherit;background:var(--surface);border:1.5px solid var(--line);border-left:5px solid var(--brown2);border-radius:16px;padding:12px 14px;box-shadow:var(--shadow)}
+.links a b{display:block;font-size:15px}.links a span{font-size:12.5px;color:var(--muted)}
+.stabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.stabs button{height:32px;padding:0 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);font-weight:700;font-size:12.5px;cursor:pointer}
+.stabs button.on{background:var(--brown);border-color:var(--brown);color:#fff}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>Admin tools</h1><small id="sub">Timetable · workload · merit · slips · orientation · rooms</small></div>
+  <div class="sp"></div>
+  <a class="tb" href="./">← App</a>
+</header>
+
+<div class="wrap">
+  <div class="links">
+    <a href="timetable.html"><b>🗓 Timetable editor</b><span>Edit periods, teachers, rooms, sections · free slots · Excel</span></a>
+    <a id="wbLink" href="#" target="_blank" rel="noopener"><b>📗 Open the workbook</b><span id="wbName">Google Sheets</span></a>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button data-t="auto" class="on">Auto timetable</button>
+    <button data-t="work">Workload</button>
+    <button data-t="merit">Stopping merit</button>
+    <button data-t="slips">Admission slips</button>
+    <button data-t="orient">Orientation</button>
+    <button data-t="rooms">Rooms</button>
+  </div>
+
+  <div class="status" id="st"></div>
+
+  <!-- 1. AUTO TIMETABLE -->
+  <section data-p="auto">
+    <div class="card">
+      <h2>Auto timetable</h2>
+      <div class="note" style="margin:6px 0 10px">Builds the printable <b>AutoTimetable</b> sheet from the <b>Timetable</b> sheet
+        (Room | Section | Period I…V, every section = Subject / Teacher / Days rows; a missing teacher is shaded).
+        Tick the programs that belong to this printed timetable — the science programs are ticked as before; tick F.A for the Arts one.</div>
+      <div class="chips" id="autoProgs"></div>
+      <div class="bar" style="margin:0">
+        <label>Stream label <input id="autoStream" value="F.SC" style="width:90px"></label>
+        <button class="btn p adm" id="autoRun">Generate AutoTimetable</button>
+        <button class="btn" id="autoLoad">Show last sheet</button>
+        <span class="grow"></span>
+        <button class="btn out" data-k="auto" data-f="pdf" disabled>PDF</button>
+        <button class="btn out" data-k="auto" data-f="xlsx" disabled>Excel</button>
+      </div>
+    </div>
+    <div class="sec hidden" id="autoOut"><h3><span id="autoT">AutoTimetable</span></h3><div class="scroll" id="autoBox"></div></div>
+  </section>
+
+  <!-- 2. WORKLOAD -->
+  <section data-p="work" class="hidden">
+    <div class="card">
+      <h2>Teacher workload by status</h2>
+      <div class="note" style="margin:6px 0 10px">Reads <b>Science Timetable</b>, <b>ARTS TIMETABLE</b> and <b>DropdownData</b> and writes three sheets:
+        <b>Permanent Workload</b>, <b>Morning Visiting Workload</b>, <b>Evening Visiting Workload</b> (department-wise, S.No · Teacher · Designation · Classes with days · WORKLOAD),
+        then saves the print-ready <b>WORKLOAD dd-MMM-yyyy.xlsx</b> next to the workbook in Drive. Evening science sections: L2, M2, N2, O2, P2, S1, T1.</div>
+      <div class="bar" style="margin:0">
+        <button class="btn p adm" id="workRun">Generate workload</button>
+        <button class="btn adm" id="workXlsx">Only re-export Drive Excel</button>
+        <button class="btn" id="workLoad">Show last sheets</button>
+        <span class="grow"></span>
+        <button class="btn out" data-k="work" data-f="pdf" disabled>PDF</button>
+        <button class="btn out" data-k="work" data-f="xlsx" disabled>Excel</button>
+      </div>
+    </div>
+    <div class="sec hidden" id="workOut"><h3><span>Workload</span><span class="stabs" id="workTabs" style="margin:0"></span></h3><div class="scroll" id="workBox"></div></div>
+  </section>
+
+  <!-- 3. STOPPING MERIT -->
+  <section data-p="merit" class="hidden">
+    <div class="card">
+      <h2>Stopping merit</h2>
+      <div class="note" style="margin:6px 0 10px">From <b>Portal backup</b>: open quota, 1st Year only. Merit % = (obtained + 20 if Hafiz-e-Quran) ÷ original total × 100,
+        also shown on the common 1200 scale. Writes the <b>Stopping Merit</b> sheet (program · category · sections · last admitted student).</div>
+      <div class="bar" style="margin:0">
+        <button class="btn p adm" id="meritRun">Generate stopping merit</button>
+        <button class="btn" id="meritLoad">Show last sheet</button>
+        <span class="grow"></span>
+        <button class="btn out" data-k="merit" data-f="pdf" disabled>PDF</button>
+        <button class="btn out" data-k="merit" data-f="xlsx" disabled>Excel</button>
+      </div>
+    </div>
+    <div class="sec hidden" id="meritOut"><h3><span>Stopping merit</span></h3><div class="scroll" id="meritBox"></div></div>
+  </section>
+
+  <!-- 4. ADMISSION SLIPS -->
+  <section data-p="slips" class="hidden">
+    <div class="card">
+      <h2>Admission slips</h2>
+      <div class="note" style="margin:6px 0 10px">4 slips on every A4 landscape page with dotted cut lines · Roll# = Enroll# · section, category (quota), session,
+        student and father name, the 7 subjects and the student's signature line. Sorted by program, then Enroll#.</div>
+      <div class="bar" style="margin:0 0 6px">
+        <select id="slCls" class="grow"></select>
+        <select id="slProg" class="grow"></select>
+        <label>Session <input id="slSession" style="width:90px"></label>
+      </div>
+      <div class="chips" id="slPcs"></div>
+      <div class="bar" style="margin:0">
+        <span id="slCount" style="color:var(--muted);font-weight:700"></span>
+        <span class="grow"></span>
+        <button class="btn p" id="slPdf" disabled>Make slips PDF</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. ORIENTATION -->
+  <section data-p="orient" class="hidden">
+    <div class="card">
+      <h2>Orientation lists</h2>
+      <div class="stabs" id="orMode">
+        <button data-m="all" class="on">All programs (Program → PCS → Room)</button>
+        <button data-m="sel">One program + chosen sections</button>
+      </div>
+      <div class="note" style="margin:0 0 10px" id="orNote"></div>
+      <div class="bar" style="margin:0 0 6px">
+        <select id="orCls" class="grow"></select>
+        <select id="orProg" class="grow hidden"></select>
+      </div>
+      <div class="chips hidden" id="orPcs"></div>
+      <div class="bar" style="margin:0">
+        <span id="orCount" style="color:var(--muted);font-weight:700"></span>
+        <span class="grow"></span>
+        <button class="btn p" id="orPdf" disabled>PDF</button>
+        <button class="btn" id="orXlsx" disabled>Excel</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. ROOMS -->
+  <section data-p="rooms" class="hidden">
+    <div class="card">
+      <h2>Fill room from timetable</h2>
+      <div class="note" style="margin:6px 0 10px">Reads Program + Section + Room from the <b>Timetable</b> sheet and writes the room into every sheet of the
+        destination workbook (matching ProgramName + Section; “F.A (JCW)” and “F.A (Jinnah College)” count as the same program).
+        A section with two different rooms in the timetable keeps the first one.</div>
+      <div class="bar" style="margin:0">
+        <button class="btn p adm" id="roomRun">Fill rooms now</button>
+      </div>
+    </div>
+    <pre class="card hidden" id="roomOut" style="white-space:pre-wrap;font:13px/1.5 ui-monospace,Consolas,monospace"></pre>
+  </section>
+</div>
+
+<script src="jcwkit.js"></script>
+<script>
+(function(){
+'use strict';
+const $ = id => document.getElementById(id), esc = JCW.esc;
+let META = null, STU = null;
+const SHEETS = { auto:null, work:null, merit:null };
+let workIdx = 0;
+
+/* ---------- status line ---------- */
+function status(msg, kind){ const s = $('st'); if(!msg){ s.className = 'status'; s.innerHTML = ''; return; } s.className = 'status show ' + (kind || ''); s.innerHTML = (kind ? '' : '<span class="spin"></span>') + '<span>' + msg + '</span>'; }
+async function busy(btn, msg, fn){
+  const all = [...document.querySelectorAll('button')]; all.forEach(b => b.dataset.was = b.disabled ? '1' : ''); all.forEach(b => b.disabled = true);
+  status(msg);
+  try{ const r = await fn(); return r; }
+  catch(e){ status(esc(e.message || e), 'err'); }
+  finally{ all.forEach(b => { b.disabled = b.dataset.was === '1'; }); refreshOut(); }
+}
+
+/* ---------- tabs ---------- */
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('section[data-p]').forEach(s => s.classList.toggle('hidden', s.dataset.p !== b.dataset.t));
+  status('');
+  if((b.dataset.t === 'slips' || b.dataset.t === 'orient') && !STU) loadStudents();
+  try{ history.replaceState(null, '', '#' + b.dataset.t); }catch(e){}
+});
+
+/* ---------- start ---------- */
+async function start(){
+  status('Loading…');
+  try{
+    META = (await JCW.api({ action:'at_meta' })).data;
+    status('');
+    $('wbLink').href = META.url; $('wbName').textContent = META.workbook;
+    document.querySelectorAll('.adm').forEach(b => { if(!META.admin){ b.disabled = true; b.title = 'Only the admin can run this'; } });
+    if(!META.admin) $('sub').textContent = 'View and print · only the admin can run the generators';
+    const ticked = new Set(META.auto.programs);
+    $('autoProgs').innerHTML = (META.programs.length ? META.programs : META.auto.programs).map(p =>
+      `<label class="${ticked.has(p) ? 'on' : ''}"><input type="checkbox" value="${esc(p)}" ${ticked.has(p) ? 'checked' : ''}>${esc(p)}</label>`).join('');
+    chipToggle($('autoProgs'));
+    $('autoStream').value = META.auto.streamLabel || 'F.SC';
+    const t = (location.hash || '').slice(1); const tb = document.querySelector('#tabs button[data-t="' + t + '"]'); if(tb) tb.click();
+  }catch(e){ status(esc(e.message), 'err'); }
+}
+function chipToggle(box){ box.addEventListener('change', e => { const l = e.target.closest('label'); if(l) l.classList.toggle('on', e.target.checked); }); }
+
+/* ---------- sheet tools ---------- */
+function showSheets(k){
+  const list = SHEETS[k]; if(!list) return;
+  const miss = list.filter(s => s.missing).map(s => s.name);
+  if(k === 'work'){
+    $('workTabs').innerHTML = list.map((s, i) => `<button data-i="${i}" class="${i === workIdx ? 'on' : ''}">${esc(s.name.replace(' Workload', ''))}</button>`).join('');
+    $('workTabs').querySelectorAll('button').forEach(b => b.onclick = () => { workIdx = +b.dataset.i; showSheets('work'); });
+    const s = list[workIdx] || list[0];
+    $('workBox').innerHTML = s.missing ? '<div class="empty"><b>Sheet “' + esc(s.name) + '” not found</b>Generate the workload first.</div>' : JCW.sheetHtml(s, 400);
+  } else {
+    const s = list[0];
+    $(k + 'Box').innerHTML = s.missing ? '<div class="empty"><b>Sheet “' + esc(s.name) + '” not found</b>Generate it first.</div>' : JCW.sheetHtml(s, 400);
+  }
+  $(k + 'Out').classList.remove('hidden');
+  if(miss.length && miss.length === list.length) status('Not made yet: ' + esc(miss.join(', ')), 'err');
+}
+function refreshOut(){ document.querySelectorAll('.out').forEach(b => { const l = SHEETS[b.dataset.k]; b.disabled = !(l && l.some(s => !s.missing)); }); $('slPdf').disabled = !STU; $('orPdf').disabled = $('orXlsx').disabled = !STU; }
+async function loadSheets(k, names){
+  await busy(null, 'Reading the sheet…', async () => {
+    const r = await JCW.api({ action:'at_sheet', names });
+    SHEETS[k] = r.data.sheets; showSheets(k); status('');
+  });
+}
+async function run(k, payload, msg){
+  await busy(null, msg + ' <small>(this can take a few minutes)</small>', async () => {
+    const r = (await JCW.api(Object.assign({ action:'at_run' }, payload), 360000)).data;
+    if(r.sheets){ SHEETS[k] = r.sheets; showSheets(k); }
+    const x = r.excel;
+    status('✔ Done' + (x && x.fileUrl ? ' · Drive Excel saved: <a href="' + esc(x.fileUrl) + '" target="_blank" rel="noopener">' + esc(x.fileName) + '</a>' : '') + ' · the sheet in the workbook is updated.', 'ok');
+  });
+}
+$('autoRun').onclick = () => {
+  const progs = [...$('autoProgs').querySelectorAll('input:checked')].map(i => i.value);
+  if(!progs.length) return status('Tick at least one program.', 'err');
+  run('auto', { tool:'auto', programs:progs, streamLabel:$('autoStream').value.trim() }, 'Generating the AutoTimetable sheet…');
+};
+$('autoLoad').onclick = () => loadSheets('auto', [META ? META.auto.target : 'AutoTimetable']);
+$('workRun').onclick = () => run('work', { tool:'workload' }, 'Calculating the workload of every teacher…');
+$('workXlsx').onclick = () => run('work', { tool:'workloadxlsx' }, 'Saving the workload Excel in Drive…');
+$('workLoad').onclick = () => loadSheets('work', META ? META.workloadSheets : ['Permanent Workload', 'Morning Visiting Workload', 'Evening Visiting Workload']);
+$('meritRun').onclick = () => run('merit', { tool:'merit' }, 'Calculating the stopping merit…');
+$('meritLoad').onclick = () => loadSheets('merit', ['Stopping Merit']);
+$('roomRun').onclick = () => busy(null, 'Filling rooms in every destination sheet…', async () => {
+  const r = (await JCW.api({ action:'at_fillroom' }, 360000)).data;
+  $('roomOut').textContent = r.message || 'Done.'; $('roomOut').classList.remove('hidden'); status('✔ Rooms filled.', 'ok');
+});
+
+const NAMES = { auto:['Auto timetable', 'JCW_AutoTimetable'], work:['Teacher workload', 'JCW_Workload'], merit:['Stopping merit', 'JCW_Stopping_Merit'] };
+document.querySelectorAll('.out').forEach(b => b.onclick = () => busy(null, 'Making the file…', async () => {
+  const k = b.dataset.k, list = SHEETS[k].filter(s => !s.missing), d = new Date().toISOString().slice(0, 10);
+  if(b.dataset.f === 'pdf'){
+    await JCW.libs();
+    const wide = list.some(s => { const px = (s.widths || []).reduce((a, x) => a + x, 0) * 0.2646; return px > 230; });
+    const doc = JCW.newDoc(wide ? 'landscape' : 'portrait');
+    list.forEach((s, i) => { if(i) doc.addPage(); JCW.sheetPdf(doc, s, k === 'work' ? { title:s.name.toUpperCase(), sub:'Department-wise · S.No · Teacher · Designation · Classes (days) · Workload' } : {}); });
+    JCW.finalize(doc);
+    status('');
+    JCW.offer(doc.output('blob'), NAMES[k][1] + '_' + d + '.pdf', NAMES[k][0], { folder:'JCW Admin Reports' });
+  } else {
+    const f = await JCW.gridXlsx(list.map(s => Object.assign({}, s, { title:(s.name || '').toUpperCase() + ' — Jinnah College for Women' })), NAMES[k][1] + '_' + d + '.xlsx');
+    status('');
+    JCW.offer(f.blob, f.name, NAMES[k][0], { folder:'JCW Admin Reports' });
+  }
+}));
+
+/* ---------- students (slips + orientation) ---------- */
+const natCmp = (a, b) => String(a).localeCompare(String(b), undefined, { numeric:true, sensitivity:'base' });
+const lastNum = e => parseInt(String(e || '').split('-').pop(), 10) || 0;
+async function loadStudents(){
+  await busy(null, 'Reading students from Transform-ALL-COLLEGE-STRENGTH…', async () => {
+    STU = (await JCW.api({ action:'at_strength' })).data;
+    status('');
+    const classes = [...new Set(STU.rows.map(r => r.c).filter(Boolean))].sort(natCmp);
+    const opt = (v, l) => `<option value="${esc(v)}">${esc(l || v)}</option>`;
+    const first = classes.find(c => /^1st year$/i.test(c)) || classes[0] || '';
+    ['slCls', 'orCls'].forEach(id => { $(id).innerHTML = classes.map(c => opt(c, 'Class: ' + c)).join(''); $(id).value = first; });
+    const d = new Date(), y = d.getMonth() + 1 >= 9 ? d.getFullYear() : d.getFullYear() - 1;   /* September starts the session */
+    $('slSession').value = y + '-' + String(y + 1).slice(-2);
+    fillSlips(); fillOrient();
+  });
+}
+function rowsOf(cls, prog){ return STU.rows.filter(r => (!cls || r.c.toLowerCase() === cls.toLowerCase()) && (!prog || r.p.toLowerCase() === prog.toLowerCase())); }
+function pcsChips(box, rows, keep){
+  const list = [...new Set(rows.map(r => r.pcs).filter(Boolean))].sort(natCmp);
+  const prev = keep ? new Set([...box.querySelectorAll('input:checked')].map(i => i.value)) : null;
+  box.innerHTML = list.map(p => { const on = !prev || !prev.size || prev.has(p); return `<label class="${on ? 'on' : ''}"><input type="checkbox" value="${esc(p)}" ${on ? 'checked' : ''}>${esc(p)}</label>`; }).join('')
+    + (list.length > 1 ? '<label style="border-style:dashed"><input type="checkbox" data-all checked>All</label>' : '');
+  const all = box.querySelector('[data-all]'); if(all) all.checked = [...box.querySelectorAll('input:not([data-all])')].every(i => i.checked);
+}
+function chosenPcs(box){ return new Set([...box.querySelectorAll('input:not([data-all]):checked')].map(i => i.value)); }
+function wireChips(box, cb){
+  box.addEventListener('change', e => {
+    if(e.target.dataset.all !== undefined){ box.querySelectorAll('input:not([data-all])').forEach(i => { i.checked = e.target.checked; i.closest('label').classList.toggle('on', i.checked); }); }
+    else{ e.target.closest('label').classList.toggle('on', e.target.checked); const all = box.querySelector('[data-all]'); if(all) all.checked = [...box.querySelectorAll('input:not([data-all])')].every(i => i.checked); }
+    cb();
+  });
+}
+
+/* ---------- admission slips ---------- */
+function fillSlips(){
+  const progs = [...new Set(rowsOf($('slCls').value).map(r => r.p).filter(Boolean))].sort(natCmp);
+  const cur = $('slProg').value;
+  $('slProg').innerHTML = '<option value="">All programs</option>' + progs.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
+  if(progs.includes(cur)) $('slProg').value = cur;
+  pcsChips($('slPcs'), rowsOf($('slCls').value, $('slProg').value)); countSlips();
+}
+function slipRows(){
+  const ch = chosenPcs($('slPcs'));
+  return rowsOf($('slCls').value, $('slProg').value).filter(r => ch.has(r.pcs) || (!r.pcs && ch.size === 0))
+    .sort((a, b) => a.p.toLowerCase().localeCompare(b.p.toLowerCase()) || natCmp(a.e, b.e));
+}
+function countSlips(){ const n = slipRows().length; $('slCount').textContent = n + ' student' + (n === 1 ? '' : 's') + ' · ' + Math.ceil(n / 4) + ' page' + (Math.ceil(n / 4) === 1 ? '' : 's'); }
+$('slCls').onchange = fillSlips; $('slProg').onchange = fillSlips; wireChips($('slPcs'), countSlips);
+
+function slip(doc, s, x, y, w, h, session){
+  const C = JCW.C, logo = JCW.logo();
+  doc.setDrawColor(...C.NAVY); doc.setLineWidth(0.6); doc.roundedRect(x, y, w, h, 2.5, 2.5, 'S');
+  doc.setFillColor(...C.NAVY); doc.roundedRect(x, y, w, 13, 2.5, 2.5, 'F'); doc.rect(x, y + 8, w, 5, 'F');
+  doc.setFillColor(...C.TEA); doc.rect(x, y + 13, w, 0.9, 'F');
+  if(logo){ try{ doc.setFillColor(255, 255, 255); doc.circle(x + 8, y + 6.5, 5, 'F'); doc.addImage(logo, 'PNG', x + 4, y + 2.6, 8, 7.8); }catch(e){} }
+  doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(12.5); doc.text('JINNAH COLLEGE FOR WOMEN, UOP', x + w / 2 + 4, y + 8.3, { align:'center' });
+  doc.setTextColor(...C.NAVY); doc.setFontSize(12.5); doc.text('ADMISSION SLIP', x + w / 2, y + 20, { align:'center' });
+  doc.setFont('helvetica', 'bolditalic'); doc.setFontSize(9.5); doc.setTextColor(...C.MUTED); doc.text(doc.splitTextToSize(s.p || '', w - 10)[0] || '', x + w / 2, y + 25.2, { align:'center' });
+  doc.setDrawColor(...C.ACC); doc.setLineWidth(0.6); doc.line(x + 6, y + 27.3, x + w - 6, y + 27.3);
+  const half = (w - 12) / 2, L = x + 6, R = x + 6 + half + 2;
+  const field = (fx, fy, fw, label, value, big) => {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.2); doc.setTextColor(...C.NAVY); doc.text(label, fx, fy);
+    const lw = doc.getTextWidth(label) + 1.6;
+    doc.setDrawColor(170, 150, 145); doc.setLineWidth(0.25); doc.line(fx + lw, fy + 1, fx + fw - 2, fy + 1);
+    doc.setFont('helvetica', big ? 'bold' : 'normal'); doc.setFontSize(big ? 10.5 : 9); doc.setTextColor(...C.INK);
+    let v = String(value || ''); const room = fw - lw - 3;
+    for(let fs = big ? 10.5 : 9; fs > 7 && doc.getTextWidth(v) > room; fs -= 0.5) doc.setFontSize(fs);   /* shrink long names first */
+    while(v.length > 1 && doc.getTextWidth(v) > room) v = v.slice(0, -1);
+    if(v !== String(value || '')) v = v.slice(0, -1) + '…';
+    doc.text(v, fx + lw, fy);
+  };
+  field(L, y + 34, half, 'ROLL#:', s.e); field(R, y + 34, half, 'SECTION:', s.pcs);
+  field(L, y + 41, half, 'CATEGORY:', s.q); field(R, y + 41, half, 'SESSION:', session);
+  field(L, y + 48, w - 12, 'STD NAME:', s.n, true);
+  field(L, y + 55, w - 12, 'F.NAME:', s.f);
+  doc.setFillColor(...C.SOFT); doc.rect(x + 6, y + 58.5, w - 12, 5.5, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...C.NAVY); doc.text('SUBJECTS', x + w / 2, y + 62.3, { align:'center' });
+  const sub = (i, cx, cy) => {
+    if(i % 2 === 0){ doc.setFillColor(...C.SOFT); doc.rect(cx - 1, cy - 3.6, half, 5, 'F'); }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.2); doc.setTextColor(...C.NAVY); doc.text('SUB' + (i + 1) + ':', cx, cy);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.8); doc.setTextColor(...C.INK);
+    let v = String((s.sub || [])[i] || ''); while(v.length > 1 && doc.getTextWidth(v) > half - 14) v = v.slice(0, -1);
+    doc.text(v, cx + 12, cy);
+  };
+  for(let i = 0; i < 4; i++) sub(i, L, y + 69 + i * 5.1);
+  for(let i = 4; i < 7; i++) sub(i, R, y + 69 + (i - 4) * 5.1);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...C.INK);
+  doc.text('STUDENT SIGN:', x + w - 62, y + h - 5.5); doc.setDrawColor(...C.INK); doc.setLineWidth(0.35); doc.line(x + w - 38, y + h - 5, x + w - 6, y + h - 5);
+}
+$('slPdf').onclick = () => busy(null, 'Making the admission slips…', async () => {
+  const rows = slipRows(); if(!rows.length) throw new Error('No students for this choice.');
+  await JCW.libs();
+  const doc = JCW.newDoc('landscape'), PW = 297, PH = 210, m = 7, gx = 8, gy = 8;
+  const w = (PW - 2 * m - gx) / 2, h = (PH - 2 * m - gy) / 2, ses = $('slSession').value.trim();
+  for(let i = 0; i < rows.length; i++){
+    const pos = i % 4; if(i && pos === 0) doc.addPage();
+    if(pos === 0){                                                   /* dotted cut guides */
+      doc.setDrawColor(160, 160, 160); doc.setLineWidth(0.25); doc.setLineDashPattern([1, 1.4], 0);
+      doc.line(PW / 2, 3, PW / 2, PH - 3); doc.line(3, PH / 2, PW - 3, PH / 2); doc.setLineDashPattern([], 0);
+    }
+    slip(doc, rows[i], m + (pos % 2) * (w + gx), m + (pos < 2 ? 0 : h + gy), w, h, ses);
+  }
+  status('');
+  const tag = $('slProg').value ? JCW.safe($('slProg').value) + '_' : '';
+  JCW.offer(doc.output('blob'), 'JCW_Admission_Slips_' + tag + ses + '.pdf', 'Admission slips', { folder:'Admission Slips' });
+});
+
+/* ---------- orientation ---------- */
+let OR_MODE = 'all';
+const displayProg = p => { const n = String(p || '').trim().toLowerCase();
+  if(['f.a (jcw)', 'f.a', 'fa (jcw)', 'fa'].includes(n)) return 'ARTS';
+  if(['fcs (jcw)', 'fcs'].includes(n)) return 'COMPUTER SCIENCE';
+  if(['pre-engineering (jcw)', 'pre-engineering'].includes(n)) return 'PRE-ENGINEERING';
+  if(['pre-medical (jcw)', 'pre-medical'].includes(n)) return 'PRE-MEDICAL';
+  return String(p || '').trim() || 'Unknown Program'; };
+const fmtRoom = r => { let v = String(r || '').trim(); if(!v) return 'Room #'; if(v.includes('/')) v = v.split('/')[0].trim(); v = v.replace(/^R\s*#\s*/i, '').replace(/^Room\s*#\s*/i, '').trim(); return 'Room # ' + v; };
+const PORDER = ['ARTS', 'COMPUTER SCIENCE', 'PRE-ENGINEERING', 'PRE-MEDICAL'];
+document.querySelectorAll('#orMode button').forEach(b => b.onclick = () => {
+  OR_MODE = b.dataset.m; document.querySelectorAll('#orMode button').forEach(x => x.classList.toggle('on', x === b));
+  $('orProg').classList.toggle('hidden', OR_MODE !== 'sel'); $('orPcs').classList.toggle('hidden', OR_MODE !== 'sel'); fillOrient();
+});
+function fillOrient(){
+  $('orNote').innerHTML = OR_MODE === 'all'
+    ? 'Every program on its own page (Arts, Computer Science, Pre-Engineering, Pre-Medical, then others) · each PCS split by room (“Room # 08”) · S# · Enroll# · Student name · Father name, sorted by Enroll#.'
+    : 'One program and the sections you tick · “PROGRAM: …” then each PCS with its students (S# · Enroll# · Student name · Father name), sorted by Enroll#.';
+  if(!STU) return;
+  const progs = [...new Set(rowsOf($('orCls').value).map(r => r.p).filter(Boolean))].sort(natCmp), cur = $('orProg').value;
+  $('orProg').innerHTML = progs.map(p => `<option value="${esc(p)}">Program: ${esc(p)}</option>`).join('');
+  if(progs.includes(cur)) $('orProg').value = cur;
+  pcsChips($('orPcs'), rowsOf($('orCls').value, $('orProg').value)); countOrient();
+}
+function orientGroups(){
+  const cls = $('orCls').value;
+  if(OR_MODE === 'sel'){
+    const ch = chosenPcs($('orPcs')), rows = rowsOf(cls, $('orProg').value).filter(r => ch.has(r.pcs));
+    const by = {}; rows.forEach(r => { (by[r.pcs || 'Unknown PCS'] = by[r.pcs || 'Unknown PCS'] || []).push(r); });
+    return [{ title:'PROGRAM: ' + (rows[0] ? rows[0].p : $('orProg').value), parts:Object.keys(by).sort(natCmp).map(k => ({ band:k, rows:by[k].sort((a, b) => lastNum(a.e) - lastNum(b.e)) })), n:rows.length }];
+  }
+  const map = {};
+  rowsOf(cls).forEach(r => { const p = displayProg(r.p), pc = r.pcs || 'Unknown PCS', rm = fmtRoom(r.room); ((map[p] = map[p] || {})[pc] = map[p][pc] || {}); (map[p][pc][rm] = map[p][pc][rm] || []).push(r); });
+  const keys = Object.keys(map).sort((a, b) => { const ia = PORDER.indexOf(a), ib = PORDER.indexOf(b); if(ia >= 0 && ib >= 0) return ia - ib; if(ia >= 0) return -1; if(ib >= 0) return 1; return a.localeCompare(b); });
+  const rn = s => { const m = String(s).match(/(\d+)/); return m ? parseInt(m[1], 10) : 999999; };
+  return keys.map(p => { const parts = [];
+    Object.keys(map[p]).sort(natCmp).forEach(pc => Object.keys(map[p][pc]).sort((a, b) => rn(a) - rn(b)).forEach(rm => parts.push({ band:pc + ' - ' + rm, rows:map[p][pc][rm].sort((a, b) => lastNum(a.e) - lastNum(b.e)) })));
+    return { title:p, parts, n:parts.reduce((a, x) => a + x.rows.length, 0) }; });
+}
+function countOrient(){ if(!STU) return; const g = orientGroups(), n = g.reduce((a, x) => a + x.n, 0); $('orCount').textContent = n + ' student' + (n === 1 ? '' : 's') + (OR_MODE === 'all' ? ' · ' + g.length + ' program' + (g.length === 1 ? '' : 's') : ' · ' + g[0].parts.length + ' section(s)'); }
+$('orCls').onchange = fillOrient; $('orProg').onchange = fillOrient; wireChips($('orPcs'), countOrient);
+$('orPdf').onclick = () => busy(null, 'Making the orientation PDF…', async () => {
+  const g = orientGroups().filter(x => x.n); if(!g.length) throw new Error('No students for this choice.');
+  await JCW.libs();
+  const doc = JCW.newDoc('portrait');
+  g.forEach((grp, gi) => {
+    if(gi) doc.addPage();
+    let Y = JCW.heading(doc, JCW.TOP, grp.title, $('orCls').value + ' · orientation list · ' + grp.n + ' students');
+    grp.parts.forEach(part => {
+      if(Y > JCW.H(doc) - 45){ doc.addPage(); Y = JCW.TOP; }
+      Y = JCW.band(doc, Y, part.band, 13);
+      Y = JCW.table(doc, { startY:Y, head:[['S#', 'Enroll#', 'Student Name', 'Father Name']],
+        body:part.rows.map((r, i) => [i + 1, r.e, r.n, r.f]),
+        columnStyles:{ 0:{ halign:'center', cellWidth:12 }, 1:{ halign:'center', cellWidth:30 }, 2:{ fontStyle:'bold' } }, styles:{ fontSize:10, cellPadding:1.9 } }) + 3;
+    });
+  });
+  JCW.finalize(doc); status('');
+  const tag = OR_MODE === 'sel' ? JCW.safe($('orProg').value) + '_' : 'All_';
+  JCW.offer(doc.output('blob'), 'JCW_Orientation_' + tag + new Date().toISOString().slice(0, 10) + '.pdf', 'Orientation list', { folder:'JCW Orientation' });
+});
+$('orXlsx').onclick = () => busy(null, 'Making the Excel file…', async () => {
+  const g = orientGroups().filter(x => x.n); if(!g.length) throw new Error('No students for this choice.');
+  const sheets = g.map(grp => { const rows = [], groupRows = [], headRows = [];
+    grp.parts.forEach(part => { groupRows.push(rows.length); rows.push([part.band]); headRows.push(rows.length); rows.push(['S#', 'Enroll#', 'Student Name', 'Father Name']); part.rows.forEach((r, i) => rows.push([i + 1, r.e, r.n, r.f])); });
+    return { name:grp.title.replace(/^PROGRAM:\s*/, ''), title:grp.title + ' — ' + $('orCls').value + ' orientation list', rows, groupRows, headRows, cols:[6, 16, 32, 32] }; });
+  const f = await JCW.xlsx(sheets, 'JCW_Orientation_' + new Date().toISOString().slice(0, 10) + '.xlsx'); status('');
+  JCW.offer(f.blob, f.name, 'Orientation list', { folder:'JCW Orientation' });
+});
+
+start();
+})();
+</script>
+</body>
+</html>
