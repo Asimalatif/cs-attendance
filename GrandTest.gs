@@ -61,6 +61,7 @@ function gtAll_(user) {
   return false;
 }
 function gtSession_() {
+  try { var set = PropertiesService.getScriptProperties().getProperty('APP_SESSION'); if (set) return set; } catch (e) {}   // set by the admin (Shortage page)
   var d = new Date(), y = d.getFullYear(), m = d.getMonth(), day = d.getDate();
   var start = (m > 7 || (m === 7 && day >= 15)) ? y : y - 1;
   return start + '-' + String(start + 1).slice(-2);

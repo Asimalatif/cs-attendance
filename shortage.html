@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#6B3423">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<title>JCW Attendance Shortage</title>
+<style>
+:root{--bg:#F7EDEA;--surface:#fff;--surface2:#FBEDEA;--ink:#2B1912;--muted:#7C6159;--line:#E2C0B8;--brown:#6B3423;--brown2:#8A4A35;
+  --pos:#0E8A5F;--pos-bg:#E3F4EC;--neg:#C0392B;--neg-bg:#FDE3E1;--mid:#B4740E;--mid-bg:#FFF2DA;--grid:#C9A79E;--shadow:0 1px 2px rgba(74,36,24,.06),0 4px 16px rgba(74,36,24,.07)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1A110F;--surface:#261915;--surface2:#30201B;--ink:#F6E9E5;--muted:#C4A8A0;--line:#4A3029;
+  --pos-bg:#14302A;--neg-bg:#3A1C1F;--mid-bg:#3A2F14;--grid:#5A3A31;--shadow:none}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;padding-bottom:40px}
+button,select,input{font:inherit;color:inherit}
+header{position:sticky;top:0;z-index:10;background:linear-gradient(120deg,#4A2418,#8A4A35);color:#fff;padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header h1{margin:0;font-size:18px}header small{display:block;opacity:.8;font-size:12px}
+header .sp{flex:1}
+.tb{height:36px;border-radius:999px;border:0;background:rgba(255,255,255,.15);color:#fff;font-weight:700;padding:0 14px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;font-size:13px}
+.wrap{max-width:1100px;margin:0 auto;padding:16px 12px}
+.tabs{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto}
+.tabs button{flex:1;min-width:64px;height:42px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-weight:800;cursor:pointer}
+.tabs button.on{background:var(--brown);border-color:var(--brown);color:#fff}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.bar input,.bar select{height:40px;border:1.5px solid var(--line);border-radius:12px;padding:0 10px;background:var(--surface);min-width:0}
+.bar .grow{flex:1;min-width:150px}
+.bar label{font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px}
+.bar input[type=number]{width:84px}
+.bar input[type=checkbox]{width:20px;height:20px;accent-color:var(--brown)}
+.btn{height:40px;padding:0 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-weight:800;cursor:pointer;white-space:nowrap}
+.btn.p{background:linear-gradient(180deg,#8A4A35,#6B3423);border-color:#6B3423;color:#fff}
+.btn:disabled{opacity:.5;cursor:default}
+.status{display:none;align-items:center;gap:10px;padding:10px 13px;border-radius:12px;font-size:13px;margin-bottom:12px;background:var(--mid-bg);color:var(--mid)}
+.status.show{display:flex}.status.err{background:var(--neg-bg);color:var(--neg)}.status.ok{background:var(--pos-bg);color:var(--pos)}
+.status a{color:inherit;font-weight:800}
+.spin{width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.kpi{background:var(--surface);border:1.5px solid var(--line);border-left:5px solid var(--brown2);border-radius:16px;padding:12px 14px;box-shadow:var(--shadow)}
+.kpi b{display:block;font-size:24px}.kpi span{font-size:12.5px;color:var(--muted);font-weight:700}
+.kpi.neg{border-left-color:var(--neg)}.kpi.neg b{color:var(--neg)}.kpi.pos{border-left-color:var(--pos)}.kpi.pos b{color:var(--pos)}
+.sec{background:var(--surface);border:1.5px solid var(--line);border-top:5px solid var(--brown);border-radius:18px;margin-bottom:14px;box-shadow:var(--shadow);overflow:hidden}
+.sec h3{margin:0;padding:10px 14px;font-size:15px;display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--line)}
+.sec h3 .n{background:var(--neg-bg);color:var(--neg);border-radius:20px;padding:2px 10px;font-size:12px}
+table{border-collapse:collapse;width:100%;font-size:13px;background:var(--surface)}
+th{background:var(--brown);color:#fff;padding:7px 8px;border:1px solid var(--grid);font-size:11.5px;text-transform:uppercase;white-space:nowrap}
+td{padding:6px 8px;border:1px solid var(--grid);text-align:center;vertical-align:top}
+td.l{text-align:left}
+tbody tr:nth-child(even) td{background:var(--surface2)}
+.scroll{overflow-x:auto}
+.s{display:inline-block;margin:1px 3px 1px 0;white-space:nowrap}
+.s b{font-weight:800}.s.low{color:var(--neg)}.s.ok{color:var(--pos)}.s.ok b{color:var(--pos)}
+.empty{text-align:center;color:var(--muted);padding:40px 16px;border:2px dashed var(--line);border-radius:18px;background:var(--surface)}
+.empty b{display:block;color:var(--ink);font-size:15px;margin-bottom:4px}
+.note{font-size:12.5px;color:var(--muted);background:var(--surface);border:1.5px dashed var(--line);border-radius:12px;padding:9px 12px;margin-bottom:12px;line-height:1.55}
+.card{background:var(--surface);border:1.5px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:12px;box-shadow:var(--shadow)}
+.card h2{margin:0 0 6px;font-size:15px}
+.gtabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.gtabs button{height:34px;padding:0 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);font-weight:700;font-size:12.5px;cursor:pointer}
+.gtabs button.on{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.hidden{display:none!important}
+@media print{header,.tabs,.bar,.gtabs,.note,.card,.status{display:none!important}.sec,.kpi{box-shadow:none;break-inside:avoid}body{background:#fff}}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>Attendance shortage</h1><small id="sub">Month or whole session · with approved leaves</small></div>
+  <div class="sp"></div>
+  <a class="tb" href="./">← App</a>
+</header>
+
+<div class="wrap">
+  <div class="card hidden" id="adminCard">
+    <h2>Admin settings</h2>
+    <div class="bar" style="margin:0">
+      <label>Session <input id="aSession" placeholder="e.g. 2026-27" style="width:110px"></label>
+      <label>Default threshold % <input id="aLimit" type="number" min="1" max="100" step="1"></label>
+      <button class="btn p" onclick="saveCfg()">Save</button>
+      <span class="rl" id="aNote" style="font-size:12.5px;color:var(--muted)"></span>
+    </div>
+  </div>
+
+  <div class="tabs" id="mtabs"></div>
+
+  <div class="bar">
+    <select id="fProg" onchange="progChanged()"></select>
+    <select id="fYear" onchange="yearChanged()"></select>
+    <select id="fSec" class="grow" onchange="draw()"></select>
+    <select id="fSub" class="grow" onchange="draw()"></select>
+  </div>
+  <div class="bar">
+    <label>Threshold % <input id="limit" type="number" min="1" max="101" step="1" oninput="deb(draw)"></label>
+    <label><input id="useLv" type="checkbox" checked onchange="draw()"> Add approved leaves</label>
+    <select id="mode" onchange="draw()">
+      <option value="final">Still short after leaves (final)</option>
+      <option value="before">Short before leaves</option>
+      <option value="cleared">Cleared by leaves</option>
+    </select>
+    <input id="q" class="grow" placeholder="Search name or Enroll#…" oninput="deb(draw)">
+  </div>
+  <div class="bar">
+    <button class="btn" onclick="load(true)" title="Read the workbooks again">↻ Refresh</button>
+    <button class="btn p" onclick="pdf()">PDF</button>
+    <button class="btn" onclick="csv()">Excel / CSV</button>
+    <button class="btn" onclick="share()">WhatsApp</button>
+    <button class="btn hidden" id="saveBtn" onclick="saveSheet()">Save to workbook</button>
+    <button class="btn" onclick="window.print()">Print</button>
+  </div>
+
+  <div class="note">A subject is <b>short</b> when attended ÷ held is below the threshold. Approved leave days of the month (Leave In-Charge) are added to the attended lectures of every subject, as in the old Shortage pipeline.
+    <b>Session</b> adds up September to January. Students who left (struck through, or not in the strength sheet) are left out. Optional subjects count in the student's own section.</div>
+
+  <div class="status" id="st"></div>
+  <div id="kpis" class="kpis"></div>
+  <div class="gtabs" id="gtabs"><button class="on" data-v="list" onclick="gview('list')">Students</button><button data-v="secs" onclick="gview('secs')">By section</button><button data-v="subs" onclick="gview('subs')">By subject</button></div>
+  <div id="out"><div class="empty"><b>Loading…</b></div></div>
+</div>
+
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm7d7-UKg0W-OoWAiuRBHe4mjlRgMQXIHuLm6zi--i/exec';
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const ls = { get(k, d){ try{ const v = localStorage.getItem('csa2_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } } };
+const user = ls.get('user', ''), pass = ls.get('pass', '');
+const MNAME = { SEPT:'September', OCT:'October', NOV:'November', DEC:'December', JAN:'January' };
+let CFG = null, VIEW = null, GV = 'list';
+const DATA = {};                 // mon -> {people, subs, leaves}
+let ROWS = [], GROUPS = [];      // current result
+let debT = null; function deb(fn){ clearTimeout(debT); debT = setTimeout(fn, 250); }
+const K = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const r0 = n => Math.round(n);
+
+async function api(payload, ms){
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms || 330000);
+  try{
+    const r = await fetch(API, { method:'POST', body:JSON.stringify({ username:user, password:pass, ...payload }), signal:ctl.signal, redirect:'follow' });
+    const txt = await r.text(); let j; try{ j = JSON.parse(txt); }catch(e){ throw new Error('The server sent a web page instead of data. Check the deployment.'); }
+    if(j && j.error === 'UNKNOWN_ACTION') throw new Error('The server does not know this yet: paste Shortage.gs, add the shr_ line to doPost and deploy a new version.');
+    if(j && j.error === 'BAD_LOGIN') throw new Error('Your saved login was refused. Open the app, sign out and sign in again.');
+    if(j && j.ok === false) throw new Error(j.error || 'Server error');
+    return j;
+  }catch(e){
+    if(e.name === 'AbortError') throw new Error('The server took too long. Try again.');
+    if(e instanceof TypeError) throw new Error(navigator.onLine ? 'The Apps Script server did not answer. Try again in a minute.' : 'No internet.');
+    throw e;
+  }finally{ clearTimeout(t); }
+}
+function say(kind, text, html){ const el = $('st'); el.className = 'status show' + (kind === 'busy' ? '' : ' ' + kind); el.innerHTML = (kind === 'busy' ? '<div class="spin"></div>' : '') + '<span></span>'; if(html) el.lastChild.innerHTML = html; else el.lastChild.textContent = text; }
+function hush(){ $('st').className = 'status'; }
+
+/* ================= start ================= */
+async function boot(){
+  if(!user || !pass){ $('out').innerHTML = '<div class="empty"><b>Sign in first</b>Open the attendance app and sign in, then come back.</div>'; return; }
+  say('busy', 'Reading settings…');
+  try{ CFG = await api({ action:'shr_cfg' }, 60000); }
+  catch(e){ say('err', e.message); $('out').innerHTML = ''; return; }
+  hush();
+  $('limit').value = CFG.limit;
+  $('sub').textContent = 'Session ' + CFG.session + ' · with approved leaves';
+  if(CFG.admin){ $('adminCard').classList.remove('hidden'); $('aSession').value = CFG.sessionSet || ''; $('aSession').placeholder = CFG.session; $('aLimit').value = CFG.limit;
+    $('aNote').textContent = CFG.sessionSet ? 'Session set by you (used in every report title).' : 'Session is worked out from today’s date. Type one to fix it.'; }
+  const now = new Date().getMonth(), cur = ({8:'SEPT',9:'OCT',10:'NOV',11:'DEC',0:'JAN'})[now];
+  VIEW = CFG.months.includes(cur) ? cur : CFG.months[0];
+  $('mtabs').innerHTML = CFG.months.map(m => `<button data-m="${m}" onclick="pick('${m}')">${MNAME[m].slice(0,3)}</button>`).join('') + '<button data-m="SESSION" onclick="pick(\'SESSION\')">Session</button>';
+  fillProg();
+  pick(VIEW);
+}
+function pick(m){ VIEW = m; document.querySelectorAll('#mtabs button').forEach(b => b.classList.toggle('on', b.dataset.m === m)); $('saveBtn').classList.toggle('hidden', !(CFG.admin && m !== 'SESSION')); load(false); }
+async function load(fresh){
+  const list = VIEW === 'SESSION' ? CFG.months : [VIEW];
+  try{
+    for(const m of list){
+      if(DATA[m] && !fresh) continue;
+      say('busy', `Reading ${MNAME[m]} attendance workbook… (first time can take a minute)`);
+      DATA[m] = await api({ action:'shr_month', mon:m, fresh: fresh ? 1 : 0 });
+    }
+    hush();
+  }catch(e){ say('err', e.message); }
+  fillSecs(); fillSubs(); draw();
+}
+
+/* ================= program / year / section from the class map ================= */
+function placeOf(sec){
+  const k = K(sec);
+  for(const p of Object.keys(CFG.classMap)) for(const y of Object.keys(CFG.classMap[p])) if(CFG.classMap[p][y].some(s => K(s) === k)) return { p, y };
+  return { p:'Other', y:'' };
+}
+function fillProg(){
+  $('fProg').innerHTML = '<option value="">All programs</option>' + Object.keys(CFG.classMap).concat(['Other']).map(p => `<option>${esc(p)}</option>`).join('');
+  fillYear();
+}
+function fillYear(){
+  const p = $('fProg').value, ys = new Set();
+  Object.keys(CFG.classMap).forEach(k => { if(!p || p === k) Object.keys(CFG.classMap[k]).forEach(y => ys.add(y)); });
+  $('fYear').innerHTML = '<option value="">All years</option>' + [...ys].sort().map(y => `<option>${esc(y)}</option>`).join('');
+}
+function progChanged(){ fillYear(); fillSecs(); draw(); }
+function yearChanged(){ fillSecs(); draw(); }
+function people(){ const o = {}; (VIEW === 'SESSION' ? CFG.months : [VIEW]).forEach(m => Object.assign(o, (DATA[m] || {}).people || {})); return o; }
+function fillSecs(){
+  const p = $('fProg').value, y = $('fYear').value, keep = $('fSec').value;
+  const secs = [...new Set(Object.values(people()).map(x => x[2]).filter(Boolean))]
+    .filter(s => { const pl = placeOf(s); return (!p || pl.p === p) && (!y || pl.y === y); })
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric:true }));
+  $('fSec').innerHTML = `<option value="">All sections (${secs.length})</option>` + secs.map(s => `<option>${esc(s)}</option>`).join('');
+  if(secs.includes(keep)) $('fSec').value = keep;
+}
+function fillSubs(){
+  const keep = $('fSub').value, subs = new Set();
+  (VIEW === 'SESSION' ? CFG.months : [VIEW]).forEach(m => ((DATA[m] || {}).subs || []).forEach(s => subs.add(s[1])));
+  const list = [...subs].sort();
+  $('fSub').innerHTML = '<option value="">All subjects</option>' + list.map(s => `<option>${esc(s)}</option>`).join('');
+  if(list.includes(keep)) $('fSub').value = keep;
+}
+
+/* ================= the calculation ================= */
+function students(){
+  const out = {}, months = VIEW === 'SESSION' ? CFG.months : [VIEW];
+  months.forEach(m => {
+    const D = DATA[m]; if(!D) return;
+    D.subs.forEach(([roll, sub, al, tl]) => {
+      const pp = D.people[roll]; if(!pp) return;
+      const st = out[roll] = out[roll] || { roll, name:pp[0], father:pp[1], sec:pp[2], lv:0, subs:{}, lvm:{} };
+      const S = st.subs[sub] = st.subs[sub] || { al:0, tl:0 };
+      S.al += Number(al) || 0; S.tl += Number(tl) || 0;
+    });
+    Object.keys(D.leaves || {}).forEach(roll => { if(out[roll] && !out[roll].lvm[m]){ out[roll].lvm[m] = 1; out[roll].lv += Number(D.leaves[roll]) || 0; } });
+  });
+  return Object.values(out);
+}
+function compute(){
+  const T = Number($('limit').value) || CFG.limit, useLv = $('useLv').checked, mode = $('mode').value;
+  const fp = $('fProg').value, fy = $('fYear').value, fs = $('fSec').value, fsub = $('fSub').value, q = $('q').value.trim().toLowerCase();
+  const rows = [];
+  let pool = 0;
+  students().forEach(st => {
+    const pl = placeOf(st.sec);
+    if(fp && pl.p !== fp) return; if(fy && pl.y !== fy) return; if(fs && st.sec !== fs) return;
+    if(q && !(st.name + ' ' + st.father + ' ' + st.roll).toLowerCase().includes(q)) return;
+    const lv = useLv ? st.lv : 0;
+    const list = Object.keys(st.subs).filter(s => (!fsub || s === fsub) && st.subs[s].tl > 0).sort().map(s => {
+      const S = st.subs[s], p = S.al / S.tl * 100, al2 = Math.min(S.tl, S.al + lv), p2 = al2 / S.tl * 100;
+      return { s, al:S.al, tl:S.tl, p, al2, p2, short:p < T, short2:p2 < T };
+    });
+    if(!list.length) return;
+    pool++;
+    const before = list.filter(x => x.short), after = list.filter(x => x.short2);
+    const take = mode === 'final' ? after.length > 0 : mode === 'before' ? before.length > 0 : (before.length > 0 && !after.length);
+    if(take) rows.push(Object.assign({}, st, { lvUsed:lv, place:pl, before, after }));
+  });
+  rows.sort((a, b) => a.sec.localeCompare(b.sec, undefined, { numeric:true }) || a.name.localeCompare(b.name));
+  const groups = []; rows.forEach(r => { let g = groups[groups.length - 1]; if(!g || g.sec !== r.sec){ g = { sec:r.sec, rows:[] }; groups.push(g); } g.rows.push(r); });
+  return { T, useLv, mode, rows, groups, pool };
+}
+const sTxt = x => `${x.s}:(${x.al}/${x.tl})=${r0(x.p)}%`;
+const s2Txt = x => `${x.s}:(${x.al2}/${x.tl})=${r0(x.p2)}%`;
+// "Shortage with leaves": in final mode only what is still short; else every short subject (cleared ones marked ✓)
+function withLv(r, mode){ return mode === 'final' ? r.after : r.before; }
+function label(){ return VIEW === 'SESSION' ? 'SESSION ' + CFG.session : MNAME[VIEW].toUpperCase() + ' ' + (VIEW === 'JAN' ? CFG.session.slice(0, 2) + CFG.session.slice(-2) : CFG.session.slice(0, 4)); }
+function filterText(R){ return [$('fProg').value, $('fYear').value, $('fSec').value, $('fSub').value].filter(Boolean).join(' · ') || 'All sections'; }
+
+/* ================= drawing ================= */
+function gview(v){ GV = v; document.querySelectorAll('#gtabs button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); draw(); }
+function draw(){
+  if(!CFG) return;
+  const R = compute(); ROWS = R.rows; GROUPS = R.groups;
+  const cleared = R.rows.length && R.mode !== 'cleared' ? R.rows.filter(r => r.before.length && !r.after.length).length : 0;
+  const subN = R.rows.reduce((a, r) => a + (R.mode === 'before' ? r.before.length : r.after.length || r.before.length), 0);
+  $('kpis').innerHTML = `<div class="kpi"><b>${R.pool}</b><span>Students checked</span></div>
+    <div class="kpi neg"><b>${R.rows.length}</b><span>${R.mode === 'final' ? 'Still short after leaves' : R.mode === 'before' ? 'Short before leaves' : 'Cleared by leaves'}</span></div>
+    <div class="kpi"><b>${R.groups.length}</b><span>Sections</span></div>
+    <div class="kpi ${R.mode === 'before' ? 'pos' : ''}"><b>${R.mode === 'before' ? cleared : subN}</b><span>${R.mode === 'before' ? 'Of them cleared by leaves' : 'Short subjects'}</span></div>`;
+  if(!Object.keys(DATA).length){ $('out').innerHTML = ''; return; }
+  if(GV === 'secs') return drawSecs(R);
+  if(GV === 'subs') return drawSubs(R);
+  if(!R.rows.length){ $('out').innerHTML = `<div class="empty"><b>Nobody here</b>No student is ${R.mode === 'cleared' ? 'cleared by leaves' : 'below ' + R.T + '%'} with these filters.</div>`; return; }
+  $('out').innerHTML = R.groups.map(g => `<div class="sec"><h3><span>Class-Sec: ${esc(g.sec)}</span><span class="n">${g.rows.length}</span></h3><div class="scroll"><table>
+    <thead><tr><th>#</th><th>Enroll#</th><th>Student</th><th>Father</th><th>Shortages</th><th>Leaves</th><th>With leaves</th></tr></thead><tbody>
+    ${g.rows.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.roll)}</td><td class="l"><b>${esc(r.name)}</b></td><td class="l">${esc(r.father)}</td>
+      <td class="l">${r.before.map(x => `<span class="s low"><b>${esc(x.s)}</b> (${x.al}/${x.tl}) ${r0(x.p)}%</span>`).join('') || '–'}</td>
+      <td>${R.useLv ? (r.lvUsed || '') : '–'}</td>
+      <td class="l">${withLv(r, R.mode).map(x => `<span class="s ${x.short2 ? 'low' : 'ok'}"><b>${esc(x.s)}</b> (${x.al2}/${x.tl}) ${r0(x.p2)}%${x.short2 ? '' : ' ✓'}</span>`).join('') || '–'}</td></tr>`).join('')}
+    </tbody></table></div></div>`).join('');
+}
+function drawSecs(R){
+  const all = {}; students().forEach(st => { (all[st.sec] = all[st.sec] || { n:0 }).n++; });
+  const secs = R.groups.map(g => [g.sec, (all[g.sec] || {}).n || 0, g.rows.length, placeOf(g.sec)]);
+  $('out').innerHTML = secs.length ? `<div class="sec"><div class="scroll"><table><thead><tr><th>Section</th><th>Program</th><th>Year</th><th>Students</th><th>Listed</th><th>%</th></tr></thead><tbody>
+    ${secs.map(s => `<tr><td class="l"><b>${esc(s[0])}</b></td><td>${esc(s[3].p)}</td><td>${esc(s[3].y)}</td><td>${s[1]}</td><td><b>${s[2]}</b></td><td>${s[1] ? r0(s[2] / s[1] * 100) + '%' : ''}</td></tr>`).join('')}
+    </tbody></table></div></div>` : '<div class="empty"><b>Nobody here</b></div>';
+}
+function subCounts(R){
+  const m = {}; R.rows.forEach(r => (R.mode === 'before' ? r.before : R.mode === 'final' ? r.after : r.before).forEach(x => { m[x.s] = (m[x.s] || 0) + 1; }));
+  return Object.entries(m).sort((a, b) => b[1] - a[1]);
+}
+function drawSubs(R){
+  const list = subCounts(R), max = list.length ? list[0][1] : 1;
+  $('out').innerHTML = list.length ? `<div class="sec"><div class="scroll"><table><thead><tr><th>Subject</th><th>Students short</th><th></th></tr></thead><tbody>
+    ${list.map(([s, n]) => `<tr><td class="l"><b>${esc(s)}</b></td><td><b>${n}</b></td><td class="l" style="width:45%"><i style="display:block;height:10px;border-radius:5px;background:var(--neg);opacity:.75;width:${r0(n / max * 100)}%"></i></td></tr>`).join('')}
+    </tbody></table></div></div>` : '<div class="empty"><b>Nobody here</b></div>';
+}
+
+/* ================= exports ================= */
+function title(R){ return `JCW ATTENDANCE SHORTAGE CASES - ${label()}`; }
+function tableRows(r, R, i){
+  return [i + 1, r.roll, r.name, r.father, r.before.map(sTxt).join(' | '),
+    R.useLv ? String(r.lvUsed || '') : '', withLv(r, R.mode).map(x => s2Txt(x) + (x.short2 ? '' : ' ✓')).join(' | ')];
+}
+let libP = null;
+function loadScript(src){ return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Could not load ' + src)); document.head.appendChild(s); }); }
+function pdfLibs(){
+  if(window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API.autoTable) return Promise.resolve();
+  if(!libP) libP = (window.jspdf ? Promise.resolve() : loadScript('jspdf.umd.min.js')).then(() => window.jspdf.jsPDF.API.autoTable ? null : loadScript('jspdf.plugin.autotable.min.js')).catch(e => { libP = null; throw e; });
+  return libP;
+}
+async function pdf(){
+  const R = compute(); if(!R.rows.length) return say('err', 'Nothing to print with these filters.');
+  try{ await pdfLibs(); }catch(e){ return say('err', e.message); }
+  const doc = new window.jspdf.jsPDF({ orientation:'landscape', unit:'mm', format:'a4' }), W = doc.internal.pageSize.getWidth();
+  doc.setFillColor(107, 52, 35); doc.rect(0, 0, W, 22, 'F');
+  doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.text(title(R), 14, 10);
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+  doc.text(`${filterText(R)} · Threshold ${R.T}% · ${R.useLv ? 'approved leaves added' : 'without leaves'} · ${$('mode').selectedOptions[0].text} · ${R.rows.length} students`, 14, 17);
+  let y = 28;
+  R.groups.forEach(g => {
+    doc.autoTable({ startY:y, theme:'grid', margin:{ left:10, right:10 },
+      head:[[{ content:'Class-Sec: ' + g.sec + '  (' + g.rows.length + ')', colSpan:7, styles:{ fillColor:[183, 215, 245], textColor:[20, 20, 20], fontSize:11 } }],
+            ['#', 'Enroll#', 'Student', 'Father', 'Shortages', 'Leaves', 'Shortage with leaves']],
+      body:g.rows.map((r, i) => tableRows(r, R, i)),
+      styles:{ fontSize:8, cellPadding:1.5, valign:'top' }, headStyles:{ fillColor:[107, 52, 35], textColor:255 },
+      columnStyles:{ 0:{ cellWidth:8 }, 1:{ cellWidth:26 }, 2:{ cellWidth:36 }, 3:{ cellWidth:34 }, 4:{ cellWidth:78 }, 5:{ cellWidth:14, halign:'center' } },
+      didParseCell:d => { if(d.section === 'body' && d.column.index === 6 && R.mode !== 'final') d.cell.styles.textColor = [14, 138, 95]; } });
+    y = doc.lastAutoTable.finalY + 6;
+  });
+  const n = doc.getNumberOfPages(), H = doc.internal.pageSize.getHeight(), stamp = new Date().toLocaleString('en-GB');
+  for(let i = 1; i <= n; i++){ doc.setPage(i); doc.setFontSize(8); doc.setTextColor(120); doc.text('Generated ' + stamp + ' · Jinnah College for Women', 10, H - 6); doc.text('Page ' + i + ' of ' + n, W - 10, H - 6, { align:'right' }); }
+  const name = `Shortage_${label().replace(/\s+/g, '_')}${$('fSec').value ? '_' + $('fSec').value : ''}.pdf`;
+  const blob = doc.output('blob'), file = new File([blob], name, { type:'application/pdf' });
+  try{ if(navigator.canShare && navigator.canShare({ files:[file] })){ await navigator.share({ files:[file], title:name }); return; } }catch(e){ if(e.name === 'AbortError') return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+}
+function csv(){
+  const R = compute(); if(!R.rows.length) return say('err', 'Nothing to export with these filters.');
+  const out = [[title(R)], [`${filterText(R)} · Threshold ${R.T}%`], ['Class-Sec', 'Program', 'Year', 'S.No', 'Enroll#', 'Student', 'Father', 'Shortages', 'Approved Leaves', 'Shortage with Leaves']];
+  R.groups.forEach(g => g.rows.forEach((r, i) => out.push([g.sec, r.place.p, r.place.y].concat(tableRows(r, R, i)))));
+  const txt = out.map(r => r.map(c => '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"').join(',')).join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + txt], { type:'text/csv' })); a.download = `Shortage_${label().replace(/\s+/g, '_')}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+function share(){
+  const R = compute(); if(!R.rows.length) return say('err', 'Nothing to share with these filters.');
+  let t = `*${title(R)}*\n${filterText(R)} · below ${R.T}%${R.useLv ? ' after approved leaves' : ''}\n`;
+  if(R.rows.length <= 60) R.groups.forEach(g => { t += `\n*${g.sec}* (${g.rows.length})\n` + g.rows.map((r, i) => `${i + 1}. ${r.name} – ${withLv(r, R.mode).filter(x => R.mode !== 'final' || x.short2).map(x => x.s + ' ' + r0(x.p2) + '%').join(', ')}`).join('\n') + '\n'; });
+  else t += '\n' + R.groups.map(g => `${g.sec}: ${g.rows.length}`).join('\n') + '\n';
+  t += `\nTotal: ${R.rows.length} students\nJinnah College for Women`;
+  if(navigator.share) navigator.share({ text:t }).catch(() => {}); else window.open('https://wa.me/?text=' + encodeURIComponent(t), '_blank');
+}
+async function saveSheet(){
+  const R = compute(); if(VIEW === 'SESSION') return;
+  const sheet = 'Final Shortage Report - ' + label();
+  if(!confirm(`Save "${sheet}" in the ${MNAME[VIEW]} attendance workbook?\n${R.rows.length} students, threshold ${R.T}%, ${filterText(R)}.\nAn old sheet of the same name is replaced.`)) return;
+  say('busy', 'Writing the sheet…');
+  try{
+    const r = await api({ action:'shr_write', mon:VIEW, sheet, title:title(R) + ` (below ${R.T}%${R.useLv ? ', with approved leaves' : ''})`,
+      sections:R.groups.map(g => ({ sec:g.sec, rows:g.rows.map((x, i) => tableRows(x, R, i)) })) });
+    say('ok', '', `✔ Saved as “${esc(r.sheet)}” in ${esc(r.book)}. <a href="${esc(r.url)}" target="_blank" rel="noopener">Open</a>`);
+  }catch(e){ say('err', e.message); }
+}
+async function saveCfg(){
+  say('busy', 'Saving…');
+  try{
+    const r = await api({ action:'shr_cfg_set', session:$('aSession').value.trim(), limit:Number($('aLimit').value) || CFG.limit });
+    CFG.session = r.session; CFG.sessionSet = r.sessionSet; CFG.limit = r.limit; $('limit').value = r.limit;
+    $('sub').textContent = 'Session ' + CFG.session + ' · with approved leaves';
+    $('aNote').textContent = r.sessionSet ? 'Session set by you (used in every report title).' : 'Session is worked out from today’s date.';
+    say('ok', `✔ Saved. Session ${r.session}, default threshold ${r.limit}%.`); draw();
+  }catch(e){ say('err', e.message); }
+}
+boot();
+</script>
+</body>
+</html>
