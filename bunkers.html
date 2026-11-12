@@ -107,10 +107,10 @@ td .lec{display:inline-block;margin:2px 2px;text-align:left;vertical-align:top}
       <button class="btn p" id="go" onclick="loadDay()">Show</button>
     </div>
     <div class="bar">
-      <select id="kindF" onchange="drawDay()"><option value="">All kinds</option><option value="confirmed">Confirmed bunks</option><option value="possible">Possible (waiting for a decision)</option><option value="excused">Excused</option></select>
-      <select id="secF" class="grow" onchange="drawDay()"><option value="">All sections</option></select>
-      <input id="q" class="grow" placeholder="Search name or roll no…" oninput="drawDay()">
-      <button class="btn" onclick="shareDay()">WhatsApp</button><button class="btn" onclick="csvDay()">CSV</button><button class="btn" onclick="window.print()">Print</button>
+      <select id="kindF" onchange="PAGE_D=1;drawDay()"><option value="">All kinds</option><option value="confirmed">Confirmed bunks</option><option value="possible">Possible (waiting for a decision)</option><option value="excused">Excused</option></select>
+      <select id="secF" class="grow" onchange="PAGE_D=1;drawDay()"><option value="">All sections</option></select>
+      <input id="q" class="grow" placeholder="Search name or roll no…" oninput="deb(() => { PAGE_D = 1; drawDay(); })">
+      <button class="btn" onclick="shareDay()">WhatsApp</button><button class="btn p" onclick="pdfDay()">PDF</button><button class="btn" onclick="csvDay()">CSV</button><button class="btn" onclick="window.print()">Print</button>
     </div>
     <div class="legend"><span class="lec P"><b>P</b> present</span><span class="lec A"><b>A</b> absent</span><span class="lec B"><b>B</b> bunk</span><span class="lec L"><b>L</b> leave</span></div>
     <div class="status" id="st_day"></div>
@@ -135,11 +135,11 @@ td .lec{display:inline-block;margin:2px 2px;text-align:left;vertical-align:top}
       <button class="btn p" onclick="loadRange()">Show</button>
     </div>
     <div class="bar">
-      <select id="minD" onchange="drawRange()"><option value="1">1 day or more</option><option value="2">2 days or more</option><option value="3">3 days or more</option><option value="5">5 days or more</option><option value="10">10 days or more</option></select>
-      <select id="kindR" onchange="drawRange()"><option value="">Confirmed + possible</option><option value="C">Only with a confirmed bunk</option></select>
-      <select id="secR" class="grow" onchange="drawRange()"><option value="">All sections</option></select>
-      <input id="qR" class="grow" placeholder="Search name or roll no…" oninput="drawRange()">
-      <button class="btn" onclick="shareRange()">WhatsApp</button><button class="btn" onclick="csvRange()">CSV</button><button class="btn" onclick="window.print()">Print</button>
+      <select id="minD" onchange="PAGE_R=1;drawRange()"><option value="1">1 day or more</option><option value="2">2 days or more</option><option value="3">3 days or more</option><option value="5">5 days or more</option><option value="10">10 days or more</option></select>
+      <select id="kindR" onchange="PAGE_R=1;drawRange()"><option value="">Confirmed + possible</option><option value="C">Only with a confirmed bunk</option></select>
+      <select id="secR" class="grow" onchange="PAGE_R=1;drawRange()"><option value="">All sections</option></select>
+      <input id="qR" class="grow" placeholder="Search name or roll no…" oninput="deb(() => { PAGE_R = 1; drawRange(); })">
+      <button class="btn" onclick="shareRange()">WhatsApp</button><button class="btn p" onclick="pdfRange()">PDF</button><button class="btn" onclick="csvRange()">CSV</button><button class="btn" onclick="window.print()">Print</button>
     </div>
     <div class="gtabs" id="gtabs"></div>
     <div class="status" id="st_range"></div>
@@ -158,7 +158,10 @@ const user = ls.get('user', ''), pass = ls.get('pass', '');
 const MON = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const TOKM = { 8: 'SEPT', 9: 'OCT', 10: 'NOV', 11: 'DEC', 0: 'JAN' };
 const KIND = { confirmed: ['C', 'Confirmed bunk'], possible: ['Pk', 'Possible bunk'], excused: ['X', 'Excused'] };
-let DAY = null, RANGE = null, MODE = 'day';
+let DAY = null, RANGE = null, MODE = 'day', PAGE_D = 1, PAGE_R = 1;
+const PER_D = 80, PER_R = 40;                       /* cards drawn at a time (2000+ students stay fast) */
+let debT = null; function deb(fn){ clearTimeout(debT); debT = setTimeout(fn, 250); }
+const more = (shown, total, fn) => shown < total ? '<div style="text-align:center;margin:10px 0"><button class="btn" onclick="' + fn + '">Show more (' + (total - shown) + ' left)</button></div>' : '';
 
 async function api(payload){
   const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 330000);
@@ -239,8 +242,9 @@ function drawDay(){
     '<div class="kpi"><b>' + n('excused') + '</b><span>excused</span></div>' +
     '<div class="kpi"><b>' + DAY.marked + '</b><span>students with attendance that day</span></div>';
   if(!rows.length){ $('o_day').innerHTML = '<div class="empty"><b>No bunkers here</b>' + (DAY.marked ? 'Nobody matches this choice on this day.' : 'No attendance was marked on this day.') + '</div>'; return; }
-  rows.forEach(r => (secs[r.sec || '—'] = secs[r.sec || '—'] || []).push(r));
-  $('o_day').innerHTML = Object.keys(secs).map(sec =>
+  const shown = rows.slice(0, PAGE_D * PER_D);
+  shown.forEach(r => (secs[r.sec || '—'] = secs[r.sec || '—'] || []).push(r));
+  $('o_day').innerHTML = '<div class="rl" style="margin-bottom:8px">' + rows.length + ' student(s)' + (rows.length > shown.length ? ', showing ' + shown.length : '') + '</div>' + Object.keys(secs).map(sec =>
     '<div class="sec"><h3><span>' + esc(sec) + '</span><span class="n">' + secs[sec].filter(r => r.kind !== 'excused').length + ' bunker(s)</span></h3>' +
     secs[sec].map(r => {
       const i = DAY.rows.indexOf(r), K = KIND[r.kind];
@@ -251,7 +255,7 @@ function drawDay(){
         '<div><span class="tag ' + K[0] + '">' + K[1] + '</span><span class="tag pat">' + esc(r.pattern) + '</span><span class="tag ' + (r.days >= 3 ? 'rep' : 'one') + '">' + r.days + (r.days === 1 ? ' day' : ' days') + ' this month' + (r.daysC ? ' (' + r.daysC + ' confirmed)' : '') + '</span></div></div>' +
         '<div class="rl" style="margin-top:3px">Attended ' + r.attended + ' · missed ' + r.missed + '</div>' +
         '<div class="tl">' + r.lectures.map(l => '<span class="lec ' + l.m + '"><b>' + (l.p ? 'P' + l.p + ' · ' : '') + l.m + '</b> ' + esc(l.sub) + (l.teacher ? '<i>' + esc(l.teacher) + '</i>' : '') + '</span>').join('') + '</div>' + acts + '</div>';
-    }).join('') + '</div>').join('');
+    }).join('') + '</div>').join('') + more(shown.length, rows.length, 'PAGE_D++;drawDay()');
 }
 async function decide(i, decision){
   const r = DAY.rows[i]; let note = '';
@@ -307,21 +311,24 @@ async function loadRange(){
   }catch(e){ say('st_range', 'err', e.message); if (!parts.length) return; }
   RANGE = { from: parts[0].from, to: parts[parts.length - 1].to, scope: parts[0].scope, markedDays: 0, perDay: [], ev: [], st: {}, months: [] };
   parts.forEach((p, i) => {
-    RANGE.markedDays += p.markedDays; RANGE.perDay = RANGE.perDay.concat(p.perDay || []); RANGE.ev = RANGE.ev.concat(p.ev || []); Object.assign(RANGE.st, p.st || {});
+    const D = p.dict || null, t = i => D ? D[i] : i;            /* the server sends each subject / teacher once (smaller answer) */
+    const ev = (p.ev || []).map(e => [e[0], e[1], e[2], t(e[3]), e[4].map(l => [l[0], t(l[1]), t(l[2]), l[3]]), (e[5] || []).map(l => l.length === 3 ? [l[0], t(l[1]), '', l[2]] : [l[0], t(l[1]), t(l[2]), l[3]])]);
+    RANGE.markedDays += p.markedDays; RANGE.perDay = RANGE.perDay.concat(p.perDay || []); RANGE.ev = RANGE.ev.concat(ev); Object.assign(RANGE.st, p.st || {});
     RANGE.months.push({ l: calls[i]._l || '', c: (p.perDay || []).reduce((a, d) => a + d.confirmed, 0), p: (p.perDay || []).reduce((a, d) => a + d.possible, 0), days: p.markedDays });
   });
   if (!RANGE.ev.length && parts.some(p => p.rows && p.rows.length)) { say('st_range', 'err', 'The server has an older Bunkers.gs: paste the new one and deploy a new version.'); return; }
   $('scope').textContent = RANGE.scope + ' · ' + short(RANGE.from) + ' – ' + short(RANGE.to);
   fillSecs($('secR'), Object.values(RANGE.st).map(x => ({ sec: x[3] })));
   if (parts.length === calls.length) hush('st_range');
-  drawGroupTabs(); drawRange();
+  PAGE_R = 1; drawGroupTabs(); drawRange();
 }
 
 /* events after the kind + section + search filters: [key, date, 'C'|'P', pattern, [[p, sub, teacher, m]]] */
 function rangeEvents(){
   if(!RANGE) return [];
   const k = $('kindR').value, s = $('secR').value, q = $('qR').value.trim().toLowerCase();
-  return RANGE.ev.filter(e => { const st = RANGE.st[e[0]] || []; return (!k || e[2] === 'C') && (!s || st[3] === s) && (!q || (st[1] + ' ' + st[0]).toLowerCase().includes(q)); });
+  if (!RANGE.txt) { RANGE.txt = {}; Object.keys(RANGE.st).forEach(key => { const x = RANGE.st[key]; RANGE.txt[key] = (x[0] + ' ' + x[1] + ' ' + x[2]).toLowerCase(); }); }
+  return RANGE.ev.filter(e => (!k || e[2] === 'C') && (!s || (RANGE.st[e[0]] || [])[3] === s) && (!q || RANGE.txt[e[0]].includes(q)));
 }
 function studentRows(evs){
   const S = {};
@@ -386,9 +393,10 @@ function drawRange(){
     (GROUP === 'sub' || GROUP === 'teacher' || GROUP === 'per' ? '<div class="legend" style="margin-top:8px">Counted per missed lecture: a student who missed two lectures of the same subject on one day counts 2 lectures but 1 bunk-day.</div>' : '');
 }
 const lecName = l => l[1] + (l[0] && l[0] !== '0' ? ' (P' + l[0] + ')' : '');
-function drawStudents(rows){
-  if(!rows.length){ $('o_range').innerHTML = '<div class="empty"><b>Nobody here</b>Try fewer days or "Confirmed + possible".</div>'; return; }
-  $('o_range').innerHTML = rows.map((r, i) =>
+function drawStudents(all){
+  if(!all.length){ $('o_range').innerHTML = '<div class="empty"><b>Nobody here</b>Try fewer days or "Confirmed + possible".</div>'; return; }
+  const rows = all.slice(0, PAGE_R * PER_R);
+  $('o_range').innerHTML = '<div class="rl" style="margin-bottom:8px">' + all.length + ' student(s)' + (all.length > rows.length ? ', showing ' + rows.length + ' (use the PDF or CSV for all)' : '') + '</div>' + rows.map((r, i) =>
     '<div class="sec"><h3><span>' + (i + 1) + '. ' + esc(r.name || r.roll) + ' <span class="rl">' + esc(r.roll) + ' · ' + esc(r.sec) + (r.father ? ' · d/o ' + esc(r.father) : '') + '</span></span>' +
     '<span><span class="tag C">' + r.confirmed + ' confirmed</span><span class="tag Pk">' + r.possible + ' possible</span><span class="tag ' + (r.count >= 5 ? 'rep' : 'one') + '">' + r.count + ' day' + (r.count > 1 ? 's' : '') + ' · ' + r.missed + ' lecture' + (r.missed > 1 ? 's' : '') + ' missed</span></span></h3>' +
     '<div class="scroll"><table><thead><tr><th>Date</th><th>Kind</th><th>Bunked (missed)</th><th>Attended that day</th><th>Pattern</th></tr></thead><tbody>' +
@@ -398,7 +406,7 @@ function drawStudents(rows){
       '<td class="l">' + (x.att.length ? x.att.map(l => '<span class="lec ' + l[3] + '"><b>' + l[3] + '</b> ' + esc(lecName(l)) + '</span>').join(' ') : '—') + '</td>' +
       '<td>' + esc(x.pat) + '</td></tr>').join('') +
     '</tbody></table></div>' +
-    '<div class="rl" style="padding:8px 14px">Most missed: ' + esc(r.subjects.join(', ')) + '</div></div>').join('');
+    '<div class="rl" style="padding:8px 14px">Most missed: ' + esc(r.subjects.join(', ')) + '</div></div>').join('') + more(rows.length, all.length, 'PAGE_R++;drawRange()');
 }
 const rangeTitle = () => ({ week: 'Weekly', month: 'Monthly', season: 'Session' }[MODE]) + ' bunkers ' + RANGE.from + ' to ' + RANGE.to;
 function shareRange(){
@@ -426,6 +434,67 @@ function csvRange(){
   const def = groupDef(), rows = groupRows(evs, def[1], def[2]); if(!rows.length){ alert('Nothing to download.'); return; }
   download(rangeTitle() + ' - ' + def[0], [[def[0], 'Students', 'Bunk-days', 'Confirmed', 'Possible', 'Lectures missed'].concat(def[2] ? ['of them B'] : [])]
     .concat(rows.map(r => [r.key, r.students, r.days, r.C, r.P, r.lec].concat(def[2] ? [r.B] : []))));
+}
+
+/* ---------------- PDF (small: plain text tables, landscape A4, works for 2000+ students) ---------------- */
+const LIBS = ['https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js'];
+const loadScript = src => new Promise((ok, bad) => { const sc = document.createElement('script'); sc.src = src; sc.onload = ok; sc.onerror = () => bad(new Error('The PDF tool could not load (no internet?).')); document.head.appendChild(sc); });
+let libP = null;
+function pdfLibs(){ if (window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API.autoTable) return Promise.resolve(); if (!libP) libP = (window.jspdf ? Promise.resolve() : loadScript(LIBS[0])).then(() => window.jspdf.jsPDF.API.autoTable ? null : loadScript(LIBS[1])).catch(e => { libP = null; throw e; }); return libP; }
+const lecShort = l => l[1] + (l[0] && l[0] !== '0' ? ' P' + l[0] : '') + (l[3] === 'B' ? ' (B)' : '');
+async function makePdf(file, title, sub, sections){
+  await pdfLibs();
+  const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape', compress: true }), W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(74, 36, 24); doc.text('Jinnah College for Women · ' + title, 10, 12);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(90); doc.text(sub, 10, 17);
+  let y = 21;
+  sections.forEach(sec => {
+    if (sec.title) { if (y > H - 25) { doc.addPage(); y = 12; } doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(107, 52, 35); doc.text(sec.title, 10, y + 3); y += 5; }
+    doc.autoTable({ startY: y, head: [sec.head], body: sec.body, theme: 'grid', margin: { left: 8, right: 8, top: 10, bottom: 10 },
+      styles: { fontSize: 7, cellPadding: 0.8, lineColor: [201, 167, 158], lineWidth: 0.1, textColor: 30, overflow: 'linebreak' },
+      headStyles: { fillColor: [107, 52, 35], textColor: 255, fontSize: 7, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [251, 237, 234] }, columnStyles: sec.cols || {},
+      didParseCell: d => { if (d.section === 'body' && sec.kindCol != null && d.column.index === sec.kindCol) { d.cell.styles.textColor = /^C/.test(d.cell.raw) ? [192, 57, 43] : [180, 116, 14]; d.cell.styles.fontStyle = 'bold'; } } });
+    y = doc.lastAutoTable.finalY + 6;
+  });
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(7); doc.setTextColor(120); doc.text('Page ' + i + ' of ' + n + ' · made ' + new Date().toLocaleString('en-GB'), W - 8, H - 4, { align: 'right' }); }
+  doc.save(file.replace(/[^\w\- ]+/g, '') + '.pdf');
+}
+async function pdfDay(){
+  const rows = dayRows(); if(!rows.length){ alert('Nothing to put in the PDF.'); return; }
+  say('st_day', 'busy', 'Making the PDF…');
+  try{
+    const C = rows.filter(r => r.kind === 'confirmed').length, P = rows.filter(r => r.kind === 'possible').length;
+    await makePdf('Bunkers ' + DAY.date, 'Bunkers · ' + nice(DAY.date), DAY.scope + ' · ' + rows.length + ' students · ' + C + ' confirmed · ' + P + ' possible · C = confirmed (teacher marked B), P = possible (present in one lecture, absent in another), X = excused', [{
+      head: ['#', 'Section', 'Roll No', 'Student', 'Kind', 'Bunked (missed) lectures', 'Attended', 'Pattern', 'Days this month'],
+      body: rows.map((r, i) => [i + 1, r.sec, r.roll, r.name, { confirmed: 'C', possible: 'P', excused: 'X' }[r.kind] + (r.decision ? ' · ' + r.decision : ''),
+        r.lectures.filter(l => l.m === 'A' || l.m === 'B').map(l => l.sub + (l.p ? ' P' + l.p : '') + (l.m === 'B' ? ' (B)' : '') + (l.teacher ? ' – ' + l.teacher : '')).join('; '),
+        r.lectures.filter(l => l.m === 'P').map(l => l.sub + (l.p ? ' P' + l.p : '')).join(', '), r.pattern, r.days]),
+      kindCol: 4, cols: { 0: { cellWidth: 7 }, 1: { cellWidth: 24 }, 2: { cellWidth: 24 }, 3: { cellWidth: 30 }, 4: { cellWidth: 14 }, 8: { cellWidth: 12 } } }]);
+    hush('st_day');
+  }catch(e){ say('st_day', 'err', e.message); }
+}
+async function pdfRange(){
+  if(!RANGE) return;
+  const evs = rangeEvents(), name = { week: 'Weekly', month: 'Monthly', season: 'Session' }[MODE] + ' bunkers', sub = RANGE.scope + ' · ' + short(RANGE.from) + ' – ' + short(RANGE.to);
+  say('st_range', 'busy', 'Making the PDF…');
+  try{
+    if (GROUP === 'students') {
+      const rows = studentRows(evs); if(!rows.length){ alert('Nothing to put in the PDF.'); hush('st_range'); return; }
+      await makePdf(rangeTitle(), name, sub + ' · ' + rows.length + ' students · day by day: date C/P: subjects bunked (B = marked bunk)', [{
+        head: ['#', 'Section', 'Roll No', 'Student', 'Days', 'C', 'P', 'Missed', 'Day by day: what she bunked'],
+        body: rows.map((r, i) => [i + 1, r.sec, r.roll, r.name, r.count, r.confirmed, r.possible, r.missed,
+          r.dates.slice().sort((a, b) => a.d < b.d ? -1 : 1).map(x => short(x.d).replace(/^\w+ /, '') + ' ' + x.k + ': ' + x.miss.map(lecShort).join(', ')).join(' | ')]),
+        cols: { 0: { cellWidth: 7 }, 1: { cellWidth: 24 }, 2: { cellWidth: 24 }, 3: { cellWidth: 30 }, 4: { cellWidth: 9 }, 5: { cellWidth: 7 }, 6: { cellWidth: 7 }, 7: { cellWidth: 11 } } }]);
+    } else {
+      const def = groupDef(), rows = groupRows(evs, def[1], def[2]);
+      await makePdf(rangeTitle() + ' - ' + def[0], name + ' by ' + def[0].toLowerCase(), sub, [{
+        head: [def[0], 'Students', 'Bunk-days', 'Confirmed', 'Possible', 'Lectures missed'].concat(def[2] ? ['of them B'] : []),
+        body: rows.map(r => [r.key, r.students, r.days, r.C, r.P, r.lec].concat(def[2] ? [r.B] : [])) }]);
+    }
+    hush('st_range');
+  }catch(e){ say('st_range', 'err', e.message); }
 }
 
 /* ---------------- START ---------------- */

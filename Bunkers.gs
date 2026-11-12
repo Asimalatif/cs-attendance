@@ -15,8 +15,9 @@
  * Days typed straight into the sheets (no Period Data, e.g. September) are read from the day cells of the sheets;
  * their period comes from the timetable (that weekday), so "left early / came late" still works.
  *
- * Who can open it: admin / principal and Chief Proctors (whole college), HOD (lectures of her department's teachers).
- * The same people can confirm or excuse a possible bunk.
+ * Who can open it: admin / principal and Chief Proctors (whole college), HOD (lectures of her department's teachers),
+ * every teacher (students who bunked HER lectures). The same people can confirm or excuse a possible bunk.
+ * Week / month answers are kept in the cache for 10 minutes, so opening them again is quick.
  *
  * INSTALL:
  *   a) + > Script > name it "Bunkers" > paste this file (replace the old one completely).
@@ -35,7 +36,7 @@ var BNK_MAX_DAYS = 62;
 function bnkRoute_(user, req) {
   try {
     var who = bnkWho_(user);
-    if (!who) return { ok: false, error: 'Only the admin, principal, HOD or Chief Proctor can see the bunkers report.' };
+    if (!who) return { ok: false, error: 'Your account has no teacher name, so there are no lectures to check.' };
     var a = String(req.action || '');
     if (a === 'bnk_day')    return bnkDay_(who, String(req.date || ''));
     if (a === 'bnk_range')  return bnkRange_(who, String(req.from || ''), String(req.to || ''));
@@ -54,7 +55,8 @@ function bnkWho_(user) {
   var cp = false; try { cp = isCP_(user); } catch (e) {}
   if (cp) return { all: true, label: 'College (Chief Proctor)' };
   if (s) return { all: false, dept: s.dept, label: s.dept || 'Department' };
-  return null;
+  var me = normalizeName(user.teacher || '');
+  return me ? { all: false, me: me, label: 'Your lectures (' + (user.teacher || '') + ')' } : null;
 }
 
 var bnkIso_ = function (d) { return Utilities.formatDate(d, TZ_(), 'yyyy-MM-dd'); };
@@ -68,24 +70,24 @@ function bnkParse_(txt) {
 var BNK_MEMO_ = {};
 /** One month: period marks of every sheet + sheet info. */
 function bnkLoad_(tok, who) {
-  var key = tok + '|' + (who.all ? '*' : who.dept);
+  var key = tok + '|' + bnkScopeKey_(who);
   if (BNK_MEMO_[key]) return BNK_MEMO_[key];
   var book = bookFor_(tok), sh = book.getSheetByName(PD_SHEET), sheets = [], TT = bnkTT_(tok);
   if (sh && sh.getLastRow() > 1) {
-    var idx = indexRows_(tok), depts = who.all ? null : teacherDepts_();
+    var idx = indexRows_(tok), depts = who.all || who.me ? null : teacherDepts_();
     sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues().forEach(function (r) {
       var name = String(r[0] || ''), raw;
       if (!name) return;
       try { raw = JSON.parse(r[1] || '{}'); } catch (e) { return; }
       var x = idx[name] || [], t = TT.sheets[name] || {}, teacher = t.teacher || String(x[4] || '');
-      var mine = who.all || String(depts[normalizeName(teacher)] || '').toUpperCase() === who.dept;
+      var mine = bnkMine_(who, teacher, depts);
       sheets.push({ name: name, cls: t.cls || String(x[2] || '') || name, sub: t.sub || String(x[3] || ''), teacher: teacher, mine: mine, r: raw.r || [], d: raw.d || {} });
     });
   }
   // days that only exist in the day cells of the sheets (typed in, or marked before Period Data existed)
   var pdDays = {};
   sheets.forEach(function (s) { pdDays[s.name] = s.d; });
-  var C = bnkCells_(tok), idx2 = indexRows_(tok), my = monthYear_(tok), dep2 = who.all ? null : teacherDepts_();
+  var C = bnkCells_(tok), idx2 = indexRows_(tok), my = monthYear_(tok), dep2 = who.all || who.me ? null : teacherDepts_();
   Object.keys(C).forEach(function (name) {
     var c = C[name], have = pdDays[name] || {}, x = idx2[name] || [], t = TT.sheets[name] || {};
     var cls = t.cls || String(x[2] || '') || c.cls, sub = t.sub || String(x[3] || '') || c.sub;
@@ -96,7 +98,7 @@ function bnkLoad_(tok, who) {
       d[day] = {}; d[day][p] = c.d[day]; any = true;
     });
     if (!any) return;
-    var mine = who.all || String(dep2[normalizeName(teacher)] || '').toUpperCase() === who.dept;
+    var mine = bnkMine_(who, teacher, dep2);
     sheets.push({ name: name, cls: cls, sub: sub, teacher: teacher, mine: mine, r: c.r, d: d });
   });
   return (BNK_MEMO_[key] = { tok: tok, sheets: sheets });
@@ -171,6 +173,14 @@ function bnkPeriod_(cls, sub, dow) {
   return '0';
 }
 
+function bnkScopeKey_(who) { return who.all ? '*' : who.me ? 'T:' + who.me : 'D:' + who.dept; }
+/** Is this lecture's teacher inside the user's view? (college / her department / herself) */
+function bnkMine_(who, teacher, depts) {
+  if (who.all) return true;
+  if (who.me) return normalizeName(teacher) === who.me;
+  return String(depts[normalizeName(teacher)] || '').toUpperCase() === who.dept;
+}
+
 var BNK_NAMES_ = null;
 function bnkNames_() {
   if (BNK_NAMES_) return BNK_NAMES_;
@@ -218,7 +228,7 @@ function bnkJudge_(rec, who) {
   var B = L.filter(function (x) { return x.m === 'B'; });
   if (!miss.length) return null;
   if (!B.length && !P.length) return null;                                   // absent the whole day = not a bunker
-  if (!who.all && !miss.some(function (x) { return x.mine; })) return null;   // HOD: only her department's lectures
+  if (!who.all && !miss.some(function (x) { return x.mine; })) return null;   // HOD: her department's lectures; teacher: her own lectures
   var kind = B.length ? 'confirmed' : 'possible', pattern;
   if (P.length && L.some(function (x) { return !x.p; })) pattern = 'Missed other lectures the same day';   // period not known
   else if (!P.length) pattern = miss.length > 1 ? 'In college, missed every lecture' : 'Marked B by the teacher';
@@ -296,7 +306,18 @@ function bnkRange_(who, fromTxt, toTxt) {
   var from = bnkParse_(fromTxt), to = bnkParse_(toTxt);
   if (!from || !to || to < from) throw new Error('Choose a correct period.');
   if ((to - from) / 864e5 > BNK_MAX_DAYS) throw new Error('Choose at most ' + BNK_MAX_DAYS + ' days.');
-  var DEC = bnkDecisions_(), S = {}, days = 0, perDay = [], ev = [], st = {};
+  var ver = PropertiesService.getScriptProperties().getProperty('BNK_DEC_VER') || '0';
+  var ck = 'bnk_r_' + ver.slice(-6) + bnkScopeKey_(who).replace(/[^\w:*]/g, '').slice(0, 40) + '_' + bnkIso_(from) + '_' + bnkIso_(to), hit = cacheGetBig_(ck);
+  if (hit) { hit.cached = true; return hit; }
+  var res = bnkRangeBuild_(who, from, to);
+  delete res.rows;                                   // the page builds the student list from the events (smaller answer)
+  cachePutBig_(ck, res);
+  return res;
+}
+
+function bnkRangeBuild_(who, from, to) {
+  var DEC = bnkDecisions_(), S = {}, days = 0, perDay = [], ev = [], st = {}, dict = [], dIx = {};
+  var di = function (t) { t = String(t || ''); if (dIx[t] == null) { dIx[t] = dict.length; dict.push(t); } return dIx[t]; };   // each subject / teacher / pattern once
   for (var x = new Date(from); x <= to; x.setDate(x.getDate() + 1)) {
     if (x.getDay() === 0 || !BNK_TOK_[x.getMonth()]) continue;
     var R = bnkDate_(who, new Date(x), DEC), c = 0, p = 0;
@@ -306,9 +327,9 @@ function bnkRange_(who, fromTxt, toTxt) {
       if (j.kind === 'confirmed') c++; else p++;
       // compact event list for the section / program / class / subject / teacher / weekday / period tables
       if (!st[j.key]) st[j.key] = [j.roll, j.name, j.father, j.sec, bnkProgram_(j.sec, x)];
-      ev.push([j.key, R.iso, j.kind === 'confirmed' ? 'C' : 'P', j.pattern,
-        j.lectures.filter(function (l) { return l.m === 'A' || l.m === 'B'; }).map(function (l) { return [l.p, l.sub, l.teacher, l.m]; }),
-        j.lectures.filter(function (l) { return l.m === 'P' || l.m === 'L'; }).map(function (l) { return [l.p, l.sub, l.teacher, l.m]; })]);
+      ev.push([j.key, R.iso, j.kind === 'confirmed' ? 'C' : 'P', di(j.pattern),
+        j.lectures.filter(function (l) { return l.m === 'A' || l.m === 'B'; }).map(function (l) { return [l.p, di(l.sub), di(l.teacher), l.m]; }),
+        j.lectures.filter(function (l) { return l.m === 'P' || l.m === 'L'; }).map(function (l) { return [l.p, di(l.sub), l.m]; })]);
       var s = S[j.key] = S[j.key] || { roll: j.roll, name: j.name, father: j.father, sec: j.sec, dates: [], confirmed: 0, possible: 0, missed: 0, subs: {}, patterns: {}, teachers: {} };
       s.dates.push({ d: R.iso, k: j.kind === 'confirmed' ? 'C' : 'P' });
       if (j.kind === 'confirmed') s.confirmed++; else s.possible++;
@@ -329,7 +350,7 @@ function bnkRange_(who, fromTxt, toTxt) {
       subjects: top(s.subs, 3).map(function (x) { return x + ' (' + s.subs[x] + ')'; }), pattern: top(s.patterns, 1)[0] || '',
       teachers: Object.keys(s.teachers) };
   }).sort(function (a, b) { return b.confirmed - a.confirmed || b.count - a.count || b.missed - a.missed || a.sec.localeCompare(b.sec, undefined, { numeric: true }); });
-  return { ok: true, from: bnkIso_(from), to: bnkIso_(to), scope: who.label, markedDays: days, perDay: perDay, rows: rows, ev: ev, st: st };
+  return { ok: true, from: bnkIso_(from), to: bnkIso_(to), scope: who.label, markedDays: days, perDay: perDay, rows: rows, ev: ev, st: st, dict: dict };
 }
 
 /** Program of a section, as written in the Timetable (e.g. "FCS-1 D2" -> "FCS (JCW)"). */
@@ -358,6 +379,7 @@ function bnkDecide_(user, req) {
       var v = sh.getRange(2, 1, sh.getLastRow() - 1, 2).getDisplayValues();
       for (var i = v.length - 1; i >= 0; i--) if (v[i][0] === iso && enr_(v[i][1]) === enr_(roll)) sh.deleteRow(i + 2);
     }
+    PropertiesService.getScriptProperties().setProperty('BNK_DEC_VER', String(Date.now()));   // week / month answers are made again
     if (dec) {
       var n = bnkNames_()[enr_(roll)] || {};
       var at = sh.getLastRow() + 1;
