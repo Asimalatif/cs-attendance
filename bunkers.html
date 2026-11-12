@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#6B3423">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<title>JCW Bunkers</title>
+<style>
+:root{--bg:#F7EDEA;--surface:#fff;--surface2:#FBEDEA;--ink:#2B1912;--muted:#7C6159;--line:#E2C0B8;--brown:#6B3423;--brown2:#8A4A35;
+  --pos:#0E8A5F;--pos-bg:#E3F4EC;--neg:#C0392B;--neg-bg:#FDE3E1;--mid:#B4740E;--mid-bg:#FFF2DA;--pur:#7A3FA0;--pur-bg:#F1E6F8;--grid:#C9A79E;--shadow:0 1px 2px rgba(74,36,24,.06),0 4px 16px rgba(74,36,24,.07)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1A110F;--surface:#261915;--surface2:#30201B;--ink:#F6E9E5;--muted:#C4A8A0;--line:#4A3029;
+  --pos-bg:#14302A;--neg-bg:#3A1C1F;--mid-bg:#3A2F14;--pur-bg:#2E2038;--pur:#C79BE6;--grid:#5A3A31;--shadow:none}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;padding-bottom:40px}
+button,select,input{font:inherit;color:inherit}
+header{position:sticky;top:0;z-index:10;background:linear-gradient(120deg,#4A2418,#8A4A35);color:#fff;padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header h1{margin:0;font-size:18px}header small{display:block;opacity:.8;font-size:12px}
+header .sp{flex:1}
+.tb{height:36px;border-radius:999px;border:0;background:rgba(255,255,255,.15);color:#fff;font-weight:700;padding:0 14px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;font-size:13px}
+.wrap{max-width:1100px;margin:0 auto;padding:16px 12px}
+.tabs{display:flex;gap:6px;margin-bottom:12px}
+.tabs button{flex:1;height:42px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-weight:800;cursor:pointer}
+.tabs button.on{background:var(--brown);border-color:var(--brown);color:#fff}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.bar input,.bar select{height:40px;border:1.5px solid var(--line);border-radius:12px;padding:0 10px;background:var(--surface)}
+.bar .grow{flex:1;min-width:160px}
+.btn{height:40px;padding:0 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-weight:800;cursor:pointer;white-space:nowrap}
+.btn.p{background:linear-gradient(180deg,#8A4A35,#6B3423);border-color:#6B3423;color:#fff}
+.btn:disabled{opacity:.5;cursor:default}
+.status{display:none;align-items:center;gap:10px;padding:10px 13px;border-radius:12px;font-size:13px;margin-bottom:12px;background:var(--mid-bg);color:var(--mid)}
+.status.show{display:flex}.status.err{background:var(--neg-bg);color:var(--neg)}.status.ok{background:var(--pos-bg);color:var(--pos)}
+.spin{width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.kpi{background:var(--surface);border:1.5px solid var(--line);border-left:5px solid var(--brown2);border-radius:16px;padding:12px 14px;box-shadow:var(--shadow)}
+.kpi b{display:block;font-size:24px}.kpi span{font-size:12.5px;color:var(--muted);font-weight:700}
+.kpi.neg{border-left-color:var(--neg)}.kpi.neg b{color:var(--neg)}.kpi.pur{border-left-color:var(--pur)}.kpi.pur b{color:var(--pur)}
+.sec{background:var(--surface);border:1.5px solid var(--line);border-top:5px solid var(--brown);border-radius:18px;margin-bottom:14px;box-shadow:var(--shadow);overflow:hidden}
+.sec h3{margin:0;padding:10px 14px;font-size:15px;display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--line)}
+.sec h3 .n{background:var(--neg-bg);color:var(--neg);border-radius:20px;padding:2px 10px;font-size:12px}
+.st{padding:10px 14px;border-bottom:1px solid var(--line)}
+.st:last-child{border-bottom:0}
+.st .top{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline}
+.st .nm{font-weight:800}.st .rl{color:var(--muted);font-size:12.5px}
+.tag{display:inline-block;border-radius:20px;padding:2px 9px;font-size:11.5px;font-weight:800;margin-left:4px}
+.tag.pat{background:var(--pur-bg);color:var(--pur)}.tag.rep{background:var(--neg-bg);color:var(--neg)}.tag.one{background:var(--surface2);color:var(--muted)}
+.tl{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.lec{border-radius:10px;padding:4px 8px;font-size:12px;border:1.5px solid;line-height:1.25}
+.lec b{font-size:12.5px}.lec i{font-style:normal;opacity:.8;display:block;font-size:11px}
+.lec.P{background:var(--pos-bg);border-color:#9fd8bf;color:var(--pos)}
+.lec.A{background:var(--neg-bg);border-color:#f2a9a1;color:var(--neg)}
+.lec.B{background:var(--pur-bg);border-color:#cfb0e3;color:var(--pur)}
+.lec.L{background:var(--mid-bg);border-color:#efd08f;color:var(--mid)}
+table{border-collapse:collapse;width:100%;font-size:13px;border:2px solid var(--brown);background:var(--surface)}
+th{background:var(--brown);color:#fff;padding:8px 10px;border:1px solid var(--grid);font-size:12px;text-transform:uppercase;white-space:nowrap}
+td{padding:7px 10px;border:1px solid var(--grid);text-align:center}
+td.l{text-align:left}
+tbody tr:nth-child(even) td{background:var(--surface2)}
+tr.hot td{background:var(--neg-bg)!important}
+.scroll{overflow-x:auto;border-radius:12px}
+.empty{text-align:center;color:var(--muted);padding:40px 16px;border:2px dashed var(--line);border-radius:18px;background:var(--surface)}
+.empty b{display:block;color:var(--ink);font-size:15px;margin-bottom:4px}
+.legend{display:flex;flex-wrap:wrap;gap:6px;font-size:12px;color:var(--muted);margin:-4px 0 12px}
+.hidden{display:none!important}
+@media print{header,.tabs,.bar,.legend{display:none!important}.sec,.kpi{box-shadow:none;break-inside:avoid}body{background:#fff}}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>Bunkers</h1><small id="scope">Present in one lecture, absent in another on the same day</small></div>
+  <div class="sp"></div>
+  <a class="tb" href="./">← App</a>
+</header>
+
+<div class="wrap">
+  <div class="tabs"><button id="tDay" class="on" onclick="tab('day')">Day</button><button id="tMon" onclick="tab('mon')">Repeat bunkers (month)</button></div>
+
+  <!-- DAY -->
+  <div id="vDay">
+    <div class="bar">
+      <button class="btn" onclick="shift(-1)" title="Previous day">‹</button>
+      <input type="date" id="date">
+      <button class="btn" onclick="shift(1)" title="Next day">›</button>
+      <button class="btn p" id="go" onclick="loadDay()">Show</button>
+      <select id="secF" class="grow" onchange="drawDay()"><option value="">All sections</option></select>
+      <input id="q" class="grow" placeholder="Search name or roll no…" oninput="drawDay()">
+    </div>
+    <div class="bar">
+      <button class="btn" onclick="shareDay()">Share on WhatsApp</button>
+      <button class="btn" onclick="csvDay()">CSV</button>
+      <button class="btn" onclick="window.print()">Print</button>
+    </div>
+    <div class="legend"><span class="lec P"><b>P</b> present</span><span class="lec A"><b>A</b> absent</span><span class="lec B"><b>B</b> bunk</span><span class="lec L"><b>L</b> leave (not bunking)</span></div>
+    <div class="status" id="st"></div>
+    <div id="kDay" class="kpis"></div>
+    <div id="outDay"><div class="empty"><b>Choose a day</b>Tap <i>Show</i> to see the students who bunked lectures that day.</div></div>
+  </div>
+
+  <!-- MONTH -->
+  <div id="vMon" class="hidden">
+    <div class="bar">
+      <select id="mon"><option value="SEPT">September</option><option value="OCT">October</option><option value="NOV">November</option><option value="DEC">December</option><option value="JAN">January</option></select>
+      <button class="btn p" onclick="loadMon()">Show</button>
+      <select id="minD" onchange="drawMon()"><option value="1">1 day or more</option><option value="2">2 days or more</option><option value="3" selected>3 days or more</option><option value="5">5 days or more</option></select>
+      <select id="secM" class="grow" onchange="drawMon()"><option value="">All sections</option></select>
+      <input id="qM" class="grow" placeholder="Search name or roll no…" oninput="drawMon()">
+      <button class="btn" onclick="csvMon()">CSV</button>
+      <button class="btn" onclick="window.print()">Print</button>
+    </div>
+    <div class="status" id="stM"></div>
+    <div id="kMon" class="kpis"></div>
+    <div id="outMon"><div class="empty"><b>Repeat bunkers</b>Tap <i>Show</i> to see who bunked on several days this month.</div></div>
+  </div>
+</div>
+
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm7d7-UKg0W-OoWAiuRBHe4mjlRgMQXIHuLm6zi--i/exec';
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const ls = { get(k, d){ try{ const v = localStorage.getItem('csa2_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } } };
+const user = ls.get('user', ''), pass = ls.get('pass', '');
+const MON = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const TOK = { 8: 'SEPT', 9: 'OCT', 10: 'NOV', 11: 'DEC', 0: 'JAN' };
+let DAY = null, MONTH = null;
+
+async function api(payload){
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 300000);
+  try{
+    const r = await fetch(API, { method: 'POST', body: JSON.stringify({ username: user, password: pass, ...payload }), signal: ctl.signal, redirect: 'follow' });
+    const txt = await r.text(); let j; try{ j = JSON.parse(txt); }catch(e){ throw new Error('The server sent a web page instead of data. Check the deployment.'); }
+    if(j && j.error === 'UNKNOWN_ACTION') throw new Error('The server does not know the bunkers report yet: paste Bunkers.gs, add the bnk_ line to doPost and deploy a new version.');
+    if(j && j.error === 'BAD_LOGIN') throw new Error('Your saved login was refused. Open the app, sign out and sign in again.');
+    if(j && j.ok === false) throw new Error(j.error || 'Server error');
+    return j;
+  }catch(e){
+    if(e.name === 'AbortError') throw new Error('The server took too long. Try again.');
+    if(e instanceof TypeError) throw new Error(navigator.onLine ? 'The Apps Script server did not answer. Try again in a minute.' : 'No internet.');
+    throw e;
+  }finally{ clearTimeout(t); }
+}
+function say(id, kind, text){ const el = $(id); el.className = 'status show' + (kind === 'busy' ? '' : ' ' + kind); el.innerHTML = (kind === 'busy' ? '<div class="spin"></div>' : '') + '<span></span>'; el.lastChild.textContent = text; }
+function hush(id){ $(id).className = 'status'; }
+function tab(w){ $('vDay').classList.toggle('hidden', w !== 'day'); $('vMon').classList.toggle('hidden', w !== 'mon'); $('tDay').classList.toggle('on', w === 'day'); $('tMon').classList.toggle('on', w === 'mon'); }
+const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+const nice = s => { const d = new Date(s + 'T00:00:00'); return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); };
+function shift(n){ const d = new Date(($('date').value || iso(new Date())) + 'T00:00:00'); do { d.setDate(d.getDate() + n); } while (d.getDay() === 0); $('date').value = iso(d); loadDay(); }
+function download(name, rows){
+  const csv = rows.map(r => r.map(c => '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"').join(',')).join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' })); a.download = name + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+function fillSecs(sel, rows){
+  const keep = sel.value, secs = [...new Set(rows.map(r => r.sec).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  sel.innerHTML = '<option value="">All sections (' + secs.length + ')</option>' + secs.map(s => '<option>' + esc(s) + '</option>').join('');
+  if (secs.includes(keep)) sel.value = keep;
+}
+const lecTxt = l => 'P' + l.p + ' ' + l.sub;
+
+/* ---------------- DAY ---------------- */
+async function loadDay(){
+  const d = $('date').value; if(!d) return;
+  $('go').disabled = true; say('st', 'busy', 'Reading the period marks of ' + nice(d) + '…');
+  try{
+    DAY = await api({ action: 'bnk_day', date: d });
+    $('scope').textContent = DAY.scope + ' · ' + nice(DAY.date);
+    fillSecs($('secF'), DAY.rows);
+    hush('st'); drawDay();
+  }catch(e){ say('st', 'err', e.message); }
+  finally{ $('go').disabled = false; }
+}
+function dayRows(){
+  if(!DAY) return [];
+  const s = $('secF').value, q = $('q').value.trim().toLowerCase();
+  return DAY.rows.filter(r => (!s || r.sec === s) && (!q || (r.name + ' ' + r.roll + ' ' + r.father).toLowerCase().includes(q)));
+}
+function drawDay(){
+  if(!DAY) return;
+  const rows = dayRows(), secs = {}, missed = rows.reduce((a, r) => a + r.missed, 0), rep = rows.filter(r => r.days >= 3).length;
+  $('kDay').innerHTML =
+    '<div class="kpi neg"><b>' + rows.length + '</b><span>students bunked</span></div>' +
+    '<div class="kpi"><b>' + missed + '</b><span>lectures missed</span></div>' +
+    '<div class="kpi pur"><b>' + rep + '</b><span>bunked 3+ days this month</span></div>' +
+    '<div class="kpi"><b>' + DAY.marked + '</b><span>students with attendance that day</span></div>';
+  if(!rows.length){ $('outDay').innerHTML = '<div class="empty"><b>No bunkers</b>' + (DAY.marked ? 'Nobody was present in one lecture and absent in another on this day.' : 'No attendance was marked on this day.') + '</div>'; return; }
+  rows.forEach(r => (secs[r.sec || '—'] = secs[r.sec || '—'] || []).push(r));
+  $('outDay').innerHTML = Object.keys(secs).map(sec =>
+    '<div class="sec"><h3><span>' + esc(sec) + '</span><span class="n">' + secs[sec].length + ' bunker' + (secs[sec].length > 1 ? 's' : '') + '</span></h3>' +
+    secs[sec].map(r =>
+      '<div class="st"><div class="top"><div><span class="nm">' + esc(r.name || r.roll) + '</span> <span class="rl">' + esc(r.roll) + (r.father ? ' · d/o ' + esc(r.father) : '') + '</span></div>' +
+      '<div><span class="tag pat">' + esc(r.pattern) + '</span><span class="tag ' + (r.days >= 3 ? 'rep' : 'one') + '">' + r.days + (r.days > 1 ? ' days' : ' day') + ' this month</span></div></div>' +
+      '<div class="rl" style="margin-top:3px">Attended ' + r.attended + ' · missed ' + r.missed + '</div>' +
+      '<div class="tl">' + r.lectures.map(l => '<span class="lec ' + l.m + '"><b>' + (l.p ? 'P' + l.p + ' · ' : '') + l.m + '</b> ' + esc(l.sub) + (l.teacher ? '<i>' + esc(l.teacher) + '</i>' : '') + '</span>').join('') + '</div></div>'
+    ).join('') + '</div>').join('');
+}
+function shareDay(){
+  const rows = dayRows(); if(!rows.length){ alert('No bunkers to share.'); return; }
+  const secs = {}; rows.forEach(r => (secs[r.sec || '—'] = secs[r.sec || '—'] || []).push(r));
+  const txt = '*Bunkers · ' + nice(DAY.date) + '*\n' + Object.keys(secs).map(sec => '\n*' + sec + '*\n' + secs[sec].map((r, i) =>
+    (i + 1) + '. ' + (r.name || r.roll) + ' (' + r.roll + ') · ' + r.pattern + '\n   missed: ' + r.lectures.filter(l => l.m !== 'P' && l.m !== 'L').map(lecTxt).join(', ') + (r.days >= 3 ? '\n   ⚠ ' + r.days + ' days this month' : '')).join('\n')).join('\n');
+  if (navigator.share) navigator.share({ text: txt }).catch(() => {}); else window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank');
+}
+function csvDay(){
+  const rows = dayRows(); if(!rows.length){ alert('Nothing to download.'); return; }
+  download('Bunkers ' + DAY.date, [['Date', 'Section', 'Roll No', 'Student', 'Father', 'Pattern', 'Attended', 'Missed', 'Missed lectures', 'Attended lectures', 'Days this month']]
+    .concat(rows.map(r => [DAY.date, r.sec, r.roll, r.name, r.father, r.pattern, r.attended, r.missed,
+      r.lectures.filter(l => l.m === 'A' || l.m === 'B').map(l => lecTxt(l) + ' (' + l.m + (l.teacher ? ', ' + l.teacher : '') + ')').join('; '),
+      r.lectures.filter(l => l.m === 'P').map(lecTxt).join('; '), r.days])));
+}
+
+/* ---------------- MONTH ---------------- */
+async function loadMon(){
+  say('stM', 'busy', 'Checking every day of the month… this can take a minute.');
+  try{
+    MONTH = await api({ action: 'bnk_month', mon: $('mon').value });
+    fillSecs($('secM'), MONTH.rows);
+    hush('stM'); drawMon();
+  }catch(e){ say('stM', 'err', e.message); }
+}
+function monRows(){
+  if(!MONTH) return [];
+  const min = +$('minD').value, s = $('secM').value, q = $('qM').value.trim().toLowerCase();
+  return MONTH.rows.filter(r => r.count >= min && (!s || r.sec === s) && (!q || (r.name + ' ' + r.roll).toLowerCase().includes(q)));
+}
+function drawMon(){
+  if(!MONTH) return;
+  const rows = monRows(), m = MON[MONTH.m] + ' ' + MONTH.y;
+  $('kMon').innerHTML =
+    '<div class="kpi neg"><b>' + rows.length + '</b><span>students shown</span></div>' +
+    '<div class="kpi"><b>' + MONTH.rows.length + '</b><span>bunked at least once in ' + esc(m) + '</span></div>' +
+    '<div class="kpi pur"><b>' + MONTH.rows.filter(r => r.count >= 5).length + '</b><span>bunked 5+ days</span></div>' +
+    '<div class="kpi"><b>' + MONTH.markedDays + '</b><span>days with attendance</span></div>';
+  if(!rows.length){ $('outMon').innerHTML = '<div class="empty"><b>Nobody here</b>Try a lower number of days.</div>'; return; }
+  $('outMon').innerHTML = '<div class="scroll"><table><thead><tr><th>#</th><th>Student</th><th>Roll No</th><th>Section</th><th>Days bunked</th><th>Dates</th><th>Lectures missed</th><th>Most missed subjects</th><th>Usual pattern</th></tr></thead><tbody>' +
+    rows.map((r, i) => '<tr class="' + (r.count >= 5 ? 'hot' : '') + '"><td>' + (i + 1) + '</td><td class="l"><b>' + esc(r.name) + '</b></td><td>' + esc(r.roll) + '</td><td>' + esc(r.sec) + '</td><td><b>' + r.count + '</b></td><td class="l">' +
+      r.days.join(', ') + '</td><td>' + r.missed + '</td><td class="l">' + esc(r.subjects.join(', ')) + '</td><td>' + esc(r.pattern) + '</td></tr>').join('') + '</tbody></table></div>';
+}
+function csvMon(){
+  const rows = monRows(); if(!rows.length){ alert('Nothing to download.'); return; }
+  download('Repeat bunkers ' + MONTH.tok, [['Student', 'Roll No', 'Section', 'Days bunked', 'Dates', 'Lectures missed', 'Most missed subjects', 'Usual pattern']]
+    .concat(rows.map(r => [r.name, r.roll, r.sec, r.count, r.days.join(' '), r.missed, r.subjects.join('; '), r.pattern])));
+}
+
+/* ---------------- START ---------------- */
+(function(){
+  if(!user || !pass){ document.querySelector('.wrap').innerHTML = '<div class="empty"><b>Sign in first</b>Open the attendance app and sign in, then come back.</div>'; return; }
+  const now = new Date(); if (now.getDay() === 0) now.setDate(now.getDate() - 1);
+  $('date').value = iso(now);
+  if (TOK[now.getMonth()]) $('mon').value = TOK[now.getMonth()];
+  loadDay();
+})();
+</script>
+</body>
+</html>

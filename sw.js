@@ -1,6 +1,6 @@
 // Bump VERSION every time you change index.html so phones pick up the update.
-const VERSION = 'csa-v117';
-const CORE = ['./', './index.html', './admission.html', './grandtest.html', './detention.html', './board.html', './boardparse.js', './spinner.js', './certificates.html', './idcards.html', './idcard/sheet.svg', './idcard/sheet-template.pdf', './idcard/Carlito-Bold.ttf', './idcard/Carlito-Bold.woff2', './idcard/principal-sign.png', './idcheck.html', './duties.html', './reports.html', './manifest.json', './icon-192.png', './jcw-logo.png', './icon-512.png'];
+const VERSION = 'csa-v118';
+const CORE = ['./', './index.html', './admission.html', './grandtest.html', './detention.html', './board.html', './boardparse.js', './spinner.js', './certificates.html', './idcards.html', './idcard/sheet.svg', './idcard/sheet-template.pdf', './idcard/Carlito-Bold.ttf', './idcard/Carlito-Bold.woff2', './idcard/principal-sign.png', './idcheck.html', './duties.html', './reports.html', './bunkers.html', './manifest.json', './icon-192.png', './jcw-logo.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
@@ -22,7 +22,7 @@ self.addEventListener('fetch', e => {
 
   // Pages: network first, fall back to the saved copy when offline
   if (req.mode === 'navigate') {
-    const page = /admission\.html$/.test(url.pathname) ? './admission.html' : /grandtest\.html$/.test(url.pathname) ? './grandtest.html' : /detention\.html$/.test(url.pathname) ? './detention.html' : /student\.html$/.test(url.pathname) ? './student.html' : /board\.html$/.test(url.pathname) ? './board.html' : /certificates\.html$/.test(url.pathname) ? './certificates.html' : /idcards\.html$/.test(url.pathname) ? './idcards.html' : /idcheck\.html$/.test(url.pathname) ? './idcheck.html' : /duties\.html$/.test(url.pathname) ? './duties.html' : /reports\.html$/.test(url.pathname) ? './reports.html' : './index.html';
+    const page = /admission\.html$/.test(url.pathname) ? './admission.html' : /grandtest\.html$/.test(url.pathname) ? './grandtest.html' : /detention\.html$/.test(url.pathname) ? './detention.html' : /student\.html$/.test(url.pathname) ? './student.html' : /board\.html$/.test(url.pathname) ? './board.html' : /certificates\.html$/.test(url.pathname) ? './certificates.html' : /idcards\.html$/.test(url.pathname) ? './idcards.html' : /idcheck\.html$/.test(url.pathname) ? './idcheck.html' : /duties\.html$/.test(url.pathname) ? './duties.html' : /reports\.html$/.test(url.pathname) ? './reports.html' : /bunkers\.html$/.test(url.pathname) ? './bunkers.html' : './index.html';
     e.respondWith(
       fetch(req).then(res => {
         const copy = res.clone();
