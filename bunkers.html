@@ -398,7 +398,7 @@ function drawStudents(all){
   const rows = all.slice(0, PAGE_R * PER_R);
   $('o_range').innerHTML = '<div class="rl" style="margin-bottom:8px">' + all.length + ' student(s)' + (all.length > rows.length ? ', showing ' + rows.length + ' (use the PDF or CSV for all)' : '') + '</div>' + rows.map((r, i) =>
     '<div class="sec"><h3><span>' + (i + 1) + '. ' + esc(r.name || r.roll) + ' <span class="rl">' + esc(r.roll) + ' · ' + esc(r.sec) + (r.father ? ' · d/o ' + esc(r.father) : '') + '</span></span>' +
-    '<span><span class="tag C">' + r.confirmed + ' confirmed</span><span class="tag Pk">' + r.possible + ' possible</span><span class="tag ' + (r.count >= 5 ? 'rep' : 'one') + '">' + r.count + ' day' + (r.count > 1 ? 's' : '') + ' · ' + r.missed + ' lecture' + (r.missed > 1 ? 's' : '') + ' missed</span></span></h3>' +
+    '<span>' + (r.confirmed ? '<span class="tag C">' + r.confirmed + ' confirmed</span>' : '') + (r.possible ? '<span class="tag Pk">' + r.possible + ' possible</span>' : '') + '<span class="tag ' + (r.count >= 5 ? 'rep' : 'one') + '">' + r.count + ' day' + (r.count > 1 ? 's' : '') + ' · ' + r.missed + ' lecture' + (r.missed > 1 ? 's' : '') + ' missed</span></span></h3>' +
     '<div class="scroll"><table><thead><tr><th>Date</th><th>Kind</th><th>Bunked (missed)</th><th>Attended that day</th><th>Pattern</th></tr></thead><tbody>' +
     r.dates.slice().sort((a, b) => a.d < b.d ? -1 : 1).map(x =>
       '<tr><td><span class="dch ' + x.k + '">' + esc(short(x.d)) + '</span></td><td>' + (x.k === 'C' ? 'Confirmed' : 'Possible') + '</td>' +
@@ -414,7 +414,7 @@ function shareRange(){
   const evs = rangeEvents(), head = '*' + ({ week: 'Weekly', month: 'Monthly', season: 'Session' }[MODE]) + ' bunkers · ' + short(RANGE.from) + ' – ' + short(RANGE.to) + '*\n';
   if (GROUP === 'students') {
     const rows = studentRows(evs); if(!rows.length){ alert('Nothing to share.'); return; }
-    share(head + rows.map((r, i) => '\n' + (i + 1) + '. *' + (r.name || r.roll) + '* (' + r.roll + ', ' + r.sec + ') · ' + r.count + ' day(s), ' + r.confirmed + ' confirmed\n' +
+    share(head + rows.map((r, i) => '\n' + (i + 1) + '. *' + (r.name || r.roll) + '* (' + r.roll + ', ' + r.sec + ') · ' + r.count + ' day(s)' + (r.confirmed ? ', ' + r.confirmed + ' confirmed' : '') + (r.possible ? ', ' + r.possible + ' possible' : '') + '\n' +
       r.dates.slice().sort((a, b) => a.d < b.d ? -1 : 1).map(x => '   ' + short(x.d) + (x.k === 'C' ? ' (confirmed)' : '') + ': bunked ' + x.miss.map(l => lecName(l) + (l[3] === 'B' ? ' B' : '')).join(', ')).join('\n')).join('\n'));
   } else {
     const def = groupDef(), rows = groupRows(evs, def[1], def[2]); if(!rows.length){ alert('Nothing to share.'); return; }
@@ -520,7 +520,7 @@ async function pdfRange(){
             const lt = m => x.miss.filter(l => l[3] === m).map(l => ab(l[1]) + (l[0] && l[0] !== '0' ? ' P' + l[0] : '')).join(', ') || '–';
             const line = [short(x.d), x.k === 'C' ? 'Confirmed' : 'Possible', lt('B'), lt('A'), (x.att || []).map(lecTxt2).join(', ') || '–'];
             body.push(j ? line : [{ content: String(i + 1), rowSpan: n }, { content: r.roll, rowSpan: n }, { content: r.name + (r.father ? '\nd/o ' + r.father : ''), rowSpan: n },
-              { content: r.count + ' day' + (r.count > 1 ? 's' : '') + '\n' + r.confirmed + ' confirmed\n' + r.possible + ' possible', rowSpan: n }].concat(line));
+              { content: r.count + ' day' + (r.count > 1 ? 's' : '') + (r.confirmed ? '\n' + r.confirmed + ' confirmed' : '') + (r.possible ? '\n' + r.possible + ' possible' : ''), rowSpan: n }].concat(line));
           });
         });
         parts.push({ title: k + ' · ' + bySec[k].st + ' student(s) · ' + bySec[k].days + ' bunk day(s)',
