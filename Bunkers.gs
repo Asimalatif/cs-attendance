@@ -70,16 +70,16 @@ var BNK_MEMO_ = {};
 function bnkLoad_(tok, who) {
   var key = tok + '|' + (who.all ? '*' : who.dept);
   if (BNK_MEMO_[key]) return BNK_MEMO_[key];
-  var book = bookFor_(tok), sh = book.getSheetByName(PD_SHEET), sheets = [];
+  var book = bookFor_(tok), sh = book.getSheetByName(PD_SHEET), sheets = [], TT = bnkTT_(tok);
   if (sh && sh.getLastRow() > 1) {
     var idx = indexRows_(tok), depts = who.all ? null : teacherDepts_();
     sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues().forEach(function (r) {
       var name = String(r[0] || ''), raw;
       if (!name) return;
       try { raw = JSON.parse(r[1] || '{}'); } catch (e) { return; }
-      var x = idx[name] || [], teacher = String(x[4] || '');
+      var x = idx[name] || [], t = TT.sheets[name] || {}, teacher = t.teacher || String(x[4] || '');
       var mine = who.all || String(depts[normalizeName(teacher)] || '').toUpperCase() === who.dept;
-      sheets.push({ name: name, cls: String(x[2] || '') || name, sub: String(x[3] || ''), teacher: teacher, mine: mine, r: raw.r || [], d: raw.d || {} });
+      sheets.push({ name: name, cls: t.cls || String(x[2] || '') || name, sub: t.sub || String(x[3] || ''), teacher: teacher, mine: mine, r: raw.r || [], d: raw.d || {} });
     });
   }
   // days that only exist in the day cells of the sheets (typed in, or marked before Period Data existed)
@@ -87,12 +87,12 @@ function bnkLoad_(tok, who) {
   sheets.forEach(function (s) { pdDays[s.name] = s.d; });
   var C = bnkCells_(tok), idx2 = indexRows_(tok), my = monthYear_(tok), dep2 = who.all ? null : teacherDepts_();
   Object.keys(C).forEach(function (name) {
-    var c = C[name], have = pdDays[name] || {}, x = idx2[name] || [], cls = String(x[2] || '') || c.cls, sub = String(x[3] || '') || c.sub;
-    var teacher = String(x[4] || '') || c.teacher, d = {}, any = false;
+    var c = C[name], have = pdDays[name] || {}, x = idx2[name] || [], t = TT.sheets[name] || {};
+    var cls = t.cls || String(x[2] || '') || c.cls, sub = t.sub || String(x[3] || '') || c.sub;
+    var teacher = t.teacher || String(x[4] || '') || c.teacher, d = {}, any = false;
     Object.keys(c.d).forEach(function (day) {
       if (have[day]) return;                                  // Period Data is the real record when it exists
-      var dow = new Date(my.y, my.m, Number(day)).getDay(), p = '0';
-      try { var sl = slotsOf_(cls, sub).filter(function (q) { return q.days[dow]; }); if (sl.length) p = String(sl[0].p); } catch (e) {}
+      var p = bnkPeriod_(cls, sub, new Date(my.y, my.m, Number(day)).getDay());
       d[day] = {}; d[day][p] = c.d[day]; any = true;
     });
     if (!any) return;
@@ -145,6 +145,30 @@ function bnkCells_(tok) {
   });
   cachePutBig_(ck, out);
   return out;
+}
+
+/** sheet name -> { cls, sub, teacher, program } exactly as written in the Timetable (the sheets are made from it). */
+var BNK_TT_ = {};
+function bnkTT_(tok) {
+  if (BNK_TT_[tok]) return BNK_TT_[tok];
+  var out = { sheets: {}, prog: {} };
+  try {
+    getTimetable_().rows.forEach(function (r) {
+      var pcs = String(r[3] || '').trim(), sub = String(r[4] || '').trim();
+      if (!pcs || !sub) return;
+      var name = makeName_(pcs, tok, sub.toUpperCase());
+      if (!out.sheets[name]) out.sheets[name] = { cls: pcs, sub: sub.toUpperCase(), teacher: String(r[0] || '').trim(), program: String(r[1] || '').trim() };
+      var k = pcs.replace(/\s+/g, '').toUpperCase();
+      if (!out.prog[k] && r[1]) out.prog[k] = String(r[1]).trim();
+    });
+  } catch (e) {}
+  return (BNK_TT_[tok] = out);
+}
+
+/** The period of this lecture on that weekday, from the Timetable ('0' when the Timetable does not say). */
+function bnkPeriod_(cls, sub, dow) {
+  try { var sl = slotsOf_(cls, sub).filter(function (q) { return q.days[dow]; }); if (sl.length) return String(sl[0].p); } catch (e) {}
+  return '0';
 }
 
 var BNK_NAMES_ = null;
@@ -281,9 +305,10 @@ function bnkRange_(who, fromTxt, toTxt) {
       if (j.kind === 'excused') return;
       if (j.kind === 'confirmed') c++; else p++;
       // compact event list for the section / program / class / subject / teacher / weekday / period tables
-      if (!st[j.key]) st[j.key] = [j.roll, j.name, j.father, j.sec];
+      if (!st[j.key]) st[j.key] = [j.roll, j.name, j.father, j.sec, bnkProgram_(j.sec, x)];
       ev.push([j.key, R.iso, j.kind === 'confirmed' ? 'C' : 'P', j.pattern,
-        j.lectures.filter(function (l) { return l.m === 'A' || l.m === 'B'; }).map(function (l) { return [l.p, l.sub, l.teacher, l.m]; })]);
+        j.lectures.filter(function (l) { return l.m === 'A' || l.m === 'B'; }).map(function (l) { return [l.p, l.sub, l.teacher, l.m]; }),
+        j.lectures.filter(function (l) { return l.m === 'P' || l.m === 'L'; }).map(function (l) { return [l.p, l.sub, l.teacher, l.m]; })]);
       var s = S[j.key] = S[j.key] || { roll: j.roll, name: j.name, father: j.father, sec: j.sec, dates: [], confirmed: 0, possible: 0, missed: 0, subs: {}, patterns: {}, teachers: {} };
       s.dates.push({ d: R.iso, k: j.kind === 'confirmed' ? 'C' : 'P' });
       if (j.kind === 'confirmed') s.confirmed++; else s.possible++;
@@ -305,6 +330,12 @@ function bnkRange_(who, fromTxt, toTxt) {
       teachers: Object.keys(s.teachers) };
   }).sort(function (a, b) { return b.confirmed - a.confirmed || b.count - a.count || b.missed - a.missed || a.sec.localeCompare(b.sec, undefined, { numeric: true }); });
   return { ok: true, from: bnkIso_(from), to: bnkIso_(to), scope: who.label, markedDays: days, perDay: perDay, rows: rows, ev: ev, st: st };
+}
+
+/** Program of a section, as written in the Timetable (e.g. "FCS-1 D2" -> "FCS (JCW)"). */
+function bnkProgram_(sec, d) {
+  var tok = BNK_TOK_[d.getMonth()], k = String(sec || '').replace(/\s+/g, '').toUpperCase();
+  return (tok && bnkTT_(tok).prog[k]) || '';
 }
 
 /* ---------------- decisions ---------------- */

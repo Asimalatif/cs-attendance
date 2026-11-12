@@ -68,6 +68,7 @@ tr.hot td{background:var(--neg-bg)!important}
 .hidden{display:none!important}
 @media print{header,.tabs,.bar,.legend{display:none!important}.sec,.kpi{box-shadow:none;break-inside:avoid}body{background:#fff}}
 .st.excused{opacity:.6}
+td .lec{display:inline-block;margin:2px 2px;text-align:left;vertical-align:top}
 .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .acts .btn{height:34px;font-size:12.5px;border-radius:10px}
 .btn.ok{border-color:#9fd8bf;color:var(--pos)}.btn.no{border-color:#f2a9a1;color:var(--neg)}
@@ -326,7 +327,7 @@ function studentRows(evs){
   const S = {};
   evs.forEach(e => {
     const st = RANGE.st[e[0]] || [], r = S[e[0]] = S[e[0]] || { roll: st[0], name: st[1], father: st[2], sec: st[3], dates: [], confirmed: 0, possible: 0, missed: 0, subs: {}, pats: {}, teachers: {} };
-    r.dates.push({ d: e[1], k: e[2] }); if (e[2] === 'C') r.confirmed++; else r.possible++;
+    r.dates.push({ d: e[1], k: e[2], pat: e[3], miss: e[4], att: e[5] || [] }); if (e[2] === 'C') r.confirmed++; else r.possible++;
     r.pats[e[3]] = (r.pats[e[3]] || 0) + 1;
     e[4].forEach(l => { r.missed++; r.subs[l[1]] = (r.subs[l[1]] || 0) + 1; if (l[2]) r.teachers[l[2]] = 1; });
   });
@@ -354,8 +355,8 @@ const DOW = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', '
 function groupDef(){
   return {
     sec:     ['Section', (st) => st[3], false],
-    prog:    ['Program', (st) => progCls(st[3])[0], false],
-    cls:     ['Class', (st) => progCls(st[3])[0] + ' · ' + progCls(st[3])[1], false],
+    prog:    ['Program', (st) => st[4] || progCls(st[3])[0], false],
+    cls:     ['Class', (st) => (st[4] || progCls(st[3])[0]) + ' · ' + progCls(st[3])[1], false],
     sub:     ['Subject', (st, e, l) => l[1], true],
     teacher: ['Teacher (lecture missed)', (st, e, l) => l[2] || '(not known)', true],
     dow:     ['Weekday', (st, e) => DOW[new Date(e[1] + 'T00:00:00').getDay()], false],
@@ -384,12 +385,20 @@ function drawRange(){
       '<td class="l"><div class="barc"><i style="width:' + Math.round(r.lec / max * 120) + 'px"></i></div></td></tr>').join('') + '</tbody></table></div>' +
     (GROUP === 'sub' || GROUP === 'teacher' || GROUP === 'per' ? '<div class="legend" style="margin-top:8px">Counted per missed lecture: a student who missed two lectures of the same subject on one day counts 2 lectures but 1 bunk-day.</div>' : '');
 }
+const lecName = l => l[1] + (l[0] && l[0] !== '0' ? ' (P' + l[0] + ')' : '');
 function drawStudents(rows){
   if(!rows.length){ $('o_range').innerHTML = '<div class="empty"><b>Nobody here</b>Try fewer days or "Confirmed + possible".</div>'; return; }
-  $('o_range').innerHTML = '<div class="scroll"><table><thead><tr><th>#</th><th>Student</th><th>Roll No</th><th>Section</th><th>Days</th><th>Confirmed</th><th>Possible</th><th>Dates</th><th>Lectures missed</th><th>Most missed subjects</th><th>Usual pattern</th></tr></thead><tbody>' +
-    rows.map((r, i) => '<tr class="' + (r.confirmed >= 3 || r.count >= 5 ? 'hot' : '') + '"><td>' + (i + 1) + '</td><td class="l"><b>' + esc(r.name) + '</b></td><td>' + esc(r.roll) + '</td><td>' + esc(r.sec) + '</td><td><b>' + r.count + '</b></td><td>' + r.confirmed + '</td><td>' + r.possible + '</td><td class="l">' +
-      r.dates.map(x => '<span class="dch ' + x.k + '">' + esc(short(x.d)) + '</span>').join('') + '</td><td>' + r.missed + '</td><td class="l">' + esc(r.subjects.join(', ')) + '</td><td>' + esc(r.pattern) + '</td></tr>').join('') + '</tbody></table></div>' +
-    '<div class="legend" style="margin-top:8px"><span class="dch C">date</span> confirmed bunk <span class="dch P">date</span> possible bunk</div>';
+  $('o_range').innerHTML = rows.map((r, i) =>
+    '<div class="sec"><h3><span>' + (i + 1) + '. ' + esc(r.name || r.roll) + ' <span class="rl">' + esc(r.roll) + ' · ' + esc(r.sec) + (r.father ? ' · d/o ' + esc(r.father) : '') + '</span></span>' +
+    '<span><span class="tag C">' + r.confirmed + ' confirmed</span><span class="tag Pk">' + r.possible + ' possible</span><span class="tag ' + (r.count >= 5 ? 'rep' : 'one') + '">' + r.count + ' day' + (r.count > 1 ? 's' : '') + ' · ' + r.missed + ' lecture' + (r.missed > 1 ? 's' : '') + ' missed</span></span></h3>' +
+    '<div class="scroll"><table><thead><tr><th>Date</th><th>Kind</th><th>Bunked (missed)</th><th>Attended that day</th><th>Pattern</th></tr></thead><tbody>' +
+    r.dates.slice().sort((a, b) => a.d < b.d ? -1 : 1).map(x =>
+      '<tr><td><span class="dch ' + x.k + '">' + esc(short(x.d)) + '</span></td><td>' + (x.k === 'C' ? 'Confirmed' : 'Possible') + '</td>' +
+      '<td class="l">' + x.miss.map(l => '<span class="lec ' + l[3] + '"><b>' + l[3] + '</b> ' + esc(lecName(l)) + (l[2] ? '<i>' + esc(l[2]) + '</i>' : '') + '</span>').join(' ') + '</td>' +
+      '<td class="l">' + (x.att.length ? x.att.map(l => '<span class="lec ' + l[3] + '"><b>' + l[3] + '</b> ' + esc(lecName(l)) + '</span>').join(' ') : '—') + '</td>' +
+      '<td>' + esc(x.pat) + '</td></tr>').join('') +
+    '</tbody></table></div>' +
+    '<div class="rl" style="padding:8px 14px">Most missed: ' + esc(r.subjects.join(', ')) + '</div></div>').join('');
 }
 const rangeTitle = () => ({ week: 'Weekly', month: 'Monthly', season: 'Session' }[MODE]) + ' bunkers ' + RANGE.from + ' to ' + RANGE.to;
 function shareRange(){
@@ -397,7 +406,8 @@ function shareRange(){
   const evs = rangeEvents(), head = '*' + ({ week: 'Weekly', month: 'Monthly', season: 'Session' }[MODE]) + ' bunkers · ' + short(RANGE.from) + ' – ' + short(RANGE.to) + '*\n';
   if (GROUP === 'students') {
     const rows = studentRows(evs); if(!rows.length){ alert('Nothing to share.'); return; }
-    share(head + rows.map((r, i) => (i + 1) + '. ' + (r.name || r.roll) + ' (' + r.roll + ', ' + r.sec + ') · ' + r.count + ' day(s), ' + r.confirmed + ' confirmed · ' + r.subjects.join(', ')).join('\n'));
+    share(head + rows.map((r, i) => '\n' + (i + 1) + '. *' + (r.name || r.roll) + '* (' + r.roll + ', ' + r.sec + ') · ' + r.count + ' day(s), ' + r.confirmed + ' confirmed\n' +
+      r.dates.slice().sort((a, b) => a.d < b.d ? -1 : 1).map(x => '   ' + short(x.d) + (x.k === 'C' ? ' (confirmed)' : '') + ': bunked ' + x.miss.map(l => lecName(l) + (l[3] === 'B' ? ' B' : '')).join(', ')).join('\n')).join('\n'));
   } else {
     const def = groupDef(), rows = groupRows(evs, def[1], def[2]); if(!rows.length){ alert('Nothing to share.'); return; }
     share(head + '_' + def[0] + '-wise_\n' + rows.map((r, i) => (i + 1) + '. ' + r.key + ': ' + r.students + ' students, ' + r.days + ' bunk-days (' + r.C + ' confirmed), ' + r.lec + ' lectures missed').join('\n'));
@@ -408,8 +418,10 @@ function csvRange(){
   const evs = rangeEvents();
   if (GROUP === 'students') {
     const rows = studentRows(evs); if(!rows.length){ alert('Nothing to download.'); return; }
-    return download(rangeTitle(), [['Student', 'Father', 'Roll No', 'Section', 'Days', 'Confirmed', 'Possible', 'Dates (C = confirmed, P = possible)', 'Lectures missed', 'Most missed subjects', 'Teachers of missed lectures', 'Usual pattern']]
-      .concat(rows.map(r => [r.name, r.father, r.roll, r.sec, r.count, r.confirmed, r.possible, r.dates.map(x => x.d + ' ' + x.k).join('; '), r.missed, r.subjects.join('; '), r.teachers.join('; '), r.pattern])));
+    const out = [['Student', 'Father', 'Roll No', 'Section', 'Date', 'Kind', 'Bunked (missed) lectures', 'Teachers of missed lectures', 'Attended that day', 'Pattern', 'Student total days', 'Student total confirmed']];
+    rows.forEach(r => r.dates.slice().sort((a, b) => a.d < b.d ? -1 : 1).forEach(x => out.push([r.name, r.father, r.roll, r.sec, x.d, x.k === 'C' ? 'Confirmed' : 'Possible',
+      x.miss.map(l => lecName(l) + ' ' + l[3]).join('; '), [...new Set(x.miss.map(l => l[2]).filter(Boolean))].join('; '), x.att.map(l => lecName(l) + (l[3] === 'L' ? ' (leave)' : '')).join('; '), x.pat, r.count, r.confirmed])));
+    return download(rangeTitle(), out);
   }
   const def = groupDef(), rows = groupRows(evs, def[1], def[2]); if(!rows.length){ alert('Nothing to download.'); return; }
   download(rangeTitle() + ' - ' + def[0], [[def[0], 'Students', 'Bunk-days', 'Confirmed', 'Possible', 'Lectures missed'].concat(def[2] ? ['of them B'] : [])]
