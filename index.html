@@ -2853,8 +2853,7 @@ function finalize(doc){
     if(LOGO){ try{ doc.setFillColor(255, 255, 255); doc.circle(21, 11, 8, 'F'); doc.addImage(LOGO, 'PNG', 14.6, 4.6, 12.8, 12.4); tx = 32; }catch(e){} }
     doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(255, 255, 255); doc.text(COLLEGE, tx, 10);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(244, 214, 208); doc.text(COLLEGE_SUB, tx, 15.5);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(255, 255, 255); doc.text(SYSTEM, w - 14, 10, { align:'right' });
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(244, 214, 208); doc.text(stamp, w - 14, 15.5, { align:'right' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(244, 214, 208); doc.text(stamp, w - 14, 12.5, { align:'right' });
     doc.setDrawColor(...LINE); doc.setLineWidth(0.2); doc.line(14, h - 13, w - 14, h - 13);
     doc.setFontSize(7.5); doc.setTextColor(...MUTED);
     doc.text('Computer-generated report' + (teacher ? ' \u00b7 prepared by ' + teacher : '') + ' \u00b7 ' + stamp, 14, h - 8.5);

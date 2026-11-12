@@ -47,7 +47,7 @@ function atRoute_(user, req) {
     try { see = admin || gtAll_(user) || wrAll_(user); } catch (e) { see = admin; }
     if (!see) return { ok: false, error: 'The admin tools are for the admin, principal and HODs.' };
     var a = String(req.action || '');
-    var mustAdmin = { at_run: 1, at_fillroom: 1 };
+    var mustAdmin = { at_run: 1, at_fillroom: 1, at_savestu: 1 };
     if (mustAdmin[a] && !admin) return { ok: false, error: 'Only the admin can run this (it writes to the workbook).' };
     switch (a) {
       case 'at_meta':     return { ok: true, data: at_meta_(admin) };
@@ -55,6 +55,8 @@ function atRoute_(user, req) {
       case 'at_strength': return { ok: true, data: at_strength_() };
       case 'at_save':     return { ok: true, data: at_save_(req) };
       case 'at_fillroom': return { ok: true, data: { message: fillRoomFromTimetableIntoAllSheets() } };
+      case 'at_savestu':  return { ok: true, data: at_saveStudent_(req) };
+      case 'at_roomtags': return { ok: true, data: at_roomTags_() };
       case 'at_run':      return { ok: true, data: at_run_(req) };
     }
     return { ok: false, error: 'UNKNOWN_ACTION' };
@@ -126,30 +128,180 @@ function at_read_(name) {
 }
 
 /* ---------- students for admission slips / orientation lists ---------- */
+/* columns of Transform-ALL-COLLEGE-STRENGTH (by header, with the old fixed positions as fallback) */
+function at_cols_(head) {
+  var h = head.map(function (x) { return String(x).trim().toLowerCase(); });
+  function col(names, fb) { for (var i = 0; i < names.length; i++) { var k = h.indexOf(names[i]); if (k >= 0) return k; } return fb; }
+  var C = {
+    e: col(['enroll#', 'enroll no', 'enrollmentno', 'enrollment no', 'enrollment#'], 1),
+    n: col(['student name', 'studentname'], 2), f: col(['father name', 'fathername'], 3),
+    p: col(['program'], 5), c: col(['class'], 6), s: col(['section'], 7), pcs: col(['pcs'], 8),
+    room: col(['room'], -1), q: col(['quota'], -1), sub: []
+  };
+  for (var k = 1; k <= 7; k++) C.sub.push(col(['sub' + k], -1));
+  return C;
+}
 function at_strength_() {
   var sh = at_ss_().getSheetByName(AT_CFG.STRENGTH);
   if (!sh) throw new Error("Sheet '" + AT_CFG.STRENGTH + "' not found.");
   var v = sh.getDataRange().getDisplayValues();
   if (v.length < 2) throw new Error('No student data found.');
-  var h = v[0].map(function (x) { return String(x).trim().toLowerCase(); });
-  function col(names, fb) { for (var i = 0; i < names.length; i++) { var k = h.indexOf(names[i]); if (k >= 0) return k; } return fb; }
-  var C = {
-    enroll: col(['enroll#', 'enroll no', 'enrollmentno', 'enrollment no', 'enrollment#'], 1),
-    name: col(['student name', 'studentname'], 2), father: col(['father name', 'fathername'], 3),
-    program: col(['program'], 5), cls: col(['class'], 6), section: col(['section'], 7), pcs: col(['pcs'], 8),
-    room: col(['room'], -1), quota: col(['quota'], -1)
-  };
-  var subs = [];
-  for (var s = 1; s <= 7; s++) subs.push(col(['sub' + s], -1));
+  var C = at_cols_(v[0]), TT = at_ttRooms_();
   var g = function (r, i) { return i >= 0 && i < r.length ? String(r[i]).trim() : ''; };
   var rows = [];
   for (var r = 1; r < v.length; r++) {
-    var row = v[r], o = { e: g(row, C.enroll), n: g(row, C.name), f: g(row, C.father), p: g(row, C.program), c: g(row, C.cls),
-      s: g(row, C.section), pcs: g(row, C.pcs), room: g(row, C.room), q: g(row, C.quota), sub: subs.map(function (i) { return g(row, i); }) };
+    var row = v[r], o = { row: r + 1, e: g(row, C.e), n: g(row, C.n), f: g(row, C.f), p: g(row, C.p), c: g(row, C.c),
+      s: g(row, C.s), pcs: g(row, C.pcs), room: g(row, C.room), q: g(row, C.q), sub: C.sub.map(function (i) { return g(row, i); }) };
     if (!o.e && !o.n) continue;
+    o.tt = at_ttRoomOf_(TT, o);                             // room of this section in the Timetable sheet
     rows.push(o);
   }
-  return { rows: rows, hasRoom: C.room >= 0, hasQuota: C.quota >= 0, hasSubs: subs.some(function (i) { return i >= 0; }) };
+  return { rows: rows, hasRoom: C.room >= 0, hasQuota: C.q >= 0, hasSubs: C.sub.some(function (i) { return i >= 0; }), ttSheet: TT.sheet, ttFound: TT.found };
+}
+
+/* ---------- room of every section from the Timetable sheet (the room used most by that section) ---------- */
+function at_key_(v) { return String(v == null ? '' : v).toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+function at_ttRooms_() {
+  var out = { byPcs: {}, byPcs2: {}, byPs: {}, sheet: AUTO_CFG.sourceSheet, found: false };
+  var sh = at_ss_().getSheetByName(AUTO_CFG.sourceSheet);
+  if (!sh || sh.getLastRow() < 2) return out;
+  out.found = true;
+  var v = sh.getDataRange().getDisplayValues();
+  var h = v[0].map(function (x) { return String(x).trim().toLowerCase().replace(/\s+/g, ''); });
+  var iP = h.indexOf('program'), iC = h.indexOf('class'), iPcs = h.indexOf('pcs'), iS = h.indexOf('section'), iR = h.indexOf('room');
+  if (iR < 0) return out;
+  var cnt = {};
+  function add(map, k, room) { if (!k) return; var m = cnt[map + k] || (cnt[map + k] = {}); m[room] = (m[room] || 0) + 1; }
+  for (var r = 1; r < v.length; r++) {
+    var room = String(v[r][iR] || '').trim(); if (!room) continue;
+    var prog = iP >= 0 ? at_key_(normalizeProgramForRoom_(v[r][iP])) : '', sec = iS >= 0 ? at_key_(v[r][iS]) : '', cls = iC >= 0 ? at_key_(v[r][iC]) : '';
+    if (iPcs >= 0) add('pcs:', at_key_(v[r][iPcs]), room);
+    if (iPcs >= 0 && prog) add('pcs2:', prog + '|' + at_key_(v[r][iPcs]), room);
+    if (prog && sec) add('ps:', prog + '|' + cls + '|' + sec, room);
+  }
+  Object.keys(cnt).forEach(function (k) {
+    var m = cnt[k], best = Object.keys(m).sort(function (a, b) { return m[b] - m[a]; })[0];
+    var p = k.indexOf(':'), map = k.slice(0, p), key = k.slice(p + 1);
+    (map === 'pcs' ? out.byPcs : map === 'pcs2' ? out.byPcs2 : out.byPs)[key] = best;
+  });
+  return out;
+}
+function at_ttRoomOf_(TT, o) {
+  var prog = at_key_(normalizeProgramForRoom_(o.p));
+  return TT.byPcs2[prog + '|' + at_key_(o.pcs)] || TT.byPs[prog + '|' + at_key_(o.c) + '|' + at_key_(o.s)] || TT.byPcs[at_key_(o.pcs)] || '';
+}
+
+/* ---------- edit one student (admission slip) in Transform-ALL-COLLEGE-STRENGTH ---------- */
+function at_saveStudent_(req) {
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    var sh = at_ss_().getSheetByName(AT_CFG.STRENGTH);
+    if (!sh) throw new Error("Sheet '" + AT_CFG.STRENGTH + "' not found.");
+    var row = Number(req.row), nc = sh.getLastColumn();
+    if (!(row >= 2 && row <= sh.getLastRow())) throw new Error('Row not found. Reload the students.');
+    var C = at_cols_(sh.getRange(1, 1, 1, nc).getDisplayValues()[0]);
+    var rg = sh.getRange(row, 1, 1, nc), cur = rg.getDisplayValues()[0], fx = rg.getFormulas()[0];
+    if (String(cur[C.e] || '').trim() !== String(req.oldE || '').trim() || String(cur[C.n] || '').trim() !== String(req.oldN || '').trim())
+      throw new Error('This row was changed in the sheet since you loaded it. Reload the students and try again.');
+    var ch = req.changes || {}, writes = [], log = [];
+    ['e', 'n', 'f', 'p', 'c', 's', 'pcs', 'q'].forEach(function (k) { if (k in ch && C[k] >= 0) writes.push([C[k], ch[k]]); });
+    if (Array.isArray(ch.sub)) ch.sub.forEach(function (v, i) { if (C.sub[i] >= 0) writes.push([C.sub[i], v]); });
+    writes.forEach(function (w) {
+      var nv = String(w[1] == null ? '' : w[1]).trim();
+      if (nv === String(cur[w[0]] || '').trim()) return;
+      if (fx[w[0]]) throw new Error('Column "' + sh.getRange(1, w[0] + 1).getDisplayValue() + '" is a formula in the sheet, so it cannot be edited here.');
+      sh.getRange(row, w[0] + 1).setValue(nv);
+      log.push(sh.getRange(1, w[0] + 1).getDisplayValue() + ': ' + cur[w[0]] + ' -> ' + nv);
+    });
+    SpreadsheetApp.flush();
+    return { row: row, changed: log };
+  } finally { lock.releaseLock(); }
+}
+
+/* ---------- ROOM TAGS (Science Timetable = FSC, ARTS TIMETABLE = FA): one schedule per room ---------- */
+function at_roomTags_() {
+  var out = { fsc: [], fa: [], notes: [] };
+  try { out.fsc = at_tagsFSC_(); } catch (e) { out.notes.push('FSC: ' + e.message); }
+  try { out.fa = at_tagsFA_(); } catch (e) { out.notes.push('FA: ' + e.message); }
+  return out;
+}
+function at_isRoman_(s) { return /^(I|II|III|IV|V|VI|VII|VIII|IX|X)$/i.test(String(s || '').trim()); }
+function at_roman_(s) { var m = { I: 1, V: 5, X: 10, L: 50, C: 100 }, n = 0, p = 0; s = String(s || '').trim().toUpperCase(); for (var i = s.length - 1; i >= 0; i--) { var c = m[s[i]] || 0; n += c < p ? -c : c; p = c; } return n; }
+function at_roomSplit_(raw) {                                // "R # 06/55" -> {room:"06", strength:"55"}
+  var rest = String(raw || '').trim().toUpperCase().replace(/^R\s*#\s*/i, '').trim(), strength = '', room = rest;
+  if (rest.indexOf('/') >= 0) { var parts = rest.split('/'), last = parts[parts.length - 1].trim(); if (/^\d+$/.test(last)) { strength = last; parts.pop(); room = parts.join('/').trim(); } }
+  else { var pm = rest.match(/\((\d+)\)\s*$/); if (pm) { strength = pm[1]; room = rest.replace(/\(\d+\)\s*$/, '').trim(); } }
+  return { room: room || rest, strength: strength };
+}
+function at_tagsFSC_() {                                     // same reading as generateRoomTagsFSC
+  var sh = at_ss_().getSheetByName('Science Timetable');
+  if (!sh) throw new Error("sheet 'Science Timetable' not found");
+  var data = sh.getDataRange().getDisplayValues();
+  if (data.length < 7) return [];
+  var per = [], tim = data[5] || [];
+  for (var i = 2; i < (data[4] || []).length; i++) { var p = String(data[4][i]).trim().toUpperCase(); if (!at_isRoman_(p)) break; per.push(p); }
+  if (!per.length) throw new Error('no Roman period numbers in row 5');
+  var merge = {};
+  sh.getRange(1, 1, data.length, 1).getMergedRanges().forEach(function (m) { merge[m.getRow()] = m.getNumRows(); });
+  var rooms = [], r = 6;
+  while (r < data.length) {
+    var cell = String(data[r][0] || '').trim();
+    if (!/^R\s*#/i.test(cell)) { r++; continue; }
+    var size = Math.max(3, merge[r + 1] || 3), rs = at_roomSplit_(cell), cls = String(data[r][1] || '').trim().toUpperCase(), rows = [];
+    for (var off = 0; off < size; off += 3) {
+      var s = data[r + off], t = data[r + off + 1] || [], d = data[r + off + 2] || [];
+      if (!s) continue;
+      for (var k = 0; k < per.length; k++) {
+        var subj = String(s[k + 2] || '').trim().toUpperCase(), tea = String(t[k + 2] || '').trim().toUpperCase(), day = String(d[k + 2] || '').trim().toUpperCase() || 'M-S';
+        if (!subj && !tea) continue;
+        if (subj === 'SPORTS') tea = '---';
+        rows.push([per[k], String(tim[k + 2] || '').trim().toUpperCase(), cls, tea, subj, day]);
+      }
+    }
+    rows.sort(function (a, b) { return at_roman_(a[0]) - at_roman_(b[0]); });
+    rooms.push({ room: rs.room, strength: rs.strength, cls: cls, rows: rows });
+    r += size;
+  }
+  return rooms;
+}
+function at_tagsFA_() {                                      // same result as generateRoomTagsFA
+  var sh = at_ss_().getSheetByName('ARTS TIMETABLE');
+  if (!sh) throw new Error("sheet 'ARTS TIMETABLE' not found");
+  var data = sh.getDataRange().getDisplayValues();
+  if (data.length < 10) return [];
+  var per = [], tim = [], pcol = {};
+  for (var c = 2; c < data[4].length; c += 2) { var p = String(data[4][c] || '').trim().toUpperCase(); if (p) { pcol[c] = per.length; per.push(p); tim.push(String(data[5][c] || '').trim().toUpperCase()); } }
+  var get = function (r, c) { return String(((data[r] || [])[c]) || '').trim().toUpperCase(); };
+  var roomLike = function (x) { return /^R\s*#/i.test(x) || /\/\s*\d+\s*$/.test(x); };
+  var cells = [];                                            // [subjectRow, col] (0-based)
+  if (typeof buildBlockCellAddresses === 'function') {        // the original block map, when it is in this project
+    var b = buildBlockCellAddresses(8, 49), rc = function (a) { var m = String(a || '').match(/([A-Za-z]+)\$?(\d+)/); if (!m) return null; var cc = m[1].toUpperCase().split('').reduce(function (x, ch) { return x * 26 + ch.charCodeAt(0) - 64; }, 0); return [Number(m[2]) - 1, cc - 1]; };
+    for (var i = 0; i < b.subjectCells.length; i++) {
+      var S = rc(b.subjectCells[i]), T = rc(b.teacherCells[i]), G = rc(b.groupCells[i]), R = rc(b.roomCells[i]), D = rc(b.dayCells[i]), K = rc(b.classCells[i]);
+      cells.push({ r: S[0], c: S[1], subj: get(S[0], S[1]), tea: T ? get(T[0], T[1]) : '', grp: G ? get(G[0], G[1]) : '', room: R ? get(R[0], R[1]) : '', day: D ? get(D[0], D[1]) : '', cls: K ? get(K[0], K[1]) : '' });
+    }
+  } else {                                                   // block = subject (group beside it) / teacher / room (days beside it)
+    for (var r = 7; r <= Math.min(48, data.length - 3); r++) for (var c2 = 2; c2 < data[r].length; c2 += 2) {
+      var subj = get(r, c2), room = get(r + 2, c2);
+      if (!subj || !room || roomLike(subj) || !roomLike(room) || roomLike(get(r + 1, c2))) continue;
+      var cls = ''; for (var u = r; u >= Math.max(7, r - 2); u--) { var x = get(u, 1); if (x && !roomLike(x)) { cls = x; break; } }
+      cells.push({ r: r, c: c2, subj: subj, tea: get(r + 1, c2), grp: get(r, c2 + 1), room: room, day: get(r + 2, c2 + 1), cls: cls });
+    }
+  }
+  var map = {}, order = [];
+  cells.forEach(function (x) {
+    if (!x.subj || !x.room) return;
+    var rv = x.room, name = rv, strength = '';
+    if (rv.indexOf('/') >= 0) { var parts = rv.split('/'), last = parts.pop().trim(); if (/^\d+$/.test(last)) strength = last; name = parts.join('/').trim(); }
+    name = (name || rv).replace(/^R\s*#\s*/i, '').trim();
+    var prog = (x.r + 1 >= 8 && x.r + 1 <= 28) ? 'F.A-I' : (x.r + 1 >= 29 && x.r + 1 <= 49) ? 'F.A-II' : '';
+    var cls = (x.cls || prog) + (x.grp ? ' ' + x.grp : '');
+    var k = Math.floor((x.c - 2) / 2);
+    if (!map[name]) { map[name] = { room: name, strength: strength, cls: cls, rows: [] }; order.push(name); }
+    if (!map[name].strength && strength) map[name].strength = strength;
+    map[name].rows.push([per[k] || '', tim[k] || '', cls, x.subj === 'SPORTS' ? '---' : x.tea, x.subj, x.day || 'M-S']);
+  });
+  return order.map(function (n) { map[n].rows.sort(function (a, b) { return at_roman_(a[0]) - at_roman_(b[0]); }); return map[n]; });
 }
 
 /* ---------- save a PDF / Excel made in the app to Drive ---------- */
