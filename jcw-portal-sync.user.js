@@ -2,8 +2,8 @@
 // ==UserScript==
 // @name         JCW Portal Sync
 // @namespace    jcw-attendance
-// @version      1.0
-// @description  Reads Jinnah College students from the UOP portal (read-only) and sends them to the JCW attendance system: fills only the empty cells of Transform-ALL-COLLEGE-STRENGTH and feeds the health check.
+// @version      1.1
+// @description  Reads Jinnah College students from the UOP portal (read-only) and sends them to the JCW attendance system: fills only the empty cells of Transform-ALL-COLLEGE-STRENGTH, lists cancelled / migrated / disenrolled / transferred students for Left Students (moved only when you press the button) and feeds the health check.
 // @match        https://portal.uop.edu.pk/Student/Students*
 // @match        https://portal.uop.edu.pk/student/students*
 // @grant        GM_xmlhttpRequest
@@ -72,7 +72,8 @@
     <button class="p" id="jsQuick">Quick sync (list only, 1–2 min)</button>
     <button id="jsFull">Full sync (all details)</button>
     <button id="jsResume" style="display:none">Resume the full sync</button>
-    <div class="bar"><i id="jsBar"></i></div><div class="s" id="jsMsg">Reads the portal only. Fills empty cells in the strength sheet; nothing already there is changed.</div>
+    <div class="bar"><i id="jsBar"></i></div><div class="s" id="jsMsg">Reads the portal only. Fills empty cells in the strength sheet. Students who left go to Left Students only when you press the button.</div>
+    <div id="jsLeft"></div>
     <button class="k" id="jsKey">Change sync key</button>`;
   document.body.appendChild(box);
   const $ = id => box.querySelector('#' + id);
@@ -265,8 +266,10 @@
     return last;
   }
   function report(r, per) {
-    const f = (r.last && r.last.fill) || {}, L = [];
-    L.push('Done: ' + r.last.rows + ' students sent (' + Object.keys(per).map(k => k + ' ' + per[k]).join(', ') + ').');
+    const f = (r.last && r.last.fill) || {}, L = [], lf = r.left || {};
+    const cnt = lf.counts && lf.batches && lf.batches.length ? lf.counts : per;
+    L.push('Done: ' + r.last.rows + ' students sent.');
+    L.push((lf.batches && lf.batches.length ? 'This year\'s batches (' + lf.batches.join(', ') + '): ' : 'All batches: ') + Object.keys(cnt).map(k => k + ' ' + cnt[k]).join(', ') + '.');
     if (f.skipped) L.push('Strength sheet NOT changed: ' + f.skipped);
     else if (f.error) L.push('Strength sheet: ' + f.error);
     else {
@@ -275,8 +278,38 @@
       if (f.added && f.added.length) L.push('New columns: ' + f.added.join(', ') + '.');
       if (f.formulaCols && f.formulaCols.length) L.push('Not written (made by a formula): ' + f.formulaCols.join(', ') + '.');
     }
+    const mv = lf.move || [], ad = lf.add || [];
+    if (lf.note) L.push('Left Students: ' + lf.note);
+    else if (r.left && !mv.length && !ad.length) L.push('Left Students: complete' + (lf.already ? ' (' + lf.already + ' of this year\'s batches already there)' : '') + '.');
+    else if (r.left) L.push('Left Students: ' + (lf.already || 0) + ' already there · ' + mv.length + ' still in the strength sheet · ' + ad.length + ' never in the strength sheet. Nothing is moved until you press a button below.');
     L.push('Now run the health check in the app (College > System health check).');
     say(L.join('\n'), 100);
+    leftButtons(mv, ad);
+  }
+
+  // ===================== LEFT STUDENTS: only after you press a button =====================
+  function leftButtons(mv, ad) {
+    const host = $('jsLeft'); host.innerHTML = '';
+    const names = list => list.slice(0, 25).map(x => x.roll + ' · ' + x.name + ' · ' + x.status).join('\n') + (list.length > 25 ? '\n… and ' + (list.length - 25) + ' more' : '');
+    const one = (list, label, ask, field) => {
+      if (!list.length) return;
+      const b = document.createElement('button'); b.textContent = label; host.appendChild(b);
+      b.onclick = async () => {
+        if (!confirm(ask + '\n\n' + names(list))) return;
+        const key = askKey(false); if (!key) return;
+        busy(true); b.disabled = true; say('Writing to Left Students …');
+        try {
+          const r = await gmPost({ action: 'portal_left', key, [field]: list.map(x => x.roll) });
+          if (!r.ok) throw new Error(r.error || 'Server error');
+          say(field === 'move' ? r.moved + ' student(s) moved to Left Students and taken out of attendance from this month' + (r.skipped && r.skipped.length ? ' (' + r.skipped.length + ' skipped)' : '') + '.\nUndo: College > Students who left > List / restore.'
+                               : r.added + ' student(s) added to Left Students (they were never in the strength sheet).', 100);
+          b.remove();
+        } catch (e) { say('Stopped: ' + e.message, null); b.disabled = false; }
+        finally { busy(false); }
+      };
+    };
+    one(mv, 'Move ' + mv.length + ' to Left Students', mv.length + ' student(s) are still in the strength sheet (and in attendance) but are no longer Enrolled on the portal. Move them to Left Students and take them out of attendance from this month?', 'move');
+    one(ad, 'Add ' + ad.length + ' to Left Students', ad.length + ' student(s) of this year\'s batches left on the portal but were never in the strength sheet. Add them to Left Students (attendance is not touched)?', 'add');
   }
 
   // ===================== RUN =====================
