@@ -665,7 +665,8 @@ const displayProg = p => { const n = String(p || '').trim().toLowerCase();
   if(['pre-medical (jcw)', 'pre-medical'].includes(n)) return 'PRE-MEDICAL';
   return String(p || '').trim() || 'Unknown Program'; };
 const fmtRoom = r => { let v = String(r || '').trim(); if(!v) return 'Room #'; if(v.includes('/')) v = v.split('/')[0].trim(); v = v.replace(/\s*\(\s*EVENING\s*\)\s*/i, ' ').replace(/^R\s*#\s*/i, '').replace(/^Room\s*#\s*/i, '').trim(); return 'Room # ' + v; };
-const roomOf = r => fmtRoom(r.tt || r.room);                    /* room from the Timetable sheet (Transform's own Room column only if the timetable has none) */
+const roomOf = r => r.tt ? fmtRoom(r.tt) : '';                  /* room only from the Timetable sheet; empty when the timetable has none */
+const withRoom = (pcs, rm) => rm ? pcs + ' - ' + rm : pcs;
 const PORDER = ['ARTS', 'COMPUTER SCIENCE', 'PRE-ENGINEERING', 'PRE-MEDICAL'];
 const progSort = (a, b) => { const ia = PORDER.indexOf(a), ib = PORDER.indexOf(b); if(ia >= 0 && ib >= 0) return ia - ib; if(ia >= 0) return -1; if(ib >= 0) return 1; return a.localeCompare(b); };
 const isArts = p => p === 'ARTS';
@@ -684,8 +685,8 @@ function fillOrient(){
   if(progs.includes(cur)) $('orProg').value = cur;
   pcsChips($('orPcs'), rowsOf($('orCls').value, $('orProg').value), true);
   const noRoom = rowsOf($('orCls').value).filter(r => !r.tt);
-  const warn = !STU.ttFound ? 'The <b>' + esc(STU.ttSheet || 'Timetable') + '</b> sheet was not found, so the rooms come from the Room column of Transform-ALL-COLLEGE-STRENGTH.'
-    : noRoom.length ? noRoom.length + ' student(s) are in sections that the Timetable sheet has no room for: ' + esc([...new Set(noRoom.map(r => r.pcs || '(no PCS)'))].slice(0, 12).join(', ')) + (noRoom.some(r => r.room) ? ' — their room is taken from Transform.' : '.') : '';
+  const warn = !STU.ttFound ? 'The <b>' + esc(STU.ttSheet || 'Timetable') + '</b> sheet was not found, so the Room is left empty.'
+    : noRoom.length ? noRoom.length + ' student(s) are in sections that the Timetable sheet has no room for, so their Room is left empty: ' + esc([...new Set(noRoom.map(r => r.pcs || '(no PCS)'))].slice(0, 12).join(', ')) : '';
   $('orWarn').innerHTML = warn; $('orWarn').classList.toggle('hidden', !warn);
   drawOrient();
 }
@@ -694,7 +695,7 @@ function orientGroups(){
   if(OR_MODE === 'sel'){
     const ch = chosenPcs($('orPcs')), rows = rowsOf(cls, $('orProg').value).filter(r => ch.has(r.pcs));
     const by = {}; rows.forEach(r => { (by[r.pcs || 'Unknown PCS'] = by[r.pcs || 'Unknown PCS'] || []).push(r); });
-    return [{ title:'PROGRAM: ' + (rows[0] ? rows[0].p : $('orProg').value), parts:Object.keys(by).sort(natCmp).map(k => ({ band:k + ' - ' + roomOf(by[k][0]), rows:by[k].sort((a, b) => lastNum(a.e) - lastNum(b.e)) })), n:rows.length }];
+    return [{ title:'PROGRAM: ' + (rows[0] ? rows[0].p : $('orProg').value), parts:Object.keys(by).sort(natCmp).map(k => ({ band:withRoom(k, roomOf(by[k][0])), rows:by[k].sort((a, b) => lastNum(a.e) - lastNum(b.e)) })), n:rows.length }];
   }
   const map = {};
   rowsOf(cls).forEach(r => { const p = displayProg(r.p); (map[p] = map[p] || []).push(r); });
@@ -703,7 +704,7 @@ function orientGroups(){
   return Object.keys(map).sort(progSort).map(p => {
     const g = {}; map[p].forEach(r => { const pc = r.pcs || 'Unknown PCS', rm = roomOf(r); ((g[pc] = g[pc] || {})[rm] = g[pc][rm] || []).push(r); });
     const parts = [];
-    Object.keys(g).sort(natCmp).forEach(pc => Object.keys(g[pc]).sort((a, b) => rn(a) - rn(b)).forEach(rm => parts.push({ band:pc + ' - ' + rm, rows:g[pc][rm].sort((a, b) => lastNum(a.e) - lastNum(b.e)) })));
+    Object.keys(g).sort(natCmp).forEach(pc => Object.keys(g[pc]).sort((a, b) => rn(a) - rn(b)).forEach(rm => parts.push({ band:withRoom(pc, rm), rows:g[pc][rm].sort((a, b) => lastNum(a.e) - lastNum(b.e)) })));
     return { title:p, parts, n:map[p].length };
   });
 }
