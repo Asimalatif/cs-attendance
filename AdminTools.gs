@@ -163,7 +163,18 @@ function at_strength_() {
     o.tt = at_ttRoomOf_(TT, o);                             // room of this section in the Timetable sheet
     rows.push(o);
   }
-  return { rows: rows, hasRoom: C.room >= 0, hasQuota: C.q >= 0, hasSubs: C.sub.some(function (i) { return i >= 0; }), ttSheet: TT.sheet, ttFound: TT.found };
+  return { rows: rows, hasRoom: C.room >= 0, hasQuota: C.q >= 0, hasSubs: C.sub.some(function (i) { return i >= 0; }), ttSheet: TT.sheet, ttFound: TT.found, faCombos: at_faCombos_() };
+}
+
+/* ---------- F.A optional subject combinations: the "FA optional subjects" sheet (gid 444973916), one combination per row ---------- */
+var AT_FA_COMBO_GID = 444973916;
+function at_faCombos_() {
+  try {
+    var ss = at_ss_(), sh = ss.getSheets().filter(function (x) { return x.getSheetId() === AT_FA_COMBO_GID; })[0]
+      || ss.getSheets().filter(function (x) { return /optional/i.test(x.getName()) && /\bF\.?\s*A\b/i.test(x.getName()); })[0];
+    if (!sh || sh.getLastRow() < 1) return { sheet: '', rows: [] };
+    return { sheet: sh.getName(), rows: sh.getDataRange().getDisplayValues().filter(function (r) { return r.some(function (c) { return String(c).trim(); }); }) };
+  } catch (e) { return { sheet: '', rows: [], error: String(e.message || e) }; }
 }
 
 /* ---------- room of every section from the Timetable sheet (the room used most by that section) ---------- */

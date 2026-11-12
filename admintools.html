@@ -288,6 +288,7 @@ table.tt td.tt-miss{background:#FDECEA!important}table.tt td.tt-miss .tt-t{color
       <label>Class<input name="c"></label>
       <label>Section<input name="s"></label>
       <label>PCS<input name="pcs"></label>
+      <label class="w2 hidden" id="edComboL">Optional subjects (F.A combinations)<select id="edCombo" style="height:38px;border:1.5px solid var(--line);border-radius:10px;padding:0 8px;background:var(--surface);color:var(--ink);font-weight:600"></select></label>
       <label>Sub1<input name="sub0"></label><label>Sub2<input name="sub1"></label>
       <label>Sub3<input name="sub2"></label><label>Sub4<input name="sub3"></label>
       <label>Sub5<input name="sub4"></label><label>Sub6<input name="sub5"></label>
@@ -502,7 +503,7 @@ const natCmp = (a, b) => String(a).localeCompare(String(b), undefined, { numeric
 const lastNum = e => parseInt(String(e || '').split('-').pop(), 10) || 0;
 async function loadStudents(){
   await busy(null, 'Reading students from Transform-ALL-COLLEGE-STRENGTH…', async () => {
-    STU = (await JCW.api({ action:'at_strength' })).data;
+    STU = (await JCW.api({ action:'at_strength' })).data; COMBOS = null;
     status('');
     const classes = [...new Set(STU.rows.map(r => r.c).filter(Boolean))].sort(natCmp);
     const opt = (v, l) => `<option value="${esc(v)}">${esc(l || v)}</option>`;
@@ -568,6 +569,36 @@ let slT = null; $('slFind').oninput = () => { clearTimeout(slT); slT = setTimeou
 $('slSession').oninput = drawSlips;
 $('slCls').onchange = fillSlips; $('slProg').onchange = fillSlips; wireChips($('slPcs'), countSlips);
 
+/* F.A optional subject combinations (from the FA optional subjects sheet) */
+let COMBOS = null;
+function faCombos(){
+  if(COMBOS) return COMBOS;
+  const src = (STU && STU.faCombos && STU.faCombos.rows) || [], seen = new Set(); COMBOS = [];
+  src.forEach(r => {
+    let cells = [];
+    r.forEach(c => String(c).split(/\s*[,+|\/]\s*|\s+-\s+|\n/).forEach(x => { x = String(x).trim(); if(x && !/^\d+(\.\d+)?%?$/.test(x)) cells.push(x); }));
+    if(cells.some(x => /^(s\.?\s*no|sr|#|sub(ject)?s?\s*\d*|combination|group|options?|optional.*|total|strength|count)$/i.test(x))) return;   /* header row */
+    cells = cells.filter(x => !isComp(x)).map(x => x.toUpperCase());
+    if(cells.length < 2) return;
+    const k = cells.slice().sort().join('|'); if(seen.has(k)) return; seen.add(k); COMBOS.push(cells);
+  });
+  return COMBOS;
+}
+function fillCombo(){
+  const arts = displayProg(ED.p) === 'ARTS', list = arts ? faCombos() : [];
+  $('edComboL').classList.toggle('hidden', !list.length);
+  if(!list.length) return;
+  const mine = optOf(ED).map(x => subKey(x)).sort().join('|');
+  $('edCombo').innerHTML = '<option value="">— choose a combination to change the optional subjects —</option>'
+    + list.map((c, i) => `<option value="${i}" ${c.map(subKey).sort().join('|') === mine ? 'selected' : ''}>${esc(c.join(', '))}</option>`).join('');
+}
+$('edCombo').onchange = () => {
+  const c = faCombos()[+$('edCombo').value]; if(!c) return;
+  const f = $('edForm'), cur = []; for(let i = 0; i < 7; i++) cur.push(f.elements['sub' + i].value.trim());
+  const comp = cur.filter(x => x && isComp(x)), next = comp.concat(c).slice(0, 7);
+  for(let i = 0; i < 7; i++) f.elements['sub' + i].value = next[i] || '';
+};
+
 /* edit one student -> Transform-ALL-COLLEGE-STRENGTH */
 let ED = null;
 $('slBox').addEventListener('click', e => {
@@ -577,6 +608,7 @@ $('slBox').addEventListener('click', e => {
   ['e', 'q', 'n', 'f', 'p', 'c', 's', 'pcs'].forEach(k => { f.elements[k].value = ED[k] || ''; });
   for(let i = 0; i < 7; i++) f.elements['sub' + i].value = (ED.sub || [])[i] || '';
   $('edMeta').textContent = 'Transform-ALL-COLLEGE-STRENGTH · row ' + ED.row;
+  fillCombo();
   $('edSt').className = 'status'; $('edSave').disabled = false;
   $('edDlg').showModal();
 });
@@ -708,7 +740,11 @@ function orientGroups(){
     return { title:p, parts, n:map[p].length };
   });
 }
-const subjOf = r => (r.sub || []).filter(Boolean).join(', ');
+const COMPULSORY = new Set(['ENGLISH', 'URDU', 'ISLAMIYAT', 'ISLAMIAT', 'MUTALIA QURAN', 'MUTALIAQURAN', 'MUTALIA E QURAN', 'PAK STUDY', 'PAK STUDIES', 'PAKISTAN STUDIES', 'PAKSTUDIES', 'PAK STUDY/PAK STUDIES']);
+const subKey = x => String(x || '').toUpperCase().replace(/[-_.]/g, ' ').replace(/\s+/g, ' ').trim();
+const isComp = x => COMPULSORY.has(subKey(x));
+const optOf = r => (r.sub || []).filter(x => x && !isComp(x));
+const subjOf = r => optOf(r).join(', ');                        /* optional subjects only (compulsory ones are the same for everybody) */
 function drawOrient(){
   if(!STU) return;
   const g = orientGroups().filter(x => x.n), q = $('orFind').value.trim().toLowerCase(), n = g.reduce((a, x) => a + x.n, 0);
@@ -718,7 +754,7 @@ function drawOrient(){
   g.forEach(grp => {
     h += `<div class="sec olist"><h3><span>${esc(grp.title)}</span><span class="n" style="background:var(--surface2);color:var(--brown)">${grp.n}</span></h3><div class="scroll">`;
     if(OR_MODE === 'board'){
-      h += `<table><thead><tr><th>S#</th><th>Student name</th><th>Father name</th><th>Enroll#</th><th>PCS</th><th>Room</th>${grp.arts ? '<th>Subjects</th>' : ''}</tr></thead><tbody>`
+      h += `<table><thead><tr><th>S#</th><th>Student name</th><th>Father name</th><th>Enroll#</th><th>PCS</th><th>Room</th>${grp.arts ? '<th>Optional subjects</th>' : ''}</tr></thead><tbody>`
         + grp.rows.map((r, i) => `<tr${hit(r)}><td class="c">${i + 1}</td><td><b>${esc(r.n)}</b></td><td>${esc(r.f)}</td><td class="c">${esc(r.e)}</td><td class="c">${esc(r.pcs)}</td><td class="c">${esc(roomOf(r))}</td>${grp.arts ? '<td>' + esc(subjOf(r)) + '</td>' : ''}</tr>`).join('') + '</tbody></table>';
     } else {
       grp.parts.forEach(pt => {
@@ -746,12 +782,14 @@ $('orPdf').onclick = () => busy(null, 'Making the PDF…', async () => {
     if(board){
       Y = JCW.heading(doc, Y, grp.title + ' — ' + $('orCls').value + ' (' + grp.n + ' students)', 'Find your name (A–Z) to see your Enroll#, section (PCS) and room.');
       const startPage = doc.internal.getCurrentPageInfo().pageNumber;
-      const head = ['S#', 'Student Name', 'Father Name', 'Enroll#', 'PCS', 'Room'].concat(grp.arts ? ['Subjects'] : []);
+      const head = ['S#', 'Student Name', 'Father Name', 'Enroll#', 'PCS', 'Room'].concat(grp.arts ? ['Optional subjects', 'New subjects (if changed)'] : []);
       JCW.table(doc, { startY:Y, margin:M2, head:[head],
-        body:grp.rows.map((r, i) => [i + 1, r.n, r.f, r.e, r.pcs, roomOf(r).replace('Room # ', '')].concat(grp.arts ? [subjOf(r)] : [])),
-        styles:{ font:'helvetica', fontSize:grp.arts ? 8.4 : 8.8, cellPadding:{ top:0.9, bottom:0.9, left:1.4, right:1.4 }, textColor:[0, 0, 0], lineColor:[90, 90, 90], lineWidth:0.15, fillColor:false },
+        body:grp.rows.map((r, i) => [i + 1, r.n, r.f, r.e, r.pcs, roomOf(r).replace('Room # ', '')].concat(grp.arts ? [subjOf(r), ''] : [])),
+        styles:{ font:'helvetica', fontSize:grp.arts ? 8.6 : 8.8, cellPadding:{ top:0.9, bottom:0.9, left:1.4, right:1.4 }, textColor:[0, 0, 0], lineColor:[90, 90, 90], lineWidth:0.15, fillColor:false, minCellHeight:grp.arts ? 8 : 0, valign:'middle' },
         alternateRowStyles:{ fillColor:false }, headStyles:{ fillColor:C.NAVY, textColor:[255, 255, 255], fontStyle:'bold', halign:'center', fontSize:8.6 },
-        columnStyles:Object.assign({ 0:{ halign:'center', cellWidth:9 }, 1:{ fontStyle:'bold' }, 3:{ halign:'center', cellWidth:24 }, 4:{ halign:'center', cellWidth:grp.arts ? 22 : 24 }, 5:{ halign:'center', cellWidth:14 } }, grp.arts ? { 1:{ fontStyle:'bold', cellWidth:64 }, 2:{ cellWidth:52 } } : {}),
+        columnStyles:grp.arts
+          ? { 0:{ halign:'center', cellWidth:9 }, 1:{ fontStyle:'bold', cellWidth:48 }, 2:{ cellWidth:42 }, 3:{ halign:'center', cellWidth:27 }, 4:{ halign:'center', cellWidth:17 }, 5:{ halign:'center', cellWidth:20 }, 6:{ cellWidth:58 }, 7:{ cellWidth:52 } }
+          : { 0:{ halign:'center', cellWidth:9 }, 1:{ fontStyle:'bold', cellWidth:52 }, 2:{ cellWidth:48 }, 3:{ halign:'center', cellWidth:27 }, 4:{ halign:'center', cellWidth:22 }, 5:{ halign:'center', cellWidth:28 } },
         didDrawPage:d => { const pn = doc.internal.getCurrentPageInfo().pageNumber; if(pn > startPage){ doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...C.NAVY); doc.text(grp.title + ' (continued)', 12, 8.5); } } });
     } else {
       Y = JCW.heading(doc, Y, grp.title, $('orCls').value + ' · orientation list · ' + grp.n + ' students');
@@ -773,8 +811,8 @@ $('orXlsx').onclick = () => busy(null, 'Making the Excel file…', async () => {
   const g = orientGroups().filter(x => x.n); if(!g.length) throw new Error('No students for this choice.');
   let sheets;
   if(OR_MODE === 'board') sheets = g.map(grp => ({ name:grp.title, title:grp.title + ' — ' + $('orCls').value + ' (A–Z)',
-    rows:[['S#', 'Student Name', 'Father Name', 'Enroll#', 'PCS', 'Room'].concat(grp.arts ? ['Subjects'] : [])].concat(grp.rows.map((r, i) => [i + 1, r.n, r.f, r.e, r.pcs, roomOf(r)].concat(grp.arts ? [subjOf(r)] : []))),
-    cols:[6, 30, 28, 16, 16, 12].concat(grp.arts ? [60] : []) }));
+    rows:[['S#', 'Student Name', 'Father Name', 'Enroll#', 'PCS', 'Room'].concat(grp.arts ? ['Optional subjects', 'New subjects (if changed)'] : [])].concat(grp.rows.map((r, i) => [i + 1, r.n, r.f, r.e, r.pcs, roomOf(r)].concat(grp.arts ? [subjOf(r), ''] : []))),
+    cols:[6, 30, 28, 16, 14, 16].concat(grp.arts ? [42, 36] : []) }));
   else sheets = g.map(grp => { const rows = [], groupRows = [], headRows = [];
     grp.parts.forEach(part => { groupRows.push(rows.length); rows.push([part.band]); headRows.push(rows.length); rows.push(['S#', 'Enroll#', 'Student Name', 'Father Name']); part.rows.forEach((r, i) => rows.push([i + 1, r.e, r.n, r.f])); });
     return { name:grp.title.replace(/^PROGRAM:\s*/, ''), title:grp.title + ' — ' + $('orCls').value + ' orientation list', rows, groupRows, headRows, cols:[6, 16, 32, 32] }; });
@@ -791,7 +829,9 @@ async function loadTags(){
     TAGS = (await JCW.api({ action:'at_roomtags' })).data; status(''); fillTags(true);
   });
 }
+const faCls = c => String(c || '').replace(/\s+F\.?\s*A\s*-\s*(1|2|I|II)\s*$/i, '').trim();   /* "F.A-II F.A-2" -> "F.A-II" */
 function fillTags(fresh){
+  if(TAGS && !TAGS._clean){ TAGS.fa.forEach(t => { t.cls = faCls(t.cls); t.rows.forEach(r => { r[2] = faCls(r[2]); }); }); TAGS._clean = true; }
   const list = tagList().sort((a, b) => natCmp(a.room, b.room)), box = $('tgRooms');
   const prev = fresh ? null : new Set([...box.querySelectorAll('input:not([data-all]):checked')].map(i => i.value));
   box.innerHTML = list.map(t => { const id = tagId(t), on = !prev || !prev.size || prev.has(id); return `<label class="${on ? 'on' : ''}"><input type="checkbox" value="${esc(id)}" ${on ? 'checked' : ''}>${esc(t.room)}${TG_KIND === 'all' ? ' <small>(' + (t.k === 'fa' ? 'F.A' : 'F.Sc') + ')</small>' : ''}</label>`; }).join('')
@@ -814,33 +854,39 @@ function drawTags(){
 document.querySelectorAll('#tgKind button').forEach(b => b.onclick = () => { TG_KIND = b.dataset.k; document.querySelectorAll('#tgKind button').forEach(x => x.classList.toggle('on', x === b)); fillTags(true); });
 wireChips($('tgRooms'), drawTags);
 $('tgLoad').onclick = loadTags;
+/* one room tag; scale < 1 makes the rows / letters smaller so that the room always fits on ONE page */
+function drawTag(doc, t, scale){
+  const C = JCW.C, PW = 297, PH = 210, logo = JCW.logo();
+  doc.setFillColor(...C.NAVY); doc.rect(0, 0, PW, 15, 'F'); doc.setFillColor(...C.TEA); doc.rect(0, 15, PW, 1, 'F');
+  if(logo){ try{ doc.setFillColor(255, 255, 255); doc.circle(17, 7.5, 6, 'F'); doc.addImage(logo, 'PNG', 12, 2.6, 10, 9.7); }catch(e){} }
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(255, 255, 255); doc.text('JINNAH COLLEGE FOR WOMEN, UNIVERSITY OF PESHAWAR', PW / 2, 9.8, { align:'center' });
+  doc.setFontSize(30); doc.setTextColor(...C.NAVY); doc.text('SCHEDULE FOR ROOM # ' + t.room, PW / 2, 31, { align:'center' });
+  doc.setDrawColor(...C.ACC); doc.setLineWidth(0.9); doc.line(PW / 2 - 40, 35, PW / 2 + 40, 35);
+  if(t.strength){ doc.setFontSize(12); doc.setTextColor(0, 0, 0); doc.text('STRENGTH : ' + t.strength, PW - 12, 42, { align:'right' }); }
+  let Y = 45;
+  if(t.k === 'fsc'){
+    doc.setFillColor(...C.SOFT); doc.setDrawColor(...C.LINE); doc.rect(12, Y, PW - 24, 13, 'FD');
+    doc.setFontSize(21); doc.setTextColor(...C.NAVY); doc.text('CLASS-SECTION : ' + (t.cls || ''), PW / 2, Y + 9.3, { align:'center' }); Y += 16;
+  }
+  const fa = t.k === 'fa', n = Math.max(1, t.rows.length), avail = PH - 8 - Y - 11;
+  const rowH = Math.max(5, Math.min(20, avail / n) * scale), fs = Math.max(7, Math.min(19, Math.min(20, avail / n) * 1.05) * scale);
+  const head = ['PER', 'TIMINGS'].concat(fa ? ['CLASS'] : []).concat(['TEACHER', 'SUBJECT', 'DAYS']);
+  const body = t.rows.map(r => [r[0], r[1]].concat(fa ? [r[2]] : []).concat([r[3], r[4], r[5]]));
+  const cs = fa ? { 0:{ cellWidth:18 }, 1:{ cellWidth:46 }, 2:{ cellWidth:34 }, 3:{ fontStyle:'bold' }, 4:{ fontStyle:'bold' }, 5:{ cellWidth:34 } }
+                : { 0:{ cellWidth:20 }, 1:{ cellWidth:48 }, 2:{ fontStyle:'bold' }, 3:{ fontStyle:'bold' }, 4:{ cellWidth:42 } };
+  doc.autoTable({ startY:Y, margin:{ left:12, right:12, top:12, bottom:8 }, theme:'grid', head:[head], body, columnStyles:cs, pageBreak:'auto', rowPageBreak:'avoid',
+    styles:{ font:'helvetica', fontSize:fs, halign:'center', valign:'middle', minCellHeight:rowH, cellPadding:Math.max(0.6, scale), textColor:[0, 0, 0], lineColor:[60, 60, 60], lineWidth:0.35 },
+    headStyles:{ fillColor:C.NAVY, textColor:[255, 255, 255], fontStyle:'bold', fontSize:Math.max(9, 13 * scale), minCellHeight:Math.max(7, 11 * scale) } });
+}
+function tagScale(t){                                            /* try on a scratch page first, shrink until it fits */
+  for(let sc = 1; sc > 0.35; sc -= 0.08){ const d = JCW.newDoc('landscape'); drawTag(d, t, sc); if(d.internal.getNumberOfPages() === 1) return sc; }
+  return 0.35;
+}
 $('tgPdf').onclick = () => busy(null, 'Making the room tags…', async () => {
   const list = chosenTags(); if(!list.length) throw new Error('Tick at least one room.');
   await JCW.libs();
-  const doc = JCW.newDoc('landscape'), C = JCW.C, PW = 297, PH = 210, logo = JCW.logo();
-  list.forEach((t, i) => {
-    if(i) doc.addPage('a4', 'landscape');
-    doc.setFillColor(...C.NAVY); doc.rect(0, 0, PW, 15, 'F'); doc.setFillColor(...C.TEA); doc.rect(0, 15, PW, 1, 'F');
-    if(logo){ try{ doc.setFillColor(255, 255, 255); doc.circle(17, 7.5, 6, 'F'); doc.addImage(logo, 'PNG', 12, 2.6, 10, 9.7); }catch(e){} }
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(255, 255, 255); doc.text('JINNAH COLLEGE FOR WOMEN, UNIVERSITY OF PESHAWAR', PW / 2, 9.8, { align:'center' });
-    doc.setFontSize(30); doc.setTextColor(...C.NAVY); doc.text('SCHEDULE FOR ROOM # ' + t.room, PW / 2, 31, { align:'center' });
-    doc.setDrawColor(...C.ACC); doc.setLineWidth(0.9); doc.line(PW / 2 - 40, 35, PW / 2 + 40, 35);
-    if(t.strength){ doc.setFontSize(12); doc.setTextColor(0, 0, 0); doc.text('STRENGTH : ' + t.strength, PW - 12, 42, { align:'right' }); }
-    let Y = 45;
-    if(t.k === 'fsc'){
-      doc.setFillColor(...C.SOFT); doc.setDrawColor(...C.LINE); doc.rect(12, Y, PW - 24, 13, 'FD');
-      doc.setFontSize(21); doc.setTextColor(...C.NAVY); doc.text('CLASS-SECTION : ' + (t.cls || ''), PW / 2, Y + 9.3, { align:'center' }); Y += 16;
-    }
-    const fa = t.k === 'fa', n = Math.max(1, t.rows.length), avail = PH - 10 - Y - 11;
-    const rowH = Math.max(7, Math.min(20, avail / n)), fs = Math.max(9, Math.min(19, rowH * 1.05));
-    const head = ['PER', 'TIMINGS'].concat(fa ? ['CLASS'] : []).concat(['TEACHER', 'SUBJECT', 'DAYS']);
-    const body = t.rows.map(r => [r[0], r[1]].concat(fa ? [r[2]] : []).concat([r[3], r[4], r[5]]));
-    const cs = fa ? { 0:{ cellWidth:18 }, 1:{ cellWidth:40 }, 2:{ cellWidth:38 }, 3:{ fontStyle:'bold' }, 4:{ fontStyle:'bold' }, 5:{ cellWidth:30 } }
-                  : { 0:{ cellWidth:20 }, 1:{ cellWidth:46 }, 2:{ fontStyle:'bold' }, 3:{ fontStyle:'bold' }, 4:{ cellWidth:42 } };
-    doc.autoTable({ startY:Y, margin:{ left:12, right:12, top:12, bottom:8 }, theme:'grid', head:[head], body, columnStyles:cs, pageBreak:'avoid', rowPageBreak:'avoid',
-      styles:{ font:'helvetica', fontSize:fs, halign:'center', valign:'middle', minCellHeight:rowH, cellPadding:1, textColor:[0, 0, 0], lineColor:[60, 60, 60], lineWidth:0.35 },
-      headStyles:{ fillColor:C.NAVY, textColor:[255, 255, 255], fontStyle:'bold', fontSize:13, minCellHeight:11 } });
-  });
+  const doc = JCW.newDoc('landscape');
+  list.forEach((t, i) => { if(i) doc.addPage('a4', 'landscape'); drawTag(doc, t, tagScale(t)); });
   status('');
   const tag = TG_KIND === 'fsc' ? 'FSC_' : TG_KIND === 'fa' ? 'FA_' : '';
   JCW.offer(doc.output('blob'), 'JCW_' + tag + 'Room_Tags_' + new Date().toISOString().slice(0, 10) + '.pdf', 'Room tags', { folder:'Room Tags' });
