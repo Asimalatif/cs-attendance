@@ -47,7 +47,7 @@ header .sp{flex:1}
 .st .top{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline}
 .st .nm{font-weight:800}.st .rl{color:var(--muted);font-size:12.5px}
 .tag{display:inline-block;border-radius:20px;padding:2px 9px;font-size:11.5px;font-weight:800;margin-left:4px}
-.tag.pat{background:var(--pur-bg);color:var(--pur)}.tag.rep{background:var(--neg-bg);color:var(--neg)}.tag.one{background:var(--surface2);color:var(--muted)}
+.tag.pat{background:var(--surface2);color:var(--muted)}.tag.C{background:var(--neg-bg);color:var(--neg)}.tag.Pk{background:var(--mid-bg);color:var(--mid)}.tag.X{background:var(--pos-bg);color:var(--pos)}.tag.rep{background:var(--neg-bg);color:var(--neg)}.tag.one{background:var(--surface2);color:var(--muted)}
 .tl{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
 .lec{border-radius:10px;padding:4px 8px;font-size:12px;border:1.5px solid;line-height:1.25}
 .lec b{font-size:12.5px}.lec i{font-style:normal;opacity:.8;display:block;font-size:11px}
@@ -67,53 +67,75 @@ tr.hot td{background:var(--neg-bg)!important}
 .legend{display:flex;flex-wrap:wrap;gap:6px;font-size:12px;color:var(--muted);margin:-4px 0 12px}
 .hidden{display:none!important}
 @media print{header,.tabs,.bar,.legend{display:none!important}.sec,.kpi{box-shadow:none;break-inside:avoid}body{background:#fff}}
+.st.excused{opacity:.6}
+.acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.acts .btn{height:34px;font-size:12.5px;border-radius:10px}
+.btn.ok{border-color:#9fd8bf;color:var(--pos)}.btn.no{border-color:#f2a9a1;color:var(--neg)}
+.dec{font-size:12px;color:var(--muted);margin-top:6px}
+.dch{display:inline-block;border-radius:8px;padding:1px 6px;margin:1px;font-size:11.5px;font-weight:700}
+.dch.C{background:var(--neg-bg);color:var(--neg)}.dch.P{background:var(--mid-bg);color:var(--mid)}
+.days{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px}
+.dbox{flex:none;min-width:74px;background:var(--surface);border:1.5px solid var(--line);border-radius:12px;padding:6px 8px;text-align:center;font-size:12px}
+.dbox b{display:block;font-size:13px}.dbox .c{color:var(--neg);font-weight:800}.dbox .p{color:var(--mid);font-weight:800}
+.note{font-size:12.5px;color:var(--muted);background:var(--surface);border:1.5px dashed var(--line);border-radius:12px;padding:9px 12px;margin-bottom:12px;line-height:1.55}
 </style>
 </head>
 <body>
 <header>
-  <div><h1>Bunkers</h1><small id="scope">Present in one lecture, absent in another on the same day</small></div>
+  <div><h1>Bunkers</h1><small id="scope">Daily, weekly and monthly</small></div>
   <div class="sp"></div>
   <a class="tb" href="./">← App</a>
 </header>
 
 <div class="wrap">
-  <div class="tabs"><button id="tDay" class="on" onclick="tab('day')">Day</button><button id="tMon" onclick="tab('mon')">Repeat bunkers (month)</button></div>
+  <div class="tabs"><button id="t_day" class="on" onclick="tab('day')">Day</button><button id="t_week" onclick="tab('week')">Week</button><button id="t_month" onclick="tab('month')">Month</button></div>
+  <div class="note"><b style="color:var(--neg)">Confirmed bunk</b> = a teacher marked her <b>B</b> (if all her other lectures are A, she came to college and missed every lecture).
+    <b style="color:var(--mid)">Possible bunk</b> = present in one lecture, absent in another the same day: tap <b>Confirm bunk</b> or <b>Excused</b> (sent home, permission …).
+    Excused ones are not counted anywhere. Leave (L) is never bunking.</div>
 
   <!-- DAY -->
-  <div id="vDay">
+  <div id="v_day">
     <div class="bar">
       <button class="btn" onclick="shift(-1)" title="Previous day">‹</button>
-      <input type="date" id="date">
+      <select id="dD" onchange="loadDay()"></select><select id="dM" onchange="fillDays();loadDay()"></select>
       <button class="btn" onclick="shift(1)" title="Next day">›</button>
       <button class="btn p" id="go" onclick="loadDay()">Show</button>
+    </div>
+    <div class="bar">
+      <select id="kindF" onchange="drawDay()"><option value="">All kinds</option><option value="confirmed">Confirmed bunks</option><option value="possible">Possible (waiting for a decision)</option><option value="excused">Excused</option></select>
       <select id="secF" class="grow" onchange="drawDay()"><option value="">All sections</option></select>
       <input id="q" class="grow" placeholder="Search name or roll no…" oninput="drawDay()">
+      <button class="btn" onclick="shareDay()">WhatsApp</button><button class="btn" onclick="csvDay()">CSV</button><button class="btn" onclick="window.print()">Print</button>
     </div>
-    <div class="bar">
-      <button class="btn" onclick="shareDay()">Share on WhatsApp</button>
-      <button class="btn" onclick="csvDay()">CSV</button>
-      <button class="btn" onclick="window.print()">Print</button>
-    </div>
-    <div class="legend"><span class="lec P"><b>P</b> present</span><span class="lec A"><b>A</b> absent</span><span class="lec B"><b>B</b> bunk</span><span class="lec L"><b>L</b> leave (not bunking)</span></div>
-    <div class="status" id="st"></div>
-    <div id="kDay" class="kpis"></div>
-    <div id="outDay"><div class="empty"><b>Choose a day</b>Tap <i>Show</i> to see the students who bunked lectures that day.</div></div>
+    <div class="legend"><span class="lec P"><b>P</b> present</span><span class="lec A"><b>A</b> absent</span><span class="lec B"><b>B</b> bunk</span><span class="lec L"><b>L</b> leave</span></div>
+    <div class="status" id="st_day"></div>
+    <div id="k_day" class="kpis"></div>
+    <div id="o_day"><div class="empty"><b>Choose a day</b>Tap <i>Show</i>.</div></div>
   </div>
 
-  <!-- MONTH -->
-  <div id="vMon" class="hidden">
-    <div class="bar">
-      <select id="mon"><option value="SEPT">September</option><option value="OCT">October</option><option value="NOV">November</option><option value="DEC">December</option><option value="JAN">January</option></select>
-      <button class="btn p" onclick="loadMon()">Show</button>
-      <select id="minD" onchange="drawMon()"><option value="1">1 day or more</option><option value="2">2 days or more</option><option value="3" selected>3 days or more</option><option value="5">5 days or more</option></select>
-      <select id="secM" class="grow" onchange="drawMon()"><option value="">All sections</option></select>
-      <input id="qM" class="grow" placeholder="Search name or roll no…" oninput="drawMon()">
-      <button class="btn" onclick="csvMon()">CSV</button>
-      <button class="btn" onclick="window.print()">Print</button>
+  <!-- WEEK + MONTH (same table) -->
+  <div id="v_range" class="hidden">
+    <div class="bar" id="weekBar">
+      <button class="btn" onclick="shiftWeek(-1)">‹ Week</button>
+      <select id="wD"></select><select id="wM" onchange="fillWeekDays()"></select>
+      <button class="btn" onclick="shiftWeek(1)">Week ›</button>
+      <button class="btn p" onclick="loadRange()">Show</button>
     </div>
-    <div class="status" id="stM"></div>
-    <div id="kMon" class="kpis"></div>
-    <div id="outMon"><div class="empty"><b>Repeat bunkers</b>Tap <i>Show</i> to see who bunked on several days this month.</div></div>
+    <div class="bar hidden" id="monBar">
+      <select id="mon"></select>
+      <button class="btn p" onclick="loadRange()">Show</button>
+    </div>
+    <div class="bar">
+      <select id="minD" onchange="drawRange()"><option value="1">1 day or more</option><option value="2">2 days or more</option><option value="3">3 days or more</option><option value="5">5 days or more</option></select>
+      <select id="kindR" onchange="drawRange()"><option value="">Confirmed + possible</option><option value="C">Only with a confirmed bunk</option></select>
+      <select id="secR" class="grow" onchange="drawRange()"><option value="">All sections</option></select>
+      <input id="qR" class="grow" placeholder="Search name or roll no…" oninput="drawRange()">
+      <button class="btn" onclick="shareRange()">WhatsApp</button><button class="btn" onclick="csvRange()">CSV</button><button class="btn" onclick="window.print()">Print</button>
+    </div>
+    <div class="status" id="st_range"></div>
+    <div id="k_range" class="kpis"></div>
+    <div id="perDay" class="days"></div>
+    <div id="o_range"><div class="empty"><b>Repeat bunkers</b>Tap <i>Show</i>.</div></div>
   </div>
 </div>
 
@@ -124,15 +146,16 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&a
 const ls = { get(k, d){ try{ const v = localStorage.getItem('csa2_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } } };
 const user = ls.get('user', ''), pass = ls.get('pass', '');
 const MON = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const TOK = { 8: 'SEPT', 9: 'OCT', 10: 'NOV', 11: 'DEC', 0: 'JAN' };
-let DAY = null, MONTH = null;
+const TOKM = { 8: 'SEPT', 9: 'OCT', 10: 'NOV', 11: 'DEC', 0: 'JAN' };
+const KIND = { confirmed: ['C', 'Confirmed bunk'], possible: ['Pk', 'Possible bunk'], excused: ['X', 'Excused'] };
+let DAY = null, RANGE = null, MODE = 'day';
 
 async function api(payload){
-  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 300000);
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 330000);
   try{
     const r = await fetch(API, { method: 'POST', body: JSON.stringify({ username: user, password: pass, ...payload }), signal: ctl.signal, redirect: 'follow' });
     const txt = await r.text(); let j; try{ j = JSON.parse(txt); }catch(e){ throw new Error('The server sent a web page instead of data. Check the deployment.'); }
-    if(j && j.error === 'UNKNOWN_ACTION') throw new Error('The server does not know the bunkers report yet: paste Bunkers.gs, add the bnk_ line to doPost and deploy a new version.');
+    if(j && j.error === 'UNKNOWN_ACTION') throw new Error('The server does not know this yet: paste the new Bunkers.gs and deploy a new version.');
     if(j && j.error === 'BAD_LOGIN') throw new Error('Your saved login was refused. Open the app, sign out and sign in again.');
     if(j && j.ok === false) throw new Error(j.error || 'Server error');
     return j;
@@ -144,112 +167,163 @@ async function api(payload){
 }
 function say(id, kind, text){ const el = $(id); el.className = 'status show' + (kind === 'busy' ? '' : ' ' + kind); el.innerHTML = (kind === 'busy' ? '<div class="spin"></div>' : '') + '<span></span>'; el.lastChild.textContent = text; }
 function hush(id){ $(id).className = 'status'; }
-function tab(w){ $('vDay').classList.toggle('hidden', w !== 'day'); $('vMon').classList.toggle('hidden', w !== 'mon'); $('tDay').classList.toggle('on', w === 'day'); $('tMon').classList.toggle('on', w === 'mon'); }
 const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-const nice = s => { const d = new Date(s + 'T00:00:00'); return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); };
-function shift(n){ const d = new Date(($('date').value || iso(new Date())) + 'T00:00:00'); do { d.setDate(d.getDate() + n); } while (d.getDay() === 0); $('date').value = iso(d); loadDay(); }
+const nice = s => new Date(s + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+const short = s => new Date(s + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 function download(name, rows){
   const csv = rows.map(r => r.map(c => '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"').join(',')).join('\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' })); a.download = name + '.csv';
   document.body.appendChild(a); a.click(); a.remove();
 }
+function share(txt){ if (navigator.share) navigator.share({ text: txt }).catch(() => {}); else window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank'); }
 function fillSecs(sel, rows){
   const keep = sel.value, secs = [...new Set(rows.map(r => r.sec).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   sel.innerHTML = '<option value="">All sections (' + secs.length + ')</option>' + secs.map(s => '<option>' + esc(s) + '</option>').join('');
   if (secs.includes(keep)) sel.value = keep;
 }
-const lecTxt = l => 'P' + l.p + ' ' + l.sub;
+const lecTxt = l => 'P' + l.p + ' ' + l.sub + (l.m === 'B' ? ' (B)' : '');
+function tab(w){
+  MODE = w;
+  ['day', 'week', 'month'].forEach(k => $('t_' + k).classList.toggle('on', k === w));
+  $('v_day').classList.toggle('hidden', w !== 'day'); $('v_range').classList.toggle('hidden', w === 'day');
+  $('weekBar').classList.toggle('hidden', w !== 'week'); $('monBar').classList.toggle('hidden', w !== 'month');
+  $('minD').value = w === 'week' ? '2' : '3';
+  RANGE = null; $('o_range').innerHTML = '<div class="empty"><b>' + (w === 'week' ? 'Weekly' : 'Monthly') + ' bunkers</b>Tap <i>Show</i>.</div>'; $('k_range').innerHTML = ''; $('perDay').innerHTML = ''; hush('st_range');
+}
+
+/* ---------- date lists (day + month in words, never mixed up) ---------- */
+function seasonMonths(){ const now = new Date(), y = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1; return [[y, 8], [y, 9], [y, 10], [y, 11], [y + 1, 0]]; }
+function monthOpts(){ return seasonMonths().map(([y, m]) => '<option value="' + y + '-' + m + '">' + MON[m] + ' ' + y + '</option>').join(''); }
+function dayOpts(sel, msel){ const [y, m] = msel.value.split('-').map(Number), n = new Date(y, m + 1, 0).getDate(), keep = +sel.value || 1;
+  sel.innerHTML = Array.from({ length: n }, (_, i) => '<option value="' + (i + 1) + '">' + (i + 1) + ' · ' + new Date(y, m, i + 1).toLocaleDateString('en-GB', { weekday: 'short' }) + '</option>').join('');
+  sel.value = String(Math.min(keep, n)); }
+function fillDays(){ dayOpts($('dD'), $('dM')); }
+function fillWeekDays(){ dayOpts($('wD'), $('wM')); }
+const getD = (dsel, msel) => { const [y, m] = msel.value.split('-').map(Number); return new Date(y, m, +dsel.value); };
+function setD(dsel, msel, d){ const v = d.getFullYear() + '-' + d.getMonth(); if (![...msel.options].some(o => o.value === v)) return false; msel.value = v; dayOpts(dsel, msel); dsel.value = String(d.getDate()); return true; }
+function shift(n){ const d = getD($('dD'), $('dM')); do { d.setDate(d.getDate() + n); } while (d.getDay() === 0); if (setD($('dD'), $('dM'), d)) loadDay(); }
+function shiftWeek(n){ const d = getD($('wD'), $('wM')); d.setDate(d.getDate() + 7 * n); if (setD($('wD'), $('wM'), d)) loadRange(); }
 
 /* ---------------- DAY ---------------- */
 async function loadDay(){
-  const d = $('date').value; if(!d) return;
-  $('go').disabled = true; say('st', 'busy', 'Reading the period marks of ' + nice(d) + '…');
+  const d = iso(getD($('dD'), $('dM')));
+  $('go').disabled = true; say('st_day', 'busy', 'Reading the period marks of ' + nice(d) + '…');
   try{
     DAY = await api({ action: 'bnk_day', date: d });
     $('scope').textContent = DAY.scope + ' · ' + nice(DAY.date);
-    fillSecs($('secF'), DAY.rows);
-    hush('st'); drawDay();
-  }catch(e){ say('st', 'err', e.message); }
+    fillSecs($('secF'), DAY.rows); hush('st_day'); drawDay();
+  }catch(e){ say('st_day', 'err', e.message); }
   finally{ $('go').disabled = false; }
 }
 function dayRows(){
   if(!DAY) return [];
-  const s = $('secF').value, q = $('q').value.trim().toLowerCase();
-  return DAY.rows.filter(r => (!s || r.sec === s) && (!q || (r.name + ' ' + r.roll + ' ' + r.father).toLowerCase().includes(q)));
+  const k = $('kindF').value, s = $('secF').value, q = $('q').value.trim().toLowerCase();
+  return DAY.rows.filter(r => (!k || r.kind === k) && (!s || r.sec === s) && (!q || (r.name + ' ' + r.roll + ' ' + r.father).toLowerCase().includes(q)));
 }
 function drawDay(){
   if(!DAY) return;
-  const rows = dayRows(), secs = {}, missed = rows.reduce((a, r) => a + r.missed, 0), rep = rows.filter(r => r.days >= 3).length;
-  $('kDay').innerHTML =
-    '<div class="kpi neg"><b>' + rows.length + '</b><span>students bunked</span></div>' +
-    '<div class="kpi"><b>' + missed + '</b><span>lectures missed</span></div>' +
-    '<div class="kpi pur"><b>' + rep + '</b><span>bunked 3+ days this month</span></div>' +
+  const all = DAY.rows, n = k => all.filter(r => r.kind === k).length, rows = dayRows(), secs = {};
+  $('k_day').innerHTML =
+    '<div class="kpi neg"><b>' + n('confirmed') + '</b><span>confirmed bunks</span></div>' +
+    '<div class="kpi" style="border-left-color:var(--mid)"><b style="color:var(--mid)">' + n('possible') + '</b><span>possible, waiting for a decision</span></div>' +
+    '<div class="kpi"><b>' + n('excused') + '</b><span>excused</span></div>' +
     '<div class="kpi"><b>' + DAY.marked + '</b><span>students with attendance that day</span></div>';
-  if(!rows.length){ $('outDay').innerHTML = '<div class="empty"><b>No bunkers</b>' + (DAY.marked ? 'Nobody was present in one lecture and absent in another on this day.' : 'No attendance was marked on this day.') + '</div>'; return; }
+  if(!rows.length){ $('o_day').innerHTML = '<div class="empty"><b>No bunkers here</b>' + (DAY.marked ? 'Nobody matches this choice on this day.' : 'No attendance was marked on this day.') + '</div>'; return; }
   rows.forEach(r => (secs[r.sec || '—'] = secs[r.sec || '—'] || []).push(r));
-  $('outDay').innerHTML = Object.keys(secs).map(sec =>
-    '<div class="sec"><h3><span>' + esc(sec) + '</span><span class="n">' + secs[sec].length + ' bunker' + (secs[sec].length > 1 ? 's' : '') + '</span></h3>' +
-    secs[sec].map(r =>
-      '<div class="st"><div class="top"><div><span class="nm">' + esc(r.name || r.roll) + '</span> <span class="rl">' + esc(r.roll) + (r.father ? ' · d/o ' + esc(r.father) : '') + '</span></div>' +
-      '<div><span class="tag pat">' + esc(r.pattern) + '</span><span class="tag ' + (r.days >= 3 ? 'rep' : 'one') + '">' + r.days + (r.days > 1 ? ' days' : ' day') + ' this month</span></div></div>' +
-      '<div class="rl" style="margin-top:3px">Attended ' + r.attended + ' · missed ' + r.missed + '</div>' +
-      '<div class="tl">' + r.lectures.map(l => '<span class="lec ' + l.m + '"><b>' + (l.p ? 'P' + l.p + ' · ' : '') + l.m + '</b> ' + esc(l.sub) + (l.teacher ? '<i>' + esc(l.teacher) + '</i>' : '') + '</span>').join('') + '</div></div>'
-    ).join('') + '</div>').join('');
+  $('o_day').innerHTML = Object.keys(secs).map(sec =>
+    '<div class="sec"><h3><span>' + esc(sec) + '</span><span class="n">' + secs[sec].filter(r => r.kind !== 'excused').length + ' bunker(s)</span></h3>' +
+    secs[sec].map(r => {
+      const i = DAY.rows.indexOf(r), K = KIND[r.kind];
+      const acts = r.kind === 'possible'
+        ? '<div class="acts"><button class="btn no" onclick="decide(' + i + ',\'Confirmed\')">Confirm bunk</button><button class="btn ok" onclick="decide(' + i + ',\'Excused\')">Excused</button></div>'
+        : r.decision ? '<div class="dec">' + esc(r.decision) + ' by ' + esc(r.decBy) + (r.decNote ? ' · “' + esc(r.decNote) + '”' : '') + ' · <a href="#" onclick="decide(' + i + ',\'\');return false">undo</a></div>' : '';
+      return '<div class="st ' + r.kind + '"><div class="top"><div><span class="nm">' + esc(r.name || r.roll) + '</span> <span class="rl">' + esc(r.roll) + (r.father ? ' · d/o ' + esc(r.father) : '') + '</span></div>' +
+        '<div><span class="tag ' + K[0] + '">' + K[1] + '</span><span class="tag pat">' + esc(r.pattern) + '</span><span class="tag ' + (r.days >= 3 ? 'rep' : 'one') + '">' + r.days + (r.days === 1 ? ' day' : ' days') + ' this month' + (r.daysC ? ' (' + r.daysC + ' confirmed)' : '') + '</span></div></div>' +
+        '<div class="rl" style="margin-top:3px">Attended ' + r.attended + ' · missed ' + r.missed + '</div>' +
+        '<div class="tl">' + r.lectures.map(l => '<span class="lec ' + l.m + '"><b>' + (l.p ? 'P' + l.p + ' · ' : '') + l.m + '</b> ' + esc(l.sub) + (l.teacher ? '<i>' + esc(l.teacher) + '</i>' : '') + '</span>').join('') + '</div>' + acts + '</div>';
+    }).join('') + '</div>').join('');
+}
+async function decide(i, decision){
+  const r = DAY.rows[i]; let note = '';
+  if (decision === 'Excused') { note = prompt('Reason (optional), e.g. sent home sick, permission from the principal:', ''); if (note === null) return; }
+  if (decision === 'Confirmed' && !confirm('Confirm that ' + (r.name || r.roll) + ' bunked on ' + nice(DAY.date) + '?')) return;
+  say('st_day', 'busy', 'Saving…');
+  try{
+    await api({ action: 'bnk_decide', date: DAY.date, roll: r.roll, decision: decision, note: note });
+    r.decision = decision; r.decNote = note; r.decBy = 'you';
+    r.kind = decision === 'Excused' ? 'excused' : decision === 'Confirmed' ? 'confirmed' : (r.lectures.some(l => l.m === 'B') ? 'confirmed' : 'possible');
+    if (!decision) { r.decision = ''; }
+    say('st_day', 'ok', decision ? 'Saved: ' + decision + '.' : 'Decision removed.'); drawDay();
+  }catch(e){ say('st_day', 'err', e.message); }
 }
 function shareDay(){
-  const rows = dayRows(); if(!rows.length){ alert('No bunkers to share.'); return; }
+  const rows = dayRows().filter(r => r.kind !== 'excused'); if(!rows.length){ alert('No bunkers to share.'); return; }
   const secs = {}; rows.forEach(r => (secs[r.sec || '—'] = secs[r.sec || '—'] || []).push(r));
-  const txt = '*Bunkers · ' + nice(DAY.date) + '*\n' + Object.keys(secs).map(sec => '\n*' + sec + '*\n' + secs[sec].map((r, i) =>
-    (i + 1) + '. ' + (r.name || r.roll) + ' (' + r.roll + ') · ' + r.pattern + '\n   missed: ' + r.lectures.filter(l => l.m !== 'P' && l.m !== 'L').map(lecTxt).join(', ') + (r.days >= 3 ? '\n   ⚠ ' + r.days + ' days this month' : '')).join('\n')).join('\n');
-  if (navigator.share) navigator.share({ text: txt }).catch(() => {}); else window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank');
+  share('*Bunkers · ' + nice(DAY.date) + '*\n' + Object.keys(secs).map(sec => '\n*' + sec + '*\n' + secs[sec].map((r, i) =>
+    (i + 1) + '. ' + (r.name || r.roll) + ' (' + r.roll + ') · ' + KIND[r.kind][1] + ' · ' + r.pattern + '\n   missed: ' + r.lectures.filter(l => l.m === 'A' || l.m === 'B').map(lecTxt).join(', ') + (r.days >= 3 ? '\n   ⚠ ' + r.days + ' days this month' : '')).join('\n')).join('\n'));
 }
 function csvDay(){
   const rows = dayRows(); if(!rows.length){ alert('Nothing to download.'); return; }
-  download('Bunkers ' + DAY.date, [['Date', 'Section', 'Roll No', 'Student', 'Father', 'Pattern', 'Attended', 'Missed', 'Missed lectures', 'Attended lectures', 'Days this month']]
-    .concat(rows.map(r => [DAY.date, r.sec, r.roll, r.name, r.father, r.pattern, r.attended, r.missed,
-      r.lectures.filter(l => l.m === 'A' || l.m === 'B').map(l => lecTxt(l) + ' (' + l.m + (l.teacher ? ', ' + l.teacher : '') + ')').join('; '),
-      r.lectures.filter(l => l.m === 'P').map(lecTxt).join('; '), r.days])));
+  download('Bunkers ' + DAY.date, [['Date', 'Section', 'Roll No', 'Student', 'Father', 'Kind', 'Pattern', 'Attended', 'Missed', 'Missed lectures', 'Attended lectures', 'Days this month', 'Decision', 'Decided by', 'Note']]
+    .concat(rows.map(r => [DAY.date, r.sec, r.roll, r.name, r.father, KIND[r.kind][1], r.pattern, r.attended, r.missed,
+      r.lectures.filter(l => l.m === 'A' || l.m === 'B').map(l => lecTxt(l) + (l.teacher ? ' [' + l.teacher + ']' : '')).join('; '),
+      r.lectures.filter(l => l.m === 'P').map(lecTxt).join('; '), r.days, r.decision || '', r.decBy || '', r.decNote || ''])));
 }
 
-/* ---------------- MONTH ---------------- */
-async function loadMon(){
-  say('stM', 'busy', 'Checking every day of the month… this can take a minute.');
+/* ---------------- WEEK / MONTH ---------------- */
+function weekOf(d){ const s = new Date(d); const dow = s.getDay() || 7; s.setDate(s.getDate() - (dow - 1)); const e = new Date(s); e.setDate(s.getDate() + 5); return [s, e]; }
+async function loadRange(){
+  let payload, label;
+  if (MODE === 'week') { const [s, e] = weekOf(getD($('wD'), $('wM'))); payload = { action: 'bnk_range', from: iso(s), to: iso(e) }; label = 'week ' + short(iso(s)) + ' – ' + short(iso(e)); }
+  else { payload = { action: 'bnk_month', mon: $('mon').value }; label = $('mon').selectedOptions[0].textContent; }
+  say('st_range', 'busy', 'Checking every day of the ' + label + '… this can take a minute.');
   try{
-    MONTH = await api({ action: 'bnk_month', mon: $('mon').value });
-    fillSecs($('secM'), MONTH.rows);
-    hush('stM'); drawMon();
-  }catch(e){ say('stM', 'err', e.message); }
+    RANGE = await api(payload);
+    $('scope').textContent = RANGE.scope + ' · ' + short(RANGE.from) + ' – ' + short(RANGE.to);
+    fillSecs($('secR'), RANGE.rows); hush('st_range'); drawRange();
+  }catch(e){ say('st_range', 'err', e.message); }
 }
-function monRows(){
-  if(!MONTH) return [];
-  const min = +$('minD').value, s = $('secM').value, q = $('qM').value.trim().toLowerCase();
-  return MONTH.rows.filter(r => r.count >= min && (!s || r.sec === s) && (!q || (r.name + ' ' + r.roll).toLowerCase().includes(q)));
+function rangeRows(){
+  if(!RANGE) return [];
+  const min = +$('minD').value, k = $('kindR').value, s = $('secR').value, q = $('qR').value.trim().toLowerCase();
+  return RANGE.rows.filter(r => r.count >= min && (!k || r.confirmed) && (!s || r.sec === s) && (!q || (r.name + ' ' + r.roll).toLowerCase().includes(q)));
 }
-function drawMon(){
-  if(!MONTH) return;
-  const rows = monRows(), m = MON[MONTH.m] + ' ' + MONTH.y;
-  $('kMon').innerHTML =
+function drawRange(){
+  if(!RANGE) return;
+  const rows = rangeRows(), C = RANGE.perDay.reduce((a, d) => a + d.confirmed, 0), P = RANGE.perDay.reduce((a, d) => a + d.possible, 0);
+  $('k_range').innerHTML =
     '<div class="kpi neg"><b>' + rows.length + '</b><span>students shown</span></div>' +
-    '<div class="kpi"><b>' + MONTH.rows.length + '</b><span>bunked at least once in ' + esc(m) + '</span></div>' +
-    '<div class="kpi pur"><b>' + MONTH.rows.filter(r => r.count >= 5).length + '</b><span>bunked 5+ days</span></div>' +
-    '<div class="kpi"><b>' + MONTH.markedDays + '</b><span>days with attendance</span></div>';
-  if(!rows.length){ $('outMon').innerHTML = '<div class="empty"><b>Nobody here</b>Try a lower number of days.</div>'; return; }
-  $('outMon').innerHTML = '<div class="scroll"><table><thead><tr><th>#</th><th>Student</th><th>Roll No</th><th>Section</th><th>Days bunked</th><th>Dates</th><th>Lectures missed</th><th>Most missed subjects</th><th>Usual pattern</th></tr></thead><tbody>' +
-    rows.map((r, i) => '<tr class="' + (r.count >= 5 ? 'hot' : '') + '"><td>' + (i + 1) + '</td><td class="l"><b>' + esc(r.name) + '</b></td><td>' + esc(r.roll) + '</td><td>' + esc(r.sec) + '</td><td><b>' + r.count + '</b></td><td class="l">' +
-      r.days.join(', ') + '</td><td>' + r.missed + '</td><td class="l">' + esc(r.subjects.join(', ')) + '</td><td>' + esc(r.pattern) + '</td></tr>').join('') + '</tbody></table></div>';
+    '<div class="kpi"><b>' + RANGE.rows.length + '</b><span>bunked at least once</span></div>' +
+    '<div class="kpi neg"><b>' + C + '</b><span>confirmed bunk-days</span></div>' +
+    '<div class="kpi" style="border-left-color:var(--mid)"><b style="color:var(--mid)">' + P + '</b><span>possible bunk-days</span></div>' +
+    '<div class="kpi"><b>' + RANGE.markedDays + '</b><span>days with attendance</span></div>';
+  $('perDay').innerHTML = RANGE.perDay.map(d => '<div class="dbox"><b>' + esc(short(d.d)) + '</b><span class="c">' + d.confirmed + '</span> · <span class="p">' + d.possible + '</span></div>').join('');
+  if(!rows.length){ $('o_range').innerHTML = '<div class="empty"><b>Nobody here</b>Try fewer days or "Confirmed + possible".</div>'; return; }
+  $('o_range').innerHTML = '<div class="scroll"><table><thead><tr><th>#</th><th>Student</th><th>Roll No</th><th>Section</th><th>Days</th><th>Confirmed</th><th>Possible</th><th>Dates</th><th>Lectures missed</th><th>Most missed subjects</th><th>Usual pattern</th></tr></thead><tbody>' +
+    rows.map((r, i) => '<tr class="' + (r.confirmed >= 3 || r.count >= 5 ? 'hot' : '') + '"><td>' + (i + 1) + '</td><td class="l"><b>' + esc(r.name) + '</b></td><td>' + esc(r.roll) + '</td><td>' + esc(r.sec) + '</td><td><b>' + r.count + '</b></td><td>' + r.confirmed + '</td><td>' + r.possible + '</td><td class="l">' +
+      r.dates.map(x => '<span class="dch ' + x.k + '">' + esc(short(x.d)) + '</span>').join('') + '</td><td>' + r.missed + '</td><td class="l">' + esc(r.subjects.join(', ')) + '</td><td>' + esc(r.pattern) + '</td></tr>').join('') + '</tbody></table></div>' +
+    '<div class="legend" style="margin-top:8px"><span class="dch C">date</span> confirmed bunk <span class="dch P">date</span> possible bunk</div>';
 }
-function csvMon(){
-  const rows = monRows(); if(!rows.length){ alert('Nothing to download.'); return; }
-  download('Repeat bunkers ' + MONTH.tok, [['Student', 'Roll No', 'Section', 'Days bunked', 'Dates', 'Lectures missed', 'Most missed subjects', 'Usual pattern']]
-    .concat(rows.map(r => [r.name, r.roll, r.sec, r.count, r.days.join(' '), r.missed, r.subjects.join('; '), r.pattern])));
+function shareRange(){
+  const rows = rangeRows(); if(!rows.length){ alert('Nothing to share.'); return; }
+  share('*' + (MODE === 'week' ? 'Weekly' : 'Monthly') + ' bunkers · ' + short(RANGE.from) + ' – ' + short(RANGE.to) + '*\n' + rows.map((r, i) =>
+    (i + 1) + '. ' + (r.name || r.roll) + ' (' + r.roll + ', ' + r.sec + ') · ' + r.count + ' day(s), ' + r.confirmed + ' confirmed · ' + r.subjects.join(', ')).join('\n'));
+}
+function csvRange(){
+  const rows = rangeRows(); if(!rows.length){ alert('Nothing to download.'); return; }
+  download((MODE === 'week' ? 'Weekly' : 'Monthly') + ' bunkers ' + RANGE.from + ' to ' + RANGE.to, [['Student', 'Father', 'Roll No', 'Section', 'Days', 'Confirmed', 'Possible', 'Dates (C = confirmed, P = possible)', 'Lectures missed', 'Most missed subjects', 'Teachers of missed lectures', 'Usual pattern']]
+    .concat(rows.map(r => [r.name, r.father, r.roll, r.sec, r.count, r.confirmed, r.possible, r.dates.map(x => x.d + ' ' + x.k).join('; '), r.missed, r.subjects.join('; '), r.teachers.join('; '), r.pattern])));
 }
 
 /* ---------------- START ---------------- */
 (function(){
   if(!user || !pass){ document.querySelector('.wrap').innerHTML = '<div class="empty"><b>Sign in first</b>Open the attendance app and sign in, then come back.</div>'; return; }
+  $('dM').innerHTML = monthOpts(); $('wM').innerHTML = monthOpts();
+  $('mon').innerHTML = seasonMonths().map(([y, m]) => '<option value="' + TOKM[m] + '">' + MON[m] + ' ' + y + '</option>').join('');
   const now = new Date(); if (now.getDay() === 0) now.setDate(now.getDate() - 1);
-  $('date').value = iso(now);
-  if (TOK[now.getMonth()]) $('mon').value = TOK[now.getMonth()];
+  if (!setD($('dD'), $('dM'), now)) fillDays();
+  if (!setD($('wD'), $('wM'), now)) fillWeekDays();
+  if (TOKM[now.getMonth()]) $('mon').value = TOKM[now.getMonth()];
   loadDay();
 })();
 </script>
