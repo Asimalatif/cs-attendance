@@ -42,6 +42,7 @@ function bnkRoute_(user, req) {
     if (a === 'bnk_range')  return bnkRange_(who, String(req.from || ''), String(req.to || ''));
     if (a === 'bnk_month')  return bnkMonthRange_(who, String(req.mon || ''));
     if (a === 'bnk_decide') return bnkDecide_(user, req);
+    if (a === 'bnk_student') return bnkStudent_(who, String(req.roll || ''));
     return { ok: false, error: 'UNKNOWN_ACTION' };
   } catch (e) {
     return { ok: false, error: e && e.message ? e.message : String(e) };
@@ -357,6 +358,42 @@ function bnkRangeBuild_(who, from, to) {
 function bnkProgram_(sec, d) {
   var tok = BNK_TOK_[d.getMonth()], k = String(sec || '').replace(/\s+/g, '').toUpperCase();
   return (tok && bnkTT_(tok).prog[k]) || '';
+}
+
+/* ---------------- one student, whole session (student record) ---------------- */
+function bnkStudent_(who, roll) {
+  var k = enr_(roll);
+  if (!k) return { ok: false, error: 'No roll number.' };
+  var DEC = bnkDecisions_(), today = new Date(), out = [], n = { confirmed: 0, possible: 0, excused: 0 };
+  SEASON.forEach(function (tok) {
+    var my = monthYear_(tok);
+    if (new Date(my.y, my.m, 1) > today) return;
+    var L = bnkLoad_(tok, who), mine = [];
+    L.sheets.forEach(function (s) { for (var q = 0; q < s.r.length; q++) if (enr_(s.r[q]) === k) { mine.push({ s: s, i: q }); break; } });
+    if (!mine.length) return;
+    var last = new Date(my.y, my.m + 1, 0).getDate();
+    for (var day = 1; day <= last; day++) {
+      var d = new Date(my.y, my.m, day);
+      if (d > today) break;
+      var rec = { roll: roll, list: [] };
+      mine.forEach(function (o) {
+        var dd = o.s.d[String(day)];
+        if (!dd) return;
+        Object.keys(dd).forEach(function (p) {
+          var c = String(dd[p]).charAt(o.i);
+          if (VALID[c]) rec.list.push({ p: Number(p) || 0, sub: o.s.sub, teacher: o.s.teacher, cls: o.s.cls, m: c, mine: o.s.mine });
+        });
+      });
+      if (!rec.list.length) continue;
+      var j = bnkJudge_(rec, who);
+      if (!j) continue;
+      var iso = bnkIso_(d);
+      bnkApply_(j, DEC[iso + '|' + k]);
+      n[j.kind]++;
+      out.push({ d: iso, kind: j.kind, pattern: j.pattern, decision: j.decision || '', note: j.decNote || '', lectures: j.lectures });
+    }
+  });
+  return { ok: true, roll: roll, scope: who.label, confirmed: n.confirmed, possible: n.possible, excused: n.excused, days: out };
 }
 
 /* ---------------- decisions ---------------- */
