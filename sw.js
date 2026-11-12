@@ -1,6 +1,9 @@
 // Bump VERSION every time you change index.html so phones pick up the update.
-const VERSION = 'csa-v128';
-const CORE = ['./', './index.html', './admission.html', './grandtest.html', './detention.html', './board.html', './boardparse.js', './spinner.js', './certificates.html', './idcards.html', './idcard/sheet.svg', './idcard/sheet-template.pdf', './idcard/Carlito-Bold.ttf', './idcard/Carlito-Bold.woff2', './idcard/principal-sign.png', './idcheck.html', './duties.html', './reports.html', './bunkers.html', './manifest.json', './icon-192.png', './jcw-logo.png', './icon-512.png'];
+const VERSION = 'csa-v129';
+
+// Approved leaves (leaves.html): self.LV = storage + sending of the Leave In-Charge's waiting leaves
+try { importScripts('./leavesync.js'); } catch (e) {}
+const CORE = ['./', './index.html', './admission.html', './grandtest.html', './detention.html', './board.html', './boardparse.js', './spinner.js', './certificates.html', './idcards.html', './idcard/sheet.svg', './idcard/sheet-template.pdf', './idcard/Carlito-Bold.ttf', './idcard/Carlito-Bold.woff2', './idcard/principal-sign.png', './idcheck.html', './duties.html', './reports.html', './bunkers.html', './leaves.html', './leavesync.js', './jspdf.umd.min.js', './jspdf.plugin.autotable.min.js', './manifest.json', './icon-192.png', './jcw-logo.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
@@ -22,7 +25,7 @@ self.addEventListener('fetch', e => {
 
   // Pages: network first, fall back to the saved copy when offline
   if (req.mode === 'navigate') {
-    const page = /admission\.html$/.test(url.pathname) ? './admission.html' : /grandtest\.html$/.test(url.pathname) ? './grandtest.html' : /detention\.html$/.test(url.pathname) ? './detention.html' : /student\.html$/.test(url.pathname) ? './student.html' : /board\.html$/.test(url.pathname) ? './board.html' : /certificates\.html$/.test(url.pathname) ? './certificates.html' : /idcards\.html$/.test(url.pathname) ? './idcards.html' : /idcheck\.html$/.test(url.pathname) ? './idcheck.html' : /duties\.html$/.test(url.pathname) ? './duties.html' : /reports\.html$/.test(url.pathname) ? './reports.html' : /bunkers\.html$/.test(url.pathname) ? './bunkers.html' : './index.html';
+    const page = /admission\.html$/.test(url.pathname) ? './admission.html' : /grandtest\.html$/.test(url.pathname) ? './grandtest.html' : /detention\.html$/.test(url.pathname) ? './detention.html' : /student\.html$/.test(url.pathname) ? './student.html' : /board\.html$/.test(url.pathname) ? './board.html' : /certificates\.html$/.test(url.pathname) ? './certificates.html' : /idcards\.html$/.test(url.pathname) ? './idcards.html' : /idcheck\.html$/.test(url.pathname) ? './idcheck.html' : /duties\.html$/.test(url.pathname) ? './duties.html' : /reports\.html$/.test(url.pathname) ? './reports.html' : /bunkers\.html$/.test(url.pathname) ? './bunkers.html' : /leaves\.html$/.test(url.pathname) ? './leaves.html' : './index.html';
     e.respondWith(
       fetch(req).then(res => {
         const copy = res.clone();
@@ -65,6 +68,7 @@ async function kvSet(k, v) {
 
 // The browser fires this when internet returns (also retried later if the handler fails)
 self.addEventListener('sync', e => {
+  if (e.tag === 'leave-sync' && self.LV) { e.waitUntil(leaveBgSend()); return; }
   if (e.tag === 'csa-sync') {
     e.waitUntil((async () => {
       await log('background sync started' + (e.lastChance ? ' (last chance)' : ''));
@@ -140,8 +144,29 @@ async function bgSync() {
 
 self.addEventListener('notificationclick', e => {
   e.notification.close();
+  if (e.notification.data && e.notification.data.url) { e.waitUntil(self.clients.openWindow(e.notification.data.url)); return; }
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
     for (const c of list) { if ('focus' in c) return c.focus(); }
     return self.clients.openWindow('./');
   }));
 });
+
+/* ===== Approved leaves: send the Leave In-Charge's waiting leaves when internet returns ===== */
+async function leaveBgSend() {
+  const r = await self.LV.syncQueue();          // a network error here makes the phone retry later
+  if (r.busy) return;
+  const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  wins.forEach(c => c.postMessage({ type: 'leaves-synced', sent: r.sent || 0, failed: r.failed || 0 }));
+  const visible = wins.some(c => c.visibilityState === 'visible');
+  let allowed = false;
+  try { allowed = Notification.permission === 'granted'; } catch (e) {}
+  if (!visible && allowed && (r.sent || r.failed || r.authError)) {
+    let body;
+    if (r.authError) body = 'Leaves are waiting. Open the attendance app and sign in again to send them.';
+    else {
+      body = r.sent ? r.sent + ' leave change' + (r.sent > 1 ? 's' : '') + ' saved to the sheets.' : '';
+      if (r.failed) body += ' ' + r.failed + ' could not be saved. Open Approved leaves to see why.';
+    }
+    try { await self.registration.showNotification('Approved leaves', { body: body.trim(), icon: './icon-192.png', tag: 'leave-sync', data: { url: './leaves.html' } }); } catch (e) {}
+  }
+}

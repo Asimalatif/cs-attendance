@@ -1411,7 +1411,7 @@ async function signOut(msg){
     if(queue.length || rq.length){ if(!confirm((queue.length + rq.length) + ' record(s) could not be saved to the server yet and would be lost. Sign out anyway?')){ renderMain(); return; } }
     else toast('Saved in sheet. Signed out.');
   }
-  user = ''; pass = ''; store.set('user', ''); store.set('pass', ''); store.set('cts', null);   // private contacts never stay after sign-out
+  user = ''; pass = ''; store.set('user', ''); store.set('pass', ''); store.set('cts', null); store.set('lvOp', false);   // private contacts never stay after sign-out
   if(!msg){ queue = []; data = {}; sheets = []; teacher = ''; isAdmin = false; confirms = {}; ['queue','data','sheets','confirms'].forEach(k => store.set(k, k === 'queue' || k === 'sheets' ? [] : {})); store.set('teacher', ''); store.set('admin', false);
     rq = []; store.set('rq', []); myReports = []; store.set('myrep', []); cps = []; store.set('cps', []); }
   renderLogin(msg);
@@ -3549,6 +3549,7 @@ function renderHome(){
     ${offs.length && !sun ? `<div class="offt"><span>No class today:</span> ${offs.map(x => `<button type="button" data-xopen="${esc(x.e.name)}" data-xday="${day}">${esc(x.e.cls)} · ${esc(abbr(x.e.sub))}</button>`).join('')}</div>` : ''}</section>`;
 
   if(cur.length || scope) h += examsCard(cur);
+  if(isAdmin || store.get('lvOp', false)) h += leaveCard();
   h += searchCard();
 
   if(cur.length){
@@ -3585,6 +3586,11 @@ function findCard(){
 function lowRow(x){
   const r = lowMode === 'week' ? x.w : x.c;
   return `<button class="li" type="button" data-xprof="${esc(x.s.roll)}" data-xcls="${esc(x.e.cls)}"><span class="av">${esc(initials(x.s.name))}</span><span class="tx"><b>${esc(x.s.name)}</b><small>${esc(x.e.cls)} · ${esc(titleCase(x.e.sub))} · ${r.p}/${r.den} lectures</small></span><span class="pill ${tone(r.pct)}">${r.pct}%</span></button>`;
+}
+/* Approved leaves (Admin + Leave In-Charge): its own page, works offline, saves to ApprovedLeavesStore */
+function leaveCard(){
+  return `<section class="card"><h3>${I.cal} Approved leaves</h3><div class="sub">Enter students' approved leave (any month, Sept–Jan), batch and class entry, application photos, records, contacts, parent WhatsApp and PDF reports. Works without internet; teachers see the leave as L in attendance.</div>
+    <div class="acts2"><a class="btn primary" href="leaves.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Approved leaves</a></div></section>`;
 }
 function collegeCard(){
   const rows = ov && ov.rows ? ov.rows : null, name = scope === 'all' ? 'College' : 'Department';
@@ -5424,6 +5430,15 @@ setTimeout(async () => {
     if(r && r.ok){ store.set('dsAdmin', !!r.ds); store.set('dsAdminAt', d + '|' + user); }
   }catch(e){}
 }, 9000);
+/* approved leaves: is this user the Leave In-Charge (role in the Users sheet)? asked once a day, so Home can show Approved leaves */
+setTimeout(async () => {
+  try{
+    if(!authed() || isAdmin || !navigator.onLine) return;
+    const d = new Date().toDateString(); if(store.get('lvOpAt', '') === d + '|' + user) return;
+    const r = await api({ action:'lv_whoami' }, 30000);
+    if(r && r.ok){ const was = store.get('lvOp', false); store.set('lvOp', !!r.allowed); store.set('lvOpAt', d + '|' + user); if(was !== !!r.allowed && appView === 'home') rerender(); }
+  }catch(e){}
+}, 10000);
 async function loadTTAll(){
   if(ttAllBusy || !authed()) return;
   if(!navigator.onLine){ if(!ttAll) ttAllErr = 'This needs internet once (then it also works offline).'; if(appView === 'free') rerender(); else refreshABody(); return; }
@@ -5947,7 +5962,7 @@ function adminExtraCards(){
       <div class="sub">All strength reports with charts: dashboard, admission flow (cancelled / migrated), merit vs quota, quota, program &amp; category, section-wise, subjects, PCS &amp; Category (Fancy), JCW summary, enrollment, F.A lists, fee challan details. Excel, Google Sheet, CSV and print.</div>
       <div class="acts2"><a class="btn primary" id="xCollRep" href="reports.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Reports</a></div></section><section class="card"><h3>${I.doc} Bunkers</h3>
       <div class="sub">Students who were present in one lecture but absent (or B) in another on the same day: who, which lectures, which teacher, left early / came late, and repeat bunkers of the month. WhatsApp, CSV and print.</div>
-      <div class="acts2"><a class="btn primary" id="xBunkA" href="bunkers.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Bunkers</a></div></section>` : ''}<section class="card"><h3>${I.check} System health check</h3>
+      <div class="acts2"><a class="btn primary" id="xBunkA" href="bunkers.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Bunkers</a></div></section>${leaveCard()}` : ''}<section class="card"><h3>${I.check} System health check</h3>
       <div class="sub">Finds problems before they stop the work: duplicate roll numbers, students without subjects or class, timetable teachers without a login, classes with no students, sections with no attendance this month, missing sheets and automatic jobs that are off.</div>
       <div class="acts2"><button class="btn primary" type="button" id="xHc">${I.check}Run health check</button></div></section>
     <section class="card"><h3>${I.doc} Student result page</h3>
