@@ -7232,23 +7232,44 @@ function ranks(list){ const s = list.filter(x => x.v != null).sort((a, b) => b.v
   s.forEach((x, i) => { const k = Math.round(x.v * 100); if(k !== last){ r = i + 1; last = k; } out[x.k] = r; }); return { pos:out, of:s.length }; }
 
 /* ======================= 2) SESSION REGISTER: one page per student ======================= */
-function studentSessionPage(doc, s, mons, first, q){
+/* approved leaves (ApprovedLeavesStore, Leave In-Charge): as in the shortage pipeline, a month's leave days are added to the
+   lectures attended in every subject held that month (never more than the lectures held) */
+function withLeaves(g, lv){
+  let a = 0;
+  Object.keys(g.months).forEach(t => { const m = g.months[t]; if(!m.off && m.d) a += Math.min(m.d, m.p + (lv[t] || 0)); });
+  return a;
+}
+function studentSessionPage(doc, s, mons, first, q, LVS){
   const C = P.C, subs = Object.values(s.subs).sort((a, b) => a.sub.localeCompare(b.sub)), live = subs.filter(g => !g.off);
-  const gP = live.reduce((a, g) => a + g.p, 0), gD = live.reduce((a, g) => a + g.d, 0), gp = pct1(gP, gD), short = live.filter(g => g.d && g.pct < LOW).length;
+  const lv = {}; mons.forEach(t => { const n = LVS && LVS[t] ? Number(LVS[t][s.roll]) || 0 : 0; if(n) lv[t] = n; });
+  const LT = Object.values(lv).reduce((a, b) => a + b, 0), useLv = !!LVS;
+  live.forEach(g => { g.pL = withLeaves(g, lv); g.pctL = g.d ? pct1(g.pL, g.d) : null; });
+  const gP = live.reduce((a, g) => a + g.p, 0), gD = live.reduce((a, g) => a + g.d, 0), gp = pct1(gP, gD);
+  const gPL = live.reduce((a, g) => a + g.pL, 0), gpL = pct1(gPL, gD);
+  const short = live.filter(g => g.d && (useLv ? g.pctL : g.pct) < LOW).length, gShow = useLv ? gpL : gp;
   if(!first) doc.addPage();
-  let Y = P.heading(doc, P.TOP, 'Student Session Attendance Register', s.name + '  ·  ' + s.roll + '  ·  ' + s.cls + '  ·  ' + rangeTxt(q.from, q.to));
+  let Y = P.heading(doc, P.TOP, 'Student Session Attendance Register', 'Session attendance · ' + rangeTxt(q.from, q.to));
+  /* student band: big name, then Enroll#, class-section and months in boxes */
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(19); doc.setTextColor(...C.INK); doc.text(String(s.name || '-'), 14, Y + 5);
+  Y = P.infoGrid(doc, Y + 8, [['Enroll#', s.roll], ['Class - Section', s.cls + (s.guest ? ' (Guest from ' + s.guest + ')' : '')], ['Months', rangeTxt(q.from, q.to)]], 3) + 4;
   Y = P.statBoxes(doc, Y, [
-    { l:'Overall attendance', v:gp == null ? '-' : gp + '%', c:gp != null && gp < LOW ? C.RED : C.GREEN, bg:gp != null && gp < LOW ? C.REDBG : C.GREENBG },
-    { l:'Present / Held', v:gP + ' / ' + gD },
-    { l:'Subjects below ' + LOW + '%', v:short, c:short ? C.RED : C.INK, bg:short ? C.REDBG : C.SOFT }]) + 3;
-  const head = [[{ content:'Subject', rowSpan:2 }, { content:'Teacher', rowSpan:2 }].concat(mons.map(t => ({ content:monName(t), colSpan:2 })), [{ content:'SESSION', colSpan:2 }, { content:'Status', rowSpan:2 }]),
-    mons.flatMap(() => ['Present / Held', '%']).concat(['Present / Held', '%'])];
+    { l:useLv ? 'Overall with approved leaves' : 'Overall attendance', v:gShow == null ? '-' : gShow + '%', c:gShow != null && gShow < LOW ? C.RED : C.GREEN, bg:gShow != null && gShow < LOW ? C.REDBG : C.GREENBG },
+    { l:'Present / Held' + (useLv ? ' · ' + (gp == null ? '-' : gp + '%') + ' without leaves' : ''), v:gP + ' / ' + gD }]
+    .concat(useLv ? [{ l:'Approved leave days', v:LT, c:LT ? C.AMB : C.INK, bg:LT ? C.AMBBG : C.SOFT }] : [],
+    [{ l:'Subjects below ' + LOW + '%' + (useLv ? ' after leaves' : ''), v:short, c:short ? C.RED : C.INK, bg:short ? C.REDBG : C.SOFT }])) + 3;
+  const lvHead = useLv ? [{ content:'WITH LEAVES', colSpan:2 }] : [];
+  const head = [[{ content:'Subject', rowSpan:2 }, { content:'Teacher', rowSpan:2 }].concat(mons.map(t => ({ content:monName(t), colSpan:2 })), [{ content:'SESSION', colSpan:2 }], lvHead, [{ content:'Status', rowSpan:2 }]),
+    mons.flatMap(() => ['Present / Held', '%']).concat(['Present / Held', '%'], useLv ? ['Present + Leave / Held', '%'] : [])];
+  const stat = p => p == null ? '' : p < LOW ? 'SHORTAGE' : 'OK';
   const body = subs.map(g => [titleCase(g.sub) + (g.off ? ' (left)' : ''), g.teacher || ''].concat(
     mons.flatMap(t => { const m = g.months[t]; return !m ? ['-', ''] : m.off ? ['left', ''] : [m.p + ' / ' + m.d, m.d ? pct1(m.p, m.d) : '-']; }),
-    g.off ? ['', '', 'Left subject'] : [g.p + ' / ' + g.d, g.pct == null ? '-' : g.pct, g.pct == null ? '' : g.pct < LOW ? 'SHORTAGE' : 'OK']));
+    g.off ? ['', ''].concat(useLv ? ['', ''] : [], ['Left subject'])
+      : [g.p + ' / ' + g.d, g.pct == null ? '-' : g.pct].concat(useLv ? [g.pL + ' / ' + g.d, g.pctL == null ? '-' : g.pctL] : [], [stat(useLv ? g.pctL : g.pct)])));
+  if(useLv) body.push(['Approved leave days', 'Leave In-Charge'].concat(mons.flatMap(t => [lv[t] ? String(lv[t]) : '-', '']), [LT ? String(LT) : '-', '', LT ? 'added to every subject' : '', '', '']));
   body.push(['Overall', ''].concat(mons.flatMap(t => { let p = 0, d = 0; live.forEach(g => { const m = g.months[t]; if(m && !m.off){ p += m.p; d += m.d; } }); return d ? [p + ' / ' + d, pct1(p, d)] : ['-', '']; }),
-    [gP + ' / ' + gD, gp == null ? '-' : gp, short ? short + ' short' : 'OK']));
-  const pctCols = new Set(); mons.forEach((_, i) => pctCols.add(3 + i * 2)); pctCols.add(3 + mons.length * 2);
+    [gP + ' / ' + gD, gp == null ? '-' : gp].concat(useLv ? [gPL + ' / ' + gD, gpL == null ? '-' : gpL] : [], [short ? short + ' short' : 'OK'])));
+  const pctCols = new Set(); mons.forEach((_, i) => pctCols.add(3 + i * 2)); pctCols.add(3 + mons.length * 2); if(useLv) pctCols.add(5 + mons.length * 2);
+  const lvRow = useLv ? body.length - 2 : -1;
   P.table(doc, { startY:Y, margin:{ top:P.TOP, left:10, right:10, bottom:16 },
     styles:{ font:'helvetica', fontSize:8, cellPadding:1.4, lineColor:C.LINE, lineWidth:0.15, textColor:C.INK, valign:'middle', halign:'center' },
     head, body, columnStyles:{ 0:{ halign:'left', fontStyle:'bold', cellWidth:38 }, 1:{ halign:'left', cellWidth:36 } },
@@ -7256,13 +7277,17 @@ function studentSessionPage(doc, s, mons, first, q){
       if(h.section !== 'body') return;
       const v = String(h.cell.raw == null ? '' : h.cell.raw), last = h.row.index === body.length - 1;
       if(last){ h.cell.styles.fontStyle = 'bold'; h.cell.styles.fillColor = [234, 238, 246]; }
+      if(h.row.index === lvRow){ h.cell.styles.fillColor = C.AMBBG; h.cell.styles.textColor = C.AMB; h.cell.styles.fontStyle = 'bold'; return; }
+      if(useLv && h.column.index >= 4 + mons.length * 2 && h.column.index <= 5 + mons.length * 2 && !last) h.cell.styles.fillColor = [236, 246, 240];
       if(pctCols.has(h.column.index) && v !== '' && v !== '-' && Number(v) < LOW){ h.cell.styles.textColor = C.RED; h.cell.styles.fillColor = C.REDBG; h.cell.styles.fontStyle = 'bold'; }
       if(/SHORTAGE|short$/.test(v)){ h.cell.styles.textColor = C.RED; h.cell.styles.fontStyle = 'bold'; }
       if(v === 'OK') h.cell.styles.textColor = C.GREEN;
       if(v === 'left'){ h.cell.styles.textColor = [150, 156, 168]; h.cell.styles.fontStyle = 'italic'; }
     } });
   Y = doc.lastAutoTable.finalY + 3;
-  Y = P.smallNote(doc, Y, 'Present = lectures attended, Held = lectures delivered (for a guest: lectures in which she was marked). Only P counts as attended. Minimum required: ' + LOW + '%.' + (scope() ? '' : ' Only the subjects taught by ' + (teacher || user) + ' are included.'));
+  Y = P.smallNote(doc, Y, 'Present = lectures attended, Held = lectures delivered (for a guest: lectures in which she was marked). Only P counts as attended. Minimum required: ' + LOW + '%.' +
+    (useLv ? ' With leaves: each month\'s approved leave days (Leave In-Charge) are added to the lectures attended in every subject held that month, never more than the lectures held; Status uses this figure.' : '') +
+    (scope() ? '' : ' Only the subjects taught by ' + (teacher || user) + ' are included.'));
   P.signatures(doc, Y, ['Class In-charge', 'HOD', 'Principal']);
 }
 async function buildCards(){
@@ -7275,7 +7300,11 @@ async function buildCards(){
   setProg('Making ' + S.length + ' pages…', 80);
   await new Promise(res => setTimeout(res, 30));
   const doc = P.newDoc('landscape'), mons = monthsIn(zr.from, zr.to);
-  S.forEach((s, i) => studentSessionPage(doc, s, mons, i === 0, q));
+  let LVS = null;
+  setProg('Reading approved leaves…', 70);
+  try{ LVS = (await call({ action:'shr_leaves', mons }, 120000)).leaves || null; }
+  catch(e){ toast('Approved leaves could not be read (' + e.message + '). The registers are made without them.'); }
+  S.forEach((s, i) => studentSessionPage(doc, s, mons, i === 0, q, LVS));
   P.finalize(doc);
   const nm = all ? allName() : zr.cls;
   return { doc, title:'Session registers ' + nm, file:'Session-registers_' + P.safe(nm) + '_' + zr.from + '-' + zr.to + '.pdf' };

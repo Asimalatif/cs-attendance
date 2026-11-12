@@ -37,8 +37,9 @@ var SHR_CFG = {
 
 function shrRoute_(user, req) {
   try {
-    if (!wrAll_(user)) return { ok: false, error: 'The shortage report is for the admin, principal and HODs.' };
     var a = String(req.action || '');
+    if (a === 'shr_leaves') return shrLeavesFor_(req.mons || []);        // every teacher (her registers add the leaves)
+    if (!wrAll_(user)) return { ok: false, error: 'The shortage report is for the admin, principal and HODs.' };
     if (a === 'shr_cfg') return shrCfg_(user);
     if (a === 'shr_month') return shrMonth_(String(req.mon || '').toUpperCase(), !!req.fresh);
     if (!isAdmin_(user)) return { ok: false, error: 'Only the admin can change this.' };
@@ -85,6 +86,19 @@ function shrMonth_(mon, fresh) {
   var used = {}; subs.forEach(function (s) { used[s[0]] = 1; });
   Object.keys(people).forEach(function (k) { if (!used[k]) delete people[k]; });
   return { ok: true, mon: mon, people: people, subs: subs, leaves: shrLeaves_(mon), at: Date.now() };
+}
+
+/** { ok, leaves: { MON: { roll: days } } } for the student registers (cached 5 minutes per month) */
+function shrLeavesFor_(mons) {
+  var out = {}, cache = CacheService.getScriptCache();
+  mons.forEach(function (m) {
+    m = String(m || '').toUpperCase(); if (!MA_BOOKS[m]) return;
+    var hit = cache.get('shr_lv_' + m);
+    if (hit) { try { out[m] = JSON.parse(hit); return; } catch (e) {} }
+    out[m] = shrLeaves_(m);
+    try { cache.put('shr_lv_' + m, JSON.stringify(out[m]), 300); } catch (e) {}
+  });
+  return { ok: true, leaves: out };
 }
 
 /** ApprovedLeavesStore of the month: { roll: number of approved leave days } */
