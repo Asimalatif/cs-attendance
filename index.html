@@ -4165,6 +4165,16 @@ async function monthlyRows(q, college){
   return rows;
 }
 const rowKey = r => normC(r.cls) + '|' + subK(r.sub) + '|' + r.mon;
+/* for the Registers add-on: the same rows as the Attendance report (monthly workbooks + daily app, as chosen in
+   "Attendance from"), plus the optional-subject sheet of the section (F.A-1 A -> F.A-1 Optional Subjects) */
+window.JCWROWS = async q => {
+  let rows = await getRows(q);
+  const base = q.cls ? String(q.cls).split(' ')[0] : '';
+  if(q.cls && base !== q.cls && !/optional/i.test(q.cls)){
+    try{ rows = rows.concat(await getRows(Object.assign({}, q, { cls:base + ' Optional Subjects' }))); }catch(e){}
+  }
+  return rows;
+};
 function mergeRows(daily, monthly){
   const D = {}; daily.forEach(r => { D[rowKey(r)] = r; });
   const out = [], used = {};
@@ -6968,6 +6978,7 @@ const monthsIn = (f, t) => SEAS.slice(SEAS.indexOf(f), SEAS.indexOf(t) + 1);
 /* "All sections" of one program / program + class: zr.only = the section list (optional-subject sheets of those classes count too) */
 const inOnly = c => !zr.only || zr.only.includes(c) || (/optional/i.test(c) && zr.only.some(x => String(c).indexOf(String(x).split(' ')[0]) === 0));
 const allName = () => zr.glabel || allLabel();
+const clsK = c => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
 /* ---------- server ---------- */
 async function call(payload, ms){
@@ -7258,7 +7269,8 @@ async function buildCards(){
   const all = zr.cls === '*';
   setProg(all ? 'Reading every section… (can take a minute)' : 'Reading the section…', 20);
   const q = all ? { from:zr.from, to:zr.to } : { from:zr.from, to:zr.to, cls:zr.cls };
-  const S = sortStu(model(await reportRows(q))).filter(s => !all || inOnly(s.cls));
+  const rows = window.JCWROWS ? await window.JCWROWS(q) : await reportRows(q);      // monthly workbooks + daily app
+  const S = sortStu(model(rows)).filter(s => all ? inOnly(s.cls) : clsK(s.cls) === clsK(zr.cls));   // students of an optional sheet who belong to another section are left out
   if(!S.length) throw new Error(all ? 'No students found for these sections.' : 'No students found for this section.');
   setProg('Making ' + S.length + ' pages…', 80);
   await new Promise(res => setTimeout(res, 30));
