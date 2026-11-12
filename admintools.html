@@ -187,7 +187,7 @@ table.tt td.tt-miss{background:#FDECEA!important}table.tt td.tt-miss .tt-t{color
   <section data-p="merit" class="hidden">
     <div class="card">
       <h2>Stopping merit</h2>
-      <div class="note" style="margin:6px 0 10px">From <b>Portal backup</b>: open quota, 1st Year only. Merit % = (obtained + 20 if Hafiz-e-Quran) ÷ original total × 100,
+      <div class="note" style="margin:6px 0 10px">From <b>Transform-ALL-COLLEGE-STRENGTH</b>: open quota, 1st Year only. Merit % = (obtained + 20 if Hafiz-e-Quran) ÷ original total × 100,
         also shown on the common 1200 scale. Writes the <b>Stopping Merit</b> sheet (program · category · sections · last admitted student).</div>
       <div class="bar" style="margin:0">
         <button class="btn p adm" id="meritRun">Generate stopping merit</button>
@@ -574,13 +574,18 @@ let COMBOS = null;
 function faCombos(){
   if(COMBOS) return COMBOS;
   const src = (STU && STU.faCombos && STU.faCombos.rows) || [], seen = new Set(); COMBOS = [];
+  const known = new Set(); (STU ? STU.rows : []).forEach(r => (r.sub || []).forEach(x => { if(x && !isComp(x)) known.add(subKey(x)); }));
   src.forEach(r => {
-    let cells = [];
-    r.forEach(c => String(c).split(/\s*[,+|\/]\s*|\s+-\s+|\n/).forEach(x => { x = String(x).trim(); if(x && !/^\d+(\.\d+)?%?$/.test(x)) cells.push(x); }));
-    if(cells.some(x => /^(s\.?\s*no|sr|#|sub(ject)?s?\s*\d*|combination|group|options?|optional.*|total|strength|count)$/i.test(x))) return;   /* header row */
-    cells = cells.filter(x => !isComp(x)).map(x => x.toUpperCase());
-    if(cells.length < 2) return;
-    const k = cells.slice().sort().join('|'); if(seen.has(k)) return; seen.add(k); COMBOS.push(cells);
+    const cells = [].concat(...r.map(c => String(c).split(/\s*[,+|]\s*|\n/))).map(x => x.trim()).filter(Boolean);
+    if(cells.some(x => /^(s\.?\s*no|sr|#|sub(ject)?s?\s*\d*|combination|group|options?|optional.*)$/i.test(x))) return;   /* header row */
+    const fi = cells.findIndex(x => known.has(subKey(x)));                       /* full subject names start here (CIVICS, HISTORY …); codes (HIS, G.MATH) come before */
+    let subs = fi >= 0 ? cells.slice(fi).filter(x => !isComp(x) && !/^\d+(\.\d+)?%?$/.test(x)) : [];
+    if(subs.length < 2) subs = cells.filter(x => x.length >= 4 && !/[\d.]/.test(x) && !isComp(x));
+    subs = [...new Set(subs.map(x => x.toUpperCase()))];
+    if(subs.length < 2) return;
+    const grp = cells.find(x => /^G\s*\d+/i.test(x)), code = grp ? grp.replace(/[.\s].*$/, '') : '';
+    const k = subs.slice().sort().join('|'); if(seen.has(k)) return; seen.add(k);
+    COMBOS.push(Object.assign(subs, { code }));
   });
   return COMBOS;
 }
@@ -590,12 +595,12 @@ function fillCombo(){
   if(!list.length) return;
   const mine = optOf(ED).map(x => subKey(x)).sort().join('|');
   $('edCombo').innerHTML = '<option value="">— choose a combination to change the optional subjects —</option>'
-    + list.map((c, i) => `<option value="${i}" ${c.map(subKey).sort().join('|') === mine ? 'selected' : ''}>${esc(c.join(', '))}</option>`).join('');
+    + list.map((c, i) => `<option value="${i}" ${c.map(subKey).sort().join('|') === mine ? 'selected' : ''}>${c.code ? esc(c.code) + ' \u2014 ' : ''}${esc(c.join(', '))}</option>`).join('');
 }
 $('edCombo').onchange = () => {
   const c = faCombos()[+$('edCombo').value]; if(!c) return;
   const f = $('edForm'), cur = []; for(let i = 0; i < 7; i++) cur.push(f.elements['sub' + i].value.trim());
-  const comp = cur.filter(x => x && isComp(x)), next = comp.concat(c).slice(0, 7);
+  const comp = cur.filter(x => x && isComp(x)), next = comp.concat([...c]).slice(0, 7);
   for(let i = 0; i < 7; i++) f.elements['sub' + i].value = next[i] || '';
 };
 
@@ -754,7 +759,7 @@ function drawOrient(){
   g.forEach(grp => {
     h += `<div class="sec olist"><h3><span>${esc(grp.title)}</span><span class="n" style="background:var(--surface2);color:var(--brown)">${grp.n}</span></h3><div class="scroll">`;
     if(OR_MODE === 'board'){
-      h += `<table><thead><tr><th>S#</th><th>Student name</th><th>Father name</th><th>Enroll#</th><th>PCS</th><th>Room</th>${grp.arts ? '<th>Optional subjects</th>' : ''}</tr></thead><tbody>`
+      h += `<table><thead><tr><th style="width:44px">S#</th><th>Student name</th><th style="width:${grp.arts ? 16 : 22}%">Father name</th><th style="width:120px">Enroll#</th><th style="width:80px">PCS</th><th style="width:100px">Room</th>${grp.arts ? '<th style="width:34%">Optional subjects</th>' : ''}</tr></thead><tbody>`
         + grp.rows.map((r, i) => `<tr${hit(r)}><td class="c">${i + 1}</td><td><b>${esc(r.n)}</b></td><td>${esc(r.f)}</td><td class="c">${esc(r.e)}</td><td class="c">${esc(r.pcs)}</td><td class="c">${esc(roomOf(r))}</td>${grp.arts ? '<td>' + esc(subjOf(r)) + '</td>' : ''}</tr>`).join('') + '</tbody></table>';
     } else {
       grp.parts.forEach(pt => {
@@ -788,7 +793,7 @@ $('orPdf').onclick = () => busy(null, 'Making the PDF…', async () => {
         styles:{ font:'helvetica', fontSize:grp.arts ? 8.6 : 8.8, cellPadding:{ top:0.9, bottom:0.9, left:1.4, right:1.4 }, textColor:[0, 0, 0], lineColor:[90, 90, 90], lineWidth:0.15, fillColor:false, minCellHeight:grp.arts ? 8 : 0, valign:'middle' },
         alternateRowStyles:{ fillColor:false }, headStyles:{ fillColor:C.NAVY, textColor:[255, 255, 255], fontStyle:'bold', halign:'center', fontSize:8.6 },
         columnStyles:grp.arts
-          ? { 0:{ halign:'center', cellWidth:9 }, 1:{ fontStyle:'bold', cellWidth:48 }, 2:{ cellWidth:42 }, 3:{ halign:'center', cellWidth:27 }, 4:{ halign:'center', cellWidth:17 }, 5:{ halign:'center', cellWidth:20 }, 6:{ cellWidth:58 }, 7:{ cellWidth:52 } }
+          ? { 0:{ halign:'center', cellWidth:9 }, 1:{ fontStyle:'bold', cellWidth:46 }, 2:{ cellWidth:34 }, 3:{ halign:'center', cellWidth:27 }, 4:{ halign:'center', cellWidth:17 }, 5:{ halign:'center', cellWidth:20 }, 6:{ cellWidth:76 }, 7:{ cellWidth:44 } }
           : { 0:{ halign:'center', cellWidth:9 }, 1:{ fontStyle:'bold', cellWidth:52 }, 2:{ cellWidth:48 }, 3:{ halign:'center', cellWidth:27 }, 4:{ halign:'center', cellWidth:22 }, 5:{ halign:'center', cellWidth:28 } },
         didDrawPage:d => { const pn = doc.internal.getCurrentPageInfo().pageNumber; if(pn > startPage){ doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...C.NAVY); doc.text(grp.title + ' (continued)', 12, 8.5); } } });
     } else {
@@ -812,7 +817,7 @@ $('orXlsx').onclick = () => busy(null, 'Making the Excel file…', async () => {
   let sheets;
   if(OR_MODE === 'board') sheets = g.map(grp => ({ name:grp.title, title:grp.title + ' — ' + $('orCls').value + ' (A–Z)',
     rows:[['S#', 'Student Name', 'Father Name', 'Enroll#', 'PCS', 'Room'].concat(grp.arts ? ['Optional subjects', 'New subjects (if changed)'] : [])].concat(grp.rows.map((r, i) => [i + 1, r.n, r.f, r.e, r.pcs, roomOf(r)].concat(grp.arts ? [subjOf(r), ''] : []))),
-    cols:[6, 30, 28, 16, 14, 16].concat(grp.arts ? [42, 36] : []) }));
+    cols:[6, 30, 22, 16, 14, 16].concat(grp.arts ? [52, 32] : []) }));
   else sheets = g.map(grp => { const rows = [], groupRows = [], headRows = [];
     grp.parts.forEach(part => { groupRows.push(rows.length); rows.push([part.band]); headRows.push(rows.length); rows.push(['S#', 'Enroll#', 'Student Name', 'Father Name']); part.rows.forEach((r, i) => rows.push([i + 1, r.e, r.n, r.f])); });
     return { name:grp.title.replace(/^PROGRAM:\s*/, ''), title:grp.title + ' — ' + $('orCls').value + ' orientation list', rows, groupRows, headRows, cols:[6, 16, 32, 32] }; });
