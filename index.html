@@ -7200,6 +7200,38 @@ async function buildDaily(){
 }
 
 /* ======================= shared: report_data -> students ======================= */
+/* ---------- monthly test marks: the real "<Month> - MONTHLY TEST" workbooks (server wr_marks), put over the app's rows ----------
+   wr_marks students: [roll, name, cls, { SUBJECT: [obtained | 'A', total] }] */
+const mtBookCache = {};
+async function mtBook(mon){
+  const c = mtBookCache[mon]; if(c && Date.now() - c.at < 10 * 60e3) return c.list;
+  let list = [];
+  try{ const r = await call({ action:'wr_marks', kind:'mt', mon }, 180000); list = r.students || []; }catch(e){ if(/Sign in/.test(e.message)) throw e; }
+  mtBookCache[mon] = { at:Date.now(), list }; return list;
+}
+async function testRows(q){
+  let rows = window.JCWROWS ? await window.JCWROWS(q) : await reportRows(q);
+  const mons = monthsIn(q.from, q.to), key = (c, sb) => clsK(c) + '|' + clsK(sb);
+  for(const mon of mons){
+    setProg('Reading the ' + monName(mon) + ' monthly test workbook…', 30 + Math.round(mons.indexOf(mon) / mons.length * 40));
+    const list = (await mtBook(mon)).filter(x => (!q.roll || x[0] === q.roll) && (!q.cls || clsK(x[2]) === clsK(q.cls)));
+    if(!list.length) continue;
+    const byKey = {}; rows.filter(r => r.mon === mon).forEach(r => { (byKey[clsK(r.sub)] = byKey[clsK(r.sub)] || []).push(r); });
+    const extra = {};
+    list.forEach(([roll, name, cls, marks]) => Object.keys(marks).forEach(sub => {
+      const [val, max] = marks[sub];
+      const hit = (byKey[clsK(sub)] || []).find(r => r.st.some(x => x[0] === roll));
+      if(hit){
+        const x = hit.st.find(y => y[0] === roll); x[4] = val; hit.mt = Math.max(Number(hit.mt) || 0, max);
+      } else {                                                       // subject with no attendance row this month: a row of its own
+        const k = key(cls, sub) + '|' + max, r = extra[k] = extra[k] || { cls, sub, teacher:'', mon, mt:max, st:[] };
+        r.st.push([roll, name, 0, 0, val, 0, '']);
+      }
+    }));
+    rows = rows.concat(Object.values(extra));
+  }
+  return rows;
+}
 async function reportRows(q){
   const r = await call(Object.assign({ action:'report_data' }, q), 180000);
   return r.rows || [];
@@ -7239,6 +7271,13 @@ function withLeaves(g, lv){
   Object.keys(g.months).forEach(t => { const m = g.months[t]; if(!m.off && m.d) a += Math.min(m.d, m.p + (lv[t] || 0)); });
   return a;
 }
+/* student band: big name, then Enroll#, class-section and months in boxes */
+function studentHead(doc, title, s, q){
+  const C = P.C, Y = P.TOP;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...C.MUTED); doc.text(title.toUpperCase(), 14, Y + 4);
+  doc.setFontSize(19); doc.setTextColor(...C.INK); doc.text(String(s.name || '-'), 14, Y + 12);
+  return P.infoGrid(doc, Y + 15, [['Enroll#', s.roll], ['Class - Section', s.cls + (s.guest ? ' (Guest from ' + s.guest + ')' : '')], ['Months', rangeTxt(q.from, q.to)]], 3) + 3;
+}
 function studentSessionPage(doc, s, mons, first, q, LVS){
   const C = P.C, subs = Object.values(s.subs).sort((a, b) => a.sub.localeCompare(b.sub)), live = subs.filter(g => !g.off);
   const lv = {}; mons.forEach(t => { const n = LVS && LVS[t] ? Number(LVS[t][s.roll]) || 0 : 0; if(n) lv[t] = n; });
@@ -7248,10 +7287,7 @@ function studentSessionPage(doc, s, mons, first, q, LVS){
   const gPL = live.reduce((a, g) => a + g.pL, 0), gpL = pct1(gPL, gD);
   const short = live.filter(g => g.d && (useLv ? g.pctL : g.pct) < LOW).length, gShow = useLv ? gpL : gp;
   if(!first) doc.addPage();
-  let Y = P.heading(doc, P.TOP, 'Student Session Attendance Register', 'Session attendance · ' + rangeTxt(q.from, q.to));
-  /* student band: big name, then Enroll#, class-section and months in boxes */
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(19); doc.setTextColor(...C.INK); doc.text(String(s.name || '-'), 14, Y + 5);
-  Y = P.infoGrid(doc, Y + 8, [['Enroll#', s.roll], ['Class - Section', s.cls + (s.guest ? ' (Guest from ' + s.guest + ')' : '')], ['Months', rangeTxt(q.from, q.to)]], 3) + 4;
+  let Y = studentHead(doc, 'Student Session Attendance Register', s, q);
   Y = P.statBoxes(doc, Y, [
     { l:useLv ? 'Overall with approved leaves' : 'Overall attendance', v:gShow == null ? '-' : gShow + '%', c:gShow != null && gShow < LOW ? C.RED : C.GREEN, bg:gShow != null && gShow < LOW ? C.REDBG : C.GREENBG },
     { l:'Present / Held' + (useLv ? ' · ' + (gp == null ? '-' : gp + '%') + ' without leaves' : ''), v:gP + ' / ' + gD }]
@@ -7363,7 +7399,7 @@ function summaryResultPage(doc, list, subs, q){
 function studentResultPage(doc, s, mons, q, first, place){
   const C = P.C, subs = Object.keys(s.subs).sort(), G = grand(s, subs);
   if(!first) doc.addPage();
-  let Y = P.heading(doc, P.TOP, 'Student Monthly Test Report', s.name + '  ·  ' + s.roll + '  ·  ' + s.cls + '  ·  ' + rangeTxt(q.from, q.to));
+  let Y = studentHead(doc, 'Student Monthly Test Report', s, q);
   Y = P.statBoxes(doc, Y, [
     { l:'Overall test %', v:G.p == null ? '-' : G.p + '%', c:G.p != null && G.p < TEST_LOW ? C.RED : C.GREEN, bg:G.p != null && G.p < TEST_LOW ? C.REDBG : C.GREENBG },
     { l:'Obtained / Total', v:G.t ? G.o + ' / ' + G.t : '-' },
@@ -7390,12 +7426,12 @@ async function buildTests(everyStudent){
   const mons = monthsIn(zr.from, zr.to), doc = P.newDoc('landscape');
   if(zr.who === 'stu'){
     setProg('Reading the student’s tests…', 20);
-    const mine = model(await reportRows({ from:zr.from, to:zr.to, roll:zr.roll }))[zr.roll];
+    const mine = model(await testRows({ from:zr.from, to:zr.to, roll:zr.roll }))[zr.roll];
     if(!mine) throw new Error('No monthly test data found for this student.');
     setProg('Working out the class position…', 55);
     let place = null;
     try{
-      const S = model(await reportRows({ from:zr.from, to:zr.to, cls:mine.cls })), subs = [...new Set(Object.values(S).flatMap(s => Object.keys(s.subs)))];
+      const S = model(await testRows({ from:zr.from, to:zr.to, cls:mine.cls })), subs = [...new Set(Object.values(S).flatMap(s => Object.keys(s.subs)))];
       const rk = ranks(Object.values(S).map(s => ({ k:s.roll, v:grand(s, subs).p })));
       if(rk.pos[zr.roll]) place = { pos:rk.pos[zr.roll], of:rk.of };
     }catch(e){}
@@ -7405,7 +7441,7 @@ async function buildTests(everyStudent){
   }
   if(zr.cls === '*'){
     setProg('Reading the tests of every section… (can take a minute)', 20);
-    const S0 = sortStu(model(await reportRows({ from:zr.from, to:zr.to }))).filter(s => inOnly(s.cls));
+    const S0 = sortStu(model(await testRows({ from:zr.from, to:zr.to }))).filter(s => inOnly(s.cls));
     const bySec = {}; S0.forEach(s => { (bySec[s.cls] = bySec[s.cls] || []).push(s); });
     const secs = Object.keys(bySec).filter(c => !/optional/i.test(c)).sort((a, b) => a.localeCompare(b, undefined, { numeric:true }));
     setProg('Making the PDF…', 80);
@@ -7431,7 +7467,7 @@ async function buildTests(everyStudent){
   }
   setProg('Reading the section’s tests…', 20);
   const q = { from:zr.from, to:zr.to, cls:zr.cls };
-  const S = sortStu(model(await reportRows(q)));
+  const S = sortStu(model(await testRows(q))).filter(s => clsK(s.cls) === clsK(zr.cls));
   if(!S.length) throw new Error('No students found for this section.');
   const subsAll = [...new Set(S.flatMap(s => Object.keys(s.subs)))].sort();
   if(!subsAll.some(x => S.some(s => s.subs[x] && s.subs[x].t))) throw new Error('No monthly test marks are entered for this section in the chosen months.');
