@@ -107,6 +107,16 @@ tr.hit td{background:#FFF2B3!important}
 .tag .hd{background:var(--brown);color:#fff;text-align:center;padding:8px;font-weight:900;font-size:16px}
 .tag .sub{display:flex;justify-content:space-between;padding:5px 10px;font-weight:800;font-size:12.5px;color:var(--brown);background:var(--surface2)}
 .tag table{font-size:11.5px}.tag th{font-size:10.5px}
+.tt-title{background:var(--surface2);color:var(--brown);font-weight:900;text-align:center;padding:10px;font-size:16px;letter-spacing:.3px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+table.tt{font-size:12.5px;table-layout:fixed;min-width:900px}
+table.tt th{text-transform:none;white-space:normal;line-height:1.25}
+table.tt th span{display:block;font-size:15px}table.tt th small{display:block;font-weight:600;opacity:.85;font-size:11px}
+table.tt th.tt-rm,table.tt td.tt-rm{width:92px}table.tt th.tt-sec,table.tt td.tt-sec{width:96px}
+table.tt td{text-align:left;vertical-align:top;padding:6px 8px;background:var(--surface)!important}
+table.tt td.tt-rm,table.tt td.tt-sec{background:var(--surface2)!important;color:var(--brown);font-weight:800;text-align:center;vertical-align:middle}
+table.tt tr.first td{border-top:2.5px solid var(--brown2)}
+.tt-s{font-weight:800;color:var(--ink)}.tt-t{font-size:12px}.tt-d{font-size:11px;color:var(--muted);font-weight:700;margin-top:1px}
+table.tt td.tt-miss{background:#FDECEA!important}table.tt td.tt-miss .tt-t{color:var(--neg);font-weight:700}
 </style>
 </head>
 <body>
@@ -143,8 +153,9 @@ tr.hit td{background:#FFF2B3!important}
       <div class="chips" id="autoProgs"></div>
       <div class="bar" style="margin:0">
         <label>Stream label <input id="autoStream" value="F.SC" style="width:90px"></label>
+        <label>Session <input id="autoSession" style="width:90px" title="Printed in the title, e.g. F.SC - I TIME TABLE (2026-27)"></label>
         <button class="btn p adm" id="autoRun">Generate AutoTimetable</button>
-        <button class="btn" id="autoLoad">Show last sheet</button>
+        <button class="btn" id="autoLoad" title="Shows the AutoTimetable sheet that is already in the workbook (made last time) without making it again">Open saved sheet</button>
         <span class="grow"></span>
         <button class="btn out" data-k="auto" data-f="pdf" disabled>PDF</button>
         <button class="btn out" data-k="auto" data-f="xlsx" disabled>Excel</button>
@@ -163,7 +174,7 @@ tr.hit td{background:#FFF2B3!important}
       <div class="bar" style="margin:0">
         <button class="btn p adm" id="workRun">Generate workload</button>
         <button class="btn adm" id="workXlsx">Only re-export Drive Excel</button>
-        <button class="btn" id="workLoad">Show last sheets</button>
+        <button class="btn" id="workLoad" title="Shows the 3 workload sheets that are already in the workbook (made last time) without calculating again">Open saved sheets</button>
         <span class="grow"></span>
         <button class="btn out" data-k="work" data-f="pdf" disabled>PDF</button>
         <button class="btn out" data-k="work" data-f="xlsx" disabled>Excel</button>
@@ -180,7 +191,7 @@ tr.hit td{background:#FFF2B3!important}
         also shown on the common 1200 scale. Writes the <b>Stopping Merit</b> sheet (program · category · sections · last admitted student).</div>
       <div class="bar" style="margin:0">
         <button class="btn p adm" id="meritRun">Generate stopping merit</button>
-        <button class="btn" id="meritLoad">Show last sheet</button>
+        <button class="btn" id="meritLoad" title="Shows the Stopping Merit sheet that is already in the workbook (made last time) without calculating again">Open saved sheet</button>
         <span class="grow"></span>
         <button class="btn out" data-k="merit" data-f="pdf" disabled>PDF</button>
         <button class="btn out" data-k="merit" data-f="xlsx" disabled>Excel</button>
@@ -333,6 +344,7 @@ async function start(){
       `<label class="${ticked.has(p) ? 'on' : ''}"><input type="checkbox" value="${esc(p)}" ${ticked.has(p) ? 'checked' : ''}>${esc(p)}</label>`).join('');
     chipToggle($('autoProgs'));
     $('autoStream').value = META.auto.streamLabel || 'F.SC';
+    $('autoSession').value = META.session || '';
     const t = (location.hash || '').slice(1); const tb = document.querySelector('#tabs button[data-t="' + t + '"]'); if(tb) tb.click();
   }catch(e){ status(esc(e.message), 'err'); }
 }
@@ -349,7 +361,7 @@ function showSheets(k){
     $('workBox').innerHTML = s.missing ? '<div class="empty"><b>Sheet “' + esc(s.name) + '” not found</b>Generate the workload first.</div>' : JCW.sheetHtml(s, 400);
   } else {
     const s = list[0];
-    $(k + 'Box').innerHTML = s.missing ? '<div class="empty"><b>Sheet “' + esc(s.name) + '” not found</b>Generate it first.</div>' : JCW.sheetHtml(s, 400);
+    $(k + 'Box').innerHTML = s.missing ? '<div class="empty"><b>Sheet “' + esc(s.name) + '” not found</b>Generate it first.</div>' : k === 'auto' ? autoHtml(s) : JCW.sheetHtml(s, 400);
   }
   $(k + 'Out').classList.remove('hidden');
   if(miss.length && miss.length === list.length) status('Not made yet: ' + esc(miss.join(', ')), 'err');
@@ -372,7 +384,7 @@ async function run(k, payload, msg){
 $('autoRun').onclick = () => {
   const progs = [...$('autoProgs').querySelectorAll('input:checked')].map(i => i.value);
   if(!progs.length) return status('Tick at least one program.', 'err');
-  run('auto', { tool:'auto', programs:progs, streamLabel:$('autoStream').value.trim() }, 'Generating the AutoTimetable sheet…');
+  run('auto', { tool:'auto', programs:progs, streamLabel:$('autoStream').value.trim(), session:$('autoSession').value.trim() }, 'Generating the AutoTimetable sheet…');
 };
 $('autoLoad').onclick = () => loadSheets('auto', [META ? META.auto.target : 'AutoTimetable']);
 $('workRun').onclick = () => run('work', { tool:'workload' }, 'Calculating the workload of every teacher…');
@@ -384,6 +396,12 @@ $('meritLoad').onclick = () => loadSheets('merit', ['Stopping Merit']);
 const NAMES = { auto:['Auto timetable', 'JCW_AutoTimetable'], work:['Teacher workload', 'JCW_Workload'], merit:['Stopping merit', 'JCW_Stopping_Merit'] };
 document.querySelectorAll('.out').forEach(b => b.onclick = () => busy(null, 'Making the file…', async () => {
   const k = b.dataset.k, list = SHEETS[k].filter(s => !s.missing), d = new Date().toISOString().slice(0, 10);
+  if(k === 'auto'){
+    const s = list[0];
+    if(b.dataset.f === 'pdf'){ const doc = await autoPdf(s); status(''); JCW.offer(doc.output('blob'), NAMES[k][1] + '_' + d + '.pdf', NAMES[k][0], { folder:'JCW Admin Reports' }); }
+    else { const f = await autoXlsx(s, NAMES[k][1] + '_' + d + '.xlsx'); status(''); JCW.offer(f.blob, f.name, NAMES[k][0], { folder:'JCW Admin Reports' }); }
+    return;
+  }
   if(b.dataset.f === 'pdf'){
     await JCW.libs();
     const wide = list.some(s => { const px = (s.widths || []).reduce((a, x) => a + x, 0) * 0.2646; return px > 230; });
@@ -398,6 +416,86 @@ document.querySelectorAll('.out').forEach(b => b.onclick = () => busy(null, 'Mak
     JCW.offer(f.blob, f.name, NAMES[k][0], { folder:'JCW Admin Reports' });
   }
 }));
+
+/* ---------- AutoTimetable: read the sheet back into classes -> sections -> period slots ---------- */
+function parseAuto(sd){
+  const V = sd.values || [], n = sd.n || 0, T = x => String(x == null ? '' : x).trim();
+  const roman = /^(I|II|III|IV|V|VI|VII|VIII|IX|X)$/;
+  let periods = [], firstCol = 2;
+  for(let r = 0; r < V.length - 1 && !periods.length; r++){
+    const cells = V[r].slice(2).map(T);
+    if(cells.filter(Boolean).length && cells.filter(Boolean).every(x => roman.test(x)))
+      periods = cells.map((x, i) => ({ roman:x, time:T(V[r + 1][i + 2]) })).filter(p => p.roman);
+  }
+  const blockAt = {}; (sd.merges || []).forEach(m => { if(m[1] === 0 && m[3] === 1 && m[2] > 1) blockAt[m[0]] = m[2]; });
+  const classes = []; let cur = null;
+  for(let r = 0; r < V.length; r++){
+    const a = T(V[r][0]);
+    if(/TIME\s*TABLE/i.test(a)){ cur = { title:a, blocks:[] }; classes.push(cur); continue; }
+    if(!(r in blockAt)) continue;
+    const rs = blockAt[r], b = { room:a, pcs:T(V[r][1]), lines:[] };
+    for(let k = 0; k + 2 < rs + 2 && r + k < V.length; k += 3){
+      const line = periods.map((p, i) => { const c = i + firstCol, s = T(V[r + k][c]), t = T((V[r + k + 1] || [])[c]), d = T((V[r + k + 2] || [])[c]); return s || t || d ? { s, t, d } : null; });
+      if(line.some(Boolean)) b.lines.push(line);
+    }
+    if(!cur){ cur = { title:'TIME TABLE', blocks:[] }; classes.push(cur); }
+    cur.blocks.push(b); r += rs - 1;
+  }
+  return { periods, classes };
+}
+function autoHtml(sd){
+  const A = parseAuto(sd);
+  if(!A.classes.length || !A.periods.length) return JCW.sheetHtml(sd, 400);
+  const cell = x => !x ? '<td class="tt-e"></td>' : `<td class="${x.s && !x.t ? 'tt-miss' : ''}"><div class="tt-s">${esc(x.s)}</div><div class="tt-t">${x.t ? esc(x.t) : (x.s ? 'Teacher not set' : '')}</div>${x.d ? '<div class="tt-d">' + esc(x.d) + '</div>' : ''}</td>`;
+  return A.classes.map(c => `<div class="tt-title">${esc(c.title)}</div><div class="scroll"><table class="tt"><thead><tr><th class="tt-rm">Room</th><th class="tt-sec">Section</th>${A.periods.map(p => `<th><span>${esc(p.roman)}</span><small>${esc(p.time)}</small></th>`).join('')}</tr></thead><tbody>`
+    + c.blocks.map((b, bi) => b.lines.map((ln, li) => `<tr class="${bi % 2 ? 'odd' : ''}${li === 0 ? ' first' : ''}">${li === 0 ? `<td class="tt-rm" rowspan="${b.lines.length}">${esc(b.room.replace(/^R\s*#\s*/i, 'Room # '))}</td><td class="tt-sec" rowspan="${b.lines.length}">${esc(b.pcs)}</td>` : ''}${ln.map(cell).join('')}</tr>`).join('')).join('')
+    + '</tbody></table></div>').join('');
+}
+/* app-style PDF: one class per landscape page, every cell = subject (bold) / teacher / days */
+async function autoPdf(sd){
+  const A = parseAuto(sd); if(!A.classes.length) throw new Error('The AutoTimetable sheet has no sections.');
+  await JCW.libs();
+  const doc = JCW.newDoc('landscape'), C = JCW.C, np = A.periods.length;
+  const wTot = 297 - 24, wRoom = 22, wSec = 24, wP = (wTot - wRoom - wSec) / np;
+  A.classes.forEach((c, ci) => {
+    if(ci) doc.addPage('a4', 'landscape');
+    const Y = JCW.heading(doc, JCW.TOP, c.title, c.blocks.length + ' sections · subject / teacher / days of every period');
+    const body = [];
+    c.blocks.forEach((b, bi) => b.lines.forEach((ln, li) => {
+      const row = [];
+      if(li === 0){
+        row.push({ content:b.room.replace(/^R\s*#\s*/i, 'Room # '), rowSpan:b.lines.length, styles:{ fontStyle:'bold', fillColor:C.SOFT, textColor:C.NAVY, halign:'center' } });
+        row.push({ content:b.pcs, rowSpan:b.lines.length, styles:{ fontStyle:'bold', fillColor:C.SOFT, textColor:C.NAVY, halign:'center', fontSize:10 } });
+      }
+      ln.forEach(x => row.push({ content:x ? [x.s, x.t || (x.s ? 'Teacher not set' : ''), x.d].filter(v => v !== '').join('\n') : '', raw:x, styles:x && x.s && !x.t ? { fillColor:[253, 236, 234] } : {} }));
+      body.push(row);
+    }));
+    doc.autoTable({ startY:Y, margin:{ top:14, left:12, right:12, bottom:14 }, theme:'grid', rowPageBreak:'avoid', showHead:'everyPage',
+      head:[['Room', 'Section'].concat(A.periods.map(p => p.roman + '\n' + p.time))],
+      body, columnStyles:Object.assign({ 0:{ cellWidth:wRoom }, 1:{ cellWidth:wSec } }, ...A.periods.map((p, i) => ({ [i + 2]:{ cellWidth:wP } }))),
+      styles:{ font:'helvetica', fontSize:8.6, cellPadding:{ top:1.3, bottom:1.3, left:1.8, right:1.8 }, lineColor:C.LINE, lineWidth:0.25, textColor:C.INK, valign:'middle' },
+      headStyles:{ fillColor:C.NAVY, textColor:[255, 255, 255], fontStyle:'bold', halign:'center', fontSize:9 },
+      willDrawCell:d => { if(d.section === 'body' && d.cell.raw && d.cell.raw.raw !== undefined){ d.cell._lines = d.cell.text; d.cell.text = []; } },
+      didDrawCell:d => {
+        if(d.section !== 'body' || !d.cell._lines) return;
+        const x = d.cell.raw.raw; if(!x) return;
+        const lh = 3.6, lines = [[x.s, 'bold', 8.8, C.INK], [x.t || (x.s ? 'Teacher not set' : ''), 'normal', 8.2, x.t ? C.INK : C.RED], [x.d, 'normal', 7.6, C.MUTED]].filter(l => l[0]);
+        let y = d.cell.y + d.cell.height / 2 - (lines.length - 1) * lh / 2 + 1.1;
+        lines.forEach(l => { doc.setFont('helvetica', l[1]); doc.setFontSize(l[2]); doc.setTextColor(...l[3]); doc.text(doc.splitTextToSize(String(l[0]), d.cell.width - 3)[0], d.cell.x + 1.8, y); y += lh; });
+      } });
+  });
+  return JCW.finalize(doc);
+}
+async function autoXlsx(sd, name){
+  const A = parseAuto(sd); if(!A.classes.length) throw new Error('The AutoTimetable sheet has no sections.');
+  const rows = [], groupRows = [], headRows = [];
+  A.classes.forEach(c => {
+    groupRows.push(rows.length); rows.push([c.title]);
+    headRows.push(rows.length); rows.push(['Room', 'Section'].concat(A.periods.map(p => p.roman + '  ' + p.time)));
+    c.blocks.forEach(b => b.lines.forEach((ln, li) => rows.push([li ? '' : b.room, li ? '' : b.pcs].concat(ln.map(x => x ? [x.s, x.t || (x.s ? 'TEACHER NOT SET' : ''), x.d].filter(Boolean).join('\n') : '')))));
+  });
+  return JCW.xlsx([{ name:'AutoTimetable', title:'Auto timetable — Jinnah College for Women', rows, groupRows, headRows, cols:[14, 14].concat(A.periods.map(() => 30)) }], name);
+}
 
 /* ---------- students (slips + orientation) ---------- */
 const natCmp = (a, b) => String(a).localeCompare(String(b), undefined, { numeric:true, sensitivity:'base' });

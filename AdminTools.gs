@@ -65,6 +65,12 @@ function atRoute_(user, req) {
   }
 }
 
+/** current session, e.g. 2026-27 (the one the admin set on the Shortage page, else from today's date) */
+function at_session_() {
+  try { return gtSession_(); } catch (e) {}
+  var d = new Date(), y = d.getMonth() >= 7 ? d.getFullYear() : d.getFullYear() - 1;
+  return y + '-' + String(y + 1).slice(-2);
+}
 function at_meta_(admin) {
   var ss = at_ss_(), names = ss.getSheets().map(function (s) { return s.getName(); });
   var progs = [];
@@ -80,7 +86,7 @@ function at_meta_(admin) {
   return {
     admin: admin, url: ss.getUrl(), workbook: ss.getName(), sheets: names, programs: progs.sort(),
     auto: { programs: AUTO_CFG.programs, streamLabel: AUTO_CFG.streamLabel, target: AUTO_CFG.targetSheet },
-    workloadSheets: AT_CFG.WORKLOAD_SHEETS
+    workloadSheets: AT_CFG.WORKLOAD_SHEETS, session: at_session_()
   };
 }
 
@@ -91,6 +97,7 @@ function at_run_(req) {
     AT_AUTO_OVERRIDE = {};
     if (Array.isArray(req.programs) && req.programs.length) AT_AUTO_OVERRIDE.programs = req.programs.map(String);
     if (req.streamLabel) AT_AUTO_OVERRIDE.streamLabel = String(req.streamLabel);
+    AT_AUTO_OVERRIDE.session = String(req.session || at_session_());
     generateAutoTimetable();
     out.sheets = at_readMany_([AUTO_CFG.targetSheet]);
   } else if (tool === 'workload') {
@@ -401,7 +408,7 @@ function generateAutoTimetable() {
 
   // ================= GROUP: class -> section (PCS) -> period -> entries =================
   const byClass = {};
-  let session = '';
+  let session = cfg.session || '';                      // admin tools page: the current session
   let maxPeriod = 0;
 
   for (let r = 1; r < data.length; r++) {
