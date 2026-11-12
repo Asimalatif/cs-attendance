@@ -177,6 +177,26 @@ function at_faCombos_() {
   } catch (e) { return { sheet: '', rows: [], error: String(e.message || e) }; }
 }
 
+/* ---------- stopping merit: only OPEN QUOTA students. Every quota / category column of Portal backup must say "open",
+   and the student's Quota in Transform-ALL-COLLEGE-STRENGTH (by Enroll#) must also be open when she is found there ---------- */
+var AT_SM_MEMO = null;
+function at_smIsOpen_(row, headers, enrollment) {
+  if (!AT_SM_MEMO) {
+    var qc = [];
+    headers.forEach(function (h, i) { if (/quota/i.test(String(h)) || /^\s*category\s*$/i.test(String(h))) qc.push(i); });
+    var tq = {};
+    try {
+      var sh = at_ss_().getSheetByName(AT_CFG.STRENGTH), v = sh.getDataRange().getDisplayValues(), C = at_cols_(v[0]);
+      if (C.q >= 0) for (var r = 1; r < v.length; r++) { var e = String(v[r][C.e] || '').trim().toUpperCase(); if (e) tq[e] = String(v[r][C.q] || '').trim(); }
+    } catch (e) {}
+    AT_SM_MEMO = { qc: qc, tq: tq };
+  }
+  var vals = AT_SM_MEMO.qc.map(function (i) { return String(row[i] == null ? '' : row[i]).trim(); }).filter(String);
+  var t = AT_SM_MEMO.tq[String(enrollment || '').trim().toUpperCase()];
+  if (t) vals.push(t);
+  return vals.length > 0 && vals.every(function (x) { return /\bOPEN\b/i.test(x); });
+}
+
 /* ---------- room of every section from the Timetable sheet (the room used most by that section) ---------- */
 function at_key_(v) { return String(v == null ? '' : v).toUpperCase().replace(/[^A-Z0-9]/g, ''); }
 function at_ttRooms_() {
@@ -4282,7 +4302,7 @@ function generateJCWStoppingMeritReport() {
     FA: {
       key: "FA",
       program: "F.A",
-      category: "F.A",
+      category: "SUBSIDIZED (M)",
       sections: "All Sections",
       records: []
     },
@@ -4290,7 +4310,7 @@ function generateJCWStoppingMeritReport() {
     FCS: {
       key: "FCS",
       program: "FCS",
-      category: "FCS",
+      category: "SUBSIDIZED (M)",
       sections: "All Sections",
       records: []
     },
@@ -4322,7 +4342,7 @@ function generateJCWStoppingMeritReport() {
     PRE_ENG: {
       key: "PRE_ENG",
       program: "Pre-Engineering",
-      category: "Pre-Engineering",
+      category: "SUBSIDIZED (M)",
       sections: "All Sections",
       records: []
     }
@@ -4423,8 +4443,7 @@ function generateJCWStoppingMeritReport() {
     // ---------------------------------------------------------------
 
     if (
-      jcwSMNormalizeText_(category) !==
-      "OPEN QUOTA"
+      !at_smIsOpen_(row, headers, enrollment)        // admin tools: open quota only (Portal backup + Transform quota)
     ) {
 
       continue;
@@ -5382,6 +5401,8 @@ function generateJCWStoppingMeritReport() {
       headersOutput.length
     )
     .createFilter();
+
+  reportSheet.deleteColumn(11);                        // admin tools: no DIVISION column
 
 
   // -------------------------------------------------------------------
