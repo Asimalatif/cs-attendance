@@ -4039,7 +4039,7 @@ function generateJCWStoppingMeritReport() {
 
   const ss = at_ss_();
 
-  const SOURCE_SHEET_NAME = "Portal backup";
+  const SOURCE_SHEET_NAME = AT_CFG.STRENGTH;            // admin tools: Transform-ALL-COLLEGE-STRENGTH (was "Portal backup")
   const REPORT_SHEET_NAME = "Stopping Merit";
 
   const TARGET_CLASS = "1st Year";
@@ -4166,7 +4166,9 @@ function generateJCWStoppingMeritReport() {
       "Obtain Marks/CGPA",
       "Obtained Marks/CGPA",
       "Obtain Marks",
-      "Obtained Marks"
+      "Obtained Marks",
+      "Marks Obtained",
+      "Obtained"
     ]
   );
 
@@ -4176,7 +4178,8 @@ function generateJCWStoppingMeritReport() {
     [
       "Total Marks/CGPA",
       "Total Marks",
-      "Total Marks / CGPA"
+      "Total Marks / CGPA",
+      "Total"
     ]
   );
 
@@ -4198,7 +4201,8 @@ function generateJCWStoppingMeritReport() {
       "Percentage Marks",
       "Percentage",
       "%age"
-    ]
+    ],
+    false
   );
 
 
