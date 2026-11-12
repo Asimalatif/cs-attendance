@@ -465,7 +465,7 @@ async function makePdf(file, title, sub, sections){
   let y = 17 + subL.length * 3.6 + 1;
   sections.forEach(sec => {
     if (sec.title) { if (y > H - 25) { doc.addPage(); y = 12; } doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(107, 52, 35); doc.text(sec.title, 10, y + 3); y += 5; }
-    doc.autoTable({ startY: y, head: [sec.head], body: sec.body, theme: 'grid', margin: { left: 8, right: 8, top: 10, bottom: 10 },
+    doc.autoTable({ startY: y, head: [sec.head], body: sec.body, theme: 'grid', margin: { left: 8, right: 8, top: 10, bottom: 10 }, tableWidth: sec.width || 'auto',
       styles: { fontSize: 7, cellPadding: 0.8, lineColor: [201, 167, 158], lineWidth: 0.1, textColor: 30, overflow: 'linebreak' },
       headStyles: { fillColor: [107, 52, 35], textColor: 255, fontSize: 7, fontStyle: 'bold' },
       alternateRowStyles: { fillColor: [251, 237, 234] }, columnStyles: sec.cols || {},
@@ -486,12 +486,12 @@ async function pdfDay(){
     const C = rows.filter(r => r.kind === 'confirmed').length, P = rows.filter(r => r.kind === 'possible').length;
     Object.keys(USED).forEach(k => delete USED[k]);
     rows.forEach(r => r.lectures.forEach(l => ab(l.sub)));
-    await makePdf('Bunkers ' + DAY.date, 'Bunkers · ' + nice(DAY.date), DAY.scope + ' · ' + rows.length + ' students · ' + C + ' confirmed · ' + P + ' possible · C = confirmed (teacher marked B), P = possible (present in one lecture, absent in another), X = excused · Marks: P present, A absent, L leave, B bunk.\nSubjects: ' + abKey(), [{
-      head: ['#', 'Section', 'Roll No', 'Student', 'Kind', 'Bunked (missed) lectures', 'Other lectures that day', 'Pattern', 'Days this month'],
-      body: rows.map((r, i) => [i + 1, r.sec, r.roll, r.name, { confirmed: 'C', possible: 'P', excused: 'X' }[r.kind] + (r.decision ? ' · ' + r.decision : ''),
+    await makePdf('Bunkers ' + DAY.date, 'Bunkers · ' + nice(DAY.date), DAY.scope + ' · ' + rows.length + ' students · ' + C + ' confirmed · ' + P + ' possible · Marks: P present, A absent, L leave, B bunk.\nSubjects: ' + abKey(), [{
+      head: ['#', 'Section', 'Roll No', 'Student', 'Bunked (missed) lectures', 'Other lectures that day', 'Pattern', 'Days this month'],
+      body: rows.map((r, i) => [i + 1, r.sec, r.roll, r.name + (r.kind === 'excused' ? '\n(excused)' : ''),
         r.lectures.filter(l => l.m === 'A' || l.m === 'B').map(l => ab(l.sub) + (l.p ? ' P' + l.p : '') + '(' + l.m + ')').join(', '),
         r.lectures.filter(l => l.m === 'P' || l.m === 'L').map(l => ab(l.sub) + (l.p ? ' P' + l.p : '') + '(' + l.m + ')').join(', '), r.pattern, r.days]),
-      kindCol: 4, cols: { 0: { cellWidth: 7 }, 1: { cellWidth: 24 }, 2: { cellWidth: 24 }, 3: { cellWidth: 30 }, 4: { cellWidth: 14 }, 8: { cellWidth: 12 } } }]);
+      cols: { 0: { cellWidth: 7 }, 1: { cellWidth: 24 }, 2: { cellWidth: 24 }, 3: { cellWidth: 34 }, 7: { cellWidth: 12 } } }]);
     hush('st_day');
   }catch(e){ say('st_day', 'err', e.message); }
 }
@@ -509,8 +509,8 @@ async function pdfRange(){
       const bySec = {};
       rows.forEach(r => { const g = bySec[r.sec || '—'] = bySec[r.sec || '—'] || { st: 0, days: 0, c: 0, p: 0, lec: 0, list: [] }; g.st++; g.days += r.count; g.c += r.confirmed; g.p += r.possible; g.lec += r.missed; g.list.push(r); });
       const secs = Object.keys(bySec).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-      const parts = [{ title: 'Summary by section', head: ['Section', 'Students', 'Bunk days', 'Confirmed (B)', 'Possible (P + A)', 'Lectures missed'],
-        body: secs.map(k => [k, bySec[k].st, bySec[k].days, bySec[k].c, bySec[k].p, bySec[k].lec]).concat([['TOTAL', rows.length, C + Pn, C, Pn, rows.reduce((a, r) => a + r.missed, 0)]]) }];
+      const parts = [{ title: 'Summary by section', head: ['Section', 'Students'], width: 70,
+        body: secs.map(k => [k, bySec[k].st]).concat([['TOTAL', rows.length]]) }];
       // 2) every section: one line per bunk day, the student's name once
       secs.forEach(k => {
         const body = [];
@@ -518,15 +518,15 @@ async function pdfRange(){
           const days = r.dates.slice().sort((a, b) => a.d < b.d ? -1 : 1), n = days.length;
           days.forEach((x, j) => {
             const lt = m => x.miss.filter(l => l[3] === m).map(l => ab(l[1]) + (l[0] && l[0] !== '0' ? ' P' + l[0] : '') + '(' + m + ')').join(', ') || '–';
-            const line = [short(x.d), x.k === 'C' ? 'Confirmed' : 'Possible', lt('B'), lt('A'), (x.att || []).map(lecTxt2).join(', ') || '–'];
+            const line = [short(x.d), lt('B'), lt('A'), (x.att || []).map(lecTxt2).join(', ') || '–'];
             body.push(j ? line : [{ content: String(i + 1), rowSpan: n }, { content: r.roll, rowSpan: n }, { content: r.name + (r.father ? '\nd/o ' + r.father : ''), rowSpan: n },
               { content: r.count + ' day' + (r.count > 1 ? 's' : '') + (r.confirmed ? '\n' + r.confirmed + ' confirmed' : '') + (r.possible ? '\n' + r.possible + ' possible' : ''), rowSpan: n }].concat(line));
           });
         });
         parts.push({ title: k + ' · ' + bySec[k].st + ' student(s) · ' + bySec[k].days + ' bunk day(s)',
-          head: ['#', 'Roll No', 'Student', 'Total', 'Date', 'Kind', 'Marked B (bunk)', 'Marked A (absent)', 'Other lectures that day'],
-          body: body, kindCol: 5, redCol: 6,
-          cols: { 0: { cellWidth: 7 }, 1: { cellWidth: 24 }, 2: { cellWidth: 34 }, 3: { cellWidth: 19 }, 4: { cellWidth: 20 }, 5: { cellWidth: 16 }, 6: { cellWidth: 40, textColor: [192, 57, 43], fontStyle: 'bold' }, 7: { cellWidth: 40 } } });
+          head: ['#', 'Roll No', 'Student', 'Total', 'Date', 'Marked B (bunk)', 'Marked A (absent)', 'Other lectures that day'],
+          body: body, redCol: 5,
+          cols: { 0: { cellWidth: 7 }, 1: { cellWidth: 24 }, 2: { cellWidth: 36 }, 3: { cellWidth: 19 }, 4: { cellWidth: 20 }, 5: { cellWidth: 44, textColor: [192, 57, 43], fontStyle: 'bold' }, 6: { cellWidth: 44 } } });
       });
       await makePdf(rangeTitle(), name, sub + ' · ' + rows.length + ' students · ' + C + ' confirmed, ' + Pn + ' possible bunk days. Confirmed = a teacher marked B (red). Possible = present (P) in one lecture, absent (A) in another the same day. Marks: P present, A absent, L leave, B bunk. P1, P2 … = period.\nSubjects: ' + abKey(), parts);
     } else {
