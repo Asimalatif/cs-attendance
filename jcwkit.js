@@ -33,7 +33,7 @@ async function api(payload, ms){
     return j;
   }catch(e){
     if(e.name === 'AbortError') throw new Error('The server took too long. Try again.');
-    if(e instanceof TypeError) throw new Error(navigator.onLine ? 'The Apps Script server did not answer. Try again in a minute.' : 'No internet.');
+    if(e instanceof TypeError) throw new Error(navigator.onLine ? 'The Apps Script server did not answer. If this keeps happening: in the Apps Script editor run atTest once and allow the permissions, make sure no old copy of these scripts is left in the project, then deploy a new version.' : 'No internet.');
     throw e;
   }finally{ clearTimeout(t); }
 }
