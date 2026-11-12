@@ -83,7 +83,7 @@ tr.hot td{background:var(--neg-bg)!important}
   <div id="vDay">
     <div class="bar">
       <button class="btn" onclick="shift(-1)" title="Previous day">‹</button>
-      <input type="date" id="date">
+      <select id="dD" onchange="loadDay()"></select><select id="dM" onchange="fillDays();loadDay()"></select>
       <button class="btn" onclick="shift(1)" title="Next day">›</button>
       <button class="btn p" id="go" onclick="loadDay()">Show</button>
       <select id="secF" class="grow" onchange="drawDay()"><option value="">All sections</option></select>
@@ -147,7 +147,15 @@ function hush(id){ $(id).className = 'status'; }
 function tab(w){ $('vDay').classList.toggle('hidden', w !== 'day'); $('vMon').classList.toggle('hidden', w !== 'mon'); $('tDay').classList.toggle('on', w === 'day'); $('tMon').classList.toggle('on', w === 'mon'); }
 const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 const nice = s => { const d = new Date(s + 'T00:00:00'); return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); };
-function shift(n){ const d = new Date(($('date').value || iso(new Date())) + 'T00:00:00'); do { d.setDate(d.getDate() + n); } while (d.getDay() === 0); $('date').value = iso(d); loadDay(); }
+/* date = two plain lists (day + month) so the date can never be read the wrong way round */
+function seasonMonths(){ const now = new Date(), y = (now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1); return [[y, 8], [y, 9], [y, 10], [y, 11], [y + 1, 0]]; }
+function fillMonths(){ $('dM').innerHTML = seasonMonths().map(([y, m]) => '<option value="' + y + '-' + m + '">' + MON[m] + ' ' + y + '</option>').join(''); }
+function fillDays(){ const [y, m] = $('dM').value.split('-').map(Number), n = new Date(y, m + 1, 0).getDate(), keep = +$('dD').value || 1;
+  $('dD').innerHTML = Array.from({ length: n }, (_, i) => { const d = new Date(y, m, i + 1); return '<option value="' + (i + 1) + '">' + (i + 1) + ' · ' + d.toLocaleDateString('en-GB', { weekday: 'short' }) + '</option>'; }).join('');
+  $('dD').value = String(Math.min(keep, n)); }
+function getDate(){ const [y, m] = $('dM').value.split('-').map(Number); return iso(new Date(y, m, +$('dD').value)); }
+function setDate(d){ const v = d.getFullYear() + '-' + d.getMonth(); if (![...$('dM').options].some(o => o.value === v)) return false; $('dM').value = v; fillDays(); $('dD').value = String(d.getDate()); return true; }
+function shift(n){ const d = new Date(getDate() + 'T00:00:00'); do { d.setDate(d.getDate() + n); } while (d.getDay() === 0); if (setDate(d)) loadDay(); }
 function download(name, rows){
   const csv = rows.map(r => r.map(c => '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"').join(',')).join('\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' })); a.download = name + '.csv';
@@ -162,7 +170,7 @@ const lecTxt = l => 'P' + l.p + ' ' + l.sub;
 
 /* ---------------- DAY ---------------- */
 async function loadDay(){
-  const d = $('date').value; if(!d) return;
+  const d = getDate();
   $('go').disabled = true; say('st', 'busy', 'Reading the period marks of ' + nice(d) + '…');
   try{
     DAY = await api({ action: 'bnk_day', date: d });
@@ -248,7 +256,8 @@ function csvMon(){
 (function(){
   if(!user || !pass){ document.querySelector('.wrap').innerHTML = '<div class="empty"><b>Sign in first</b>Open the attendance app and sign in, then come back.</div>'; return; }
   const now = new Date(); if (now.getDay() === 0) now.setDate(now.getDate() - 1);
-  $('date').value = iso(now);
+  fillMonths();
+  if (!setDate(now)) { $('dM').selectedIndex = 0; fillDays(); }
   if (TOK[now.getMonth()]) $('mon').value = TOK[now.getMonth()];
   loadDay();
 })();
