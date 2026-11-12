@@ -8,7 +8,7 @@
 (function(){
 'use strict';
 const API = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm7d7-UKg0W-OoWAiuRBHe4mjlRgMQXIHuLm6zi--i/exec';
-const COLLEGE = 'JINNAH COLLEGE FOR WOMEN', COLLEGE_SUB = 'University of Peshawar', SYSTEM = 'JCW Daily Attendance';
+const COLLEGE = 'JINNAH COLLEGE FOR WOMEN', COLLEGE_SUB = 'University of Peshawar';
 const C = { INK:[43,25,18], NAVY:[107,52,35], ACC:[194,118,106], TEA:[231,183,174], BR2:[138,74,53], LINE:[226,192,184], MUTED:[124,97,89], SOFT:[251,237,234],
   RED:[217,45,32], REDBG:[253,236,234], GREEN:[18,128,92], GREENBG:[230,244,238], AMB:[183,121,31], AMBBG:[255,244,219] };
 const LIBS = ['https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js'];
@@ -87,19 +87,22 @@ function table(doc, opts){
 }
 function finalize(doc, opt){
   opt = opt || {};
-  const n = doc.internal.getNumberOfPages(), w = W(doc), h = H(doc), st = stamp(), who = teacher();
+  const n = doc.internal.getNumberOfPages(), st = stamp(), who = teacher();
   for(let i = 1; i <= n; i++){
     doc.setPage(i);
-    if(!opt.noBand){
+    const w = W(doc), h = H(doc);                               /* pages may differ (portrait / landscape) */
+    if(!opt.noBand && !(opt.bandFirst && i > 1)){
       doc.setFillColor(...C.NAVY); doc.rect(0, 0, w, 22, 'F'); doc.setFillColor(...C.TEA); doc.rect(0, 22, w, 1.4, 'F');
       let tx = 14;
       if(LOGO){ try{ doc.setFillColor(255, 255, 255); doc.circle(21, 11, 8, 'F'); doc.addImage(LOGO, 'PNG', 14.6, 4.6, 12.8, 12.4); tx = 32; }catch(e){} }
       doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(255, 255, 255); doc.text(COLLEGE, tx, 10);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(244, 214, 208); doc.text(COLLEGE_SUB, tx, 15.5);
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(255, 255, 255); doc.text(opt.system || SYSTEM, w - 14, 10, { align:'right' });
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(244, 214, 208); doc.text(st, w - 14, 15.5, { align:'right' });
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(244, 214, 208); doc.text(st, w - 14, 12.5, { align:'right' });
     }
-    if(!opt.noFooter){
+    if(opt.footer === 'pages'){                                  /* print-saving lists: only the page number */
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...C.MUTED);
+      doc.text('Page ' + i + ' of ' + n, w - 12, h - 5, { align:'right' });
+    } else if(!opt.noFooter){
       doc.setDrawColor(...C.LINE); doc.setLineWidth(0.2); doc.line(14, h - 13, w - 14, h - 13);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...C.MUTED);
       doc.text('Computer-generated report' + (who ? ' · prepared by ' + who : '') + ' · ' + st, 14, h - 8.5);

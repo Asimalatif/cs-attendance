@@ -81,11 +81,37 @@ tbody tr:nth-child(even) td{background:var(--surface2)}
 .stabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
 .stabs button{height:32px;padding:0 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);font-weight:700;font-size:12.5px;cursor:pointer}
 .stabs button.on{background:var(--brown);border-color:var(--brown);color:#fff}
+.slips{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px;margin-bottom:12px}
+.slip{background:var(--surface);border:1.5px solid var(--brown);border-radius:14px;overflow:hidden;box-shadow:var(--shadow);font-size:12.5px}
+.slip .hd{background:var(--brown);color:#fff;font-weight:800;text-align:center;padding:6px 8px;font-size:12px;letter-spacing:.3px}
+.slip .t{text-align:center;font-weight:800;color:var(--brown);margin-top:6px}.slip .pg{text-align:center;font-style:italic;color:var(--muted);font-size:11.5px;border-bottom:2px solid #C2766A;margin:0 10px 6px;padding-bottom:3px}
+.slip .g{display:grid;grid-template-columns:1fr 1fr;gap:3px 10px;padding:0 10px}.slip .g .w{grid-column:span 2}
+.slip .g b{color:var(--brown);font-size:11px;margin-right:4px}.slip .nm{font-weight:800;font-size:13.5px}
+.slip .sb{display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;padding:6px 10px;margin-top:6px;background:var(--surface2)}
+.slip .sb span b{color:var(--brown);font-size:11px;margin-right:4px}
+.slip .ft{display:flex;justify-content:space-between;align-items:center;padding:6px 10px}
+.slip .ft button{height:30px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);font-weight:800;padding:0 14px;cursor:pointer}
+.slip.saved{outline:3px solid var(--pos)}
+dialog#edDlg{border:0;border-radius:18px;padding:18px;width:min(560px,94vw);box-shadow:0 20px 60px rgba(43,25,18,.35);background:var(--surface);color:var(--ink)}
+dialog#edDlg::backdrop{background:rgba(43,25,18,.45)}
+.edgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.edgrid .w2{grid-column:span 2}
+.edgrid label{display:flex;flex-direction:column;font-size:12px;font-weight:700;color:var(--muted);gap:3px}
+.edgrid input{height:38px;border:1.5px solid var(--line);border-radius:10px;padding:0 10px;background:var(--surface);color:var(--ink);font-weight:600}
+.olist{margin-bottom:14px}
+.olist h3{margin:0;padding:10px 14px;font-size:15px}
+.olist .bandr{background:var(--surface2);color:var(--brown);font-weight:800;text-align:center;padding:6px;border-top:1px solid var(--line)}
+.olist td{text-align:left}.olist td.c{text-align:center}
+tr.hit td{background:#FFF2B3!important}
+.tags{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:12px}
+.tag{background:var(--surface);border:1.5px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:var(--shadow)}
+.tag .hd{background:var(--brown);color:#fff;text-align:center;padding:8px;font-weight:900;font-size:16px}
+.tag .sub{display:flex;justify-content:space-between;padding:5px 10px;font-weight:800;font-size:12.5px;color:var(--brown);background:var(--surface2)}
+.tag table{font-size:11.5px}.tag th{font-size:10.5px}
 </style>
 </head>
 <body>
 <header>
-  <div><h1>Admin tools</h1><small id="sub">Timetable · workload · merit · slips · orientation · rooms</small></div>
+  <div><h1>Admin tools</h1><small id="sub">Timetable · workload · merit · slips · orientation · room tags</small></div>
   <div class="sp"></div>
   <a class="tb" href="./">← App</a>
 </header>
@@ -102,7 +128,7 @@ tbody tr:nth-child(even) td{background:var(--surface2)}
     <button data-t="merit">Stopping merit</button>
     <button data-t="slips">Admission slips</button>
     <button data-t="orient">Orientation</button>
-    <button data-t="rooms">Rooms</button>
+    <button data-t="tags">Room tags</button>
   </div>
 
   <div class="status" id="st"></div>
@@ -168,7 +194,8 @@ tbody tr:nth-child(even) td{background:var(--surface2)}
     <div class="card">
       <h2>Admission slips</h2>
       <div class="note" style="margin:6px 0 10px">4 slips on every A4 landscape page with dotted cut lines · Roll# = Enroll# · section, category (quota), session,
-        student and father name, the 7 subjects and the student's signature line. Sorted by program, then Enroll#.</div>
+        student and father name, the 7 subjects and the student's signature line. Sorted by program, then Enroll#.
+        <b>Edit</b> on a slip changes the student's row in <b>Transform-ALL-COLLEGE-STRENGTH</b>.</div>
       <div class="bar" style="margin:0 0 6px">
         <select id="slCls" class="grow"></select>
         <select id="slProg" class="grow"></select>
@@ -176,20 +203,23 @@ tbody tr:nth-child(even) td{background:var(--surface2)}
       </div>
       <div class="chips" id="slPcs"></div>
       <div class="bar" style="margin:0">
+        <input id="slFind" class="grow" placeholder="Search name, father name or Enroll#" autocomplete="off">
         <span id="slCount" style="color:var(--muted);font-weight:700"></span>
-        <span class="grow"></span>
         <button class="btn p" id="slPdf" disabled>Make slips PDF</button>
       </div>
     </div>
+    <div class="slips" id="slBox"></div>
+    <div style="text-align:center"><button class="btn hidden" id="slMore">Show more</button></div>
   </section>
 
   <!-- 5. ORIENTATION -->
   <section data-p="orient" class="hidden">
     <div class="card">
-      <h2>Orientation lists</h2>
+      <h2>Orientation day lists</h2>
       <div class="stabs" id="orMode">
-        <button data-m="all" class="on">All programs (Program → PCS → Room)</button>
+        <button data-m="all" class="on">Orientation list (Program → PCS → Room)</button>
         <button data-m="sel">One program + chosen sections</button>
+        <button data-m="board">Notice board (names A–Z)</button>
       </div>
       <div class="note" style="margin:0 0 10px" id="orNote"></div>
       <div class="bar" style="margin:0 0 6px">
@@ -198,28 +228,67 @@ tbody tr:nth-child(even) td{background:var(--surface2)}
       </div>
       <div class="chips hidden" id="orPcs"></div>
       <div class="bar" style="margin:0">
+        <input id="orFind" class="grow" placeholder="Find a student (name, father name or Enroll#)" autocomplete="off">
         <span id="orCount" style="color:var(--muted);font-weight:700"></span>
-        <span class="grow"></span>
         <button class="btn p" id="orPdf" disabled>PDF</button>
         <button class="btn" id="orXlsx" disabled>Excel</button>
       </div>
+      <div class="note hidden" id="orWarn" style="margin:10px 0 0"></div>
     </div>
+    <div id="orBox"></div>
   </section>
 
-  <!-- 6. ROOMS -->
-  <section data-p="rooms" class="hidden">
+  <!-- 6. ROOM TAGS -->
+  <section data-p="tags" class="hidden">
     <div class="card">
-      <h2>Fill room from timetable</h2>
-      <div class="note" style="margin:6px 0 10px">Reads Program + Section + Room from the <b>Timetable</b> sheet and writes the room into every sheet of the
-        destination workbook (matching ProgramName + Section; “F.A (JCW)” and “F.A (Jinnah College)” count as the same program).
-        A section with two different rooms in the timetable keeps the first one.</div>
-      <div class="bar" style="margin:0">
-        <button class="btn p adm" id="roomRun">Fill rooms now</button>
+      <h2>Room tags</h2>
+      <div class="note" style="margin:6px 0 10px">The schedule of every room for its door and the notice board: one room on each A4 landscape page —
+        room number, strength, class-section (F.Sc), then period · timings · teacher · subject · days (F.A also shows the class).
+        F.Sc rooms come from <b>Science Timetable</b>, F.A rooms from <b>ARTS TIMETABLE</b>.</div>
+      <div class="stabs" id="tgKind">
+        <button data-k="fsc" class="on">F.Sc rooms</button>
+        <button data-k="fa">F.A rooms</button>
+        <button data-k="all">Both</button>
       </div>
+      <div class="chips" id="tgRooms"></div>
+      <div class="bar" style="margin:0">
+        <button class="btn" id="tgLoad">Reload from the timetables</button>
+        <span id="tgCount" style="color:var(--muted);font-weight:700"></span>
+        <span class="grow"></span>
+        <button class="btn p" id="tgPdf" disabled>Room tags PDF</button>
+        <button class="btn" id="tgXlsx" disabled>Excel</button>
+      </div>
+      <div class="note hidden" id="tgWarn" style="margin:10px 0 0"></div>
     </div>
-    <pre class="card hidden" id="roomOut" style="white-space:pre-wrap;font:13px/1.5 ui-monospace,Consolas,monospace"></pre>
+    <div class="tags" id="tgBox"></div>
   </section>
 </div>
+
+<dialog id="edDlg">
+  <form method="dialog" id="edForm">
+    <h2 style="margin:0 0 4px;font-size:17px">Edit student</h2>
+    <div class="meta" id="edMeta" style="color:var(--muted);font-size:12.5px;margin-bottom:10px"></div>
+    <div class="edgrid">
+      <label>Enroll# (Roll#)<input name="e"></label>
+      <label>Category (quota)<input name="q"></label>
+      <label class="w2">Student name<input name="n"></label>
+      <label class="w2">Father name<input name="f"></label>
+      <label>Program<input name="p"></label>
+      <label>Class<input name="c"></label>
+      <label>Section<input name="s"></label>
+      <label>PCS<input name="pcs"></label>
+      <label>Sub1<input name="sub0"></label><label>Sub2<input name="sub1"></label>
+      <label>Sub3<input name="sub2"></label><label>Sub4<input name="sub3"></label>
+      <label>Sub5<input name="sub4"></label><label>Sub6<input name="sub5"></label>
+      <label>Sub7<input name="sub6"></label>
+    </div>
+    <div class="status" id="edSt" style="margin:10px 0 0"></div>
+    <div class="bar" style="margin:12px 0 0;justify-content:flex-end">
+      <button class="btn" value="cancel" type="submit" formnovalidate>Cancel</button>
+      <button class="btn p" id="edSave" type="button">Save to sheet</button>
+    </div>
+  </form>
+</dialog>
 
 <script src="jcwkit.js"></script>
 <script>
@@ -246,6 +315,7 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
   document.querySelectorAll('section[data-p]').forEach(s => s.classList.toggle('hidden', s.dataset.p !== b.dataset.t));
   status('');
   if((b.dataset.t === 'slips' || b.dataset.t === 'orient') && !STU) loadStudents();
+  if(b.dataset.t === 'tags' && !TAGS) loadTags();
   try{ history.replaceState(null, '', '#' + b.dataset.t); }catch(e){}
 });
 
@@ -284,7 +354,7 @@ function showSheets(k){
   $(k + 'Out').classList.remove('hidden');
   if(miss.length && miss.length === list.length) status('Not made yet: ' + esc(miss.join(', ')), 'err');
 }
-function refreshOut(){ document.querySelectorAll('.out').forEach(b => { const l = SHEETS[b.dataset.k]; b.disabled = !(l && l.some(s => !s.missing)); }); $('slPdf').disabled = !STU; $('orPdf').disabled = $('orXlsx').disabled = !STU; }
+function refreshOut(){ document.querySelectorAll('.out').forEach(b => { const l = SHEETS[b.dataset.k]; b.disabled = !(l && l.some(s => !s.missing)); }); $('slPdf').disabled = !STU; $('orPdf').disabled = $('orXlsx').disabled = !STU; if(typeof drawTags === 'function' && TAGS){ const n = chosenTags().length; $('tgPdf').disabled = $('tgXlsx').disabled = !n; } }
 async function loadSheets(k, names){
   await busy(null, 'Reading the sheet…', async () => {
     const r = await JCW.api({ action:'at_sheet', names });
@@ -310,10 +380,6 @@ $('workXlsx').onclick = () => run('work', { tool:'workloadxlsx' }, 'Saving the w
 $('workLoad').onclick = () => loadSheets('work', META ? META.workloadSheets : ['Permanent Workload', 'Morning Visiting Workload', 'Evening Visiting Workload']);
 $('meritRun').onclick = () => run('merit', { tool:'merit' }, 'Calculating the stopping merit…');
 $('meritLoad').onclick = () => loadSheets('merit', ['Stopping Merit']);
-$('roomRun').onclick = () => busy(null, 'Filling rooms in every destination sheet…', async () => {
-  const r = (await JCW.api({ action:'at_fillroom' }, 360000)).data;
-  $('roomOut').textContent = r.message || 'Done.'; $('roomOut').classList.remove('hidden'); status('✔ Rooms filled.', 'ok');
-});
 
 const NAMES = { auto:['Auto timetable', 'JCW_AutoTimetable'], work:['Teacher workload', 'JCW_Workload'], merit:['Stopping merit', 'JCW_Stopping_Merit'] };
 document.querySelectorAll('.out').forEach(b => b.onclick = () => busy(null, 'Making the file…', async () => {
@@ -367,20 +433,72 @@ function wireChips(box, cb){
 }
 
 /* ---------- admission slips ---------- */
+let SL_SHOW = 24;
 function fillSlips(){
   const progs = [...new Set(rowsOf($('slCls').value).map(r => r.p).filter(Boolean))].sort(natCmp);
   const cur = $('slProg').value;
   $('slProg').innerHTML = '<option value="">All programs</option>' + progs.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
   if(progs.includes(cur)) $('slProg').value = cur;
-  pcsChips($('slPcs'), rowsOf($('slCls').value, $('slProg').value)); countSlips();
+  pcsChips($('slPcs'), rowsOf($('slCls').value, $('slProg').value), true); countSlips();
 }
 function slipRows(){
   const ch = chosenPcs($('slPcs'));
   return rowsOf($('slCls').value, $('slProg').value).filter(r => ch.has(r.pcs) || (!r.pcs && ch.size === 0))
     .sort((a, b) => a.p.toLowerCase().localeCompare(b.p.toLowerCase()) || natCmp(a.e, b.e));
 }
-function countSlips(){ const n = slipRows().length; $('slCount').textContent = n + ' student' + (n === 1 ? '' : 's') + ' · ' + Math.ceil(n / 4) + ' page' + (Math.ceil(n / 4) === 1 ? '' : 's'); }
+const findOk = (r, q) => !q || (r.n + ' ' + r.f + ' ' + r.e).toLowerCase().includes(q);
+function countSlips(){
+  const n = slipRows().length; $('slCount').textContent = n + ' student' + (n === 1 ? '' : 's') + ' · ' + Math.ceil(n / 4) + ' page' + (Math.ceil(n / 4) === 1 ? '' : 's');
+  SL_SHOW = 24; drawSlips();
+}
+function slipCard(r){
+  const ses = esc($('slSession').value.trim()), su = (r.sub || []).map((x, i) => `<span><b>SUB${i + 1}:</b>${esc(x)}</span>`).join('');
+  return `<div class="slip" data-row="${r.row}"><div class="hd">JINNAH COLLEGE FOR WOMEN, UOP</div><div class="t">ADMISSION SLIP</div><div class="pg">${esc(r.p)}</div>
+    <div class="g"><span><b>ROLL#:</b>${esc(r.e)}</span><span><b>SECTION:</b>${esc(r.pcs)}</span><span><b>CATEGORY:</b>${esc(r.q)}</span><span><b>SESSION:</b>${ses}</span>
+    <span class="w"><b>STD NAME:</b><span class="nm">${esc(r.n)}</span></span><span class="w"><b>F.NAME:</b>${esc(r.f)}</span></div>
+    <div class="sb">${su}</div><div class="ft"><small style="color:var(--muted)">Sheet row ${r.row}</small>${META && META.admin ? '<button type="button" data-ed="' + r.row + '">✎ Edit</button>' : ''}</div></div>`;
+}
+function drawSlips(){
+  if(!STU) return;
+  const q = $('slFind').value.trim().toLowerCase(), list = slipRows().filter(r => findOk(r, q));
+  $('slBox').innerHTML = list.slice(0, SL_SHOW).map(slipCard).join('') || '<div class="empty" style="grid-column:1/-1"><b>No students</b>Change the class, program, sections or the search.</div>';
+  $('slMore').classList.toggle('hidden', list.length <= SL_SHOW);
+  $('slMore').textContent = 'Show more (' + (list.length - SL_SHOW) + ' left)';
+}
+$('slMore').onclick = () => { SL_SHOW += 48; drawSlips(); };
+let slT = null; $('slFind').oninput = () => { clearTimeout(slT); slT = setTimeout(() => { SL_SHOW = 24; drawSlips(); }, 200); };
+$('slSession').oninput = drawSlips;
 $('slCls').onchange = fillSlips; $('slProg').onchange = fillSlips; wireChips($('slPcs'), countSlips);
+
+/* edit one student -> Transform-ALL-COLLEGE-STRENGTH */
+let ED = null;
+$('slBox').addEventListener('click', e => {
+  const b = e.target.closest('[data-ed]'); if(!b) return;
+  ED = STU.rows.find(r => r.row === +b.dataset.ed); if(!ED) return;
+  const f = $('edForm');
+  ['e', 'q', 'n', 'f', 'p', 'c', 's', 'pcs'].forEach(k => { f.elements[k].value = ED[k] || ''; });
+  for(let i = 0; i < 7; i++) f.elements['sub' + i].value = (ED.sub || [])[i] || '';
+  $('edMeta').textContent = 'Transform-ALL-COLLEGE-STRENGTH · row ' + ED.row;
+  $('edSt').className = 'status'; $('edSave').disabled = false;
+  $('edDlg').showModal();
+});
+$('edSave').onclick = async () => {
+  const f = $('edForm'), ch = {};
+  ['e', 'q', 'n', 'f', 'p', 'c', 's', 'pcs'].forEach(k => { const v = f.elements[k].value.trim(); if(v !== (ED[k] || '')) ch[k] = v; });
+  const sub = []; let subCh = false;
+  for(let i = 0; i < 7; i++){ sub.push(f.elements['sub' + i].value.trim()); if(sub[i] !== ((ED.sub || [])[i] || '')) subCh = true; }
+  if(subCh) ch.sub = sub;
+  if(!Object.keys(ch).length){ $('edDlg').close(); return; }
+  $('edSave').disabled = true; $('edSt').className = 'status show'; $('edSt').innerHTML = '<span class="spin"></span><span>Saving to the sheet…</span>';
+  try{
+    const r = (await JCW.api({ action:'at_savestu', row:ED.row, oldE:ED.e, oldN:ED.n, changes:ch })).data;
+    Object.keys(ch).forEach(k => { ED[k] = ch[k]; });
+    $('edDlg').close();
+    fillSlips(); fillOrient();
+    const card = document.querySelector('.slip[data-row="' + ED.row + '"]'); if(card){ card.classList.add('saved'); card.scrollIntoView({ block:'nearest' }); }
+    JCW.toast('✔ Saved to the sheet' + (r.changed && r.changed.length ? ' (' + r.changed.length + ' change' + (r.changed.length === 1 ? '' : 's') + ')' : ''));
+  }catch(err){ $('edSave').disabled = false; $('edSt').className = 'status show err'; $('edSt').textContent = err.message; }
+};
 
 function slip(doc, s, x, y, w, h, session){
   const C = JCW.C, logo = JCW.logo();
@@ -440,7 +558,7 @@ $('slPdf').onclick = () => busy(null, 'Making the admission slips…', async () 
   JCW.offer(doc.output('blob'), 'JCW_Admission_Slips_' + tag + ses + '.pdf', 'Admission slips', { folder:'Admission Slips' });
 });
 
-/* ---------- orientation ---------- */
+/* ---------- orientation day lists ---------- */
 let OR_MODE = 'all';
 const displayProg = p => { const n = String(p || '').trim().toLowerCase();
   if(['f.a (jcw)', 'f.a', 'fa (jcw)', 'fa'].includes(n)) return 'ARTS';
@@ -448,65 +566,200 @@ const displayProg = p => { const n = String(p || '').trim().toLowerCase();
   if(['pre-engineering (jcw)', 'pre-engineering'].includes(n)) return 'PRE-ENGINEERING';
   if(['pre-medical (jcw)', 'pre-medical'].includes(n)) return 'PRE-MEDICAL';
   return String(p || '').trim() || 'Unknown Program'; };
-const fmtRoom = r => { let v = String(r || '').trim(); if(!v) return 'Room #'; if(v.includes('/')) v = v.split('/')[0].trim(); v = v.replace(/^R\s*#\s*/i, '').replace(/^Room\s*#\s*/i, '').trim(); return 'Room # ' + v; };
+const fmtRoom = r => { let v = String(r || '').trim(); if(!v) return 'Room #'; if(v.includes('/')) v = v.split('/')[0].trim(); v = v.replace(/\s*\(\s*EVENING\s*\)\s*/i, ' ').replace(/^R\s*#\s*/i, '').replace(/^Room\s*#\s*/i, '').trim(); return 'Room # ' + v; };
+const roomOf = r => fmtRoom(r.tt || r.room);                    /* room from the Timetable sheet (Transform's own Room column only if the timetable has none) */
 const PORDER = ['ARTS', 'COMPUTER SCIENCE', 'PRE-ENGINEERING', 'PRE-MEDICAL'];
+const progSort = (a, b) => { const ia = PORDER.indexOf(a), ib = PORDER.indexOf(b); if(ia >= 0 && ib >= 0) return ia - ib; if(ia >= 0) return -1; if(ib >= 0) return 1; return a.localeCompare(b); };
+const isArts = p => p === 'ARTS';
 document.querySelectorAll('#orMode button').forEach(b => b.onclick = () => {
   OR_MODE = b.dataset.m; document.querySelectorAll('#orMode button').forEach(x => x.classList.toggle('on', x === b));
   $('orProg').classList.toggle('hidden', OR_MODE !== 'sel'); $('orPcs').classList.toggle('hidden', OR_MODE !== 'sel'); fillOrient();
 });
 function fillOrient(){
   $('orNote').innerHTML = OR_MODE === 'all'
-    ? 'Every program on its own page (Arts, Computer Science, Pre-Engineering, Pre-Medical, then others) · each PCS split by room (“Room # 08”) · S# · Enroll# · Student name · Father name, sorted by Enroll#.'
-    : 'One program and the sections you tick · “PROGRAM: …” then each PCS with its students (S# · Enroll# · Student name · Father name), sorted by Enroll#.';
+    ? 'Every program starts on a new page (Arts, Computer Science, Pre-Engineering, Pre-Medical, then others) · each PCS with its room from the <b>Timetable</b> sheet (“Room # 08”) · S# · Enroll# · Student name · Father name, sorted by Enroll#.'
+    : OR_MODE === 'sel' ? 'One program and the sections you tick · “PROGRAM: …” then each PCS with its students, sorted by Enroll#.'
+    : 'For the notice board: every program on its own pages, students sorted by <b>name</b> so a new student finds herself quickly and reads her <b>Enroll#, PCS and Room</b>. Arts pages are landscape and also show the subjects. Plain black print, no colours on the rows.';
   if(!STU) return;
   const progs = [...new Set(rowsOf($('orCls').value).map(r => r.p).filter(Boolean))].sort(natCmp), cur = $('orProg').value;
   $('orProg').innerHTML = progs.map(p => `<option value="${esc(p)}">Program: ${esc(p)}</option>`).join('');
   if(progs.includes(cur)) $('orProg').value = cur;
-  pcsChips($('orPcs'), rowsOf($('orCls').value, $('orProg').value)); countOrient();
+  pcsChips($('orPcs'), rowsOf($('orCls').value, $('orProg').value), true);
+  const noRoom = rowsOf($('orCls').value).filter(r => !r.tt);
+  const warn = !STU.ttFound ? 'The <b>' + esc(STU.ttSheet || 'Timetable') + '</b> sheet was not found, so the rooms come from the Room column of Transform-ALL-COLLEGE-STRENGTH.'
+    : noRoom.length ? noRoom.length + ' student(s) are in sections that the Timetable sheet has no room for: ' + esc([...new Set(noRoom.map(r => r.pcs || '(no PCS)'))].slice(0, 12).join(', ')) + (noRoom.some(r => r.room) ? ' — their room is taken from Transform.' : '.') : '';
+  $('orWarn').innerHTML = warn; $('orWarn').classList.toggle('hidden', !warn);
+  drawOrient();
 }
 function orientGroups(){
   const cls = $('orCls').value;
   if(OR_MODE === 'sel'){
     const ch = chosenPcs($('orPcs')), rows = rowsOf(cls, $('orProg').value).filter(r => ch.has(r.pcs));
     const by = {}; rows.forEach(r => { (by[r.pcs || 'Unknown PCS'] = by[r.pcs || 'Unknown PCS'] || []).push(r); });
-    return [{ title:'PROGRAM: ' + (rows[0] ? rows[0].p : $('orProg').value), parts:Object.keys(by).sort(natCmp).map(k => ({ band:k, rows:by[k].sort((a, b) => lastNum(a.e) - lastNum(b.e)) })), n:rows.length }];
+    return [{ title:'PROGRAM: ' + (rows[0] ? rows[0].p : $('orProg').value), parts:Object.keys(by).sort(natCmp).map(k => ({ band:k + ' - ' + roomOf(by[k][0]), rows:by[k].sort((a, b) => lastNum(a.e) - lastNum(b.e)) })), n:rows.length }];
   }
   const map = {};
-  rowsOf(cls).forEach(r => { const p = displayProg(r.p), pc = r.pcs || 'Unknown PCS', rm = fmtRoom(r.room); ((map[p] = map[p] || {})[pc] = map[p][pc] || {}); (map[p][pc][rm] = map[p][pc][rm] || []).push(r); });
-  const keys = Object.keys(map).sort((a, b) => { const ia = PORDER.indexOf(a), ib = PORDER.indexOf(b); if(ia >= 0 && ib >= 0) return ia - ib; if(ia >= 0) return -1; if(ib >= 0) return 1; return a.localeCompare(b); });
+  rowsOf(cls).forEach(r => { const p = displayProg(r.p); (map[p] = map[p] || []).push(r); });
+  if(OR_MODE === 'board') return Object.keys(map).sort(progSort).map(p => ({ title:p, arts:isArts(p), rows:map[p].sort((a, b) => a.n.localeCompare(b.n, undefined, { sensitivity:'base' }) || a.f.localeCompare(b.f)), n:map[p].length }));
   const rn = s => { const m = String(s).match(/(\d+)/); return m ? parseInt(m[1], 10) : 999999; };
-  return keys.map(p => { const parts = [];
-    Object.keys(map[p]).sort(natCmp).forEach(pc => Object.keys(map[p][pc]).sort((a, b) => rn(a) - rn(b)).forEach(rm => parts.push({ band:pc + ' - ' + rm, rows:map[p][pc][rm].sort((a, b) => lastNum(a.e) - lastNum(b.e)) })));
-    return { title:p, parts, n:parts.reduce((a, x) => a + x.rows.length, 0) }; });
+  return Object.keys(map).sort(progSort).map(p => {
+    const g = {}; map[p].forEach(r => { const pc = r.pcs || 'Unknown PCS', rm = roomOf(r); ((g[pc] = g[pc] || {})[rm] = g[pc][rm] || []).push(r); });
+    const parts = [];
+    Object.keys(g).sort(natCmp).forEach(pc => Object.keys(g[pc]).sort((a, b) => rn(a) - rn(b)).forEach(rm => parts.push({ band:pc + ' - ' + rm, rows:g[pc][rm].sort((a, b) => lastNum(a.e) - lastNum(b.e)) })));
+    return { title:p, parts, n:map[p].length };
+  });
 }
-function countOrient(){ if(!STU) return; const g = orientGroups(), n = g.reduce((a, x) => a + x.n, 0); $('orCount').textContent = n + ' student' + (n === 1 ? '' : 's') + (OR_MODE === 'all' ? ' · ' + g.length + ' program' + (g.length === 1 ? '' : 's') : ' · ' + g[0].parts.length + ' section(s)'); }
-$('orCls').onchange = fillOrient; $('orProg').onchange = fillOrient; wireChips($('orPcs'), countOrient);
-$('orPdf').onclick = () => busy(null, 'Making the orientation PDF…', async () => {
+const subjOf = r => (r.sub || []).filter(Boolean).join(', ');
+function drawOrient(){
+  if(!STU) return;
+  const g = orientGroups().filter(x => x.n), q = $('orFind').value.trim().toLowerCase(), n = g.reduce((a, x) => a + x.n, 0);
+  $('orCount').textContent = n + ' student' + (n === 1 ? '' : 's') + (OR_MODE === 'sel' ? ' · ' + (g[0] ? g[0].parts.length : 0) + ' section(s)' : ' · ' + g.length + ' program' + (g.length === 1 ? '' : 's'));
+  const hit = r => q && findOk(r, q) ? ' class="hit"' : '';
+  let h = '';
+  g.forEach(grp => {
+    h += `<div class="sec olist"><h3><span>${esc(grp.title)}</span><span class="n" style="background:var(--surface2);color:var(--brown)">${grp.n}</span></h3><div class="scroll">`;
+    if(OR_MODE === 'board'){
+      h += `<table><thead><tr><th>S#</th><th>Student name</th><th>Father name</th><th>Enroll#</th><th>PCS</th><th>Room</th>${grp.arts ? '<th>Subjects</th>' : ''}</tr></thead><tbody>`
+        + grp.rows.map((r, i) => `<tr${hit(r)}><td class="c">${i + 1}</td><td><b>${esc(r.n)}</b></td><td>${esc(r.f)}</td><td class="c">${esc(r.e)}</td><td class="c">${esc(r.pcs)}</td><td class="c">${esc(roomOf(r))}</td>${grp.arts ? '<td>' + esc(subjOf(r)) + '</td>' : ''}</tr>`).join('') + '</tbody></table>';
+    } else {
+      grp.parts.forEach(pt => {
+        h += `<div class="bandr">${esc(pt.band)} · ${pt.rows.length}</div><table><thead><tr><th style="width:50px">S#</th><th style="width:130px">Enroll#</th><th>Student name</th><th>Father name</th></tr></thead><tbody>`
+          + pt.rows.map((r, i) => `<tr${hit(r)}><td class="c">${i + 1}</td><td class="c">${esc(r.e)}</td><td><b>${esc(r.n)}</b></td><td>${esc(r.f)}</td></tr>`).join('') + '</tbody></table>';
+      });
+    }
+    h += '</div></div>';
+  });
+  $('orBox').innerHTML = h || '<div class="empty"><b>No students</b>Choose another class, program or sections.</div>';
+  if(q){ const f = $('orBox').querySelector('tr.hit'); if(f) f.scrollIntoView({ block:'center' }); }
+}
+let orT = null; $('orFind').oninput = () => { clearTimeout(orT); orT = setTimeout(drawOrient, 250); };
+$('orCls').onchange = fillOrient; $('orProg').onchange = fillOrient; wireChips($('orPcs'), drawOrient);
+
+const M2 = { top:12, left:12, right:12, bottom:12 };            /* pages after the first: no college band, small margins */
+$('orPdf').onclick = () => busy(null, 'Making the PDF…', async () => {
   const g = orientGroups().filter(x => x.n); if(!g.length) throw new Error('No students for this choice.');
   await JCW.libs();
-  const doc = JCW.newDoc('portrait');
+  const board = OR_MODE === 'board', first = board && g[0].arts ? 'landscape' : 'portrait', doc = JCW.newDoc(first), C = JCW.C;
   g.forEach((grp, gi) => {
-    if(gi) doc.addPage();
-    let Y = JCW.heading(doc, JCW.TOP, grp.title, $('orCls').value + ' · orientation list · ' + grp.n + ' students');
-    grp.parts.forEach(part => {
-      if(Y > JCW.H(doc) - 45){ doc.addPage(); Y = JCW.TOP; }
-      Y = JCW.band(doc, Y, part.band, 13);
-      Y = JCW.table(doc, { startY:Y, head:[['S#', 'Enroll#', 'Student Name', 'Father Name']],
-        body:part.rows.map((r, i) => [i + 1, r.e, r.n, r.f]),
-        columnStyles:{ 0:{ halign:'center', cellWidth:12 }, 1:{ halign:'center', cellWidth:30 }, 2:{ fontStyle:'bold' } }, styles:{ fontSize:10, cellPadding:1.9 } }) + 3;
-    });
+    const orient = board && grp.arts ? 'landscape' : 'portrait';
+    if(gi) doc.addPage('a4', orient);
+    let Y = gi ? 12 : JCW.TOP;
+    if(board){
+      Y = JCW.heading(doc, Y, grp.title + ' — ' + $('orCls').value + ' (' + grp.n + ' students)', 'Find your name (A–Z) to see your Enroll#, section (PCS) and room.');
+      const startPage = doc.internal.getCurrentPageInfo().pageNumber;
+      const head = ['S#', 'Student Name', 'Father Name', 'Enroll#', 'PCS', 'Room'].concat(grp.arts ? ['Subjects'] : []);
+      JCW.table(doc, { startY:Y, margin:M2, head:[head],
+        body:grp.rows.map((r, i) => [i + 1, r.n, r.f, r.e, r.pcs, roomOf(r).replace('Room # ', '')].concat(grp.arts ? [subjOf(r)] : [])),
+        styles:{ font:'helvetica', fontSize:grp.arts ? 8.4 : 8.8, cellPadding:{ top:0.9, bottom:0.9, left:1.4, right:1.4 }, textColor:[0, 0, 0], lineColor:[90, 90, 90], lineWidth:0.15, fillColor:false },
+        alternateRowStyles:{ fillColor:false }, headStyles:{ fillColor:C.NAVY, textColor:[255, 255, 255], fontStyle:'bold', halign:'center', fontSize:8.6 },
+        columnStyles:Object.assign({ 0:{ halign:'center', cellWidth:9 }, 1:{ fontStyle:'bold' }, 3:{ halign:'center', cellWidth:24 }, 4:{ halign:'center', cellWidth:grp.arts ? 22 : 24 }, 5:{ halign:'center', cellWidth:14 } }, grp.arts ? { 1:{ fontStyle:'bold', cellWidth:64 }, 2:{ cellWidth:52 } } : {}),
+        didDrawPage:d => { const pn = doc.internal.getCurrentPageInfo().pageNumber; if(pn > startPage){ doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...C.NAVY); doc.text(grp.title + ' (continued)', 12, 8.5); } } });
+    } else {
+      Y = JCW.heading(doc, Y, grp.title, $('orCls').value + ' · orientation list · ' + grp.n + ' students');
+      grp.parts.forEach(part => {
+        if(Y > JCW.H(doc) - 40){ doc.addPage('a4', 'portrait'); Y = 12; }
+        Y = JCW.band(doc, Y, part.band + '  ·  ' + part.rows.length + ' students', 11.5);
+        Y = JCW.table(doc, { startY:Y, margin:M2, head:[['S#', 'Enroll#', 'Student Name', 'Father Name']],
+          body:part.rows.map((r, i) => [i + 1, r.e, r.n, r.f]),
+          columnStyles:{ 0:{ halign:'center', cellWidth:11 }, 1:{ halign:'center', cellWidth:28 }, 2:{ fontStyle:'bold' } },
+          styles:{ font:'helvetica', fontSize:9.2, cellPadding:{ top:1.1, bottom:1.1, left:1.6, right:1.6 }, lineColor:C.LINE, lineWidth:0.2, textColor:C.INK } }) + 2;
+      });
+    }
   });
-  JCW.finalize(doc); status('');
-  const tag = OR_MODE === 'sel' ? JCW.safe($('orProg').value) + '_' : 'All_';
+  JCW.finalize(doc, { bandFirst:true, footer:'pages' }); status('');
+  const tag = OR_MODE === 'board' ? 'Notice_Board_' : OR_MODE === 'sel' ? JCW.safe($('orProg').value) + '_' : 'All_';
   JCW.offer(doc.output('blob'), 'JCW_Orientation_' + tag + new Date().toISOString().slice(0, 10) + '.pdf', 'Orientation list', { folder:'JCW Orientation' });
 });
 $('orXlsx').onclick = () => busy(null, 'Making the Excel file…', async () => {
   const g = orientGroups().filter(x => x.n); if(!g.length) throw new Error('No students for this choice.');
-  const sheets = g.map(grp => { const rows = [], groupRows = [], headRows = [];
+  let sheets;
+  if(OR_MODE === 'board') sheets = g.map(grp => ({ name:grp.title, title:grp.title + ' — ' + $('orCls').value + ' (A–Z)',
+    rows:[['S#', 'Student Name', 'Father Name', 'Enroll#', 'PCS', 'Room'].concat(grp.arts ? ['Subjects'] : [])].concat(grp.rows.map((r, i) => [i + 1, r.n, r.f, r.e, r.pcs, roomOf(r)].concat(grp.arts ? [subjOf(r)] : []))),
+    cols:[6, 30, 28, 16, 16, 12].concat(grp.arts ? [60] : []) }));
+  else sheets = g.map(grp => { const rows = [], groupRows = [], headRows = [];
     grp.parts.forEach(part => { groupRows.push(rows.length); rows.push([part.band]); headRows.push(rows.length); rows.push(['S#', 'Enroll#', 'Student Name', 'Father Name']); part.rows.forEach((r, i) => rows.push([i + 1, r.e, r.n, r.f])); });
     return { name:grp.title.replace(/^PROGRAM:\s*/, ''), title:grp.title + ' — ' + $('orCls').value + ' orientation list', rows, groupRows, headRows, cols:[6, 16, 32, 32] }; });
-  const f = await JCW.xlsx(sheets, 'JCW_Orientation_' + new Date().toISOString().slice(0, 10) + '.xlsx'); status('');
+  const f = await JCW.xlsx(sheets, 'JCW_Orientation_' + (OR_MODE === 'board' ? 'Notice_Board_' : '') + new Date().toISOString().slice(0, 10) + '.xlsx'); status('');
   JCW.offer(f.blob, f.name, 'Orientation list', { folder:'JCW Orientation' });
+});
+
+/* ---------- room tags ---------- */
+let TAGS = null, TG_KIND = 'fsc';
+const tagList = () => !TAGS ? [] : (TG_KIND === 'fsc' ? TAGS.fsc.map(t => Object.assign({ k:'fsc' }, t)) : TG_KIND === 'fa' ? TAGS.fa.map(t => Object.assign({ k:'fa' }, t)) : TAGS.fsc.map(t => Object.assign({ k:'fsc' }, t)).concat(TAGS.fa.map(t => Object.assign({ k:'fa' }, t))));
+const tagId = t => t.k + ':' + t.room;
+async function loadTags(){
+  await busy(null, 'Reading Science Timetable and ARTS TIMETABLE…', async () => {
+    TAGS = (await JCW.api({ action:'at_roomtags' })).data; status(''); fillTags(true);
+  });
+}
+function fillTags(fresh){
+  const list = tagList().sort((a, b) => natCmp(a.room, b.room)), box = $('tgRooms');
+  const prev = fresh ? null : new Set([...box.querySelectorAll('input:not([data-all]):checked')].map(i => i.value));
+  box.innerHTML = list.map(t => { const id = tagId(t), on = !prev || !prev.size || prev.has(id); return `<label class="${on ? 'on' : ''}"><input type="checkbox" value="${esc(id)}" ${on ? 'checked' : ''}>${esc(t.room)}${TG_KIND === 'all' ? ' <small>(' + (t.k === 'fa' ? 'F.A' : 'F.Sc') + ')</small>' : ''}</label>`; }).join('')
+    + (list.length > 1 ? '<label style="border-style:dashed"><input type="checkbox" data-all checked>All</label>' : '');
+  const notes = (TAGS && TAGS.notes) || [];
+  $('tgWarn').innerHTML = notes.map(esc).join('<br>'); $('tgWarn').classList.toggle('hidden', !notes.length);
+  drawTags();
+}
+function chosenTags(){ const ch = chosenPcs($('tgRooms')); return tagList().filter(t => ch.has(tagId(t))).sort((a, b) => natCmp(a.room, b.room)); }
+function drawTags(){
+  const list = chosenTags();
+  $('tgCount').textContent = list.length + ' room' + (list.length === 1 ? '' : 's');
+  $('tgPdf').disabled = $('tgXlsx').disabled = !list.length;
+  $('tgBox').innerHTML = list.map(t => `<div class="tag"><div class="hd">SCHEDULE FOR ROOM # ${esc(t.room)}</div>
+    <div class="sub"><span>${t.k === 'fsc' ? 'CLASS-SECTION : ' + esc(t.cls) : 'F.A'}</span><span>${t.strength ? 'STRENGTH : ' + esc(t.strength) : ''}</span></div>
+    <div class="scroll"><table><thead><tr><th>Per</th><th>Timings</th>${t.k === 'fa' ? '<th>Class</th>' : ''}<th>Teacher</th><th>Subject</th><th>Days</th></tr></thead><tbody>
+    ${t.rows.map(r => `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td>${t.k === 'fa' ? '<td>' + esc(r[2]) + '</td>' : ''}<td><b>${esc(r[3])}</b></td><td><b>${esc(r[4])}</b></td><td>${esc(r[5])}</td></tr>`).join('')}</tbody></table></div></div>`).join('')
+    || (TAGS ? '<div class="empty" style="grid-column:1/-1"><b>No rooms</b>Tick some rooms above.</div>' : '');
+}
+document.querySelectorAll('#tgKind button').forEach(b => b.onclick = () => { TG_KIND = b.dataset.k; document.querySelectorAll('#tgKind button').forEach(x => x.classList.toggle('on', x === b)); fillTags(true); });
+wireChips($('tgRooms'), drawTags);
+$('tgLoad').onclick = loadTags;
+$('tgPdf').onclick = () => busy(null, 'Making the room tags…', async () => {
+  const list = chosenTags(); if(!list.length) throw new Error('Tick at least one room.');
+  await JCW.libs();
+  const doc = JCW.newDoc('landscape'), C = JCW.C, PW = 297, PH = 210, logo = JCW.logo();
+  list.forEach((t, i) => {
+    if(i) doc.addPage('a4', 'landscape');
+    doc.setFillColor(...C.NAVY); doc.rect(0, 0, PW, 15, 'F'); doc.setFillColor(...C.TEA); doc.rect(0, 15, PW, 1, 'F');
+    if(logo){ try{ doc.setFillColor(255, 255, 255); doc.circle(17, 7.5, 6, 'F'); doc.addImage(logo, 'PNG', 12, 2.6, 10, 9.7); }catch(e){} }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(255, 255, 255); doc.text('JINNAH COLLEGE FOR WOMEN, UNIVERSITY OF PESHAWAR', PW / 2, 9.8, { align:'center' });
+    doc.setFontSize(30); doc.setTextColor(...C.NAVY); doc.text('SCHEDULE FOR ROOM # ' + t.room, PW / 2, 31, { align:'center' });
+    doc.setDrawColor(...C.ACC); doc.setLineWidth(0.9); doc.line(PW / 2 - 40, 35, PW / 2 + 40, 35);
+    if(t.strength){ doc.setFontSize(12); doc.setTextColor(0, 0, 0); doc.text('STRENGTH : ' + t.strength, PW - 12, 42, { align:'right' }); }
+    let Y = 45;
+    if(t.k === 'fsc'){
+      doc.setFillColor(...C.SOFT); doc.setDrawColor(...C.LINE); doc.rect(12, Y, PW - 24, 13, 'FD');
+      doc.setFontSize(21); doc.setTextColor(...C.NAVY); doc.text('CLASS-SECTION : ' + (t.cls || ''), PW / 2, Y + 9.3, { align:'center' }); Y += 16;
+    }
+    const fa = t.k === 'fa', n = Math.max(1, t.rows.length), avail = PH - 10 - Y - 11;
+    const rowH = Math.max(7, Math.min(20, avail / n)), fs = Math.max(9, Math.min(19, rowH * 1.05));
+    const head = ['PER', 'TIMINGS'].concat(fa ? ['CLASS'] : []).concat(['TEACHER', 'SUBJECT', 'DAYS']);
+    const body = t.rows.map(r => [r[0], r[1]].concat(fa ? [r[2]] : []).concat([r[3], r[4], r[5]]));
+    const cs = fa ? { 0:{ cellWidth:18 }, 1:{ cellWidth:40 }, 2:{ cellWidth:38 }, 3:{ fontStyle:'bold' }, 4:{ fontStyle:'bold' }, 5:{ cellWidth:30 } }
+                  : { 0:{ cellWidth:20 }, 1:{ cellWidth:46 }, 2:{ fontStyle:'bold' }, 3:{ fontStyle:'bold' }, 4:{ cellWidth:42 } };
+    doc.autoTable({ startY:Y, margin:{ left:12, right:12, top:12, bottom:8 }, theme:'grid', head:[head], body, columnStyles:cs, pageBreak:'avoid', rowPageBreak:'avoid',
+      styles:{ font:'helvetica', fontSize:fs, halign:'center', valign:'middle', minCellHeight:rowH, cellPadding:1, textColor:[0, 0, 0], lineColor:[60, 60, 60], lineWidth:0.35 },
+      headStyles:{ fillColor:C.NAVY, textColor:[255, 255, 255], fontStyle:'bold', fontSize:13, minCellHeight:11 } });
+  });
+  status('');
+  const tag = TG_KIND === 'fsc' ? 'FSC_' : TG_KIND === 'fa' ? 'FA_' : '';
+  JCW.offer(doc.output('blob'), 'JCW_' + tag + 'Room_Tags_' + new Date().toISOString().slice(0, 10) + '.pdf', 'Room tags', { folder:'Room Tags' });
+});
+$('tgXlsx').onclick = () => busy(null, 'Making the Excel file…', async () => {
+  const list = chosenTags(), sheets = [];
+  ['fsc', 'fa'].forEach(k => {
+    const ts = list.filter(t => t.k === k); if(!ts.length) return;
+    const fa = k === 'fa', rows = [], groupRows = [], headRows = [];
+    ts.forEach(t => {
+      groupRows.push(rows.length); rows.push(['SCHEDULE FOR ROOM # ' + t.room + (t.strength ? '   ·   STRENGTH : ' + t.strength : '') + (!fa && t.cls ? '   ·   CLASS-SECTION : ' + t.cls : '')]);
+      headRows.push(rows.length); rows.push(['PER', 'TIMINGS'].concat(fa ? ['CLASS'] : []).concat(['TEACHER', 'SUBJECT', 'DAYS']));
+      t.rows.forEach(r => rows.push([r[0], r[1]].concat(fa ? [r[2]] : []).concat([r[3], r[4], r[5]])));
+    });
+    sheets.push({ name:fa ? 'FA Room Tags' : 'FSC Room Tags', title:(fa ? 'F.A' : 'F.Sc') + ' room tags — Jinnah College for Women', rows, groupRows, headRows, cols:fa ? [7, 18, 16, 30, 30, 14] : [7, 18, 30, 30, 14] });
+  });
+  const f = await JCW.xlsx(sheets, 'JCW_Room_Tags_' + new Date().toISOString().slice(0, 10) + '.xlsx'); status('');
+  JCW.offer(f.blob, f.name, 'Room tags', { folder:'Room Tags' });
 });
 
 start();
