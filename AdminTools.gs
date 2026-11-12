@@ -189,12 +189,21 @@ function at_smIsOpen_(row, headers, enrollment) {
       var sh = at_ss_().getSheetByName(AT_CFG.STRENGTH), v = sh.getDataRange().getDisplayValues(), C = at_cols_(v[0]);
       if (C.q >= 0) for (var r = 1; r < v.length; r++) { var e = String(v[r][C.e] || '').trim().toUpperCase(); if (e) tq[e] = String(v[r][C.q] || '').trim(); }
     } catch (e) {}
-    AT_SM_MEMO = { qc: qc, tq: tq };
+    AT_SM_MEMO = { qc: qc, tq: tq, seen: {} };
   }
   var vals = AT_SM_MEMO.qc.map(function (i) { return String(row[i] == null ? '' : row[i]).trim(); }).filter(String);
   var t = AT_SM_MEMO.tq[String(enrollment || '').trim().toUpperCase()];
   if (t) vals.push(t);
-  return vals.length > 0 && vals.every(function (x) { return /\bOPEN\b/i.test(x); });
+  var q = vals[0] || '(blank)'; AT_SM_MEMO.seen[q] = (AT_SM_MEMO.seen[q] || 0) + 1;
+  /* strictly "Open Quota" / "Open Merit" (any other quota, even one with the word open in it, is left out) */
+  return vals.length > 0 && vals.every(function (x) { var k = String(x).toUpperCase().replace(/[^A-Z]+/g, ' ').trim(); return k === 'OPEN QUOTA' || k === 'OPEN MERIT' || k === 'OPEN'; });
+}
+/* row 3 of the Stopping Merit sheet: which quotas the 1st-year students have, and which one was used */
+function at_smNote_(sh) {
+  if (!AT_SM_MEMO) return;
+  var seen = AT_SM_MEMO.seen, txt = Object.keys(seen).sort(function (a, b) { return seen[b] - seen[a]; }).map(function (k) { return k + ' ' + seen[k]; }).join('  \u00b7  ');
+  sh.getRange(3, 1, 1, sh.getLastColumn()).merge().setValue('Only OPEN QUOTA students counted.  Quotas found (1st Year): ' + txt)
+    .setFontSize(9).setFontStyle('italic').setHorizontalAlignment('center').setWrap(true);
 }
 
 /* ---------- room of every section from the Timetable sheet (the room used most by that section) ---------- */
@@ -5410,6 +5419,7 @@ function generateJCWStoppingMeritReport() {
     .createFilter();
 
   reportSheet.deleteColumn(11);                        // admin tools: no DIVISION column
+  at_smNote_(reportSheet);                             // admin tools: quotas found / used
 
 
   // -------------------------------------------------------------------
