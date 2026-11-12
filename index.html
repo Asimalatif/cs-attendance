@@ -4455,7 +4455,10 @@ function ewCard(){
   return `<section class="card"><h3>${I.alert} Early warning</h3>
     <div class="seg2" role="group" aria-label="Period"><button type="button" data-xew="month" class="${ew.span === 'month' ? 'on' : ''}">This month</button><button type="button" data-xew="session" class="${ew.span === 'session' ? 'on' : ''}">Session so far</button></div>
     <div class="sub">${scope ? esc(allLabel()) : 'Your subjects'}: students already below ${LOW}% (with the lectures each must attend) and students <b>at risk</b>, who can miss only ${RISK} more lectures or fewer. Send it to the HOD or Chief Proctor every week.</div>
-    <div class="acts2"><button class="btn" type="button" id="xEwTxt">Share on WhatsApp</button><button class="btn primary" type="button" id="xEwPdf">${I.share}Early warning PDF</button></div></section>`;
+    <div class="acts2"><button class="btn" type="button" id="xEwTxt">Share on WhatsApp</button><button class="btn primary" type="button" id="xEwPdf">${I.share}Early warning PDF</button></div></section>
+    <section class="card"><h3>${I.alert} Bunkers</h3>
+    <div class="sub">${scope ? esc(allLabel()) : 'Your lectures'}: students who were present in one lecture but absent (or marked B) in another on the same day. Day, week, month and whole session; by section, subject, class and more. PDF, CSV and WhatsApp.</div>
+    <div class="acts2"><a class="btn primary" href="bunkers.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Bunkers</a></div></section>`;
 }
 /** one student may come back under two sections (guest in one subject): join them into one report, home section first */
 function oneStudent(S, roll){
