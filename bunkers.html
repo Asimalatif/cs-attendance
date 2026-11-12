@@ -489,8 +489,8 @@ async function pdfDay(){
     await makePdf('Bunkers ' + DAY.date, 'Bunkers · ' + nice(DAY.date), DAY.scope + ' · ' + rows.length + ' students · ' + C + ' confirmed · ' + P + ' possible · C = confirmed (teacher marked B), P = possible (present in one lecture, absent in another), X = excused · Marks: P present, A absent, L leave, B bunk.\nSubjects: ' + abKey(), [{
       head: ['#', 'Section', 'Roll No', 'Student', 'Kind', 'Bunked (missed) lectures', 'Other lectures that day', 'Pattern', 'Days this month'],
       body: rows.map((r, i) => [i + 1, r.sec, r.roll, r.name, { confirmed: 'C', possible: 'P', excused: 'X' }[r.kind] + (r.decision ? ' · ' + r.decision : ''),
-        r.lectures.filter(l => l.m === 'A' || l.m === 'B').map(l => ab(l.sub) + (l.p ? ' P' + l.p : '') + ' ' + l.m).join(', '),
-        r.lectures.filter(l => l.m === 'P' || l.m === 'L').map(l => ab(l.sub) + (l.p ? ' P' + l.p : '') + ' ' + l.m).join(', '), r.pattern, r.days]),
+        r.lectures.filter(l => l.m === 'A' || l.m === 'B').map(l => ab(l.sub) + (l.p ? ' P' + l.p : '') + '(' + l.m + ')').join(', '),
+        r.lectures.filter(l => l.m === 'P' || l.m === 'L').map(l => ab(l.sub) + (l.p ? ' P' + l.p : '') + '(' + l.m + ')').join(', '), r.pattern, r.days]),
       kindCol: 4, cols: { 0: { cellWidth: 7 }, 1: { cellWidth: 24 }, 2: { cellWidth: 24 }, 3: { cellWidth: 30 }, 4: { cellWidth: 14 }, 8: { cellWidth: 12 } } }]);
     hush('st_day');
   }catch(e){ say('st_day', 'err', e.message); }
@@ -503,7 +503,7 @@ async function pdfRange(){
     if (GROUP === 'students') {
       const rows = studentRows(evs); if(!rows.length){ alert('Nothing to put in the PDF.'); hush('st_range'); return; }
       Object.keys(USED).forEach(k => delete USED[k]);
-      const lecTxt2 = l => ab(l[1]) + (l[0] && l[0] !== '0' ? ' P' + l[0] : '') + ' ' + l[3];
+      const lecTxt2 = l => ab(l[1]) + (l[0] && l[0] !== '0' ? ' P' + l[0] : '') + '(' + l[3] + ')';
       const C = rows.reduce((a, r) => a + r.confirmed, 0), Pn = rows.reduce((a, r) => a + r.possible, 0);
       // 1) summary by section
       const bySec = {};
@@ -517,7 +517,7 @@ async function pdfRange(){
         bySec[k].list.forEach((r, i) => {
           const days = r.dates.slice().sort((a, b) => a.d < b.d ? -1 : 1), n = days.length;
           days.forEach((x, j) => {
-            const lt = m => x.miss.filter(l => l[3] === m).map(l => ab(l[1]) + (l[0] && l[0] !== '0' ? ' P' + l[0] : '')).join(', ') || '–';
+            const lt = m => x.miss.filter(l => l[3] === m).map(l => ab(l[1]) + (l[0] && l[0] !== '0' ? ' P' + l[0] : '') + '(' + m + ')').join(', ') || '–';
             const line = [short(x.d), x.k === 'C' ? 'Confirmed' : 'Possible', lt('B'), lt('A'), (x.att || []).map(lecTxt2).join(', ') || '–'];
             body.push(j ? line : [{ content: String(i + 1), rowSpan: n }, { content: r.roll, rowSpan: n }, { content: r.name + (r.father ? '\nd/o ' + r.father : ''), rowSpan: n },
               { content: r.count + ' day' + (r.count > 1 ? 's' : '') + (r.confirmed ? '\n' + r.confirmed + ' confirmed' : '') + (r.possible ? '\n' + r.possible + ' possible' : ''), rowSpan: n }].concat(line));
