@@ -442,6 +442,20 @@ const loadScript = src => new Promise((ok, bad) => { const sc = document.createE
 let libP = null;
 function pdfLibs(){ if (window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API.autoTable) return Promise.resolve(); if (!libP) libP = (window.jspdf ? Promise.resolve() : loadScript(LIBS[0])).then(() => window.jspdf.jsPDF.API.autoTable ? null : loadScript(LIBS[1])).catch(e => { libP = null; throw e; }); return libP; }
 const lecShort = l => l[1] + (l[0] && l[0] !== '0' ? ' P' + l[0] : '') + (l[3] === 'B' ? ' (B)' : '');
+/* short subject names for the PDFs (a key of the ones used is printed under the title) */
+const ABBR = { 'ENGLISH':'ENG', 'URDU':'URDU', 'ISLAMIYAT':'ISL', 'ISLAMIAT':'ISL', 'ISLAMIC STUDIES':'IS', 'MUTALIA QURAN':'MQ', 'MUTALA QURAN':'MQ', 'PAK-STUDIES':'PST', 'PAK STUDIES':'PST', 'PAKISTAN STUDIES':'PST',
+  'PHYSICS':'PHY', 'CHEMISTRY':'CHEM', 'BIOLOGY':'BIO', 'ZOOLOGY':'ZOO', 'BOTANY':'BOT', 'MATHEMATICS':'MATH', 'MATH':'MATH', 'GENERAL MATHEMATICS':'GMATH', 'STATISTICS':'STAT',
+  'COMPUTER SCIENCE':'CS', 'COMPUTER':'CS', 'ECONOMICS':'ECO', 'EDUCATION':'EDU', 'HISTORY':'HIST', 'GEOGRAPHY':'GEO', 'PSYCHOLOGY':'PSY', 'CIVICS':'CIV', 'SOCIOLOGY':'SOC',
+  'POLITICAL SCIENCE':'POL', 'HOME ECONOMICS':'HEC', 'FINE ARTS':'ART', 'PASHTO':'PSH', 'ARABIC':'ARB', 'PERSIAN':'PER', 'LIBRARY SCIENCE':'LIB', 'HEALTH & PHYSICAL EDUCATION':'HPE', 'HEALTH AND PHYSICAL EDUCATION':'HPE' };
+const USED = {};
+function ab(sub){
+  const k = String(sub || '').trim().toUpperCase(); if (!k) return '';
+  let a = ABBR[k];
+  if (!a) { const w = k.split(/[\s&\-\/]+/).filter(x => x && !/^(AND|OF|THE)$/.test(x)); a = w.length > 1 ? w.map(x => x[0]).join('') : k.slice(0, 4); }
+  if (a !== k) USED[a] = k.replace(/\b\w+/g, x => x[0] + x.slice(1).toLowerCase());
+  return a;
+}
+const abKey = () => Object.keys(USED).sort().map(a => a + ' = ' + USED[a]).join(' · ');
 async function makePdf(file, title, sub, sections){
   await pdfLibs();
   const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape', compress: true }), W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
@@ -470,11 +484,13 @@ async function pdfDay(){
   say('st_day', 'busy', 'Making the PDF…');
   try{
     const C = rows.filter(r => r.kind === 'confirmed').length, P = rows.filter(r => r.kind === 'possible').length;
-    await makePdf('Bunkers ' + DAY.date, 'Bunkers · ' + nice(DAY.date), DAY.scope + ' · ' + rows.length + ' students · ' + C + ' confirmed · ' + P + ' possible · C = confirmed (teacher marked B), P = possible (present in one lecture, absent in another), X = excused', [{
-      head: ['#', 'Section', 'Roll No', 'Student', 'Kind', 'Bunked (missed) lectures', 'Attended', 'Pattern', 'Days this month'],
+    Object.keys(USED).forEach(k => delete USED[k]);
+    rows.forEach(r => r.lectures.forEach(l => ab(l.sub)));
+    await makePdf('Bunkers ' + DAY.date, 'Bunkers · ' + nice(DAY.date), DAY.scope + ' · ' + rows.length + ' students · ' + C + ' confirmed · ' + P + ' possible · C = confirmed (teacher marked B), P = possible (present in one lecture, absent in another), X = excused · Marks: P present, A absent, L leave, B bunk.\nSubjects: ' + abKey(), [{
+      head: ['#', 'Section', 'Roll No', 'Student', 'Kind', 'Bunked (missed) lectures', 'Other lectures that day', 'Pattern', 'Days this month'],
       body: rows.map((r, i) => [i + 1, r.sec, r.roll, r.name, { confirmed: 'C', possible: 'P', excused: 'X' }[r.kind] + (r.decision ? ' · ' + r.decision : ''),
-        r.lectures.filter(l => l.m === 'A' || l.m === 'B').map(l => l.sub + (l.p ? ' P' + l.p : '') + (l.m === 'B' ? ' (B)' : '') + (l.teacher ? ' – ' + l.teacher : '')).join('; '),
-        r.lectures.filter(l => l.m === 'P').map(l => l.sub + (l.p ? ' P' + l.p : '')).join(', '), r.pattern, r.days]),
+        r.lectures.filter(l => l.m === 'A' || l.m === 'B').map(l => ab(l.sub) + (l.p ? ' P' + l.p : '') + ' ' + l.m).join(', '),
+        r.lectures.filter(l => l.m === 'P' || l.m === 'L').map(l => ab(l.sub) + (l.p ? ' P' + l.p : '') + ' ' + l.m).join(', '), r.pattern, r.days]),
       kindCol: 4, cols: { 0: { cellWidth: 7 }, 1: { cellWidth: 24 }, 2: { cellWidth: 24 }, 3: { cellWidth: 30 }, 4: { cellWidth: 14 }, 8: { cellWidth: 12 } } }]);
     hush('st_day');
   }catch(e){ say('st_day', 'err', e.message); }
@@ -486,7 +502,8 @@ async function pdfRange(){
   try{
     if (GROUP === 'students') {
       const rows = studentRows(evs); if(!rows.length){ alert('Nothing to put in the PDF.'); hush('st_range'); return; }
-      const lecTxt2 = l => l[1] + (l[0] && l[0] !== '0' ? ' (P' + l[0] + ')' : '') + ' ' + l[3];
+      Object.keys(USED).forEach(k => delete USED[k]);
+      const lecTxt2 = l => ab(l[1]) + (l[0] && l[0] !== '0' ? ' P' + l[0] : '') + ' ' + l[3];
       const C = rows.reduce((a, r) => a + r.confirmed, 0), Pn = rows.reduce((a, r) => a + r.possible, 0);
       // 1) summary by section
       const bySec = {};
@@ -500,18 +517,18 @@ async function pdfRange(){
         bySec[k].list.forEach((r, i) => {
           const days = r.dates.slice().sort((a, b) => a.d < b.d ? -1 : 1), n = days.length;
           days.forEach((x, j) => {
-            const lt = m => x.miss.filter(l => l[3] === m).map(l => l[1] + (l[0] && l[0] !== '0' ? ' (P' + l[0] + ')' : '') + (l[2] ? ' – ' + l[2] : '')).join('\n') || '–';
+            const lt = m => x.miss.filter(l => l[3] === m).map(l => ab(l[1]) + (l[0] && l[0] !== '0' ? ' P' + l[0] : '')).join(', ') || '–';
             const line = [short(x.d), x.k === 'C' ? 'Confirmed' : 'Possible', lt('B'), lt('A'), (x.att || []).map(lecTxt2).join(', ') || '–'];
             body.push(j ? line : [{ content: String(i + 1), rowSpan: n }, { content: r.roll, rowSpan: n }, { content: r.name + (r.father ? '\nd/o ' + r.father : ''), rowSpan: n },
               { content: r.count + ' day' + (r.count > 1 ? 's' : '') + '\n' + r.confirmed + ' confirmed\n' + r.possible + ' possible', rowSpan: n }].concat(line));
           });
         });
         parts.push({ title: k + ' · ' + bySec[k].st + ' student(s) · ' + bySec[k].days + ' bunk day(s)',
-          head: ['#', 'Roll No', 'Student', 'Total', 'Date', 'Kind', 'Marked B (bunk) – teacher', 'Marked A (absent) – teacher', 'Other lectures that day'],
+          head: ['#', 'Roll No', 'Student', 'Total', 'Date', 'Kind', 'Marked B (bunk)', 'Marked A (absent)', 'Other lectures that day'],
           body: body, kindCol: 5, redCol: 6,
-          cols: { 0: { cellWidth: 7 }, 1: { cellWidth: 24 }, 2: { cellWidth: 32 }, 3: { cellWidth: 19 }, 4: { cellWidth: 20 }, 5: { cellWidth: 16 }, 6: { cellWidth: 52, textColor: [192, 57, 43], fontStyle: 'bold' }, 7: { cellWidth: 52 } } });
+          cols: { 0: { cellWidth: 7 }, 1: { cellWidth: 24 }, 2: { cellWidth: 34 }, 3: { cellWidth: 19 }, 4: { cellWidth: 20 }, 5: { cellWidth: 16 }, 6: { cellWidth: 40, textColor: [192, 57, 43], fontStyle: 'bold' }, 7: { cellWidth: 40 } } });
       });
-      await makePdf(rangeTitle(), name, sub + ' · ' + rows.length + ' students · ' + C + ' confirmed, ' + Pn + ' possible bunk days. Confirmed = a teacher marked B (red). Possible = present (P) in one lecture, absent (A) in another the same day. Marks: P present, A absent, L leave, B bunk.', parts);
+      await makePdf(rangeTitle(), name, sub + ' · ' + rows.length + ' students · ' + C + ' confirmed, ' + Pn + ' possible bunk days. Confirmed = a teacher marked B (red). Possible = present (P) in one lecture, absent (A) in another the same day. Marks: P present, A absent, L leave, B bunk. P1, P2 … = period.\nSubjects: ' + abKey(), parts);
     } else {
       const def = groupDef(), rows = groupRows(evs, def[1], def[2]);
       await makePdf(rangeTitle() + ' - ' + def[0], name + ' by ' + def[0].toLowerCase(), sub, [{
