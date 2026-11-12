@@ -1,42 +1,51 @@
 /**
- * Bunkers.gs — Daily bunkers report (page bunkers.html).
+ * Bunkers.gs — Daily, weekly and monthly bunkers report (page bunkers.html).
  *
- * A "bunker" is a student who was PRESENT in at least one lecture on a day but ABSENT (A) or BUNK (B)
- * in another lecture of the same day. Students a teacher marked "B" are listed too, even with no P that day.
- * Leave (L) is never counted as bunking.
+ * It reads the hidden "Period Data" sheet of each month workbook (the real mark of every period of every subject),
+ * so teachers mark nothing new, and nothing is written to the attendance sheets.
  *
- * It reads the hidden "Period Data" sheet of the month workbook (the real mark of every period of every
- * subject), so nothing new has to be marked by the teachers. Nothing is written to the attendance sheets.
+ * Two kinds of bunkers on a day:
+ *   CONFIRMED  a teacher marked her "B" (in college but missed the lecture).
+ *              If her other lectures that day are all A, she came to college and missed every lecture.
+ *   POSSIBLE   present (P) in one lecture but absent (A) in another lecture of the same day, and no B.
+ *              The A may be a real bunk or a real reason (sent home, left with permission …), so it waits
+ *              for a decision: "Confirm bunk" or "Excused". Decisions are kept in the sheet "Bunk Decisions"
+ *              of the Users workbook (the attendance itself is never changed).
+ * Leave (L) is never bunking. A P in the same period in another sheet (guest, moved section) cancels an A/B there.
  *
- * Who can open it: admin / principal (whole college), Chief Proctors (whole college),
- *                  HOD (only lectures taught by teachers of her department).
+ * Who can open it: admin / principal and Chief Proctors (whole college), HOD (lectures of her department's teachers).
+ * The same people can confirm or excuse a possible bunk.
  *
  * INSTALL:
- *   a) + > Script > name it "Bunkers" > paste this file.
- *   b) doPost, next to the rpt_ line:
+ *   a) + > Script > name it "Bunkers" > paste this file (replace the old one completely).
+ *   b) doPost, next to the rpt_ line (once):
  *        if (/^bnk_/.test(String(req.action || ''))) return json_(bnkRoute_(user, req));
  *   c) Deploy > Manage deployments > Edit > New version > Deploy.
- *   d) Optional: run bnkSetupDailyLog once — every day at about 4 pm the day's bunkers are also saved
- *      in the sheet "Bunkers Log" of the Users workbook (history that stays even after the month ends).
+ *   d) Optional: run bnkSetupDailyLog once — every day at about 4 pm the day's bunkers are saved in "Bunkers Log".
  */
 var BNK_LOG_SHEET = 'Bunkers Log';
-var BNK_LOG_HEAD = ['Date', 'Roll No', 'Student', 'Section', 'Pattern', 'Attended', 'Missed', 'Missed lectures', 'Attended lectures'];
+var BNK_LOG_HEAD = ['Date', 'Roll No', 'Student', 'Section', 'Kind', 'Pattern', 'Attended', 'Missed', 'Missed lectures', 'Attended lectures', 'Decision'];
+var BNK_DEC_SHEET = 'Bunk Decisions';
+var BNK_DEC_HEAD = ['Date', 'Roll No', 'Student', 'Section', 'Decision', 'Note', 'By', 'When'];
 var BNK_TOK_ = { 8: 'SEPT', 9: 'OCT', 10: 'NOV', 11: 'DEC', 0: 'JAN' };
+var BNK_MAX_DAYS = 62;
 
 function bnkRoute_(user, req) {
   try {
     var who = bnkWho_(user);
     if (!who) return { ok: false, error: 'Only the admin, principal, HOD or Chief Proctor can see the bunkers report.' };
     var a = String(req.action || '');
-    if (a === 'bnk_day')   return bnkDay_(who, String(req.date || ''));
-    if (a === 'bnk_month') return bnkMonth_(who, String(req.mon || ''));
+    if (a === 'bnk_day')    return bnkDay_(who, String(req.date || ''));
+    if (a === 'bnk_range')  return bnkRange_(who, String(req.from || ''), String(req.to || ''));
+    if (a === 'bnk_month')  return bnkMonthRange_(who, String(req.mon || ''));
+    if (a === 'bnk_decide') return bnkDecide_(user, req);
     return { ok: false, error: 'UNKNOWN_ACTION' };
   } catch (e) {
     return { ok: false, error: e && e.message ? e.message : String(e) };
   }
 }
 
-/** { all: true } or { all: false, dept: 'COMPUTER SCIENCE' } or null */
+/** { all: true } or { all: false, dept } or null */
 function bnkWho_(user) {
   var s = scopeOf_(user);
   if (s && s.all) return { all: true, label: 'College' };
@@ -46,33 +55,53 @@ function bnkWho_(user) {
   return null;
 }
 
-/** "2026-11-12" -> { tok:'NOV', day:12, date:Date } (only Sept to Jan have attendance workbooks) */
-function bnkDate_(txt) {
-  var m = String(txt || '').match(/^(\d{4})-(\d{2})-(\d{2})$/), d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date();
-  var tok = BNK_TOK_[d.getMonth()];
-  if (!tok) throw new Error('Attendance is only kept from September to January.');
-  return { tok: tok, day: d.getDate(), date: d, iso: Utilities.formatDate(d, TZ_(), 'yyyy-MM-dd') };
+var bnkIso_ = function (d) { return Utilities.formatDate(d, TZ_(), 'yyyy-MM-dd'); };
+function bnkParse_(txt) {
+  var m = String(txt || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
 }
 
-/** Everything one month needs: period marks of every sheet + sheet info + student names. */
+/* ---------------- data ---------------- */
+
+var BNK_MEMO_ = {};
+/** One month: period marks of every sheet + sheet info. */
 function bnkLoad_(tok, who) {
+  var key = tok + '|' + (who.all ? '*' : who.dept);
+  if (BNK_MEMO_[key]) return BNK_MEMO_[key];
   var book = bookFor_(tok), sh = book.getSheetByName(PD_SHEET), sheets = [];
-  if (!sh || sh.getLastRow() < 2) return { sheets: [], names: {} };
-  var idx = indexRows_(tok), depts = who.all ? null : teacherDepts_();
-  sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues().forEach(function (r) {
-    var name = String(r[0] || ''), raw;
-    if (!name) return;
-    try { raw = JSON.parse(r[1] || '{}'); } catch (e) { return; }
-    var x = idx[name] || [], teacher = String(x[4] || '');
-    var mine = who.all || String(depts[normalizeName(teacher)] || '').toUpperCase() === who.dept;
-    sheets.push({ name: name, cls: String(x[2] || '') || name, sub: String(x[3] || ''), teacher: teacher, mine: mine, r: raw.r || [], d: raw.d || {} });
-  });
-  var names = {};
-  getMaster_().rows.forEach(function (m) { names[enr_(m[0])] = { name: m[1], sec: m[2], father: m[4] }; });
-  return { sheets: sheets, names: names };
+  if (sh && sh.getLastRow() > 1) {
+    var idx = indexRows_(tok), depts = who.all ? null : teacherDepts_();
+    sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues().forEach(function (r) {
+      var name = String(r[0] || ''), raw;
+      if (!name) return;
+      try { raw = JSON.parse(r[1] || '{}'); } catch (e) { return; }
+      var x = idx[name] || [], teacher = String(x[4] || '');
+      var mine = who.all || String(depts[normalizeName(teacher)] || '').toUpperCase() === who.dept;
+      sheets.push({ name: name, cls: String(x[2] || '') || name, sub: String(x[3] || ''), teacher: teacher, mine: mine, r: raw.r || [], d: raw.d || {} });
+    });
+  }
+  return (BNK_MEMO_[key] = { tok: tok, sheets: sheets });
 }
 
-/** roll -> [ { p, sub, teacher, cls, m, mine } ] for one day (only students with a mark that day) */
+var BNK_NAMES_ = null;
+function bnkNames_() {
+  if (BNK_NAMES_) return BNK_NAMES_;
+  BNK_NAMES_ = {};
+  getMaster_().rows.forEach(function (m) { BNK_NAMES_[enr_(m[0])] = { name: m[1], sec: m[2], father: m[4] }; });
+  return BNK_NAMES_;
+}
+
+/** 'yyyy-MM-dd|ROLL' -> { decision, note, by, when } */
+function bnkDecisions_() {
+  var sh = SpreadsheetApp.openById(USERS_SS_ID).getSheetByName(BNK_DEC_SHEET), out = {};
+  if (!sh || sh.getLastRow() < 2) return out;
+  sh.getRange(2, 1, sh.getLastRow() - 1, BNK_DEC_HEAD.length).getDisplayValues().forEach(function (r) {
+    if (r[0] && r[1]) out[r[0] + '|' + enr_(r[1])] = { decision: r[4], note: r[5], by: r[6], when: r[7] };
+  });
+  return out;
+}
+
+/** roll -> { roll, list:[ { p, sub, teacher, cls, m, mine } ] } for one day of one month */
 function bnkDayMarks_(L, day) {
   var out = {};
   L.sheets.forEach(function (s) {
@@ -91,84 +120,155 @@ function bnkDayMarks_(L, day) {
   return out;
 }
 
-/** One student's day -> null (not a bunker) or the bunk record. */
+/** One student's day -> null or { kind: 'confirmed'|'possible', pattern, attended, missed, lectures } */
 function bnkJudge_(rec, who) {
   // the same period in two sheets (guest, moved section, duplicate roll): a P there means she WAS in class
   var inClass = {};
   rec.list.forEach(function (x) { if (x.m === 'P' && x.p) inClass[x.p] = 1; });
   var L = rec.list.filter(function (x) { return x.m === 'P' || !x.p || !inClass[x.p]; }).sort(function (a, b) { return a.p - b.p; });
   var P = L.filter(function (x) { return x.m === 'P'; }), miss = L.filter(function (x) { return x.m === 'A' || x.m === 'B'; });
-  var hasB = L.some(function (x) { return x.m === 'B'; });
-  if (!miss.length || (!P.length && !hasB)) return null;
+  var B = L.filter(function (x) { return x.m === 'B'; });
+  if (!miss.length) return null;
+  if (!B.length && !P.length) return null;                                   // absent the whole day = not a bunker
   if (!who.all && !miss.some(function (x) { return x.mine; })) return null;   // HOD: only her department's lectures
-  var pattern = 'Marked B by the teacher';
-  if (P.length) {
+  var kind = B.length ? 'confirmed' : 'possible', pattern;
+  if (!P.length) pattern = miss.length > 1 ? 'In college, missed every lecture' : 'Marked B by the teacher';
+  else {
     var firstP = P[0].p, lastP = P[P.length - 1].p;
     var late = miss.some(function (x) { return x.p && x.p < firstP; }), early = miss.some(function (x) { return x.p && x.p > lastP; });
     var mid = miss.some(function (x) { return x.p > firstP && x.p < lastP; });
     pattern = early && !late && !mid ? 'Left early' : late && !early && !mid ? 'Came late' : mid && !late && !early ? 'Skipped in between' : 'Missed lectures in between';
   }
-  return { attended: P.length, missed: miss.length, pattern: pattern,
+  return { kind: kind, pattern: pattern, attended: P.length, missed: miss.length,
     lectures: L.map(function (x) { return { p: x.p, sub: x.sub, teacher: x.teacher, m: x.m }; }) };
 }
 
-function bnkDay_(who, dateTxt) {
-  var D = bnkDate_(dateTxt), L = bnkLoad_(D.tok, who), marks = bnkDayMarks_(L, D.day), rows = [];
-  Object.keys(marks).forEach(function (k) {
-    var j = bnkJudge_(marks[k], who);
+/** A decision: "Confirmed" makes a possible bunk confirmed; "Excused" takes it out of every count. */
+function bnkApply_(j, dec) {
+  if (!dec) return j;
+  j.decision = dec.decision; j.decNote = dec.note; j.decBy = dec.by;
+  if (dec.decision === 'Excused') j.kind = 'excused';
+  else if (dec.decision === 'Confirmed') j.kind = 'confirmed';
+  return j;
+}
+
+/** All judged students of one calendar date: { iso, rows:[...], marked } */
+function bnkDate_(who, d, DEC) {
+  var tok = BNK_TOK_[d.getMonth()], iso = bnkIso_(d);
+  if (!tok) return { iso: iso, rows: [], marked: 0 };
+  var L = bnkLoad_(tok, who), M = bnkDayMarks_(L, d.getDate()), names = bnkNames_(), rows = [];
+  Object.keys(M).forEach(function (k) {
+    var j = bnkJudge_(M[k], who);
     if (!j) return;
-    var n = L.names[k] || {};
-    j.roll = marks[k].roll; j.name = n.name || ''; j.father = n.father || '';
-    j.sec = n.sec || (marks[k].list[0] && marks[k].list[0].cls) || '';
+    bnkApply_(j, DEC[iso + '|' + k]);
+    var n = names[k] || {};
+    j.key = k; j.roll = M[k].roll; j.name = n.name || ''; j.father = n.father || '';
+    j.sec = n.sec || (M[k].list[0] && M[k].list[0].cls) || '';
     rows.push(j);
   });
-  rows.sort(function (a, b) { return a.sec.localeCompare(b.sec, undefined, { numeric: true }) || b.missed - a.missed || a.name.localeCompare(b.name); });
-  // repeat bunkers: how many days this month (up to this day) each of them bunked
-  var times = bnkRepeat_(L, who, D.day);
-  rows.forEach(function (r) { r.days = times[enr_(r.roll)] || 1; });
-  return { ok: true, date: D.iso, tok: D.tok, day: D.day, scope: who.label,
-    marked: Object.keys(marks).length, rows: rows };
+  return { iso: iso, rows: rows, marked: Object.keys(M).length };
 }
 
-/** roll -> number of days (1..upTo) she bunked this month */
-function bnkRepeat_(L, who, upTo) {
-  var days = {}, out = {};
-  L.sheets.forEach(function (s) { Object.keys(s.d).forEach(function (d) { if (Number(d) <= upTo) days[d] = 1; }); });
-  Object.keys(days).forEach(function (d) {
-    var M = bnkDayMarks_(L, d);
-    Object.keys(M).forEach(function (k) { if (bnkJudge_(M[k], who)) out[k] = (out[k] || 0) + 1; });
+/* ---------------- day ---------------- */
+
+function bnkDay_(who, dateTxt) {
+  var d = bnkParse_(dateTxt) || new Date();
+  if (!BNK_TOK_[d.getMonth()]) throw new Error('Attendance is only kept from September to January.');
+  var DEC = bnkDecisions_(), R = bnkDate_(who, d, DEC), o = { confirmed: 0, possible: 1, excused: 2 };
+  R.rows.sort(function (a, b) {
+    return a.sec.localeCompare(b.sec, undefined, { numeric: true }) || o[a.kind] - o[b.kind] || b.missed - a.missed || a.name.localeCompare(b.name);
   });
-  return out;
+  // days bunked this month up to this day (confirmed + possible, not excused)
+  var cnt = {};
+  for (var x = new Date(d.getFullYear(), d.getMonth(), 1); x <= d; x.setDate(x.getDate() + 1)) {
+    if (x.getDay() === 0) continue;
+    bnkDate_(who, new Date(x), DEC).rows.forEach(function (r) {
+      if (r.kind === 'excused') return;
+      var c = cnt[r.key] = cnt[r.key] || { c: 0, p: 0 };
+      if (r.kind === 'confirmed') c.c++; else c.p++;
+    });
+  }
+  R.rows.forEach(function (r) { var c = cnt[r.key] || { c: 0, p: 0 }; r.days = c.c + c.p; r.daysC = c.c; r.daysP = c.p; });
+  return { ok: true, date: R.iso, scope: who.label, marked: R.marked, rows: R.rows };
 }
 
-/** The whole month: every student who bunked, with the days and the subjects she missed most. */
-function bnkMonth_(who, tok) {
+/* ---------------- week / month (any range) ---------------- */
+
+function bnkMonthRange_(who, tok) {
   tok = String(tok || '').toUpperCase() || currentSeasonToken_();
   if (!tok || SEASON.indexOf(tok) < 0) throw new Error('Choose a month from September to January.');
-  var L = bnkLoad_(tok, who), days = {}, S = {};
-  L.sheets.forEach(function (s) { Object.keys(s.d).forEach(function (d) { days[d] = 1; }); });
-  var dayList = Object.keys(days).map(Number).sort(function (a, b) { return a - b; });
-  dayList.forEach(function (d) {
-    var M = bnkDayMarks_(L, d);
-    Object.keys(M).forEach(function (k) {
-      var j = bnkJudge_(M[k], who);
-      if (!j) return;
-      var n = L.names[k] || {}, s = S[k] = S[k] || { roll: M[k].roll, name: n.name || '', sec: n.sec || M[k].list[0].cls || '', days: [], missed: 0, subs: {}, patterns: {} };
-      s.days.push(d); s.missed += j.missed; s.patterns[j.pattern] = (s.patterns[j.pattern] || 0) + 1;
-      j.lectures.forEach(function (x) { if (x.m === 'A' || x.m === 'B') s.subs[x.sub] = (s.subs[x.sub] || 0) + 1; });
-    });
-  });
-  var rows = Object.keys(S).map(function (k) {
-    var s = S[k], top = Object.keys(s.subs).sort(function (a, b) { return s.subs[b] - s.subs[a]; });
-    var pat = Object.keys(s.patterns).sort(function (a, b) { return s.patterns[b] - s.patterns[a]; })[0];
-    return { roll: s.roll, name: s.name, sec: s.sec, days: s.days, count: s.days.length, missed: s.missed,
-      subjects: top.slice(0, 3).map(function (x) { return x + ' (' + s.subs[x] + ')'; }), pattern: pat };
-  }).sort(function (a, b) { return b.count - a.count || b.missed - a.missed || a.sec.localeCompare(b.sec, undefined, { numeric: true }); });
   var my = monthYear_(tok);
-  return { ok: true, tok: tok, m: my.m, y: my.y, scope: who.label, markedDays: dayList.length, rows: rows };
+  var from = new Date(my.y, my.m, 1), to = new Date(my.y, my.m + 1, 0), today = new Date();
+  if (to > today) to = today;
+  return bnkRange_(who, bnkIso_(from), bnkIso_(to));
 }
 
-/* ---------- optional daily log (history that stays) ---------- */
+function bnkRange_(who, fromTxt, toTxt) {
+  var from = bnkParse_(fromTxt), to = bnkParse_(toTxt);
+  if (!from || !to || to < from) throw new Error('Choose a correct period.');
+  if ((to - from) / 864e5 > BNK_MAX_DAYS) throw new Error('Choose at most ' + BNK_MAX_DAYS + ' days.');
+  var DEC = bnkDecisions_(), S = {}, days = 0, perDay = [];
+  for (var x = new Date(from); x <= to; x.setDate(x.getDate() + 1)) {
+    if (x.getDay() === 0 || !BNK_TOK_[x.getMonth()]) continue;
+    var R = bnkDate_(who, new Date(x), DEC), c = 0, p = 0;
+    if (R.marked) days++;
+    R.rows.forEach(function (j) {
+      if (j.kind === 'excused') return;
+      if (j.kind === 'confirmed') c++; else p++;
+      var s = S[j.key] = S[j.key] || { roll: j.roll, name: j.name, father: j.father, sec: j.sec, dates: [], confirmed: 0, possible: 0, missed: 0, subs: {}, patterns: {}, teachers: {} };
+      s.dates.push({ d: R.iso, k: j.kind === 'confirmed' ? 'C' : 'P' });
+      if (j.kind === 'confirmed') s.confirmed++; else s.possible++;
+      s.missed += j.missed; s.patterns[j.pattern] = (s.patterns[j.pattern] || 0) + 1;
+      j.lectures.forEach(function (l) {
+        if (l.m !== 'A' && l.m !== 'B') return;
+        s.subs[l.sub] = (s.subs[l.sub] || 0) + 1;
+        if (l.teacher) s.teachers[l.teacher] = 1;
+      });
+    });
+    if (R.marked) perDay.push({ d: R.iso, confirmed: c, possible: p, marked: R.marked });
+  }
+  var top = function (o, n) { return Object.keys(o).sort(function (a, b) { return o[b] - o[a]; }).slice(0, n); };
+  var rows = Object.keys(S).map(function (k) {
+    var s = S[k];
+    return { roll: s.roll, name: s.name, father: s.father, sec: s.sec, dates: s.dates, count: s.dates.length,
+      confirmed: s.confirmed, possible: s.possible, missed: s.missed,
+      subjects: top(s.subs, 3).map(function (x) { return x + ' (' + s.subs[x] + ')'; }), pattern: top(s.patterns, 1)[0] || '',
+      teachers: Object.keys(s.teachers) };
+  }).sort(function (a, b) { return b.confirmed - a.confirmed || b.count - a.count || b.missed - a.missed || a.sec.localeCompare(b.sec, undefined, { numeric: true }); });
+  return { ok: true, from: bnkIso_(from), to: bnkIso_(to), scope: who.label, markedDays: days, perDay: perDay, rows: rows };
+}
+
+/* ---------------- decisions ---------------- */
+
+/** req: { date, roll, decision: 'Confirmed' | 'Excused' | '' (clear), note } */
+function bnkDecide_(user, req) {
+  var d = bnkParse_(req.date), roll = String(req.roll || '').trim(), dec = String(req.decision || '');
+  if (!d || !roll) return { ok: false, error: 'Missing date or roll number.' };
+  if (dec && dec !== 'Confirmed' && dec !== 'Excused') return { ok: false, error: 'Unknown decision.' };
+  var iso = bnkIso_(d), lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var book = SpreadsheetApp.openById(USERS_SS_ID), sh = book.getSheetByName(BNK_DEC_SHEET);
+    if (!sh) {
+      sh = book.insertSheet(BNK_DEC_SHEET);
+      sh.getRange(1, 1, 1, BNK_DEC_HEAD.length).setValues([BNK_DEC_HEAD]).setFontWeight('bold').setBackground('#6B3423').setFontColor('#ffffff');
+      sh.setFrozenRows(1);
+    }
+    if (sh.getLastRow() > 1) {                                   // one decision per student per day
+      var v = sh.getRange(2, 1, sh.getLastRow() - 1, 2).getDisplayValues();
+      for (var i = v.length - 1; i >= 0; i--) if (v[i][0] === iso && enr_(v[i][1]) === enr_(roll)) sh.deleteRow(i + 2);
+    }
+    if (dec) {
+      var n = bnkNames_()[enr_(roll)] || {};
+      var at = sh.getLastRow() + 1;
+      sh.getRange(at, 1, 1, 2).setNumberFormat('@');
+      sh.getRange(at, 1, 1, BNK_DEC_HEAD.length).setValues([[iso, roll, n.name || '', n.sec || '', dec, String(req.note || '').slice(0, 300), user.teacher || user.username, new Date()]]);
+    }
+    return { ok: true, date: iso, roll: roll, decision: dec };
+  } finally { lock.releaseLock(); }
+}
+
+/* ---------------- optional daily log (history that stays) ---------------- */
 function bnkSetupDailyLog() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'bnkDailyLog') ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('bnkDailyLog').timeBased().everyDays(1).atHour(16).create();
@@ -177,28 +277,28 @@ function bnkSetupDailyLog() {
 
 function bnkDailyLog() {
   var now = new Date();
-  if (now.getDay() === 0 || !BNK_TOK_[now.getMonth()]) return;          // Sunday or outside Sept-Jan
-  var r = bnkDay_({ all: true, label: 'College' }, Utilities.formatDate(now, TZ_(), 'yyyy-MM-dd'));
+  if (now.getDay() === 0 || !BNK_TOK_[now.getMonth()]) return;
+  var R = bnkDate_({ all: true, label: 'College' }, now, bnkDecisions_());
   var book = SpreadsheetApp.openById(USERS_SS_ID), sh = book.getSheetByName(BNK_LOG_SHEET);
   if (!sh) {
     sh = book.insertSheet(BNK_LOG_SHEET);
     sh.getRange(1, 1, 1, BNK_LOG_HEAD.length).setValues([BNK_LOG_HEAD]).setFontWeight('bold').setBackground('#6B3423').setFontColor('#ffffff');
     sh.setFrozenRows(1);
   }
-  // the same date is written only once (a second run replaces it)
   if (sh.getLastRow() > 1) {
     var v = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getDisplayValues();
-    for (var i = v.length - 1; i >= 0; i--) if (v[i][0] === r.date) sh.deleteRow(i + 2);
+    for (var i = v.length - 1; i >= 0; i--) if (v[i][0] === R.iso) sh.deleteRow(i + 2);
   }
-  if (!r.rows.length) return;
+  if (!R.rows.length) return;
   var fmt = function (list, want) {
     return list.filter(function (x) { return want(x.m); }).map(function (x) { return 'P' + x.p + ' ' + x.sub + (x.m === 'B' ? ' (B)' : ''); }).join(', ');
   };
-  var out = r.rows.map(function (x) {
-    return [r.date, x.roll, x.name, x.sec, x.pattern, x.attended, x.missed,
-      fmt(x.lectures, function (m) { return m === 'A' || m === 'B'; }), fmt(x.lectures, function (m) { return m === 'P'; })];
+  var KIND = { confirmed: 'Confirmed (B)', possible: 'Possible', excused: 'Excused' };
+  var out = R.rows.map(function (x) {
+    return [R.iso, x.roll, x.name, x.sec, KIND[x.kind], x.pattern, x.attended, x.missed,
+      fmt(x.lectures, function (m) { return m === 'A' || m === 'B'; }), fmt(x.lectures, function (m) { return m === 'P'; }), x.decision || ''];
   });
   var at = sh.getLastRow() + 1;
-  sh.getRange(at, 1, out.length, 1).setNumberFormat('@');
+  sh.getRange(at, 1, out.length, 2).setNumberFormat('@');
   sh.getRange(at, 1, out.length, BNK_LOG_HEAD.length).setValues(out);
 }
