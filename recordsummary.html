@@ -1,0 +1,1310 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="theme-color" content="#312e81">
+  <meta name="robots" content="noindex">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.png">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JCW Record Summary</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&family=Fraunces:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#15132e; --bg-2:#262060; --paper:#fff; --wash:#f4f4fb; --ink:#1c1a3a; --muted:#625f80; --line:#c9c9de;
+      --brand:#4338ca; --brand-dark:#312e81; --brand-tint:#e8e8fb; --accent:#f2b84b; --good:#12946b; --mid:#d98e04; --alert:#b4382f; --serif:"Fraunces",Georgia,serif; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; color:var(--ink); font:13px/1.35 "Plus Jakarta Sans","Segoe UI",Arial,sans-serif;
+      background:radial-gradient(1200px 520px at 50% -10%, var(--bg-2), var(--bg)); }
+    .page { width:96%; max-width:1200px; margin:0 auto; padding:24px 0 40px; }
+    .bar { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; background:var(--paper); padding:10px 12px;
+      border-radius:14px; border-bottom:3px solid var(--accent); box-shadow:0 10px 30px rgba(0,0,0,.3); margin-bottom:12px; }
+    .fld { display:flex; flex-direction:column; gap:3px; font-size:12px; color:var(--muted); font-weight:600; }
+    .bar select.plain { font:inherit; font-weight:400; color:var(--ink); padding:7px 10px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+
+    /* ---------- tabs ---------- */
+    .tabs { display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
+    .back { display:inline-flex; align-items:center; height:36px; padding:0 14px; border-radius:999px; background:rgba(255,255,255,.14); color:#fff; font-weight:700; text-decoration:none; margin-right:auto; }
+    .tab { position:relative; display:flex; align-items:center; gap:10px; font:inherit; font-weight:700; font-size:14px;
+      padding:9px 20px 9px 10px; border:2px solid rgba(255,255,255,.18); border-radius:14px; cursor:pointer;
+      color:#dcdaf5; background:rgba(255,255,255,.07); transition:transform .15s, background .2s, border-color .2s, box-shadow .2s; }
+    .tab .ico { width:32px; height:32px; border-radius:10px; display:grid; place-items:center; font-size:17px; background:rgba(255,255,255,.14); }
+    #tabTable  { --c1:#38bdf8; --c2:#4338ca; }   /* blue */
+    #tabCharts { --c1:#f472b6; --c2:#f59e0b; }   /* pink to amber */
+    .tab:hover { transform:translateY(-2px); border-color:var(--c1); color:#fff; }
+    .tab.on { color:#fff; border-color:transparent; transform:translateY(-2px);
+      background:linear-gradient(135deg,var(--c1),var(--c2));
+      box-shadow:0 10px 24px rgba(0,0,0,.4), 0 0 0 3px rgba(255,255,255,.28); }
+    .tab.on .ico { background:rgba(255,255,255,.28); }
+    .tab.on::after { content:""; position:absolute; left:50%; bottom:-10px; transform:translateX(-50%);
+      border:8px solid transparent; border-bottom:0; border-top-color:var(--c2); }
+    .tab .spin { display:none; margin-left:2px; border-color:rgba(255,255,255,.4); border-left-color:#fff; }
+    body.busy .tab .spin { display:inline-block; }
+    #tableView .bar  { border-bottom-color:#38bdf8; }
+    #chartsView .bar { border-bottom-color:#f472b6; }
+    #chartsView { display:none; }
+
+    /* ---------- multi-select dropdown ---------- */
+    .ms { position:relative; }
+    .ms-btn { font:inherit; font-weight:400; color:var(--ink); display:flex; align-items:center; justify-content:space-between; gap:8px;
+      width:100%; min-width:150px; max-width:220px; padding:7px 10px; border:1px solid var(--line); border-radius:8px; background:#fff; cursor:pointer; text-align:left; }
+    .ms-btn .ms-txt { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .ms-btn .car { font-size:10px; color:var(--muted); }
+    .ms.has .ms-btn { border-color:var(--brand); background:var(--brand-tint); font-weight:600; }
+    .ms-panel { display:none; position:absolute; top:calc(100% + 3px); left:0; min-width:100%; max-width:320px; max-height:260px; overflow:auto;
+      background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 10px 24px rgba(0,0,0,.25); z-index:50; padding:4px; }
+    .ms.open .ms-panel { display:block; }
+    .ms-panel label.opt { display:flex; align-items:center; gap:7px; padding:5px 7px; border-radius:6px; cursor:pointer; white-space:nowrap;
+      font-size:12px; font-weight:400; color:var(--ink); }
+    .ms-panel label.opt:hover { background:var(--brand-tint); }
+    .ms-panel input { margin:0; accent-color:var(--brand); }
+    .ms-empty { padding:6px 8px; color:var(--muted); font-size:12px; }
+
+    .spacer { flex:1; }
+    .progress { font-size:12px; color:var(--muted); font-weight:600; padding-bottom:8px; }
+    .btn { font:inherit; font-weight:700; border:1px solid var(--brand); border-radius:10px; padding:8px 14px; cursor:pointer; background:var(--brand); color:#fff; }
+    .btn:hover { background:var(--brand-dark); }
+    .btn.ghost { background:var(--paper); color:var(--brand-dark); border-color:var(--line); }
+    .btn.ghost:hover { background:var(--brand-tint); }
+
+    .sheet { background:var(--paper); border-radius:14px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,.3); }
+    .wrap { overflow:auto; max-height:80vh; }
+    table { border-collapse:separate; border-spacing:0; width:100%; text-align:center; }
+    th, td { border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:3px 5px; }
+    thead th { background:var(--wash); font-weight:700; position:sticky; z-index:3; white-space:nowrap; }
+    thead tr.t1 th { top:0; font-family:var(--serif); font-size:16px; background:var(--brand-dark); color:#fff; border-color:#4a46a3; }
+    thead tr.t2 th { top:var(--h1, 36px); }
+    thead tr.t3 th { top:var(--h2, 72px); font-size:12px; }
+    th.grp { background:var(--brand-tint); color:var(--brand-dark); letter-spacing:.3px; }
+    th.tall { vertical-align:middle; }
+    th.locked { color:#9a99b5; font-weight:600; }
+
+    td.sno, td.cls { background:#fff; font-weight:700; font-size:13px; white-space:nowrap; }
+    td.sno { width:30px; }
+    th.clsh { width:50px; max-width:56px; white-space:normal; font-size:11px; line-height:1.15; padding:3px 2px; }
+    td.cls { width:50px; max-width:56px; white-space:normal; word-break:break-word; font-size:11.5px; line-height:1.15; padding:3px 2px; }
+
+    td.subj { text-align:left; font-weight:600; background:#fff; white-space:normal; max-width:130px; line-height:1.2; }
+    td.teacher { text-align:left; font-size:12px; color:var(--muted); font-weight:600; background:#fff; white-space:normal; max-width:120px; line-height:1.2; }
+    tbody tr.first td { border-top:2px solid #8f8fb5; }
+    tbody tr:hover td.subj, tbody tr:hover td.teacher, tbody tr:hover td.c { background:var(--brand-tint); }
+
+    td.c { width:44px; min-width:0; padding:3px 2px; font-size:15px; font-weight:700; }
+    td.c.full { color:var(--good); }
+    td.c.none { color:#d8d8e6; }
+    td.c.lock { background:#f3f3f8; }
+    td.c.na { background:#f3f3f8; color:#a3a2bd; font-size:10px; font-weight:600; }
+    td.c.load { background:linear-gradient(90deg,#f4f4fb,#eaeaf6,#f4f4fb); background-size:200% 100%; animation:sh 1.2s linear infinite; }
+    @keyframes sh { to { background-position:-200% 0; } }
+
+    tfoot td { position:sticky; bottom:0; background:var(--wash); font-weight:700; font-size:11.5px; border-top:2px solid var(--brand); white-space:nowrap; }
+    tfoot td.lab { text-align:right; }
+    .spin { display:inline-block; width:10px; height:10px; margin-left:4px; border:2px solid #cfd0f5; border-left-color:var(--brand); border-radius:50%; animation:sp 1s linear infinite; vertical-align:-1px; }
+    @keyframes sp { to { transform:rotate(360deg); } }
+    .err { color:var(--alert); cursor:help; margin-left:3px; }
+    .legend { display:flex; flex-wrap:wrap; gap:4px 14px; padding:8px 12px; font-size:12px; color:var(--muted); border-top:1px solid var(--line); }
+    .empty { padding:26px; text-align:center; color:var(--muted); }
+    .short { display:none; }
+
+    /* ---------- hint / selection summary ---------- */
+    .hint { background:var(--paper); border-radius:12px; padding:8px 12px; margin-bottom:12px; box-shadow:0 6px 18px rgba(0,0,0,.25);
+      border-left:4px solid var(--accent); font-size:11.5px; color:var(--muted); line-height:1.45; }
+    .hint b { color:var(--ink); }
+    .selbox { background:var(--paper); border-radius:12px; padding:9px 12px; margin-bottom:12px; box-shadow:0 6px 18px rgba(0,0,0,.25); border-left:4px solid var(--accent); }
+    .selbox .st { font-weight:700; color:var(--brand-dark); font-size:12px; margin-bottom:5px; }
+    .chips { display:flex; flex-wrap:wrap; gap:5px; }
+    .chip { background:var(--wash); border:1px solid var(--line); border-radius:999px; padding:2px 10px; font-size:11.5px; color:var(--muted); }
+    .chip b { color:var(--ink); font-weight:700; margin-right:3px; }
+    .chip.on { background:var(--brand-tint); border-color:var(--brand); color:var(--brand-dark); }
+    .selbox .how { margin-top:6px; font-size:11.5px; color:var(--muted); line-height:1.45; }
+    .selbox .how b { color:var(--ink); }
+
+    /* ---------- efficiency charts ---------- */
+    .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:12px; }
+    .kpi { background:var(--paper); border-radius:12px; padding:10px 12px; box-shadow:0 6px 18px rgba(0,0,0,.25); border-top:3px solid var(--brand); }
+    .kpi small { display:block; color:var(--muted); font-weight:600; font-size:11px; }
+    .kpi b { display:block; font-family:var(--serif); font-size:22px; margin-top:2px; color:var(--brand-dark); }
+    .cgrid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .cpanel { background:var(--paper); border-radius:14px; padding:12px 14px; min-width:0; box-shadow:0 10px 30px rgba(0,0,0,.3); }
+    .cpanel h3 { margin:0 0 8px; font-family:var(--serif); font-size:16px; color:var(--brand-dark); display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+    .cpanel h3 small { font:600 11px "Plus Jakarta Sans",sans-serif; color:var(--muted); }
+    .cbody { max-height:400px; overflow:auto; padding-right:4px; }
+    .brow { display:block; padding:5px 0; border-bottom:1px dashed #e3e3f0; }
+    .bl { font-weight:700; font-size:12px; margin-bottom:2px; line-height:1.2; }
+    .mini { display:grid; grid-template-columns:112px 1fr 84px; gap:6px; align-items:center; padding:1px 0; cursor:pointer; border-radius:6px; }
+    .mini:hover { background:var(--brand-tint); }
+    .ml { font-size:10.5px; color:var(--muted); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .mv { font-weight:700; font-size:11px; text-align:right; white-space:nowrap; }
+    .mv small { color:var(--muted); font-weight:600; font-size:10px; margin-left:3px; }
+    .bt { height:12px; background:#ececf6; border-radius:8px; overflow:hidden; }
+    .bf { height:100%; border-radius:8px; min-width:2px; transition:width .3s; }
+    .clegend { display:flex; gap:14px; padding:10px 4px 0; font-size:12px; color:#cfcdee; flex-wrap:wrap; }
+    .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; vertical-align:-1px; }
+
+    /* ---------- not-marking report ---------- */
+    #tabDef { --c1:#fb7185; --c2:#b4382f; }
+    #defView .bar { border-bottom-color:#fb7185; }
+    .bar input.plain { font:inherit; font-weight:400; color:var(--ink); padding:7px 10px; border:1px solid var(--line); border-radius:8px; min-width:150px; }
+    .chk { flex-direction:row !important; align-items:center; gap:6px; cursor:pointer; padding-bottom:8px; }
+    .selbox.warn { border-left-color:var(--mid); color:#8a5a00; font-size:12px; font-weight:600; }
+    .dgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(340px,100%),1fr)); gap:12px; }
+    .dcard { background:var(--paper); border-radius:14px; padding:10px 12px; box-shadow:0 10px 30px rgba(0,0,0,.3); border-top:4px solid var(--alert); min-width:0; }
+    .dhead { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px; }
+    .dname { font-family:var(--serif); font-size:16px; color:var(--brand-dark); }
+    .dmeta { font-size:11px; color:var(--muted); font-weight:600; }
+    .badge { background:var(--alert); color:#fff; border-radius:999px; padding:2px 9px; font-weight:700; font-size:12px; white-space:nowrap; }
+    .dline { display:grid; grid-template-columns:1fr auto; gap:8px; padding:4px 0; border-bottom:1px dashed #e3e3f0; font-size:12px; }
+    .dmiss { display:flex; flex-wrap:wrap; gap:3px; justify-content:flex-end; }
+    .dmiss span { background:#fdecea; color:var(--alert); border-radius:6px; padding:1px 6px; font-size:10.5px; font-weight:700; white-space:nowrap; }
+    .dmiss span.att   { background:#dbeafe; color:#1d4ed8; }
+    .dmiss span.mon   { background:#ede9fe; color:#6d28d9; }
+    .dmiss span.grand { background:#fef3c7; color:#b45309; }
+    .dmiss span.det   { background:#fee2e2; color:#b91c1c; }
+    .dact { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+    .dact .btn { padding:4px 10px; font-size:11.5px; }
+    .okbox { background:var(--paper); border-radius:12px; padding:9px 12px; margin-top:12px; box-shadow:0 6px 18px rgba(0,0,0,.25); border-left:4px solid var(--good); font-size:12px; color:var(--muted); line-height:1.5; }
+    #toast { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:#1c1a3a; color:#fff; padding:10px 16px; border-radius:10px; font-size:12.5px; display:none; z-index:300; max-width:90vw; text-align:center; box-shadow:0 10px 28px rgba(0,0,0,.45); }
+    .dline > span:first-child { min-width:0; }
+    @media print {
+      body { background:#fff; }
+      .tabs, .bar, .dact, #tip, #toast, .selbox.warn { display:none !important; }
+      .dcard, .kpi, .okbox { box-shadow:none; border:1px solid var(--line); break-inside:avoid; }
+    }
+
+
+    /* teacher cards (Not Marking) */
+    .dgrid { grid-template-columns:repeat(auto-fill,minmax(min(430px,100%),1fr)); }
+    .dcard { border-top:none; padding:14px; }
+    .dhead { gap:12px; align-items:center; margin-bottom:4px; }
+    .av { width:44px; height:44px; border-radius:50%; display:grid; place-items:center; color:#fff; font-weight:800; font-size:15px; flex:0 0 auto; box-shadow:0 4px 10px rgba(0,0,0,.18); }
+    .dwho { flex:1; min-width:0; }
+    .dname { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .dbar { height:6px; background:#ececf6; border-radius:6px; overflow:hidden; margin:5px 0 3px; }
+    .dbar span { display:block; height:100%; border-radius:6px; }
+    .dtw { overflow-x:auto; border:1px solid var(--line); border-radius:10px; margin-top:10px; }
+    .dt { width:100%; border-collapse:collapse; font-size:12px; }
+    .dt th, .dt td { border:0; border-bottom:1px solid #ececf6; padding:5px 6px; text-align:center; white-space:nowrap; }
+    .dt tbody tr:last-child td { border-bottom:0; }
+    .dt th { position:static; font-size:10.5px; font-weight:800; letter-spacing:.3px; color:var(--brand-dark); background:var(--wash); }
+    .dt th.att { background:#dbeafe; color:#1d4ed8; }  .dt td.att { background:#f6f9ff; }
+    .dt th.mon { background:#ede9fe; color:#6d28d9; }  .dt td.mon { background:#fbfaff; }
+    .dt th.grand { background:#fef3c7; color:#b45309; } .dt th.det { background:#fee2e2; color:#b91c1c; }
+    .dt th.m { font-weight:700; }
+    .dt .gs { border-left:2px solid #fff; box-shadow:inset 2px 0 0 #d6d6e8; }
+    .dt .l { text-align:left; }
+    .dt td.sub { font-weight:600; font-size:11.5px; white-space:normal; min-width:90px; }
+    .secb { display:inline-block; background:var(--brand-dark); color:#fff; border-radius:6px; padding:2px 8px; font-weight:700; font-size:11px; }
+    .dt i, .dkey i { font-style:normal; display:inline-grid; place-items:center; width:21px; height:21px; border-radius:50%; font-size:11px; font-weight:800; }
+    i.ok { background:#dcfce7; color:#15803d; }  i.no { background:#fee2e2; color:#b91c1c; }  i.na { color:#b9b9cf; }
+    .dact { align-items:center; }
+    .dkey { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--muted); font-weight:600; margin-right:auto; }
+
+    /* ---------- month-wise report ---------- */
+    #tabMon { --c1:#34d399; --c2:#0f766e; }
+    #monView .bar { border-bottom-color:#34d399; }
+    .mchips { display:flex; gap:5px; flex-wrap:wrap; }
+    .mchip { font:inherit; font-weight:700; font-size:12px; padding:6px 12px; border-radius:999px; border:1px solid var(--line); background:#fff; color:var(--ink); cursor:pointer; }
+    .mchip.on { background:#0f766e; border-color:#0f766e; color:#fff; }
+    .mgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(440px,100%),1fr)); gap:12px; }
+    .mgrid .dt td { white-space:normal; vertical-align:top; }
+    .mtag { display:inline-block; background:#fdecea; color:var(--alert); border-radius:6px; padding:1px 6px; margin:1px 2px; font-size:10.5px; font-weight:700; white-space:nowrap; }
+
+    /* ---------- hover tooltip ---------- */
+    #tip { position:fixed; display:none; z-index:200; max-width:340px; background:#1c1a3a; color:#fff; border-radius:10px; padding:9px 11px;
+      font-size:11.5px; line-height:1.4; box-shadow:0 10px 28px rgba(0,0,0,.45); pointer-events:none; }
+    #tip .th { font-weight:700; font-size:12px; margin-bottom:1px; }
+    #tip .ts { color:#cfcdee; margin-bottom:5px; }
+    #tip .tl { margin-top:4px; word-wrap:break-word; }
+    #tip .tl b.ok { color:#4ade9f; }
+    #tip .tl b.no { color:#ff8a80; }
+    #tip .tn { color:#a9a7cf; font-style:italic; }
+
+    /* ---------- phones (portrait) ---------- */
+    @media (max-width: 700px) {
+      body { font-size:11px; }
+      .page { width:100%; padding:8px 4px 24px; }
+      .bar { padding:8px; gap:6px; border-radius:12px; }
+      .fld { flex:1 1 44%; font-size:11px; }
+      .ms-btn, .bar select.plain { min-width:0; max-width:none; width:100%; padding:6px 6px; font-size:12px; }
+      .ms-panel { max-width:260px; }
+      .spacer { display:none; }
+      .tab { padding:7px 12px 7px 8px; font-size:12px; }
+      .tab .ico { width:26px; height:26px; font-size:14px; }
+      .sheet { border-radius:12px; }
+      th, td { padding:2px 3px; }
+      thead tr.t1 th { font-size:11px; padding:4px; }
+      thead tr.t3 th, thead th { font-size:10px; }
+      td.sno { font-size:10.5px; width:20px; }
+      th.clsh { width:38px; max-width:42px; font-size:9px; }
+      td.cls { width:38px; max-width:42px; font-size:10px; }
+      td.subj { font-size:10.5px; max-width:80px; }
+      td.teacher { font-size:9.5px; max-width:70px; }
+      td.c { width:28px; padding:2px 1px; font-size:13px; }
+      tfoot td { font-size:9.5px; }
+      .legend { font-size:10.5px; padding:6px 8px; }
+      .full { display:none; }
+      .short { display:inline; }
+      .kpis { grid-template-columns:repeat(2,1fr); }
+      .cgrid { grid-template-columns:1fr; }
+      .cbody { max-height:340px; }
+      .mini { grid-template-columns:96px 1fr 60px; }
+      .mv small { display:none; }
+      #tip { max-width:260px; }
+    }
+
+    /* ---------- compact mode: small screens AND landscape phones ----------
+       (a landscape phone is wider than 700px but very short, so it needs its own rule) */
+    .ftoggle { display:none; }
+
+    @media (max-width:900px), (max-height:520px) {
+      .page { width:100%; padding:4px 4px 12px; }
+
+      /* smaller tabs */
+      .tabs { gap:6px; margin-bottom:6px; }
+      .tab { padding:4px 10px 4px 6px; font-size:12px; border-radius:10px; }
+      .tab .ico { width:20px; height:20px; font-size:12px; border-radius:6px; }
+      .tab.on::after { display:none; }
+
+      /* compact filter bar + collapse support */
+      .bar { padding:5px 8px; gap:6px; margin-bottom:6px; border-radius:10px; }
+      .ftoggle { display:inline-block; padding:5px 10px; }
+      .bar .btn { padding:5px 10px; font-size:12px; }
+      .bar.collapsed .fld,
+      .bar.collapsed .btn:not(.ftoggle),
+      .bar.collapsed .spacer { display:none; }
+      .bar.collapsed .progress { padding:0; margin-left:auto; }
+      .ms-btn, .bar select.plain { padding:4px 8px; font-size:12px; min-width:110px; }
+
+      .selbox, .kpis { margin-bottom:6px; }
+
+      /* give the table the screen */
+      .sheet { border-radius:10px; }
+      .wrap { max-height:calc(100vh - 90px); max-height:calc(100dvh - 90px); }
+      thead tr.t1 { display:none; }          /* hide big title row */
+      .legend { display:none; }
+      th, td { padding:2px 3px; }
+      td.c { font-size:13px; }
+
+      /* ---- Efficiency Charts tab ---- */
+      .kpis { display:flex; overflow-x:auto; gap:6px; }
+      .kpi { flex:0 0 auto; min-width:90px; padding:4px 8px; border-radius:8px; border-top-width:2px; }
+      .kpi small { font-size:10px; }
+      .kpi b { font-size:15px; margin-top:0; }
+      .cgrid { gap:6px; }
+      .cpanel { padding:6px 8px; border-radius:10px; }
+      .cpanel h3 { font-size:13px; margin-bottom:4px; }
+      .brow { padding:3px 0; }
+      .clegend { display:none; }
+    }
+
+    /* landscape phones: let each chart panel use the full screen height */
+    @media (max-height:520px) {
+      .cbody { max-height:calc(100vh - 110px); max-height:calc(100dvh - 110px); }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <div class="tabs">
+    <a class="back" href="./" title="Back to the attendance app">← App</a>
+    <button class="tab on" id="tabTable" onclick="showTab('table')"><span class="ico">📋</span>Record Table<span class="spin"></span></button>
+    <button class="tab" id="tabCharts" onclick="showTab('charts')"><span class="ico">📊</span>Efficiency Charts<span class="spin"></span></button>
+    <button class="tab" id="tabDef" onclick="showTab('def')"><span class="ico">🚩</span>Not Marking<span class="spin"></span></button>
+    <button class="tab" id="tabMon" onclick="showTab('mon')"><span class="ico">📅</span>Month-wise<span class="spin"></span></button>
+  </div>
+
+  <!-- ================= TAB 1 : TABLE ================= -->
+  <div id="tableView">
+    <div class="bar">
+      <button class="btn ghost ftoggle" onclick="toggleBar(this)">☰ Filters</button>
+      <div class="fld"><span>Program</span><div class="ms" id="fProgram"></div></div>
+      <div class="fld"><span>Section</span><div class="ms" id="fSection"></div></div>
+      <div class="fld"><span>Subject</span><div class="ms" id="fSubject"></div></div>
+      <div class="fld"><span>Teacher</span><div class="ms" id="fTeacher"></div></div>
+      <label class="fld chk"><input type="checkbox" id="fPending" onchange="render()"> Only unmarked rows</label>
+      <button class="btn ghost" onclick="clearFilters('f')">Clear</button>
+      <span class="spacer"></span>
+      <span class="progress" id="progress"></span>
+      <button class="btn" onclick="loadAll()">⟳ Reload</button>
+      <button class="btn ghost" onclick="loadAll(true)">Full recheck</button>
+    </div>
+    <div class="sheet">
+      <div class="wrap" id="wrap"><div class="empty"><span class="spin"></span> Loading sections...</div></div>
+      <div class="legend">
+        <span><b style="color:#12946b">✔</b> marked</span>
+        <span><b style="color:#b9b9cf">—</b> not marked</span>      </div>
+    </div>
+  </div>
+
+  <!-- ================= TAB 2 : EFFICIENCY CHARTS ================= -->
+  <div id="chartsView" style="display:none">
+    <div class="bar">
+      <button class="btn ghost ftoggle" onclick="toggleBar(this)">☰ Filters</button>
+      <div class="fld"><span>Program</span><div class="ms" id="cProgram"></div></div>
+      <div class="fld"><span>Section</span><div class="ms" id="cSection"></div></div>
+      <div class="fld"><span>Subject</span><div class="ms" id="cSubject"></div></div>
+      <div class="fld"><span>Teacher</span><div class="ms" id="cTeacher"></div></div>
+      <div class="fld"><span>Column</span><div class="ms" id="cColumn"></div></div>
+      <div class="fld"><span>Sort</span>
+        <select class="plain" id="cSort" onchange="renderCharts()">
+          <option value="low">Lowest efficiency first</option>
+          <option value="high">Highest efficiency first</option>
+          <option value="name">Name (A–Z)</option>
+        </select>
+      </div>
+      <button class="btn ghost" onclick="clearFilters('c')">Clear</button>
+      <span class="spacer"></span>
+      <span class="progress" id="progress2"></span>
+      <button class="btn" onclick="loadAll()">⟳ Reload</button>
+      <button class="btn ghost" onclick="loadAll(true)">Full recheck</button>
+    </div>
+
+    <div class="selbox" id="selbox" style="display:none"></div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="cgrid">
+      <div class="cpanel"><h3>Program-wise <small id="iDept"></small></h3><div class="cbody" id="chDept"></div></div>
+      <div class="cpanel"><h3>Section-wise <small id="iSec"></small></h3><div class="cbody" id="chSec"></div></div>
+      <div class="cpanel"><h3>Subject-wise <small id="iSub"></small></h3><div class="cbody" id="chSub"></div></div>
+      <div class="cpanel"><h3>Teacher-wise <small id="iTea"></small></h3><div class="cbody" id="chTea"></div></div>
+    </div>
+    <div class="clegend">
+      <span><i class="dot" style="background:#12946b"></i>80% or more</span>
+      <span><i class="dot" style="background:#d98e04"></i>50–79%</span>
+      <span><i class="dot" style="background:#b4382f"></i>below 50%</span>
+      <span>Hover (or tap) a bar to see which sections are marked and not marked</span>
+    </div>
+  </div>
+
+  <!-- ================= TAB 3 : NOT MARKING ================= -->
+  <div id="defView" style="display:none">
+    <div class="bar">
+      <button class="btn ghost ftoggle" onclick="toggleBar(this)">☰ Filters</button>
+      <div class="fld"><span>Program</span><div class="ms" id="dProgram"></div></div>
+      <div class="fld"><span>Column</span><div class="ms" id="dColumn"></div></div>
+      <div class="fld"><span>Search teacher</span><input class="plain" id="dSearch" placeholder="Type a name..." oninput="render()"></div>
+      <div class="fld"><span>Sort</span>
+        <select class="plain" id="dSort" onchange="render()">
+          <option value="most">Most pending first</option>
+          <option value="pct">Lowest % marked first</option>
+          <option value="name">Name (A–Z)</option>
+        </select>
+      </div>
+      <button class="btn ghost" onclick="clearFilters('d')">Clear</button>
+      <span class="spacer"></span>
+      <span class="progress" id="progress3"></span>
+      <button class="btn ghost" onclick="copyAllDef()">📋 Copy all</button>
+      <button class="btn ghost" onclick="downloadDefCsv()">⬇ CSV</button>
+      <button class="btn" onclick="window.print()">🖨 Print</button>
+    </div>
+    <div class="selbox warn" id="defNote" style="display:none"></div>
+    <div class="kpis" id="dKpis"></div>
+    <div class="dgrid" id="defList"></div>
+    <div class="okbox" id="defOk" style="display:none"></div>
+  </div>
+
+  <!-- ================= TAB 4 : MONTH-WISE ================= -->
+  <div id="monView" style="display:none">
+    <div class="bar">
+      <button class="btn ghost ftoggle" onclick="toggleBar(this)">☰ Filters</button>
+      <div class="fld"><span>Month</span><div class="mchips" id="mMonths"></div></div>
+      <div class="fld"><span>Program</span><div class="ms" id="mProgram"></div></div>
+      <div class="fld"><span>Search teacher</span><input class="plain" id="mSearch" placeholder="Type a name..." oninput="render()"></div>
+      <button class="btn ghost" onclick="clearFilters('m')">Clear</button>
+      <span class="spacer"></span>
+      <span class="progress" id="progress4"></span>
+      <button class="btn ghost" onclick="copyMonth()">📋 Copy</button>
+      <button class="btn" onclick="window.print()">🖨 Print</button>
+    </div>
+    <div class="selbox warn" id="monNote" style="display:none"></div>
+    <div class="kpis" id="mKpis"></div>
+    <div class="mgrid" id="monList"></div>
+  </div>
+</div>
+
+<div id="tip"></div>
+<div id="toast"></div>
+
+<script>
+/* ===== attendance app adapter: the record summary server functions are called through the app's backend
+   (doPost actions rsm_*) with the app login, in place of google.script.run ===== */
+(function(){
+  const API = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm7d7-UKg0W-OoWAiuRBHe4mjlRgMQXIHuLm6zi--i/exec';
+  const ls = k => { try{ const v = localStorage.getItem('csa2_' + k); return v == null ? '' : JSON.parse(v); }catch(e){ return ''; } };
+  const MAP = {
+    getRecordSummaryMeta: () => ({ action:'rsm_meta' }),
+    getRecordFileList:    a => ({ action:'rsm_files', force:!!a[0] }),
+    getRecordFile:        a => ({ action:'rsm_file', id:a[0], cached:a[1] || null, mod:a[2] || 0 }),
+    getRecordTeachers:    () => ({ action:'rsm_teachers' })
+  };
+  async function call(payload){
+    const user = ls('user'), pass = ls('pass');
+    if(!user || !pass) throw new Error('Sign in to the attendance app first, then open the Record summary again.');
+    let r;
+    try{ r = await fetch(API, { method:'POST', body:JSON.stringify(Object.assign({ username:user, password:pass }, payload)), redirect:'follow' }); }
+    catch(e){ throw new Error(navigator.onLine ? 'The Apps Script server did not answer. Try again in a minute.' : 'No internet.'); }
+    let j; try{ j = JSON.parse(await r.text()); }catch(e){ throw new Error('The server sent a web page instead of data. Check the deployment.'); }
+    if(j && j.error === 'UNKNOWN_ACTION') throw new Error('The server does not know the record summary yet: paste RecordSummary.gs, add the rsm_ line to doPost and deploy a new version.');
+    if(j && j.error === 'BAD_LOGIN') throw new Error('Your saved login was refused. Open the app, sign out and sign in again.');
+    if(!j || !j.ok) throw new Error((j && j.error) || 'Server error');
+    return j.data;
+  }
+  function runner(){
+    let ok = () => {}, fail = () => {};
+    const o = { withSuccessHandler(f){ ok = f; return o; }, withFailureHandler(f){ fail = f; return o; } };
+    Object.keys(MAP).forEach(n => { o[n] = (...args) => { call(MAP[n](args)).then(v => ok(v), e => fail(e)); }; });
+    return o;
+  }
+  window.google = { script: { get run(){ return runner(); } } };
+})();
+</script>
+<script>
+  const $ = id => document.getElementById(id);
+  const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+  const MAXPAR = 10;
+
+  let META = null, DATA = {}, NAMES = {}, STATE = {}, PENDING = {}, TEACHERS = {}, PRACT = {}, RUN = 0;
+  let totalTasks = 0, doneTasks = 0, renderTimer = null, TAB = "table";
+  let filesStarted = false, teachersDone = false;
+
+  /* ---------------- collapsible filter bar (compact screens) ---------------- */
+  function toggleBar(btn) { btn.closest(".bar").classList.toggle("collapsed"); }
+
+  /* ---------------- busy spinner on tabs ---------------- */
+  function updateBusy() {
+    document.body.classList.toggle("busy", !META || !filesStarted || !teachersDone || doneTasks < totalTasks);
+  }
+
+  /* ---------------- tabs ---------------- */
+  function showTab(t) {
+    TAB = t;
+    $("tabTable").classList.toggle("on", t === "table");
+    $("tabCharts").classList.toggle("on", t === "charts");
+    $("tableView").style.display = t === "table" ? "" : "none";
+    $("chartsView").style.display = t === "charts" ? "block" : "none";
+    $("tabDef").classList.toggle("on", t === "def");
+    $("defView").style.display = t === "def" ? "block" : "none";
+    $("tabMon").classList.toggle("on", t === "mon");
+    $("monView").style.display = t === "mon" ? "block" : "none";
+    hideTip();
+    render();
+  }
+
+  /* ---------------- multi-select dropdowns ----------------
+     ids starting with "f" belong to the Table tab, ids starting with "c" to the Charts tab */
+  const IDS = ["fProgram","fSection","fSubject","fTeacher","cProgram","cSection","cSubject","cTeacher","cColumn","dProgram","dColumn","mProgram"];
+  const ALL_TEXT = { fProgram:"All programs", fSection:"All sections", fSubject:"All subjects", fTeacher:"All teachers",
+                     cProgram:"All programs", cSection:"All sections", cSubject:"All subjects", cTeacher:"All teachers", cColumn:"All due columns",
+                     dProgram:"All programs", dColumn:"All due columns", mProgram:"All programs" };
+  const SEL = {}, OPTS = {};
+  IDS.forEach(id => { SEL[id] = new Set(); OPTS[id] = []; });
+
+  function msButtonText(id) {
+    const n = SEL[id].size;
+    if (!n) return ALL_TEXT[id];
+    if (n === 1) { const o = OPTS[id].find(x => SEL[id].has(x.v)); return o ? o.l : "1 selected"; }
+    return n + " selected";
+  }
+
+  function msRefresh(id) {
+    const el = $(id);
+    el.classList.toggle("has", SEL[id].size > 0);
+    const t = el.querySelector(".ms-txt"); if (t) t.textContent = msButtonText(id);
+    el.querySelectorAll("input").forEach((inp, i) => { inp.checked = SEL[id].has(OPTS[id][i].v); });
+  }
+
+  // items: array of strings or {v, l}
+  function setOpts(id, items) {
+    const list = items.map(x => typeof x === "object" ? x : { v: x, l: x });
+    OPTS[id] = list;
+    const valid = new Set(list.map(x => x.v));
+    [...SEL[id]].forEach(v => { if (!valid.has(v)) SEL[id].delete(v); });
+
+    const el = $(id), sig = JSON.stringify(list);
+    if (el._sig !== sig) {
+      const open = el.classList.contains("open");
+      el.innerHTML = `<button type="button" class="ms-btn" onclick="toggleMs('${id}',event)"><span class="ms-txt"></span><span class="car">▾</span></button>` +
+        `<div class="ms-panel" onclick="event.stopPropagation()">` +
+        (list.length ? list.map((o, i) => `<label class="opt"><input type="checkbox" onchange="pick('${id}',${i},this.checked)"> ${esc(o.l)}</label>`).join("")
+                     : `<div class="ms-empty">No options</div>`) + `</div>`;
+      el._sig = sig;
+      if (open) el.classList.add("open");
+    }
+    msRefresh(id);
+  }
+
+  function toggleMs(id, ev) {
+    ev.stopPropagation();
+    const el = $(id), was = el.classList.contains("open");
+    document.querySelectorAll(".ms.open").forEach(m => m.classList.remove("open"));
+    if (!was) el.classList.add("open");
+  }
+  document.addEventListener("click", () => document.querySelectorAll(".ms.open").forEach(m => m.classList.remove("open")));
+
+  function pick(id, i, on) {
+    const v = OPTS[id][i].v;
+    on ? SEL[id].add(v) : SEL[id].delete(v);
+    msRefresh(id);                                   // update this dropdown's own label
+    if (id === "cColumn" || id[0] === "d" || id[0] === "m") { render(); return; }   // these filters do not change other lists
+    fillFilters(id[0]);
+    render();
+  }
+
+  // Program -> Section -> Subject -> Teacher : each list depends only on the choices above it
+  function fillFilters(pfx) {
+    if (!META) return;
+    if (!pfx) { fillFilters("f"); fillFilters("c"); return; }
+    if (pfx === "d" || pfx === "m") return;
+    const P = pfx + "Program", S = pfx + "Section", U = pfx + "Subject", T = pfx + "Teacher";
+    const sort = a => [...a].sort((x, y) => x.localeCompare(y, undefined, { numeric: true }));
+
+    // 1) sections of the chosen program(s)
+    const progSecs = META.sections.filter(s => !SEL[P].size || SEL[P].has(s.program));
+    setOpts(S, progSecs.map(s => s.pcs));
+
+    // 2) subjects of the chosen section(s)
+    const secs = progSecs.filter(s => !SEL[S].size || SEL[S].has(s.pcs));
+    const subs = new Set();
+    secs.forEach(s => subjectsOf(s).forEach(x => { if (x.key !== "__none") subs.add(x.name); }));
+    setOpts(U, sort(subs));
+
+    // 3) teachers who teach the chosen subject(s) in the chosen section(s)
+    const teas = new Set();
+    secs.forEach(s => subjectsOf(s).forEach(x => {
+      if (x.key === "__none") return;
+      if (SEL[U].size && !SEL[U].has(x.name)) return;
+      teachersOf(s, x).forEach(n => teas.add(n));
+    }));
+    setOpts(T, sort(teas));
+  }
+
+  function clearFilters(pfx) {
+    IDS.filter(id => id[0] === pfx).forEach(id => SEL[id].clear());
+    if (pfx === "d") $("dSearch").value = "";
+    if (pfx === "m") $("mSearch").value = "";
+    fillFilters(pfx);
+    IDS.filter(id => id[0] === pfx).forEach(msRefresh);
+    render();
+  }
+
+  /* ---------------- loading ---------------- */
+  function loadAll(force) {
+    const run = ++RUN;
+    DATA = {}; NAMES = {}; STATE = {}; PENDING = {};
+    totalTasks = 0; doneTasks = 0;
+    setProgress("Loading...");
+    filesStarted = false; teachersDone = false; updateBusy();
+
+    let files = null;
+    const go = () => { if (META && files && run === RUN) startFiles(files, run); };
+
+    google.script.run
+      .withSuccessHandler(m => {
+        if (run !== RUN) return;
+        META = m;
+        const progs = [...new Set(m.sections.map(s => s.program).filter(Boolean))].sort();
+        const popts = progs.map(p => ({ v: p, l: p }));
+        setOpts("fProgram", popts);
+        setOpts("cProgram", popts);
+        m.columns.forEach(c => { STATE[c.key] = c.open ? "load" : "lock"; DATA[c.key] = { sections: {}, errors: [] }; PENDING[c.key] = 0; });
+        const copts = m.columns.map(c => ({ v: c.key, l: (c.group ? c.group + " – " : "") + c.label }));
+        setOpts("cColumn", copts);
+        setOpts("dColumn", copts);
+        setOpts("dProgram", popts);
+        setOpts("mProgram", popts);
+        document.title = m.title;
+        fillFilters();
+        render();
+        updateBusy();
+        go();
+      })
+      .withFailureHandler(e => {
+        document.body.classList.remove("busy");
+        $("wrap").innerHTML = `<div class="empty">Could not load sections: ${esc(e && e.message || e)}</div>`;
+      })
+      .getRecordSummaryMeta();
+
+    google.script.run
+      .withSuccessHandler(f => { files = f; go(); })
+      .withFailureHandler(e => { filesStarted = true; updateBusy(); setProgress("File list failed: " + (e && e.message || e)); })
+      .getRecordFileList(!!force);
+
+    google.script.run
+      .withSuccessHandler(t => { if (run === RUN) { TEACHERS = (t && t.teachers) || t || {}; PRACT = (t && t.practical) || {}; teachersDone = true; updateBusy(); fillFilters(); scheduleRender(); } })
+      .withFailureHandler(() => { teachersDone = true; updateBusy(); })
+      .getRecordTeachers();
+  }
+
+  function setProgress(txt) { $("progress").textContent = txt; $("progress2").textContent = txt; $("progress3").textContent = txt; $("progress4").textContent = txt; }
+
+  function startFiles(files, run) {
+    const tasks = [];
+    META.columns.forEach(c => {
+      if (!c.open) return;
+      const list = files[c.key] || [];
+      PENDING[c.key] = list.length;
+      if (!list.length) { DATA[c.key].errors.push("No file found for this column"); STATE[c.key] = "err"; }
+      list.forEach(f => tasks.push({ col: c.key, id: f.id, name: f.name, cached: f.cached, mod: f.mod }));
+    });
+    totalTasks = tasks.length;
+    filesStarted = true; updateBusy();
+
+    // trust the stored result only if the file is complete AND unchanged since it was stored
+    const fresh = t => t.cached && t.cached.complete && t.cached.mod === t.mod;
+    tasks.filter(fresh).forEach(t => fileDone(t, t.cached));
+    const todo = tasks.filter(t => !fresh(t));
+    updateProgress();
+    scheduleRender();
+
+    let next = 0, active = 0;
+    const pump = () => {
+      while (active < MAXPAR && next < todo.length) {
+        const t = todo[next++]; active++;
+        google.script.run
+          .withSuccessHandler(r => { active--; if (run === RUN) fileDone(t, r); pump(); })
+          .withFailureHandler(e => { active--; if (run === RUN) fileDone(t, { acc: {}, names: {}, errors: [String(e && e.message || e)] }); pump(); })
+          .getRecordFile(t.id, t.cached || null, t.mod);
+      }
+    };
+    pump();
+  }
+
+  function fileDone(t, r) {
+    const d = DATA[t.col];
+    Object.keys(r.acc || {}).forEach(sec => {
+      const dst = d.sections[sec] || (d.sections[sec] = {});
+      Object.keys(r.acc[sec]).forEach(sub => {
+        const e = dst[sub] || (dst[sub] = [0, 0]);
+        e[0] += r.acc[sec][sub][0]; e[1] += r.acc[sec][sub][1];
+      });
+    });
+    Object.keys(r.names || {}).forEach(k => { if (!NAMES[k]) NAMES[k] = r.names[k]; });
+    (r.errors || []).forEach(m => d.errors.push(t.name + ": " + m));
+    if (--PENDING[t.col] <= 0) STATE[t.col] = d.errors.length ? "err" : "ok";
+    doneTasks++;
+    updateProgress();
+    scheduleRender();
+  }
+
+  function updateProgress() {
+    setProgress(doneTasks >= totalTasks
+      ? "✓ Updated " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      : `Loaded ${doneTasks} of ${totalTasks} files...`);
+    updateBusy();
+  }
+  function scheduleRender() { if (!renderTimer) renderTimer = setTimeout(() => { renderTimer = null; render(); }, 200); }
+
+  /* ---------------- rows ---------------- */
+  // fixed rows use their own subject list; rows without a fixed list show only subjects that have at least one entry
+  function subjectsOf(sec) {
+    if (!sec.dynamic) return sec.subjects;
+    const seen = [];
+    META.columns.forEach(c => {
+      sec.keys.forEach(k => {
+        const S = DATA[c.key] && DATA[c.key].sections[k];
+        if (S) Object.keys(S).forEach(sub => { if (S[sub][0] > 0 && !seen.includes(sub)) seen.push(sub); });
+      });
+    });
+    return seen.length ? seen.map(key => ({ key, name: NAMES[key] || key })) : [{ key: "__none", name: "(no records found)" }];
+  }
+
+  // sections that closed (e.g. S1 / T1 after September) are "n/a" in later columns and never counted
+  const SESSION_MONTHS = ["September","October","November","December","January","February","March","April","May","June","July","August"];
+  const closedFor = (sec, col) => (sec.skip || []).includes(col.type) || (!!sec.until &&
+    (!col.month || SESSION_MONTHS.indexOf(col.month) > SESSION_MONTHS.indexOf(sec.until)));
+
+  function cellState(sec, sub, col) {
+    if (STATE[col.key] === "lock") return { st: "lock" };
+    if (closedFor(sec, col)) return { st: "na", tip: "Not applicable for " + sec.pcs };
+    const d = DATA[col.key];
+    let f = 0, t = 0;
+    sec.keys.forEach(k => {                      // combined rows add up all their keys
+      const S = d && d.sections[k];
+      const e = S ? S[sub.key] : null;
+      if (e) { f += e[0]; t += e[1]; }
+    });
+    if (f > 0) return { st: "full", tip: `${f} of ${t} entries filled` };
+    return { st: STATE[col.key] === "load" ? "load" : "none" };
+  }
+
+  // teacher names of a subject (array); combined rows (F.A-1 / F.A-2) also look at their member sections
+  function teachersOf(sec, sub) {
+    const out = [];
+    sec.keys.forEach(k => {
+      const list = TEACHERS[k] && TEACHERS[k][sub.key];
+      if (list) list.forEach(t => { if (!out.includes(t)) out.push(t); });
+    });
+    return out;
+  }
+
+  // teachers responsible for marking: practical-only teachers are left out
+  // (if the Timetable lists only practical teachers for a subject, all of them are kept)
+  function responsibleOf(sec, sub) {
+    const all = teachersOf(sec, sub), pr = new Set();
+    sec.keys.forEach(k => ((PRACT[k] && PRACT[k][sub.key]) || []).forEach(n => pr.add(n.toUpperCase())));
+    const th = all.filter(n => !pr.has(n.toUpperCase()));
+    return th.length ? th : all;
+  }
+
+  function shortLabel(c) { return c.group ? c.label.slice(0, 3) : (c.key === "grand" ? "Grand" : "Det"); }
+
+  /* ---------------- render ---------------- */
+  function render() {
+    if (!META) return;
+    if (TAB === "charts") renderCharts(); else if (TAB === "def") renderDef(); else if (TAB === "mon") renderMonth(); else renderTable();
+  }
+
+  function renderTable() {
+    const cols = META.columns;
+
+    const groups = [];
+    cols.forEach(c => {
+      if (c.group) { const g = groups[groups.length - 1]; if (g && g.name === c.group) g.n++; else groups.push({ name: c.group, n: 1 }); }
+      else groups.push({ name: "", n: 1, col: c });
+    });
+    const colHead = c => `<span class="full">${esc(c.label)}</span><span class="short">${esc(shortLabel(c))}</span>` +
+      (STATE[c.key] === "lock" ? ` <span title="Not due yet this month">🔒</span>` : "") +
+      (STATE[c.key] === "load" ? `<span class="spin"></span>` : "") +
+      (STATE[c.key] === "err" ? `<span class="err" title="${esc((DATA[c.key].errors || []).join("\n"))}">⚠</span>` : "");
+    const thCls = c => STATE[c.key] === "lock" ? " locked" : "";
+
+    let head = `<thead><tr class="t1"><th colspan="${4 + cols.length}">${esc(META.title)}${META.next ? `<small style="font:600 11px 'Plus Jakarta Sans',sans-serif;opacity:.75;margin-left:12px">⏳ ${esc(META.next)}</small>` : ""}</th></tr>
+      <tr class="t2"><th rowspan="2" class="tall">SNO</th><th rowspan="2" class="tall clsh">CLASS-SEC</th><th rowspan="2" class="tall">Subject</th><th rowspan="2" class="tall">Teacher</th>`;
+    groups.forEach(g => head += g.name ? `<th class="grp" colspan="${g.n}">${esc(g.name)}</th>` : `<th class="grp${thCls(g.col)}" rowspan="2">${colHead(g.col)}</th>`);
+    head += `</tr><tr class="t3">` + cols.filter(c => c.group).map(c => `<th class="${thCls(c).trim()}">${colHead(c)}</th>`).join("") + `</tr></thead>`;
+
+    const tot = cols.map(() => ({ full: 0, all: 0 }));
+    let body = "", sno = 0;
+    META.sections.forEach(sec => {
+      if (SEL.fProgram.size && !SEL.fProgram.has(sec.program)) return;
+      if (SEL.fSection.size && !SEL.fSection.has(sec.pcs)) return;
+
+      const rows = [];
+      subjectsOf(sec).forEach(sub => {
+        if (SEL.fSubject.size && !SEL.fSubject.has(sub.name)) return;
+        const teas = teachersOf(sec, sub);
+        if (SEL.fTeacher.size && !teas.some(t => SEL.fTeacher.has(t))) return;
+        if ($("fPending").checked && !cols.some(c => cellState(sec, sub, c).st === "none")) return;
+        rows.push({ sub, teacher: teas.join(" / ") });
+      });
+      if (!rows.length) return;
+
+      sno++;
+      rows.forEach((row, i) => {
+        body += `<tr class="${i === 0 ? "first" : ""}">`;
+        if (i === 0) body += `<td class="sno" rowspan="${rows.length}">${sno}</td><td class="cls" rowspan="${rows.length}">${esc(sec.pcs)}</td>`;
+        body += `<td class="subj">${esc(row.sub.name)}</td><td class="teacher">${esc(row.teacher)}</td>`;
+        cols.forEach((c, ci) => {
+          const s = cellState(sec, row.sub, c);
+          if (s.st === "full" || s.st === "none") { tot[ci].all++; if (s.st === "full") tot[ci].full++; }
+          body += `<td class="c ${s.st}" ${s.tip ? `title="${esc(s.tip)}"` : ""}>${s.st === "full" ? "✔" : s.st === "none" ? "—" : ""}</td>`;
+        });
+        body += `</tr>`;
+      });
+    });
+
+    const foot = `<tfoot><tr><td class="lab" colspan="4">Marked (subject rows)</td>` +
+      tot.map((t, i) => { const s = STATE[cols[i].key]; return `<td>${s === "lock" ? "–" : s === "load" ? "…" : `${t.full}/${t.all}`}</td>`; }).join("") + `</tr></tfoot>`;
+
+    const anyOpen = cols.some(c => c.open);
+    const sc = $("wrap").scrollTop;
+    $("wrap").innerHTML = !anyOpen
+      ? `<div class="empty">No records are due yet this month.</div>`
+      : body ? `<table>${head}<tbody>${body}</tbody>${foot}</table>` : `<div class="empty">Nothing to show for this filter.</div>`;
+    $("wrap").scrollTop = sc;
+
+    const t = $("wrap").querySelector("table");
+    if (t) {
+      const r = t.querySelectorAll("thead tr"), h1 = r[0].offsetHeight, h2 = r[1].offsetHeight;
+      t.style.setProperty("--h1", h1 + "px");
+      t.style.setProperty("--h2", (h1 + h2) + "px");
+    }
+  }
+
+  /* ---------------- efficiency charts ---------------- */
+  const barColor = p => p >= 80 ? "#12946b" : p >= 50 ? "#d98e04" : "#b4382f";
+  // record type of a column: Attendance, Monthly Tests, ... (columns without a group use their own label)
+  const gname = c => c.group ? (c.type === "mon" ? "Monthly Test " : "Attendance ") + c.label.slice(0, 3)
+                            : c.label.charAt(0) + c.label.slice(1).toLowerCase();
+
+  let TIPS = [];   // tooltip html, one entry per bar (rebuilt on every chart render)
+
+  function sortRows(map, mode) {
+    const arr = Object.keys(map).map(k => {
+      let f = 0, a = 0;
+      Object.values(map[k].g).forEach(x => { f += x.f; a += x.a; });
+      return { name: k, g: map[k].g, f, a, p: a ? f * 100 / a : 0 };
+    });
+    if (mode === "name") arr.sort((x, y) => x.name.localeCompare(y.name, undefined, { numeric: true }));
+    else if (mode === "high") arr.sort((x, y) => y.p - x.p || x.name.localeCompare(y.name));
+    else arr.sort((x, y) => x.p - y.p || x.name.localeCompare(y.name));
+    return arr;
+  }
+
+  function tipList(arr, cls, title) {
+    if (!arr.length) return `<div class="tl"><b class="${cls}">${title} (0)</b> <span class="tn">none</span></div>`;
+    const MAX = 40, shown = arr.slice(0, MAX).map(esc).join(", ");
+    return `<div class="tl"><b class="${cls}">${title} (${arr.length}):</b> ${shown}${arr.length > MAX ? ` <span class="tn">… +${arr.length - MAX} more</span>` : ""}</div>`;
+  }
+
+  function barsHtml(arr, gnames) {
+    if (!arr.length) return `<div class="empty">Nothing to show for this filter.</div>`;
+    return arr.map(r => `<div class="brow"><div class="bl">${esc(r.name)}</div>` +
+      gnames.filter(g => r.g[g]).map(g => {
+        const x = r.g[g], p = x.a ? x.f * 100 / x.a : 0;
+        const idx = TIPS.length;
+        TIPS.push(`<div class="th">${esc(r.name)}</div><div class="ts">${esc(g)} · ${x.f} of ${x.a} marked (${Math.round(p)}%)</div>` +
+          tipList(x.ok, "ok", "✔ Marked") + tipList(x.no, "no", "✖ Not marked"));
+        return `<div class="mini" data-tip="${idx}">
+          <span class="ml">${esc(g)}</span>
+          <div class="bt"><div class="bf" style="width:${p}%;background:${barColor(p)}"></div></div>
+          <span class="mv">${Math.round(p)}%<small>${x.f}/${x.a}</small></span></div>`;
+      }).join("") + `</div>`).join("");
+  }
+
+  /* tooltip behaviour (hover on desktop, tap on phones) */
+  function showTip(idx, x, y) {
+    const tip = $("tip");
+    tip.innerHTML = TIPS[idx] || "";
+    tip.style.display = "block";
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    let left = x + 14, top = y + 16;
+    if (left + w > window.innerWidth - 8) left = Math.max(8, x - w - 14);
+    if (top + h > window.innerHeight - 8) top = Math.max(8, y - h - 14);
+    tip.style.left = left + "px"; tip.style.top = top + "px";
+  }
+  function hideTip() { $("tip").style.display = "none"; }
+  document.addEventListener("mousemove", e => {
+    const m = e.target.closest && e.target.closest(".mini");
+    if (m && m.dataset.tip !== undefined) showTip(+m.dataset.tip, e.clientX, e.clientY); else hideTip();
+  });
+  document.addEventListener("click", e => {
+    const m = e.target.closest && e.target.closest(".mini");
+    if (m && m.dataset.tip !== undefined) showTip(+m.dataset.tip, e.clientX, e.clientY); else hideTip();
+  });
+  document.addEventListener("scroll", hideTip, true);
+
+  function renderCharts() {
+    if (!META) return;
+    const mode = $("cSort").value;
+    const cols = META.columns.filter(c => STATE[c.key] !== "lock" && (!SEL.cColumn.size || SEL.cColumn.has(c.key)));
+    const gnames = [];
+    cols.forEach(c => { const g = gname(c); if (!gnames.includes(g)) gnames.push(g); });
+
+    TIPS = [];
+    const maps = { dept: {}, sect: {}, subj: {}, tea: {} };
+    const tot = {}; gnames.forEach(g => tot[g] = { f: 0, a: 0 });
+    let rowCount = 0;
+    const add = (m, k, g, f, label) => {
+      const e = m[k] || (m[k] = { g: {} });
+      const x = e.g[g] || (e.g[g] = { f: 0, a: 0, ok: [], no: [] });
+      x.f += f; x.a += 1;
+      (f ? x.ok : x.no).push(label);
+    };
+
+    META.sections.forEach(sec => {
+      if (SEL.cProgram.size && !SEL.cProgram.has(sec.program)) return;
+      if (SEL.cSection.size && !SEL.cSection.has(sec.pcs)) return;
+      subjectsOf(sec).forEach(sub => {
+        if (sub.key === "__none") return;
+        if (SEL.cSubject.size && !SEL.cSubject.has(sub.name)) return;
+        const teas = teachersOf(sec, sub);
+        if (SEL.cTeacher.size && !teas.some(t => SEL.cTeacher.has(t))) return;
+
+        rowCount++;
+        const both = sec.pcs + " · " + sub.name;     // label used in tooltips
+        gnames.forEach(g => {
+          let m = 0, n = 0;
+          cols.filter(c => gname(c) === g).forEach(c => {
+            const s = cellState(sec, sub, c);
+            if (s.st === "full" || s.st === "none") { n++; if (s.st === "full") m++; }
+          });
+          if (!n) return;
+          const f = m === n ? 1 : 0;   // one column per bar, so this is simply ticked / not ticked
+          tot[g].f += f; tot[g].a++;
+          add(maps.dept, sec.program || "(No program)", g, f, both);
+          add(maps.sect, sec.pcs, g, f, sub.name);
+          add(maps.subj, sub.name, g, f, sec.pcs);
+          const resp = responsibleOf(sec, sub);
+          if (!resp.length) add(maps.tea, "(No teacher)", g, f, both);
+          resp.forEach(t => { if (!SEL.cTeacher.size || SEL.cTeacher.has(t)) add(maps.tea, t, g, f, both); });
+        });
+      });
+    });
+
+    const D = sortRows(maps.dept, mode), S = sortRows(maps.sect, mode), U = sortRows(maps.subj, mode), T = sortRows(maps.tea, mode);
+    $("chDept").innerHTML = barsHtml(D, gnames);
+    $("chSec").innerHTML = barsHtml(S, gnames);
+    $("chSub").innerHTML = barsHtml(U, gnames);
+    $("chTea").innerHTML = barsHtml(T, gnames);
+    $("iDept").textContent = D.length + " programs";
+    $("iSec").textContent = S.length + " sections";
+    $("iSub").textContent = U.length + " subjects";
+    $("iTea").textContent = T.length + " teachers";
+
+    $("kpis").innerHTML = gnames.map(g => {
+      const p = tot[g].a ? tot[g].f * 100 / tot[g].a : 0;
+      return `<div class="kpi" style="border-top-color:${barColor(p)}"><small>${esc(g)}</small><b style="color:${barColor(p)}">${tot[g].a ? Math.round(p) + "%" : "–"}</b><small>${tot[g].f}/${tot[g].a} marked</small></div>`;
+    }).join("") +
+      `<div class="kpi"><small>Sections</small><b>${S.length}</b></div>` +
+      `<div class="kpi"><small>Subjects</small><b>${U.length}</b></div>` +
+      `<div class="kpi"><small>Teachers</small><b>${T.length}</b></div>`;
+  }
+
+  /* ---------------- NOT MARKING report (teacher-wise) ---------------- */
+  let DEF = [];   // last shown list, used by Copy all / CSV
+  let DEFCOLS = []; // columns used by the report (and its image)
+  const tc = s => String(s).toLowerCase().replace(/\b\w/g, ch => ch.toUpperCase());
+  const colName = c => c.group ? tc(c.group) + " " + c.label.slice(0, 3) : tc(c.label);
+
+  function buildDef() {
+    const cols = META.columns.filter(c => !SEL.dColumn.size || SEL.dColumn.has(c.key));
+    DEFCOLS = cols;
+    const map = {};
+    let due = 0, miss = 0;
+    META.sections.forEach(sec => {
+      if (SEL.dProgram.size && !SEL.dProgram.has(sec.program)) return;
+      subjectsOf(sec).forEach(sub => {
+        if (sub.key === "__none") return;
+        const missing = []; let n = 0;
+        cols.forEach(c => {
+          const s = cellState(sec, sub, c).st;
+          if (s === "full" || s === "none") n++;
+          if (s === "none") missing.push(c);
+        });
+        if (!n) return;
+        due += n; miss += missing.length;
+        const teas = responsibleOf(sec, sub);
+        (teas.length ? teas : ["(No teacher in Timetable)"]).forEach(t => {
+          const e = map[t] || (map[t] = { name: t, due: 0, miss: 0, items: [] });
+          e.due += n; e.miss += missing.length;
+          if (missing.length) {
+            const st = {}; cols.forEach(c => st[c.key] = cellState(sec, sub, c).st);
+            e.items.push({ sec: sec.pcs, sub: sub.name, cols: missing, st });
+          }
+        });
+      });
+    });
+    return { list: Object.values(map), due, miss };
+  }
+
+  // current date / time, e.g. "Wednesday, 11 November 2026" and "10:57 AM"
+  function stamp() {
+    const d = new Date();
+    return { date: d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
+             time: d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+             iso: d.toISOString().slice(0, 10) };
+  }
+
+  // missing columns of one subject, grouped by record type: [{type:"Attendance", months:"October"}, ...]
+  const tcls = type => ({ "Attendance": "att", "Monthly Test": "mon", "Grand Test": "grand" })[type] || "det";
+
+  function typeGroups(cols) {
+    const by = {}, order = [];
+    cols.forEach(c => {
+      const type = c.group ? (c.group === "MONTHLY TESTS" ? "Monthly Test" : tc(c.group)) : tc(c.label);
+      if (!by[type]) { by[type] = []; order.push(type); }
+      if (c.group) by[type].push(c.label);
+    });
+    return order.map(type => ({ type, months: by[type].join(", ") || "—" }));
+  }
+
+  // one row per section + subject + record type (used by the image)
+  function groupRows(t) {
+    const out = [];
+    t.items.forEach(it => typeGroups(it.cols).forEach(g => out.push({ sec: it.sec, sub: it.sub, type: g.type, months: g.months })));
+    return out;
+  }
+
+  function defMsg(t) {
+    const s = stamp(), p = t.due ? Math.round((t.due - t.miss) * 100 / t.due) : 0;
+    return `*JCW RECORD SUMMARY – PENDING RECORDS*\n📅 Date: ${s.date}\n🕒 Time: ${s.time}\n\n` +
+      `Respected ${t.name},\nThe following records are still *NOT marked*:\n\n` +
+      t.items.map((it, i) => `${i + 1}. *${it.sec} – ${it.sub}*\n` +
+        typeGroups(it.cols).map(g => `    • ${g.type}: ${g.months}`).join("\n")).join("\n") +
+      `\n\nTotal pending: *${t.miss}* (${p}% marked)\nKindly complete them at the earliest. Thank you.`;
+  }
+
+  /* ---------- report image: one row per class + subject, a separate column for every record and month ---------- */
+  const GSTYLE = {
+    att:   { name: "ATTENDANCE",   bg: "#dbeafe", ink: "#1d4ed8" },
+    mon:   { name: "MONTHLY TEST", bg: "#ede9fe", ink: "#6d28d9" },
+    grand: { name: "GRAND TEST",   bg: "#fef3c7", ink: "#b45309" },
+    det:   { name: "DETENTION",    bg: "#fee2e2", ink: "#b91c1c" }
+  };
+  const gs = c => GSTYLE[c.type] || { name: c.label, bg: "#e8e8fb", ink: "#312e81" };
+
+  function drawReport(t) {
+    const cols = DEFCOLS.length ? DEFCOLS : META.columns, s = stamp(), SC = 2;
+    const X0 = 24, wNo = 36, wSec = 130, wSub = 210, CW = 120, XC = X0 + wNo + wSec + wSub;
+    const W = Math.max(900, XC + cols.length * CW + 24);
+    const Y0 = 214, HH = 64, RH = 38;
+    const H = Y0 + HH + t.items.length * RH + 78;
+    const cv = document.createElement("canvas"); cv.width = W * SC; cv.height = H * SC;
+    const g = cv.getContext("2d"); g.scale(SC, SC);
+    const F = (w, px, fam) => `${w} ${px}px ${fam || "'Plus Jakarta Sans', Arial, sans-serif"}`;
+    const box = (x, y, w, h, r, col) => { g.fillStyle = col; g.beginPath(); g.roundRect ? g.roundRect(x, y, w, h, r) : g.rect(x, y, w, h); g.fill(); };
+    const fit = (txt, w) => { txt = String(txt); if (g.measureText(txt).width <= w) return txt;
+      while (txt.length > 1 && g.measureText(txt + "…").width > w) txt = txt.slice(0, -1); return txt + "…"; };
+    const mid = (txt, x, w, y) => { g.textAlign = "center"; g.fillText(fit(txt, w - 8), x + w / 2, y); g.textAlign = "left"; };
+    const p = t.due ? Math.round((t.due - t.miss) * 100 / t.due) : 0;
+
+    // title band
+    g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
+    g.fillStyle = "#312e81"; g.fillRect(0, 0, W, 66);
+    g.fillStyle = "#f2b84b"; g.fillRect(0, 66, W, 4);
+    g.fillStyle = "#fff"; g.font = F(700, 22, "Fraunces, Georgia, serif");
+    g.fillText("JCW RECORD SUMMARY — PENDING RECORDS", 24, 42);
+
+    g.fillStyle = "#1c1a3a"; g.font = F(700, 21); g.fillText(fit(t.name, W - 300), 24, 104);
+    g.fillStyle = "#625f80"; g.font = F(600, 14);
+    g.fillText("Session " + (META.title.match(/\d{4}-\d{4}/) || [""])[0], 24, 128);
+    g.fillStyle = "#1c1a3a"; g.font = F(700, 15);
+    g.fillText(`Date: ${s.date}     Time: ${s.time}`, 24, 154);
+
+    box(W - 210, 84, 186, 36, 18, "#b4382f");
+    g.fillStyle = "#fff"; g.font = F(700, 17); mid(`${t.miss} pending`, W - 210, 186, 108);
+    g.fillStyle = "#625f80"; g.font = F(600, 13); mid(`${p}% marked (${t.due - t.miss}/${t.due})`, W - 210, 186, 140);
+
+    // one coloured count per record type: "ATTENDANCE — 6 not marked"
+    const cnt = {}, order = [];
+    t.items.forEach(it => it.cols.forEach(c => { if (!cnt[c.type]) { cnt[c.type] = 0; order.push(c); } cnt[c.type]++; }));
+    let px = 24; g.font = F(700, 13);
+    order.forEach(c => {
+      const st = gs(c), txt = `${st.name} — ${cnt[c.type]} not marked`, w = g.measureText(txt).width + 22;
+      box(px, 168, w, 28, 14, st.bg); g.fillStyle = st.ink; g.fillText(txt, px + 11, 187); px += w + 8;
+    });
+
+    // header: fixed columns span both rows
+    g.fillStyle = "#e8e8fb"; g.fillRect(X0, Y0, XC - X0, HH);
+    g.fillStyle = "#312e81"; g.font = F(700, 13);
+    g.fillText("#", X0 + 10, Y0 + 38); g.fillText("CLASS-SEC", X0 + wNo + 8, Y0 + 38); g.fillText("SUBJECT", X0 + wNo + wSec + 8, Y0 + 38);
+
+    // header: record groups (row 1) and months (row 2)
+    for (let i = 0; i < cols.length;) {
+      const c = cols[i], st = gs(c); let j = i;
+      while (j + 1 < cols.length && cols[j + 1].type === c.type) j++;
+      const x = XC + i * CW, w = (j - i + 1) * CW;
+      g.fillStyle = st.bg; g.fillRect(x, Y0, w, HH);
+      g.fillStyle = st.ink;
+      if (c.group) {
+        g.font = F(800, 14); mid(st.name, x, w, Y0 + 22);
+        g.fillStyle = "rgba(255,255,255,.7)"; g.fillRect(x + 6, Y0 + 31, w - 12, 1.5);
+        g.fillStyle = st.ink; g.font = F(700, 13);
+        for (let k = i; k <= j; k++) mid(cols[k].label, XC + k * CW, CW, Y0 + 54);
+      } else { g.font = F(800, 14); mid(st.name, x, w, Y0 + 38); }
+      i = j + 1;
+    }
+
+    // body
+    t.items.forEach((it, r) => {
+      const y = Y0 + HH + r * RH, cy = y + 24;
+      if (r % 2) { g.fillStyle = "#f7f7fc"; g.fillRect(X0, y, W - 48, RH); }
+      g.fillStyle = "#e3e3f0"; g.fillRect(X0, y + RH - 1, W - 48, 1);
+      g.fillStyle = "#625f80"; g.font = F(600, 13); g.fillText(String(r + 1), X0 + 10, cy);
+      g.fillStyle = "#1c1a3a"; g.font = F(800, 14); g.fillText(fit(it.sec, wSec - 12), X0 + wNo + 8, cy);
+      g.font = F(600, 14); g.fillText(fit(it.sub, wSub - 12), X0 + wNo + wSec + 8, cy);
+      cols.forEach((c, k) => {
+        const x = XC + k * CW, v = it.st[c.key];
+        if (v === "none") { box(x + 4, y + 5, CW - 8, RH - 10, 8, "#fee2e2"); g.fillStyle = "#b91c1c"; g.font = F(800, 12); mid("✖ NOT MARKED", x, CW, cy); }
+        else if (v === "full") { box(x + 4, y + 5, CW - 8, RH - 10, 8, "#dcfce7"); g.fillStyle = "#15803d"; g.font = F(700, 12); mid("✔ Marked", x, CW, cy); }
+        else { g.fillStyle = "#b9b9cf"; g.font = F(600, 13); mid("—", x, CW, cy); }
+      });
+    });
+
+    // thick dividers between record groups
+    const yb = Y0 + HH + t.items.length * RH;
+    g.fillStyle = "#312e81";
+    [XC].concat(cols.map((c, k) => k && c.type !== cols[k - 1].type ? XC + k * CW : 0).filter(Boolean))
+      .forEach(x => g.fillRect(x - 1, Y0, 2, yb - Y0));
+
+    // footer
+    g.font = F(700, 13); g.fillStyle = "#b91c1c"; g.fillText("✖ NOT MARKED = please complete", 24, H - 44);
+    g.fillStyle = "#15803d"; g.fillText("✔ Marked = done", 290, H - 44);
+    g.fillStyle = "#9a99b5"; g.fillText("— = not applicable", 430, H - 44);
+    g.fillStyle = "#625f80"; g.font = F(600, 13);
+    g.fillText("Kindly complete these records at the earliest. Thank you.", 24, H - 20);
+    g.textAlign = "right"; g.fillText(`Generated ${s.date}, ${s.time}`, W - 24, H - 20); g.textAlign = "left";
+    return cv;
+  }
+
+  const imgName = t => `Pending-${t.name.replace(/[^A-Za-z0-9]+/g, "-")}-${stamp().iso}.png`;
+  const toBlob = cv => new Promise(r => cv.toBlob(r, "image/png"));
+  function saveBlob(blob, name) {
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }
+
+  // download the image only
+  async function saveImg(i) { const t = DEF[i]; saveBlob(await toBlob(drawReport(t)), imgName(t)); toast("Image downloaded ✓"); }
+
+
+  function renderDef() {
+    const r = buildDef(), q = $("dSearch").value.trim().toLowerCase(), mode = $("dSort").value;
+    const pct = t => t.due ? (t.due - t.miss) * 100 / t.due : 100;
+    const hit = t => !q || t.name.toLowerCase().includes(q);
+    const badAll = r.list.filter(t => t.miss > 0), goodAll = r.list.filter(t => !t.miss);
+    const bad = badAll.filter(hit), good = goodAll.filter(hit);
+    if (mode === "name") bad.sort((a, b) => a.name.localeCompare(b.name));
+    else if (mode === "pct") bad.sort((a, b) => pct(a) - pct(b) || b.miss - a.miss);
+    else bad.sort((a, b) => b.miss - a.miss || a.name.localeCompare(b.name));
+    DEF = bad;
+
+    const loading = doneTasks < totalTasks || !teachersDone || !filesStarted;
+    $("defNote").style.display = loading ? "" : "none";
+    $("defNote").innerHTML = `<span class="spin"></span> Still loading files (${doneTasks}/${totalTasks}) — this list may still change.`;
+
+    const p = r.due ? Math.round((r.due - r.miss) * 100 / r.due) : 0;
+    $("dKpis").innerHTML =
+      `<div class="kpi" style="border-top-color:var(--alert)"><small>Teachers not marking</small><b style="color:var(--alert)">${badAll.length}</b><small>of ${r.list.length} teachers</small></div>` +
+      `<div class="kpi" style="border-top-color:var(--good)"><small>Fully marked</small><b style="color:var(--good)">${goodAll.length}</b><small>teachers</small></div>` +
+      `<div class="kpi"><small>Pending entries</small><b>${r.miss}</b><small>of ${r.due} due</small></div>` +
+      `<div class="kpi" style="border-top-color:${barColor(p)}"><small>Overall marked</small><b style="color:${barColor(p)}">${r.due ? p + "%" : "–"}</b></div>`;
+
+    // card = mini table: one row per class + subject, one column per due month (same layout as the image)
+    const cols = DEFCOLS, grp = [];
+    cols.forEach(c => { const g = grp[grp.length - 1]; if (g && g.type === c.type) g.n++; else grp.push({ type: c.type, n: 1, c }); });
+    const starts = new Set(grp.map(g => g.c.key));
+    const gs = c => starts.has(c.key) ? " gs" : "";
+    const gName = c => c.group ? (c.type === "mon" ? "Monthly Test" : tc(c.group)) : tc(c.label);
+    const head = `<thead><tr><th rowspan="2" class="l">Class</th><th rowspan="2" class="l">Subject</th>` +
+      grp.map(g => `<th class="g ${g.type} gs" colspan="${g.n}"${g.c.group ? "" : ' rowspan="2"'}>${esc(gName(g.c))}</th>`).join("") +
+      `</tr><tr>` + cols.filter(c => c.group).map(c => `<th class="m ${c.type}${gs(c)}">${esc(c.label.slice(0, 3))}</th>`).join("") + `</tr></thead>`;
+    const ini = n => n.replace(/^(DR|MS|MRS|MISS|PROF|SIR)\.?\s+/i, "").split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join("").toUpperCase();
+
+    $("defList").innerHTML = bad.length ? bad.map((t, i) => {
+      const tp = Math.round(pct(t));
+      return `<div class="dcard">
+        <div class="dhead">
+          <div class="av" style="background:${barColor(tp)}">${esc(ini(t.name))}</div>
+          <div class="dwho"><div class="dname" title="${esc(t.name)}">${esc(t.name)}</div>
+            <div class="dbar"><span style="width:${tp}%;background:${barColor(tp)}"></span></div>
+            <div class="dmeta">${tp}% marked · ${t.due - t.miss} of ${t.due} done</div></div>
+          <span class="badge">${t.miss} pending</span>
+        </div>
+        <div class="dtw"><table class="dt">${head}<tbody>` +
+        t.items.map(it => `<tr><td class="l"><span class="secb">${esc(it.sec)}</span></td><td class="l sub">${esc(it.sub)}</td>` +
+          cols.map(c => { const v = it.st[c.key];
+            return `<td class="${c.type}${gs(c)}">${v === "none" ? '<i class="no" title="Not marked">✖</i>' : v === "full" ? '<i class="ok" title="Marked">✔</i>' : '<i class="na">–</i>'}</td>`; }).join("") +
+          `</tr>`).join("") +
+        `</tbody></table></div>
+        <div class="dact"><span class="dkey"><i class="ok">✔</i> marked <i class="no">✖</i> not marked</span>
+          <button class="btn ghost" onclick="saveImg(${i})">⬇ Download image</button></div></div>`;
+    }).join("") : `<div class="cpanel"><div class="empty">${loading ? "Loading…" : "🎉 Every teacher has marked all due records for this filter."}</div></div>`;
+
+    $("defOk").style.display = good.length ? "" : "none";
+    $("defOk").innerHTML = `<b style="color:var(--good)">✔ All marked (${good.length}):</b> ` + good.map(t => t.name).sort().map(esc).join(", ");
+  }
+
+  /* ---------------- MONTH-WISE report: pick a month, see who did not mark it ---------------- */
+  let MON = "", MONDATA = [];
+  // chip value = month name for monthly columns, column key for Grand Test / Detention
+  const monOf = c => c.month || c.key;
+  function setMon(m) { MON = m; render(); }
+
+  function buildMonth() {
+    return META.columns.filter(c => monOf(c) === MON).map(c => {
+      const map = {}; let due = 0, miss = 0;
+      META.sections.forEach(sec => {
+        if (SEL.mProgram.size && !SEL.mProgram.has(sec.program)) return;
+        subjectsOf(sec).forEach(sub => {
+          if (sub.key === "__none") return;
+          const st = cellState(sec, sub, c).st;
+          if (st !== "full" && st !== "none") return;
+          due++; if (st === "none") miss++;
+          const teas = responsibleOf(sec, sub);
+          (teas.length ? teas : ["(No teacher in Timetable)"]).forEach(t => {
+            const e = map[t] || (map[t] = { name: t, due: 0, items: [] });
+            e.due++;
+            if (st === "none") e.items.push({ sec: sec.pcs, sub: sub.name });
+          });
+        });
+      });
+      const list = Object.values(map);
+      return { c, due, miss, loading: STATE[c.key] === "load",
+               bad: list.filter(t => t.items.length).sort((a, b) => b.items.length - a.items.length || a.name.localeCompare(b.name)),
+               good: list.filter(t => !t.items.length).map(t => t.name).sort() };
+    });
+  }
+
+  function renderMonth() {
+    const chips = [];
+    META.columns.forEach(c => { const v = monOf(c); if (!chips.some(x => x.v === v)) chips.push({ v, l: c.month || tc(c.label) }); });
+    if (!chips.some(x => x.v === MON)) MON = chips.length ? chips[0].v : "";
+    $("mMonths").innerHTML = chips.map(x => `<button type="button" class="mchip${x.v === MON ? " on" : ""}" onclick="setMon('${esc(x.v)}')">${esc(x.l)}</button>`).join("");
+
+    const q = $("mSearch").value.trim().toLowerCase();
+    MONDATA = buildMonth();
+    const loading = MONDATA.some(b => b.loading) || !teachersDone;
+    $("monNote").style.display = loading ? "" : "none";
+    $("monNote").innerHTML = `<span class="spin"></span> Still loading files (${doneTasks}/${totalTasks}) — this list may still change.`;
+
+    $("mKpis").innerHTML = MONDATA.map(b => {
+      const st = gs(b.c), p = b.due ? Math.round((b.due - b.miss) * 100 / b.due) : 0;
+      return `<div class="kpi" style="border-top-color:${st.ink}"><small>${esc(colName(b.c))}</small><b style="color:${barColor(p)}">${b.due ? p + "%" : "–"}</b><small>${b.bad.length} teachers · ${b.miss} of ${b.due} not marked</small></div>`;
+    }).join("");
+
+    $("monList").innerHTML = MONDATA.length ? MONDATA.map(b => {
+      const st = gs(b.c), bad = b.bad.filter(t => !q || t.name.toLowerCase().includes(q));
+      return `<div class="cpanel" style="border-top:4px solid ${st.ink}">
+        <h3><span style="color:${st.ink}">${esc(colName(b.c))} — NOT marked</span><small>${b.bad.length} teachers · ${b.miss} entries</small></h3>
+        ${bad.length ? `<div class="dtw"><table class="dt"><thead><tr><th>#</th><th class="l">Teacher</th><th>Pending</th><th class="l">Class – Subject</th></tr></thead><tbody>` +
+          bad.map((t, i) => `<tr><td>${i + 1}</td><td class="l" style="font-weight:700">${esc(t.name)}</td><td><span class="badge">${t.items.length}</span></td>` +
+            `<td class="l">${t.items.map(it => `<span class="mtag">${esc(it.sec)} · ${esc(it.sub)}</span>`).join("")}</td></tr>`).join("") +
+          `</tbody></table></div>`
+        : `<div class="empty">${b.loading ? "Loading…" : "🎉 Everyone has marked this."}</div>`}
+        ${b.good.length && !q ? `<div class="okbox" style="box-shadow:none;margin-top:8px"><b style="color:var(--good)">✔ Marked (${b.good.length}):</b> ${b.good.map(esc).join(", ")}</div>` : ""}
+      </div>`;
+    }).join("") : `<div class="cpanel"><div class="empty">No records are due yet.</div></div>`;
+  }
+
+  function copyMonth() {
+    if (!MONDATA.some(b => b.bad.length)) return toast("Nothing to copy");
+    const s = stamp();
+    copyText(`*${META.title}*\n📅 ${s.date}  🕒 ${s.time}\n\n` + MONDATA.map(b =>
+      `*${colName(b.c)} — NOT marked (${b.bad.length} teachers)*\n` +
+      (b.bad.length ? b.bad.map((t, i) => `${i + 1}) ${t.name} (${t.items.length}): ` + t.items.map(it => it.sec + " – " + it.sub).join(", ")).join("\n") : "Everyone has marked ✔")
+    ).join("\n\n"));
+  }
+
+  function toast(msg, ms) { const t = $("toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = "none", ms || 1800); }
+  function copyText(txt) {
+    const a = document.createElement("textarea"); a.value = txt; a.style.position = "fixed"; a.style.opacity = "0";
+    document.body.appendChild(a); a.select();
+    let ok = false; try { ok = document.execCommand("copy"); } catch (e) {}
+    a.remove();
+    if (ok) return toast("Copied ✓");
+    if (navigator.clipboard) navigator.clipboard.writeText(txt).then(() => toast("Copied ✓"), () => toast("Copy failed"));
+  }
+  function copyAllDef() {
+    if (!DEF.length) return toast("Nothing to copy");
+    const s = stamp();
+    copyText(`*${META.title}*\nTeachers NOT marking\n📅 ${s.date}  🕒 ${s.time}\n\n` +
+      DEF.map((t, i) => `${i + 1}) *${t.name}* — ${t.miss} pending\n` +
+        t.items.map(it => `   • ${it.sec} – ${it.sub}: ` + typeGroups(it.cols).map(g => `${g.type} (${g.months})`).join("; ")).join("\n")).join("\n\n"));
+  }
+  function downloadDefCsv() {
+    if (!DEF.length) return toast("Nothing to download");
+    const q = v => `"${String(v).replace(/"/g, '""')}"`;
+    const lines = [["Teacher", "Section", "Subject", "Not marked", "Teacher total pending"].map(q).join(",")];
+    DEF.forEach(t => t.items.forEach(it => lines.push([t.name, it.sec, it.sub, it.cols.map(colName).join(" / "), t.miss].map(q).join(","))));
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv" }));
+    a.download = "Teachers-not-marking-" + new Date().toISOString().slice(0, 10) + ".csv";
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  IDS.forEach(id => setOpts(id, []));
+
+  // start with the filter bars collapsed on small / landscape-phone screens
+  if (window.matchMedia("(max-width:900px), (max-height:520px)").matches) {
+    document.querySelectorAll(".bar").forEach(b => b.classList.add("collapsed"));
+  }
+
+  loadAll();
+  showTab("table");
+</script>
+</body>
+</html>
