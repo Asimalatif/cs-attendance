@@ -4970,7 +4970,7 @@ async function tpGo(kind){
    Teachers: students of their sections; personal details limited (the server sends nothing more).
    Attendance per subject and month (monthly attendance workbooks + approved leaves), day by day as a calendar
    (daily attendance workbooks), monthly tests, grand test and detention. */
-let ssv = { q:'', list:[], busy:false, roll:'', p:null, months:{}, tests:null, board:null, err:'', t:0, full:false, open:{} };
+let ssv = { q:'', list:[], busy:false, roll:'', p:null, months:{}, tests:null, board:null, bunk:null, err:'', t:0, full:false, open:{} };
 document.addEventListener('input', ev => { if(ev.target && ev.target.id === 'ssQ') ssFind(ev.target.value); });
 document.addEventListener('toggle', ev => { const d = ev.target; if(d && d.classList && d.classList.contains('ssmon')) ssv.open[d.dataset.m] = d.open; }, true);
 function searchCard(){
@@ -5000,13 +5000,14 @@ function ssListHtml(){
 }
 function ssPaintList(){ const b = $q('#ssRes'); if(b) b.innerHTML = ssListHtml(); }
 function ssOpen(roll){
-  Object.assign(ssv, { roll, p:null, months:{}, tests:null, board:null, err:'', open:{} });
+  Object.assign(ssv, { roll, p:null, months:{}, tests:null, board:null, bunk:null, err:'', open:{} });
   rerender(); window.scrollTo(0, 0);
   const same = f => r => { if(ssv.roll === roll){ f(r); if(appView === 'search') rerender(); } };
   const fail = k => e => { if(ssv.roll === roll){ ssv[k] = { error:errText(e) }; if(appView === 'search') rerender(); } };
   const call = (q, ms) => api(q, ms).then(r => { if(!r.ok) throw new Error(String(r.error || 'Failed').replace(/^NOT_ALLOWED: /, '')); return r; });
   call({ action:'st_profile', roll }, 60000).then(same(r => { ssv.p = r; })).catch(fail('p'));
   call({ action:'st_tests', roll }, 120000).then(same(r => { ssv.tests = r; })).catch(fail('tests'));
+  call({ action:'bnk_student', roll }, 240000).then(same(r => { ssv.bunk = r; })).catch(e => { if(ssv.roll === roll){ ssv.bunk = { error:/UNKNOWN_ACTION/.test(errText(e)) ? 'The bunk record needs Bunkers.gs on the server.' : errText(e) }; if(appView === 'search') rerender(); } });
   call({ action:'st_board', roll }, 90000).then(same(r => { ssv.board = r; })).catch(e => { if(ssv.roll === roll){ ssv.board = { show:true, error:errText(e) }; if(appView === 'search') rerender(); } });
   SEAS.slice(0, seasNow() + 1).forEach(m => call({ action:'st_month', roll, mon:m }, 120000).then(same(r => { ssv.months[m] = r; })).catch(e => { if(ssv.roll === roll){ ssv.months[m] = { error:errText(e) }; if(appView === 'search') rerender(); } }));
 }
@@ -5094,8 +5095,23 @@ function renderSearch(){
   h += `<section class="card"><h3>${I.doc} Detention exam</h3>${!T ? '<div class="empty">Loading…</div>' : dtS.length ? `<table class="mtab"><thead><tr><th>Subject</th><th class="c">Theory</th><th class="c">Practical</th><th class="c">Total</th></tr></thead><tbody>${dtS.map(sub => { const x = T.dt[sub], pc = /^A/i.test(x.tot) ? 0 : numOf(x.tot) != null ? numOf(x.tot) / x.max * 100 : null;
       return `<tr><td>${esc(titleCase(sub))}</td><td class="c">${esc(x.th || '–')}${x.th ? ' / ' + x.thMax : ''}</td><td class="c">${x.prMax ? esc(x.pr || '–') + (x.pr ? ' / ' + x.prMax : '') : '–'}</td><td class="c"><span class="pill ${/^A/i.test(x.tot) ? 'bad' : pc == null ? '' : pc < 40 ? 'bad' : pc < 60 ? 'mid' : 'good'}">${esc(x.tot || 'N/R')} / ${x.max}</span></td></tr>`; }).join('')}</tbody></table>
       <div class="rnote">${['#TOTAL (600)', '#PERCENTAGE', '#POSITION'].filter(k => T.dt[k]).map(k => esc(k.slice(1)) + ': <b>' + esc(T.dt[k]) + '</b>').join(' · ')}</div>` : '<div class="empty">No detention marks found.</div>'}</section>`;
-  h += '</div></div></main>';
+  h += '</div>' + ssBunkHtml() + '</div></main>';
   $q('#app').innerHTML = h;
+}
+/* bunk record: days she was in college but skipped lectures (Bunkers.gs) */
+function ssBunkHtml(){
+  const B = ssv.bunk, sd = d => fmtDate(new Date(d + 'T00:00:00'));
+  let h = `<section class="card" style="margin-top:12px"><h3>${I.alert} Bunk record</h3>`;
+  if(!B) return h + '<div class="empty">Loading…</div></section>';
+  if(B.error) return h + `<div class="empty">${esc(B.error)}</div></section>`;
+  h += `<div class="sub"><span class="pill bad">${B.confirmed} confirmed</span> <span class="pill mid">${B.possible} possible</span> <span class="pill">${B.excused} excused</span> · ${esc(B.scope)}. Confirmed = a teacher marked her B; possible = present in one lecture, absent in another the same day.</div>`;
+  if(!B.days.length) return h + '<div class="empty">No bunks found this session.</div></section>';
+  const lec = l => esc(titleCase(l.sub)) + (l.p ? ' (P' + l.p + ')' : '') + (l.m === 'B' ? ' <b>B</b>' : '');
+  h += `<div class="sswrap"><table class="mtab"><thead><tr><th>Date</th><th>Kind</th><th>Bunked (missed)</th><th>Attended</th><th>Pattern</th></tr></thead><tbody>${B.days.map(x => `<tr>
+    <td>${esc(sd(x.d))}</td><td><span class="pill ${x.kind === 'confirmed' ? 'bad' : x.kind === 'possible' ? 'mid' : ''}">${x.kind === 'confirmed' ? 'Confirmed' : x.kind === 'possible' ? 'Possible' : 'Excused'}</span>${x.note ? '<div class="rnote">' + esc(x.note) + '</div>' : ''}</td>
+    <td>${x.lectures.filter(l => l.m === 'A' || l.m === 'B').map(l => lec(l) + (l.teacher ? ' <small>· ' + esc(l.teacher) + '</small>' : '')).join('<br>')}</td>
+    <td>${x.lectures.filter(l => l.m === 'P').map(lec).join(', ') || '–'}</td><td>${esc(x.pattern)}</td></tr>`).join('')}</tbody></table></div>`;
+  return h + '</section>';
 }
 /* compartment codes of the board list -> subject names (unknown codes are shown as they are) */
 const BOARD_CODES = { M:'Mathematics', PH:'Physics', CH:'Chemistry', CS:'Computer Science', BIO:'Biology', E:'English', U:'Urdu', PSY:'Psychology', ECO:'Economics', GM:'General Mathematics', GEO:'Geography' };
@@ -5141,6 +5157,8 @@ function h2cLoad(){
     document.head.appendChild(sc);
   }));
 }
+/* file name: Eshaal-Ardhad_JCW-F26-2345_12-11-2026.pdf */
+function ssFileName(P0){ const d = new Date(), z = n => String(n).padStart(2, '0'); return P.safe(P0.name) + '_' + P.safe(P0.roll) + '_' + z(d.getDate()) + '-' + z(d.getMonth() + 1) + '-' + d.getFullYear() + '.pdf'; }
 async function ssPdfCopy(){
   const src = $q('#ssRec'), P0 = ssv.p; if(!src || !P0 || P0.error) return;
   const btn = $q('#ssPdf'); if(btn) btn.disabled = true;
@@ -5177,7 +5195,7 @@ async function ssPdfCopy(){
       pdf.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG', M, M, cw, (end - y) / pxPerMm);
       first = false; y = end;
     }
-    P.offerFile(pdf.output('blob'), 'Student-record_' + P.safe(P0.name) + '_' + P.safe(P0.roll) + '.pdf', 'Student record ' + P0.name);
+    P.offerFile(pdf.output('blob'), ssFileName(P0), 'Student record ' + P0.name);
   }catch(e){ toast('PDF not made: ' + errText(e)); }
   finally{ if(clone) clone.remove(); const b2 = $q('#ssPdf'); if(b2) b2.disabled = false; }
 }
@@ -5217,7 +5235,7 @@ function ssPdf(){
     const ex = ['#TOTAL (600)', '#PERCENTAGE', '#POSITION'].filter(k => T.dt[k]).map(k => k.slice(1) + ': ' + T.dt[k]).join('   ');
     if(ex) Y = P.smallNote(doc, Y, ex); }
   P.finalize(doc);
-  return { doc, title:'Student record ' + P0.name, file:'Student-record_' + P.safe(P0.name) + '_' + P.safe(P0.roll) + '.pdf' };
+  return { doc, title:'Student record ' + P0.name, file:ssFileName(P0) };
 }
 
 /* ======================= TIMETABLE: periods, days, timings, workload ======================= */
