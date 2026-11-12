@@ -12,6 +12,8 @@
  *              for a decision: "Confirm bunk" or "Excused". Decisions are kept in the sheet "Bunk Decisions"
  *              of the Users workbook (the attendance itself is never changed).
  * Leave (L) is never bunking. A P in the same period in another sheet (guest, moved section) cancels an A/B there.
+ * Days typed straight into the sheets (no Period Data, e.g. September) are read from the day cells of the sheets;
+ * their period comes from the timetable (that weekday), so "left early / came late" still works.
  *
  * Who can open it: admin / principal and Chief Proctors (whole college), HOD (lectures of her department's teachers).
  * The same people can confirm or excuse a possible bunk.
@@ -80,7 +82,69 @@ function bnkLoad_(tok, who) {
       sheets.push({ name: name, cls: String(x[2] || '') || name, sub: String(x[3] || ''), teacher: teacher, mine: mine, r: raw.r || [], d: raw.d || {} });
     });
   }
+  // days that only exist in the day cells of the sheets (typed in, or marked before Period Data existed)
+  var pdDays = {};
+  sheets.forEach(function (s) { pdDays[s.name] = s.d; });
+  var C = bnkCells_(tok), idx2 = indexRows_(tok), my = monthYear_(tok), dep2 = who.all ? null : teacherDepts_();
+  Object.keys(C).forEach(function (name) {
+    var c = C[name], have = pdDays[name] || {}, x = idx2[name] || [], cls = String(x[2] || '') || c.cls, sub = String(x[3] || '') || c.sub;
+    var teacher = String(x[4] || '') || c.teacher, d = {}, any = false;
+    Object.keys(c.d).forEach(function (day) {
+      if (have[day]) return;                                  // Period Data is the real record when it exists
+      var dow = new Date(my.y, my.m, Number(day)).getDay(), p = '0';
+      try { var sl = slotsOf_(cls, sub).filter(function (q) { return q.days[dow]; }); if (sl.length) p = String(sl[0].p); } catch (e) {}
+      d[day] = {}; d[day][p] = c.d[day]; any = true;
+    });
+    if (!any) return;
+    var mine = who.all || String(dep2[normalizeName(teacher)] || '').toUpperCase() === who.dept;
+    sheets.push({ name: name, cls: cls, sub: sub, teacher: teacher, mine: mine, r: c.r, d: d });
+  });
   return (BNK_MEMO_[key] = { tok: tok, sheets: sheets });
+}
+
+/**
+ * Day cells of every attendance sheet of a month: { name: { cls, sub, teacher, r:[rolls], d:{ day: 'PAB-L…' } } }
+ * (one letter per student; "2P" counts as P). Kept in the cache for 10 minutes.
+ */
+function bnkCells_(tok) {
+  var ck = 'bnk_cells_' + tok, hit = cacheGetBig_(ck);
+  if (hit) return hit;
+  var book = bookFor_(tok), names = book.getSheets().map(function (sh) { return sh.getName(); })
+    .filter(function (n) { return n !== PD_SHEET && (' ' + n + ' ').indexOf(' ' + tok + ' ') >= 0; });
+  var grids = {};
+  try {                                                       // fast: one call (Sheets advanced service, if it is on)
+    for (var k = 0; k < names.length; k += 100) {
+      var part = names.slice(k, k + 100);
+      var res = Sheets.Spreadsheets.Values.batchGet(book.getId(), { ranges: part.map(function (n) { return "'" + n.replace(/'/g, "''") + "'!A2:AZ"; }) });
+      (res.valueRanges || []).forEach(function (vr, i) { grids[part[i]] = vr.values || []; });
+    }
+  } catch (e) {
+    grids = {};
+    names.forEach(function (n) {                              // slower: one sheet at a time
+      var sh = book.getSheetByName(n), lr = sh ? sh.getLastRow() : 0;
+      if (lr >= FIRST_ROW) grids[n] = sh.getRange(2, 1, lr - 1, Math.min(sh.getLastColumn(), 52)).getDisplayValues();
+    });
+  }
+  var out = {};
+  Object.keys(grids).forEach(function (n) {
+    var g = grids[n]; if (g.length < 3) return;
+    var hdr = g[HEADER_ROW - 2] || [], rc = -1, dc = {};
+    hdr.forEach(function (h, i) { var t = norm_(h); if (t === 'ROLLNO' && rc < 0) rc = i; else if (/^\d+$/.test(t) && +t >= 1 && +t <= 31 && dc[+t] == null) dc[+t] = i; });
+    if (rc < 0) return;
+    var rows = g.slice(FIRST_ROW - 2).filter(function (r) { return String(r[rc] || '').trim(); });
+    if (!rows.length) return;
+    var d = {};
+    Object.keys(dc).forEach(function (day) {
+      var str = rows.map(function (r) { var m = String(r[dc[day]] || '').trim().toUpperCase().match(/^\d*([PALB])$/); return m ? m[1] : '-'; }).join('');
+      if (/[PALB]/.test(str)) d[day] = str;
+    });
+    if (!Object.keys(d).length) return;
+    var parts = n.split(' ' + tok + ' ');
+    out[n] = { cls: parts[0] || n, sub: parts.slice(1).join(' ' + tok + ' '), teacher: String((g[0] || [])[0] || '').replace(/^Teacher:\s*/i, ''),
+      r: rows.map(function (r) { return String(r[rc]).trim(); }), d: d };
+  });
+  cachePutBig_(ck, out);
+  return out;
 }
 
 var BNK_NAMES_ = null;
@@ -132,7 +196,8 @@ function bnkJudge_(rec, who) {
   if (!B.length && !P.length) return null;                                   // absent the whole day = not a bunker
   if (!who.all && !miss.some(function (x) { return x.mine; })) return null;   // HOD: only her department's lectures
   var kind = B.length ? 'confirmed' : 'possible', pattern;
-  if (!P.length) pattern = miss.length > 1 ? 'In college, missed every lecture' : 'Marked B by the teacher';
+  if (P.length && L.some(function (x) { return !x.p; })) pattern = 'Missed other lectures the same day';   // period not known
+  else if (!P.length) pattern = miss.length > 1 ? 'In college, missed every lecture' : 'Marked B by the teacher';
   else {
     var firstP = P[0].p, lastP = P[P.length - 1].p;
     var late = miss.some(function (x) { return x.p && x.p < firstP; }), early = miss.some(function (x) { return x.p && x.p > lastP; });
