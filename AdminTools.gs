@@ -4228,7 +4228,10 @@ function generateJCWStoppingMeritReport() {
       "Hafiz Quran",
       "Hafiz Quran?",
       "Hafiz-e-Quran",
-      "Hafiz E Quran"
+      "Hafiz E Quran",
+      "HQ",
+      "Hifz",
+      "Hafiz"
     ],
     false
   );
@@ -4526,7 +4529,7 @@ function generateJCWStoppingMeritReport() {
     const isHafizQuran =
       jcwSMNormalizeText_(
         hafizQuran
-      ) === "YES";
+      ) === "YES" || /^(Y|TRUE|HAFIZ|HAFIZA)$/i.test(String(hafizQuran).trim());
 
 
     const hafizBonus =
