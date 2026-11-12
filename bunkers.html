@@ -446,15 +446,19 @@ async function makePdf(file, title, sub, sections){
   await pdfLibs();
   const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape', compress: true }), W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
   doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(74, 36, 24); doc.text('Jinnah College for Women · ' + title, 10, 12);
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(90); doc.text(sub, 10, 17);
-  let y = 21;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(90);
+  const subL = doc.splitTextToSize(sub, W - 20); doc.text(subL, 10, 17);
+  let y = 17 + subL.length * 3.6 + 1;
   sections.forEach(sec => {
     if (sec.title) { if (y > H - 25) { doc.addPage(); y = 12; } doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(107, 52, 35); doc.text(sec.title, 10, y + 3); y += 5; }
     doc.autoTable({ startY: y, head: [sec.head], body: sec.body, theme: 'grid', margin: { left: 8, right: 8, top: 10, bottom: 10 },
       styles: { fontSize: 7, cellPadding: 0.8, lineColor: [201, 167, 158], lineWidth: 0.1, textColor: 30, overflow: 'linebreak' },
       headStyles: { fillColor: [107, 52, 35], textColor: 255, fontSize: 7, fontStyle: 'bold' },
       alternateRowStyles: { fillColor: [251, 237, 234] }, columnStyles: sec.cols || {},
-      didParseCell: d => { if (d.section === 'body' && sec.kindCol != null && d.column.index === sec.kindCol) { d.cell.styles.textColor = /^C/.test(d.cell.raw) ? [192, 57, 43] : [180, 116, 14]; d.cell.styles.fontStyle = 'bold'; } } });
+      didParseCell: d => {
+        if (d.section !== 'body') return;
+        if (sec.kindCol != null && d.column.index === sec.kindCol) { const t = String(d.cell.raw && d.cell.raw.content != null ? d.cell.raw.content : d.cell.raw); d.cell.styles.textColor = /^C/.test(t) ? [192, 57, 43] : /^P/.test(t) ? [180, 116, 14] : [90, 90, 90]; d.cell.styles.fontStyle = 'bold'; }
+      } });
     y = doc.lastAutoTable.finalY + 6;
   });
   const n = doc.getNumberOfPages();
@@ -482,11 +486,32 @@ async function pdfRange(){
   try{
     if (GROUP === 'students') {
       const rows = studentRows(evs); if(!rows.length){ alert('Nothing to put in the PDF.'); hush('st_range'); return; }
-      await makePdf(rangeTitle(), name, sub + ' · ' + rows.length + ' students · day by day: date C/P: subjects bunked (B = marked bunk)', [{
-        head: ['#', 'Section', 'Roll No', 'Student', 'Days', 'C', 'P', 'Missed', 'Day by day: what she bunked'],
-        body: rows.map((r, i) => [i + 1, r.sec, r.roll, r.name, r.count, r.confirmed, r.possible, r.missed,
-          r.dates.slice().sort((a, b) => a.d < b.d ? -1 : 1).map(x => short(x.d).replace(/^\w+ /, '') + ' ' + x.k + ': ' + x.miss.map(lecShort).join(', ')).join(' | ')]),
-        cols: { 0: { cellWidth: 7 }, 1: { cellWidth: 24 }, 2: { cellWidth: 24 }, 3: { cellWidth: 30 }, 4: { cellWidth: 9 }, 5: { cellWidth: 7 }, 6: { cellWidth: 7 }, 7: { cellWidth: 11 } } }]);
+      const lecTxt2 = l => l[1] + (l[0] && l[0] !== '0' ? ' (P' + l[0] + ')' : '') + ' ' + l[3];
+      const C = rows.reduce((a, r) => a + r.confirmed, 0), Pn = rows.reduce((a, r) => a + r.possible, 0);
+      // 1) summary by section
+      const bySec = {};
+      rows.forEach(r => { const g = bySec[r.sec || '—'] = bySec[r.sec || '—'] || { st: 0, days: 0, c: 0, p: 0, lec: 0, list: [] }; g.st++; g.days += r.count; g.c += r.confirmed; g.p += r.possible; g.lec += r.missed; g.list.push(r); });
+      const secs = Object.keys(bySec).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      const parts = [{ title: 'Summary by section', head: ['Section', 'Students', 'Bunk days', 'Confirmed (B)', 'Possible (P + A)', 'Lectures missed'],
+        body: secs.map(k => [k, bySec[k].st, bySec[k].days, bySec[k].c, bySec[k].p, bySec[k].lec]).concat([['TOTAL', rows.length, C + Pn, C, Pn, rows.reduce((a, r) => a + r.missed, 0)]]) }];
+      // 2) every section: one line per bunk day, the student's name once
+      secs.forEach(k => {
+        const body = [];
+        bySec[k].list.forEach((r, i) => {
+          const days = r.dates.slice().sort((a, b) => a.d < b.d ? -1 : 1), n = days.length;
+          days.forEach((x, j) => {
+            const lt = m => x.miss.filter(l => l[3] === m).map(l => l[1] + (l[0] && l[0] !== '0' ? ' (P' + l[0] + ')' : '') + (l[2] ? ' – ' + l[2] : '')).join('\n') || '–';
+            const line = [short(x.d), x.k === 'C' ? 'Confirmed' : 'Possible', lt('B'), lt('A'), (x.att || []).map(lecTxt2).join(', ') || '–'];
+            body.push(j ? line : [{ content: String(i + 1), rowSpan: n }, { content: r.roll, rowSpan: n }, { content: r.name + (r.father ? '\nd/o ' + r.father : ''), rowSpan: n },
+              { content: r.count + ' day' + (r.count > 1 ? 's' : '') + '\n' + r.confirmed + ' confirmed\n' + r.possible + ' possible', rowSpan: n }].concat(line));
+          });
+        });
+        parts.push({ title: k + ' · ' + bySec[k].st + ' student(s) · ' + bySec[k].days + ' bunk day(s)',
+          head: ['#', 'Roll No', 'Student', 'Total', 'Date', 'Kind', 'Marked B (bunk) – teacher', 'Marked A (absent) – teacher', 'Other lectures that day'],
+          body: body, kindCol: 5, redCol: 6,
+          cols: { 0: { cellWidth: 7 }, 1: { cellWidth: 24 }, 2: { cellWidth: 32 }, 3: { cellWidth: 19 }, 4: { cellWidth: 20 }, 5: { cellWidth: 16 }, 6: { cellWidth: 52, textColor: [192, 57, 43], fontStyle: 'bold' }, 7: { cellWidth: 52 } } });
+      });
+      await makePdf(rangeTitle(), name, sub + ' · ' + rows.length + ' students · ' + C + ' confirmed, ' + Pn + ' possible bunk days. Confirmed = a teacher marked B (red). Possible = present (P) in one lecture, absent (A) in another the same day. Marks: P present, A absent, L leave, B bunk.', parts);
     } else {
       const def = groupDef(), rows = groupRows(evs, def[1], def[2]);
       await makePdf(rangeTitle() + ' - ' + def[0], name + ' by ' + def[0].toLowerCase(), sub, [{
