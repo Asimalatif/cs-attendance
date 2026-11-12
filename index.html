@@ -7271,6 +7271,19 @@ function withLeaves(g, lv){
   Object.keys(g.months).forEach(t => { const m = g.months[t]; if(!m.off && m.d) a += Math.min(m.d, m.p + (lv[t] || 0)); });
   return a;
 }
+/* signatures on the SAME page as the table: normal gap when there is room, else a smaller gap just above the footer */
+function sigsFit(doc, Y, labels){
+  const H = doc.internal.pageSize.getHeight(), W = doc.internal.pageSize.getWidth();
+  if(Y + 30 <= H - 20) return P.signatures(doc, Y, labels);
+  if(Y + 8 > H - 18) return P.signatures(doc, Y, labels);              // no room at all (very long table): next page as before
+  const ly = Math.min(Y + 12, H - 20), w = (W - 28) / labels.length;
+  labels.forEach((l, i) => {
+    const x1 = 14 + i * w + 6, x2 = 14 + (i + 1) * w - 6;
+    doc.setDrawColor(...P.C.MUTED); doc.setLineWidth(0.3); doc.line(x1, ly, x2, ly); doc.setLineWidth(0.2);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...P.C.MUTED); doc.text(l, (x1 + x2) / 2, ly + 4, { align:'center' });
+  });
+  return ly + 6;
+}
 /* student band: big name, then Enroll#, class-section and months in boxes */
 function studentHead(doc, title, s, q){
   const C = P.C, Y = P.TOP;
@@ -7307,7 +7320,7 @@ function studentSessionPage(doc, s, mons, first, q, LVS){
   const pctCols = new Set(); mons.forEach((_, i) => pctCols.add(3 + i * 2)); pctCols.add(3 + mons.length * 2); if(useLv) pctCols.add(5 + mons.length * 2);
   const lvRow = useLv ? body.length - 2 : -1;
   P.table(doc, { startY:Y, margin:{ top:P.TOP, left:10, right:10, bottom:16 },
-    styles:{ font:'helvetica', fontSize:8, cellPadding:1.4, lineColor:C.LINE, lineWidth:0.15, textColor:C.INK, valign:'middle', halign:'center' },
+    styles:{ font:'helvetica', fontSize:8, cellPadding:subs.length > 6 ? 1.05 : 1.4, lineColor:C.LINE, lineWidth:0.15, textColor:C.INK, valign:'middle', halign:'center' },
     head, body, columnStyles:{ 0:{ halign:'left', fontStyle:'bold', cellWidth:38 }, 1:{ halign:'left', cellWidth:36 } },
     didParseCell:h => {
       if(h.section !== 'body') return;
@@ -7324,7 +7337,7 @@ function studentSessionPage(doc, s, mons, first, q, LVS){
   Y = P.smallNote(doc, Y, 'Present = lectures attended, Held = lectures delivered (for a guest: lectures in which she was marked). Only P counts as attended. Minimum required: ' + LOW + '%.' +
     (useLv ? ' With leaves: each month\'s approved leave days (Leave In-Charge) are added to the lectures attended in every subject held that month, never more than the lectures held; Status uses this figure.' : '') +
     (scope() ? '' : ' Only the subjects taught by ' + (teacher || user) + ' are included.'));
-  P.signatures(doc, Y, ['Class In-charge', 'HOD', 'Principal']);
+  sigsFit(doc, Y, ['Class In-charge', 'HOD', 'Principal']);
 }
 async function buildCards(){
   const all = zr.cls === '*';
@@ -7413,14 +7426,14 @@ function studentResultPage(doc, s, mons, q, first, place){
     G.t ? [G.o + ' / ' + G.t, G.p] : ['-', '']));
   const pctCols = new Set(); mons.forEach((_, i) => pctCols.add(3 + i * 2)); pctCols.add(3 + mons.length * 2);
   P.table(doc, { startY:Y, margin:{ top:P.TOP, left:10, right:10, bottom:16 },
-    styles:{ font:'helvetica', fontSize:8, cellPadding:1.4, lineColor:C.LINE, lineWidth:0.15, textColor:C.INK, valign:'middle', halign:'center' },
+    styles:{ font:'helvetica', fontSize:8, cellPadding:subs.length > 6 ? 1.05 : 1.4, lineColor:C.LINE, lineWidth:0.15, textColor:C.INK, valign:'middle', halign:'center' },
     head, body, columnStyles:{ 0:{ halign:'left', fontStyle:'bold', cellWidth:38 }, 1:{ halign:'left', cellWidth:36 } },
     didParseCell:h => { if(h.section !== 'body') return; const v = String(h.cell.raw == null ? '' : h.cell.raw);
       if(h.row.index === body.length - 1){ h.cell.styles.fontStyle = 'bold'; h.cell.styles.fillColor = [234, 238, 246]; }
       if(v === 'Absent' || (pctCols.has(h.column.index) && v !== '' && v !== '-' && Number(v) < TEST_LOW)){ h.cell.styles.textColor = C.RED; h.cell.styles.fillColor = C.REDBG; h.cell.styles.fontStyle = 'bold'; } } });
   Y = doc.lastAutoTable.finalY + 3;
   Y = P.smallNote(doc, Y, testLegend + (place ? ' Position = among the students of ' + s.cls + ', by overall % of ' + (scope() ? 'the subjects of that section.' : 'the subjects shown.') : '') + (scope() ? '' : ' Only the subjects taught by ' + (teacher || user) + ' are included.'));
-  P.signatures(doc, Y, ['Class In-charge', 'HOD', 'Principal']);
+  sigsFit(doc, Y, ['Class In-charge', 'HOD', 'Principal']);
 }
 async function buildTests(everyStudent){
   const mons = monthsIn(zr.from, zr.to), doc = P.newDoc('landscape');
