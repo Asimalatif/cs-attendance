@@ -272,7 +272,7 @@ function bnkRange_(who, fromTxt, toTxt) {
   var from = bnkParse_(fromTxt), to = bnkParse_(toTxt);
   if (!from || !to || to < from) throw new Error('Choose a correct period.');
   if ((to - from) / 864e5 > BNK_MAX_DAYS) throw new Error('Choose at most ' + BNK_MAX_DAYS + ' days.');
-  var DEC = bnkDecisions_(), S = {}, days = 0, perDay = [];
+  var DEC = bnkDecisions_(), S = {}, days = 0, perDay = [], ev = [], st = {};
   for (var x = new Date(from); x <= to; x.setDate(x.getDate() + 1)) {
     if (x.getDay() === 0 || !BNK_TOK_[x.getMonth()]) continue;
     var R = bnkDate_(who, new Date(x), DEC), c = 0, p = 0;
@@ -280,6 +280,10 @@ function bnkRange_(who, fromTxt, toTxt) {
     R.rows.forEach(function (j) {
       if (j.kind === 'excused') return;
       if (j.kind === 'confirmed') c++; else p++;
+      // compact event list for the section / program / class / subject / teacher / weekday / period tables
+      if (!st[j.key]) st[j.key] = [j.roll, j.name, j.father, j.sec];
+      ev.push([j.key, R.iso, j.kind === 'confirmed' ? 'C' : 'P', j.pattern,
+        j.lectures.filter(function (l) { return l.m === 'A' || l.m === 'B'; }).map(function (l) { return [l.p, l.sub, l.teacher, l.m]; })]);
       var s = S[j.key] = S[j.key] || { roll: j.roll, name: j.name, father: j.father, sec: j.sec, dates: [], confirmed: 0, possible: 0, missed: 0, subs: {}, patterns: {}, teachers: {} };
       s.dates.push({ d: R.iso, k: j.kind === 'confirmed' ? 'C' : 'P' });
       if (j.kind === 'confirmed') s.confirmed++; else s.possible++;
@@ -300,7 +304,7 @@ function bnkRange_(who, fromTxt, toTxt) {
       subjects: top(s.subs, 3).map(function (x) { return x + ' (' + s.subs[x] + ')'; }), pattern: top(s.patterns, 1)[0] || '',
       teachers: Object.keys(s.teachers) };
   }).sort(function (a, b) { return b.confirmed - a.confirmed || b.count - a.count || b.missed - a.missed || a.sec.localeCompare(b.sec, undefined, { numeric: true }); });
-  return { ok: true, from: bnkIso_(from), to: bnkIso_(to), scope: who.label, markedDays: days, perDay: perDay, rows: rows };
+  return { ok: true, from: bnkIso_(from), to: bnkIso_(to), scope: who.label, markedDays: days, perDay: perDay, rows: rows, ev: ev, st: st };
 }
 
 /* ---------------- decisions ---------------- */

@@ -23,7 +23,7 @@ header .sp{flex:1}
 .tb{height:36px;border-radius:999px;border:0;background:rgba(255,255,255,.15);color:#fff;font-weight:700;padding:0 14px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;font-size:13px}
 .wrap{max-width:1100px;margin:0 auto;padding:16px 12px}
 .tabs{display:flex;gap:6px;margin-bottom:12px}
-.tabs button{flex:1;height:42px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-weight:800;cursor:pointer}
+.tabs button{flex:1;min-width:70px;height:42px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-weight:800;cursor:pointer}
 .tabs button.on{background:var(--brown);border-color:var(--brown);color:#fff}
 .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
 .bar input,.bar select{height:40px;border:1.5px solid var(--line);border-radius:12px;padding:0 10px;background:var(--surface)}
@@ -77,6 +77,10 @@ tr.hot td{background:var(--neg-bg)!important}
 .days{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px}
 .dbox{flex:none;min-width:74px;background:var(--surface);border:1.5px solid var(--line);border-radius:12px;padding:6px 8px;text-align:center;font-size:12px}
 .dbox b{display:block;font-size:13px}.dbox .c{color:var(--neg);font-weight:800}.dbox .p{color:var(--mid);font-weight:800}
+.gtabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.gtabs button{height:34px;padding:0 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);font-weight:700;font-size:12.5px;cursor:pointer}
+.gtabs button.on{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.barc{display:flex;align-items:center;gap:6px;min-width:140px}.barc i{display:block;height:10px;border-radius:5px;background:var(--neg);opacity:.75}
 .note{font-size:12.5px;color:var(--muted);background:var(--surface);border:1.5px dashed var(--line);border-radius:12px;padding:9px 12px;margin-bottom:12px;line-height:1.55}
 </style>
 </head>
@@ -88,7 +92,7 @@ tr.hot td{background:var(--neg-bg)!important}
 </header>
 
 <div class="wrap">
-  <div class="tabs"><button id="t_day" class="on" onclick="tab('day')">Day</button><button id="t_week" onclick="tab('week')">Week</button><button id="t_month" onclick="tab('month')">Month</button></div>
+  <div class="tabs"><button id="t_day" class="on" onclick="tab('day')">Day</button><button id="t_week" onclick="tab('week')">Week</button><button id="t_month" onclick="tab('month')">Month</button><button id="t_season" onclick="tab('season')">Session</button></div>
   <div class="note"><b style="color:var(--neg)">Confirmed bunk</b> = a teacher marked her <b>B</b> (if all her other lectures are A, she came to college and missed every lecture).
     <b style="color:var(--mid)">Possible bunk</b> = present in one lecture, absent in another the same day: tap <b>Confirm bunk</b> or <b>Excused</b> (sent home, permission …).
     Excused ones are not counted anywhere. Leave (L) is never bunking.</div>
@@ -121,17 +125,22 @@ tr.hot td{background:var(--neg-bg)!important}
       <button class="btn" onclick="shiftWeek(1)">Week ›</button>
       <button class="btn p" onclick="loadRange()">Show</button>
     </div>
+    <div class="bar hidden" id="seasonBar">
+      <span class="rl">Whole session, September to January (up to today). Each month is read in turn.</span>
+      <button class="btn p" onclick="loadRange()">Show</button>
+    </div>
     <div class="bar hidden" id="monBar">
       <select id="mon"></select>
       <button class="btn p" onclick="loadRange()">Show</button>
     </div>
     <div class="bar">
-      <select id="minD" onchange="drawRange()"><option value="1">1 day or more</option><option value="2">2 days or more</option><option value="3">3 days or more</option><option value="5">5 days or more</option></select>
+      <select id="minD" onchange="drawRange()"><option value="1">1 day or more</option><option value="2">2 days or more</option><option value="3">3 days or more</option><option value="5">5 days or more</option><option value="10">10 days or more</option></select>
       <select id="kindR" onchange="drawRange()"><option value="">Confirmed + possible</option><option value="C">Only with a confirmed bunk</option></select>
       <select id="secR" class="grow" onchange="drawRange()"><option value="">All sections</option></select>
       <input id="qR" class="grow" placeholder="Search name or roll no…" oninput="drawRange()">
       <button class="btn" onclick="shareRange()">WhatsApp</button><button class="btn" onclick="csvRange()">CSV</button><button class="btn" onclick="window.print()">Print</button>
     </div>
+    <div class="gtabs" id="gtabs"></div>
     <div class="status" id="st_range"></div>
     <div id="k_range" class="kpis"></div>
     <div id="perDay" class="days"></div>
@@ -184,11 +193,11 @@ function fillSecs(sel, rows){
 const lecTxt = l => 'P' + l.p + ' ' + l.sub + (l.m === 'B' ? ' (B)' : '');
 function tab(w){
   MODE = w;
-  ['day', 'week', 'month'].forEach(k => $('t_' + k).classList.toggle('on', k === w));
+  ['day', 'week', 'month', 'season'].forEach(k => $('t_' + k).classList.toggle('on', k === w));
   $('v_day').classList.toggle('hidden', w !== 'day'); $('v_range').classList.toggle('hidden', w === 'day');
-  $('weekBar').classList.toggle('hidden', w !== 'week'); $('monBar').classList.toggle('hidden', w !== 'month');
-  $('minD').value = w === 'week' ? '2' : '3';
-  RANGE = null; $('o_range').innerHTML = '<div class="empty"><b>' + (w === 'week' ? 'Weekly' : 'Monthly') + ' bunkers</b>Tap <i>Show</i>.</div>'; $('k_range').innerHTML = ''; $('perDay').innerHTML = ''; hush('st_range');
+  $('weekBar').classList.toggle('hidden', w !== 'week'); $('monBar').classList.toggle('hidden', w !== 'month'); $('seasonBar').classList.toggle('hidden', w !== 'season');
+  $('minD').value = w === 'week' ? '2' : w === 'season' ? '5' : '3';
+  RANGE = null; $('gtabs').innerHTML = ''; $('o_range').innerHTML = '<div class="empty"><b>' + ({ week: 'Weekly', month: 'Monthly', season: 'Whole session' }[w] || '') + ' bunkers</b>Tap <i>Show</i>. Then see them by student, section, program, class, subject, teacher, weekday or period.</div>'; $('k_range').innerHTML = ''; $('perDay').innerHTML = ''; hush('st_range');
 }
 
 /* ---------- date lists (day + month in words, never mixed up) ---------- */
@@ -270,49 +279,141 @@ function csvDay(){
       r.lectures.filter(l => l.m === 'P').map(lecTxt).join('; '), r.days, r.decision || '', r.decBy || '', r.decNote || ''])));
 }
 
-/* ---------------- WEEK / MONTH ---------------- */
+/* ---------------- WEEK / MONTH / SESSION ---------------- */
+const GROUPS = [['students', 'Students'], ['sec', 'Sections'], ['prog', 'Programs'], ['cls', 'Classes'], ['sub', 'Subjects'], ['teacher', 'Teachers'], ['dow', 'Weekdays'], ['per', 'Periods'], ['pat', 'Patterns']];
+let GROUP = 'students';
 function weekOf(d){ const s = new Date(d); const dow = s.getDay() || 7; s.setDate(s.getDate() - (dow - 1)); const e = new Date(s); e.setDate(s.getDate() + 5); return [s, e]; }
+/* "FCS-1 D2" -> program FCS, class 1st Year */
+function progCls(sec){ const m = String(sec || '').match(/^(.*?)\s*-\s*(\d)/); return m ? [m[1].trim(), m[2] === '1' ? '1st Year' : m[2] === '2' ? '2nd Year' : 'Year ' + m[2]] : [sec || '—', '—']; }
+function drawGroupTabs(){ $('gtabs').innerHTML = GROUPS.map(g => '<button class="' + (g[0] === GROUP ? 'on' : '') + '" onclick="GROUP=\'' + g[0] + '\';drawGroupTabs();drawRange()">' + g[1] + '</button>').join(''); }
+
 async function loadRange(){
-  let payload, label;
-  if (MODE === 'week') { const [s, e] = weekOf(getD($('wD'), $('wM'))); payload = { action: 'bnk_range', from: iso(s), to: iso(e) }; label = 'week ' + short(iso(s)) + ' – ' + short(iso(e)); }
-  else { payload = { action: 'bnk_month', mon: $('mon').value }; label = $('mon').selectedOptions[0].textContent; }
-  say('st_range', 'busy', 'Checking every day of the ' + label + '… this can take a minute.');
+  let calls = [], label;
+  if (MODE === 'week') { const [s, e] = weekOf(getD($('wD'), $('wM'))); calls = [{ action: 'bnk_range', from: iso(s), to: iso(e) }]; label = 'week ' + short(iso(s)) + ' – ' + short(iso(e)); }
+  else if (MODE === 'month') { calls = [{ action: 'bnk_month', mon: $('mon').value }]; label = $('mon').selectedOptions[0].textContent; }
+  else {
+    const today = new Date();
+    calls = seasonMonths().filter(([y, m]) => new Date(y, m, 1) <= today).map(([y, m]) => ({ action: 'bnk_month', mon: TOKM[m], _l: MON[m] }));
+    label = 'session';
+  }
+  const parts = [];
   try{
-    RANGE = await api(payload);
-    $('scope').textContent = RANGE.scope + ' · ' + short(RANGE.from) + ' – ' + short(RANGE.to);
-    fillSecs($('secR'), RANGE.rows); hush('st_range'); drawRange();
-  }catch(e){ say('st_range', 'err', e.message); }
+    for (let i = 0; i < calls.length; i++) {
+      say('st_range', 'busy', calls.length > 1 ? 'Reading ' + calls[i]._l + ' (' + (i + 1) + ' of ' + calls.length + ')… each month can take up to a minute.' : 'Checking every day of the ' + label + '… this can take a minute.');
+      const { _l, ...payload } = calls[i];
+      parts.push(await api(payload));
+    }
+  }catch(e){ say('st_range', 'err', e.message); if (!parts.length) return; }
+  RANGE = { from: parts[0].from, to: parts[parts.length - 1].to, scope: parts[0].scope, markedDays: 0, perDay: [], ev: [], st: {}, months: [] };
+  parts.forEach((p, i) => {
+    RANGE.markedDays += p.markedDays; RANGE.perDay = RANGE.perDay.concat(p.perDay || []); RANGE.ev = RANGE.ev.concat(p.ev || []); Object.assign(RANGE.st, p.st || {});
+    RANGE.months.push({ l: calls[i]._l || '', c: (p.perDay || []).reduce((a, d) => a + d.confirmed, 0), p: (p.perDay || []).reduce((a, d) => a + d.possible, 0), days: p.markedDays });
+  });
+  if (!RANGE.ev.length && parts.some(p => p.rows && p.rows.length)) { say('st_range', 'err', 'The server has an older Bunkers.gs: paste the new one and deploy a new version.'); return; }
+  $('scope').textContent = RANGE.scope + ' · ' + short(RANGE.from) + ' – ' + short(RANGE.to);
+  fillSecs($('secR'), Object.values(RANGE.st).map(x => ({ sec: x[3] })));
+  if (parts.length === calls.length) hush('st_range');
+  drawGroupTabs(); drawRange();
 }
-function rangeRows(){
+
+/* events after the kind + section + search filters: [key, date, 'C'|'P', pattern, [[p, sub, teacher, m]]] */
+function rangeEvents(){
   if(!RANGE) return [];
-  const min = +$('minD').value, k = $('kindR').value, s = $('secR').value, q = $('qR').value.trim().toLowerCase();
-  return RANGE.rows.filter(r => r.count >= min && (!k || r.confirmed) && (!s || r.sec === s) && (!q || (r.name + ' ' + r.roll).toLowerCase().includes(q)));
+  const k = $('kindR').value, s = $('secR').value, q = $('qR').value.trim().toLowerCase();
+  return RANGE.ev.filter(e => { const st = RANGE.st[e[0]] || []; return (!k || e[2] === 'C') && (!s || st[3] === s) && (!q || (st[1] + ' ' + st[0]).toLowerCase().includes(q)); });
+}
+function studentRows(evs){
+  const S = {};
+  evs.forEach(e => {
+    const st = RANGE.st[e[0]] || [], r = S[e[0]] = S[e[0]] || { roll: st[0], name: st[1], father: st[2], sec: st[3], dates: [], confirmed: 0, possible: 0, missed: 0, subs: {}, pats: {}, teachers: {} };
+    r.dates.push({ d: e[1], k: e[2] }); if (e[2] === 'C') r.confirmed++; else r.possible++;
+    r.pats[e[3]] = (r.pats[e[3]] || 0) + 1;
+    e[4].forEach(l => { r.missed++; r.subs[l[1]] = (r.subs[l[1]] || 0) + 1; if (l[2]) r.teachers[l[2]] = 1; });
+  });
+  const top = (o, n) => Object.keys(o).sort((a, b) => o[b] - o[a]).slice(0, n);
+  const min = +$('minD').value;
+  return Object.values(S).map(r => ({ ...r, count: r.dates.length, subjects: top(r.subs, 3).map(x => x + ' (' + r.subs[x] + ')'), pattern: top(r.pats, 1)[0] || '', teachers: Object.keys(r.teachers) }))
+    .filter(r => r.count >= min)
+    .sort((a, b) => b.confirmed - a.confirmed || b.count - a.count || b.missed - a.missed || String(a.sec).localeCompare(String(b.sec), undefined, { numeric: true }));
+}
+/* one summary table: key -> students, bunk-days, confirmed, possible, lectures missed */
+function groupRows(evs, keyOf, perLecture){
+  const G = {};
+  evs.forEach(e => {
+    const st = RANGE.st[e[0]] || [];
+    const add = (key, lec) => { const g = G[key] = G[key] || { key: key, st: new Set(), ev: new Set(), C: 0, P: 0, lec: 0, B: 0 };
+      g.st.add(e[0]); const id = e[0] + e[1]; if (!g.ev.has(id)) { g.ev.add(id); if (e[2] === 'C') g.C++; else g.P++; }
+      g.lec += lec ? 1 : e[4].length; if (lec && lec[3] === 'B') g.B++; };
+    if (perLecture) e[4].forEach(l => add(keyOf(st, e, l) || '—', l));
+    else add(keyOf(st, e) || '—', null);
+  });
+  return Object.values(G).map(g => ({ key: g.key, students: g.st.size, days: g.ev.size, C: g.C, P: g.P, lec: g.lec, B: g.B }))
+    .sort((a, b) => b.lec - a.lec || b.days - a.days);
+}
+const DOW = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+function groupDef(){
+  return {
+    sec:     ['Section', (st) => st[3], false],
+    prog:    ['Program', (st) => progCls(st[3])[0], false],
+    cls:     ['Class', (st) => progCls(st[3])[0] + ' · ' + progCls(st[3])[1], false],
+    sub:     ['Subject', (st, e, l) => l[1], true],
+    teacher: ['Teacher (lecture missed)', (st, e, l) => l[2] || '(not known)', true],
+    dow:     ['Weekday', (st, e) => DOW[new Date(e[1] + 'T00:00:00').getDay()], false],
+    per:     ['Period', (st, e, l) => l[0] ? 'Period ' + l[0] : '(period not known)', true],
+    pat:     ['Pattern', (st, e) => e[3], false]
+  }[GROUP];
 }
 function drawRange(){
   if(!RANGE) return;
-  const rows = rangeRows(), C = RANGE.perDay.reduce((a, d) => a + d.confirmed, 0), P = RANGE.perDay.reduce((a, d) => a + d.possible, 0);
+  const evs = rangeEvents(), C = evs.filter(e => e[2] === 'C').length, P = evs.length - C, people = new Set(evs.map(e => e[0])).size;
   $('k_range').innerHTML =
-    '<div class="kpi neg"><b>' + rows.length + '</b><span>students shown</span></div>' +
-    '<div class="kpi"><b>' + RANGE.rows.length + '</b><span>bunked at least once</span></div>' +
+    '<div class="kpi neg"><b>' + people + '</b><span>students who bunked</span></div>' +
     '<div class="kpi neg"><b>' + C + '</b><span>confirmed bunk-days</span></div>' +
     '<div class="kpi" style="border-left-color:var(--mid)"><b style="color:var(--mid)">' + P + '</b><span>possible bunk-days</span></div>' +
+    '<div class="kpi"><b>' + evs.reduce((a, e) => a + e[4].length, 0) + '</b><span>lectures missed</span></div>' +
     '<div class="kpi"><b>' + RANGE.markedDays + '</b><span>days with attendance</span></div>';
-  $('perDay').innerHTML = RANGE.perDay.map(d => '<div class="dbox"><b>' + esc(short(d.d)) + '</b><span class="c">' + d.confirmed + '</span> · <span class="p">' + d.possible + '</span></div>').join('');
+  $('perDay').innerHTML = MODE === 'season'
+    ? RANGE.months.map(m => '<div class="dbox"><b>' + esc(m.l) + '</b><span class="c">' + m.c + '</span> · <span class="p">' + m.p + '</span></div>').join('')
+    : RANGE.perDay.map(d => '<div class="dbox"><b>' + esc(short(d.d)) + '</b><span class="c">' + d.confirmed + '</span> · <span class="p">' + d.possible + '</span></div>').join('');
+  $('minD').parentElement.querySelector('#minD').classList.toggle('hidden', GROUP !== 'students');
+  if (GROUP === 'students') return drawStudents(studentRows(evs));
+  const def = groupDef(), rows = groupRows(evs, def[1], def[2]), max = Math.max(1, ...rows.map(r => r.lec));
+  if(!rows.length){ $('o_range').innerHTML = '<div class="empty"><b>Nothing here</b>No bunks match this choice.</div>'; return; }
+  $('o_range').innerHTML = '<div class="scroll"><table><thead><tr><th>#</th><th>' + def[0] + '</th><th>Students</th><th>Bunk-days</th><th>Confirmed</th><th>Possible</th><th>Lectures missed</th>' + (def[2] ? '<th>of them B</th>' : '') + '<th></th></tr></thead><tbody>' +
+    rows.map((r, i) => '<tr><td>' + (i + 1) + '</td><td class="l"><b>' + esc(r.key) + '</b></td><td>' + r.students + '</td><td>' + r.days + '</td><td>' + r.C + '</td><td>' + r.P + '</td><td><b>' + r.lec + '</b></td>' + (def[2] ? '<td>' + r.B + '</td>' : '') +
+      '<td class="l"><div class="barc"><i style="width:' + Math.round(r.lec / max * 120) + 'px"></i></div></td></tr>').join('') + '</tbody></table></div>' +
+    (GROUP === 'sub' || GROUP === 'teacher' || GROUP === 'per' ? '<div class="legend" style="margin-top:8px">Counted per missed lecture: a student who missed two lectures of the same subject on one day counts 2 lectures but 1 bunk-day.</div>' : '');
+}
+function drawStudents(rows){
   if(!rows.length){ $('o_range').innerHTML = '<div class="empty"><b>Nobody here</b>Try fewer days or "Confirmed + possible".</div>'; return; }
   $('o_range').innerHTML = '<div class="scroll"><table><thead><tr><th>#</th><th>Student</th><th>Roll No</th><th>Section</th><th>Days</th><th>Confirmed</th><th>Possible</th><th>Dates</th><th>Lectures missed</th><th>Most missed subjects</th><th>Usual pattern</th></tr></thead><tbody>' +
     rows.map((r, i) => '<tr class="' + (r.confirmed >= 3 || r.count >= 5 ? 'hot' : '') + '"><td>' + (i + 1) + '</td><td class="l"><b>' + esc(r.name) + '</b></td><td>' + esc(r.roll) + '</td><td>' + esc(r.sec) + '</td><td><b>' + r.count + '</b></td><td>' + r.confirmed + '</td><td>' + r.possible + '</td><td class="l">' +
       r.dates.map(x => '<span class="dch ' + x.k + '">' + esc(short(x.d)) + '</span>').join('') + '</td><td>' + r.missed + '</td><td class="l">' + esc(r.subjects.join(', ')) + '</td><td>' + esc(r.pattern) + '</td></tr>').join('') + '</tbody></table></div>' +
     '<div class="legend" style="margin-top:8px"><span class="dch C">date</span> confirmed bunk <span class="dch P">date</span> possible bunk</div>';
 }
+const rangeTitle = () => ({ week: 'Weekly', month: 'Monthly', season: 'Session' }[MODE]) + ' bunkers ' + RANGE.from + ' to ' + RANGE.to;
 function shareRange(){
-  const rows = rangeRows(); if(!rows.length){ alert('Nothing to share.'); return; }
-  share('*' + (MODE === 'week' ? 'Weekly' : 'Monthly') + ' bunkers · ' + short(RANGE.from) + ' – ' + short(RANGE.to) + '*\n' + rows.map((r, i) =>
-    (i + 1) + '. ' + (r.name || r.roll) + ' (' + r.roll + ', ' + r.sec + ') · ' + r.count + ' day(s), ' + r.confirmed + ' confirmed · ' + r.subjects.join(', ')).join('\n'));
+  if(!RANGE) return;
+  const evs = rangeEvents(), head = '*' + ({ week: 'Weekly', month: 'Monthly', season: 'Session' }[MODE]) + ' bunkers · ' + short(RANGE.from) + ' – ' + short(RANGE.to) + '*\n';
+  if (GROUP === 'students') {
+    const rows = studentRows(evs); if(!rows.length){ alert('Nothing to share.'); return; }
+    share(head + rows.map((r, i) => (i + 1) + '. ' + (r.name || r.roll) + ' (' + r.roll + ', ' + r.sec + ') · ' + r.count + ' day(s), ' + r.confirmed + ' confirmed · ' + r.subjects.join(', ')).join('\n'));
+  } else {
+    const def = groupDef(), rows = groupRows(evs, def[1], def[2]); if(!rows.length){ alert('Nothing to share.'); return; }
+    share(head + '_' + def[0] + '-wise_\n' + rows.map((r, i) => (i + 1) + '. ' + r.key + ': ' + r.students + ' students, ' + r.days + ' bunk-days (' + r.C + ' confirmed), ' + r.lec + ' lectures missed').join('\n'));
+  }
 }
 function csvRange(){
-  const rows = rangeRows(); if(!rows.length){ alert('Nothing to download.'); return; }
-  download((MODE === 'week' ? 'Weekly' : 'Monthly') + ' bunkers ' + RANGE.from + ' to ' + RANGE.to, [['Student', 'Father', 'Roll No', 'Section', 'Days', 'Confirmed', 'Possible', 'Dates (C = confirmed, P = possible)', 'Lectures missed', 'Most missed subjects', 'Teachers of missed lectures', 'Usual pattern']]
-    .concat(rows.map(r => [r.name, r.father, r.roll, r.sec, r.count, r.confirmed, r.possible, r.dates.map(x => x.d + ' ' + x.k).join('; '), r.missed, r.subjects.join('; '), r.teachers.join('; '), r.pattern])));
+  if(!RANGE) return;
+  const evs = rangeEvents();
+  if (GROUP === 'students') {
+    const rows = studentRows(evs); if(!rows.length){ alert('Nothing to download.'); return; }
+    return download(rangeTitle(), [['Student', 'Father', 'Roll No', 'Section', 'Days', 'Confirmed', 'Possible', 'Dates (C = confirmed, P = possible)', 'Lectures missed', 'Most missed subjects', 'Teachers of missed lectures', 'Usual pattern']]
+      .concat(rows.map(r => [r.name, r.father, r.roll, r.sec, r.count, r.confirmed, r.possible, r.dates.map(x => x.d + ' ' + x.k).join('; '), r.missed, r.subjects.join('; '), r.teachers.join('; '), r.pattern])));
+  }
+  const def = groupDef(), rows = groupRows(evs, def[1], def[2]); if(!rows.length){ alert('Nothing to download.'); return; }
+  download(rangeTitle() + ' - ' + def[0], [[def[0], 'Students', 'Bunk-days', 'Confirmed', 'Possible', 'Lectures missed'].concat(def[2] ? ['of them B'] : [])]
+    .concat(rows.map(r => [r.key, r.students, r.days, r.C, r.P, r.lec].concat(def[2] ? [r.B] : []))));
 }
 
 /* ---------------- START ---------------- */
