@@ -2107,7 +2107,7 @@ const MKH = {
   P:['P = Present','The student attended this lecture. Only P counts towards the attendance percentage.'],
   A:['A = Absent','The student was absent. The row turns red.'],
   L:['L = Leave','The student is on approved leave. Not counted as present.'],
-  B:['B = Bunk','The student is in college but missed this lecture. Not counted as present.']
+  B:['B = Bunk','The student is in college but missed this lecture. Not counted as present. She shows in Bunkers as a confirmed bunk.']
 };
 const FH = {
   all:['All','Shows every student.'],
@@ -2140,6 +2140,8 @@ const HINTS = [
  ['[data-xrf],[data-xrfa]','Add / Remove / Switch on','Add = put the missing student in the sheet. Remove = delete her row (struck through instead if she already has marks that month). Switch on = count her again.','home'],
  ['#xLeftList','List / restore','Everyone moved so far, with Excel, and Restore for a student moved by mistake.','home'],
  ['#fOpen','Open / Print','PDF: opens it to view or print. Excel: opens it as a table with a filter on every column and a Print button.','home'],
+ ['#xBunk,#xBunkA','Bunkers','Students who were present in one lecture but absent (or marked B) in another on the same day. Day, week, month and whole session; by section, subject, class, teacher. Confirm bunk or Excused; PDF, CSV, WhatsApp. Teachers see their own lectures, HOD the department, admin and Chief Proctor the whole college.','bunkers'],
+ ['#xCollRep','College reports','All strength reports with charts: dashboard, admission flow (cancelled / migrated), merit vs quota, quota, sections, subjects, PCS & Category (Fancy), JCW summary, enrollment, F.A lists, fee challan details. Excel, Google Sheet, CSV, print.','home'],
  ['#xEwTxt,#xEwPdf','Early warning','Students below 73% (lectures each must attend) and students at risk (can miss 2 or fewer more lectures). Share on WhatsApp or as PDF.','reports'],
  ['[data-xfd]','Day','One day (then choose the day), or All week: Monday to Saturday in one list and one PDF.','free'],
  ['[data-xfs]','Shift','Morning or evening periods (timings from the timetable settings).','free'],
@@ -2437,7 +2439,19 @@ function sections(){
     <li><b>Shortage</b>: everyone below the limit (73% unless you change <b>Below %</b>) in the months you choose. <b>Needed</b> = lectures in a row she must attend to reach the limit. A dot after a name = short in more than one subject.</li>
     <li><b>From / To</b>: any range from September up to this month. September to now = the whole session so far.</li>
     <li><b>Early warning</b>: students already below 73% (with the lectures each must attend in a row) and students <b>at risk</b>, who can miss only 2 more lectures or fewer before falling below 73%. Choose <i>This month</i> or <i>Session so far</i>, then <b>Share on WhatsApp</b> or <b>Early warning PDF</b>. Send it to the HOD or Chief Proctor every week.</li>
-    <li><b>Shortcuts</b>: one tap for the session shortage, this month's shortage, and all data for Excel.</li></ul>` },
+    <li><b>Shortcuts</b>: one tap for the session shortage, this month's shortage, and all data for Excel.</li>
+    <li><b>Bunkers</b>: students present in one lecture but absent (or B) in another the same day, for a day, week, month or the session. See <i>Bunkers</i> in this help.</li></ul>` },
+
+  { id:'bunkers', nav:'Bunkers', title:'Bunkers: students who skip lectures', html:`
+    <p>Open <b>Reports → Bunkers</b> (admin: also on the admin home). It reads the attendance you already mark; nothing new to fill in.</p>
+    <ul><li><b>Confirmed bunk</b>: a teacher marked her <b>B</b>. If all her other lectures that day are A, she came to college and missed every lecture.</li>
+    <li><b>Possible bunk</b>: <b>P</b> in one lecture, <b>A</b> in another the same day. Tap <b>Confirm bunk</b> or <b>Excused</b> (sent home, permission…; write the reason). Excused ones are not counted anywhere; <b>undo</b> takes a decision back.</li>
+    <li><b>L</b> (leave) is never bunking. A P in the same period in another sheet (guest, moved section) cancels an A there.</li></ul>
+    <ol><li><b>Day</b>: choose the day and month (‹ › move a day). Every student shows her whole day: period, subject, teacher, P / A / B, and a pattern (Left early, Came late, Skipped in between).</li>
+    <li><b>Week</b> (Monday to Saturday), <b>Month</b>, <b>Session</b> (September to January): one list for the whole period.</li>
+    <li>Below the period, choose the table: <b>Students</b> (each bunk day with the subjects she missed), <b>Sections</b>, <b>Programs</b>, <b>Classes</b>, <b>Subjects</b>, <b>Teachers</b>, <b>Weekdays</b>, <b>Periods</b>, <b>Patterns</b>.</li>
+    <li><b>PDF</b> (small, one line per student: fine for 2000+ students), <b>CSV</b> (Excel), <b>WhatsApp</b>, <b>Print</b>.</li></ol>
+    <div class="tip"><b>Who sees what:</b> a teacher sees students who bunked <b>her</b> lectures; an HOD her department; the admin, principal and Chief Proctors the whole college. The screen shows 80 / 40 students at a time (<b>Show more</b>); the PDF and CSV always have everyone.</div>` },
 
   { id:'start', nav:'Quick start', title:'Quick start', html:`
     <p>Take attendance in six steps:</p>
@@ -4458,7 +4472,7 @@ function ewCard(){
     <div class="acts2"><button class="btn" type="button" id="xEwTxt">Share on WhatsApp</button><button class="btn primary" type="button" id="xEwPdf">${I.share}Early warning PDF</button></div></section>
     <section class="card"><h3>${I.alert} Bunkers</h3>
     <div class="sub">${scope === 'all' || isCP ? 'Whole college' : scope ? esc(allLabel()) : 'Your lectures'}: students who were present in one lecture but absent (or marked B) in another on the same day. Day, week, month and whole session; by section, subject, class and more. PDF, CSV and WhatsApp.</div>
-    <div class="acts2"><a class="btn primary" href="bunkers.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Bunkers</a></div></section>`;
+    <div class="acts2"><a class="btn primary" id="xBunk" href="bunkers.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Bunkers</a></div></section>`;
 }
 /** one student may come back under two sections (guest in one subject): join them into one report, home section first */
 function oneStudent(S, roll){
@@ -5912,9 +5926,9 @@ function adminExtraCards(){
       <div class="sub">Open the Word duty table and get teacher-wise, room-wise, date-wise, class-wise and subject-wise PDFs, clash check, WhatsApp, Excel and Google Sheet.</div>
       <div class="acts2"><a class="btn primary" href="duties.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Duty lists</a></div></section><section class="card"><h3>${I.doc} College reports</h3>
       <div class="sub">All strength reports with charts: dashboard, admission flow (cancelled / migrated), merit vs quota, quota, program &amp; category, section-wise, subjects, PCS &amp; Category (Fancy), JCW summary, enrollment, F.A lists, fee challan details. Excel, Google Sheet, CSV and print.</div>
-      <div class="acts2"><a class="btn primary" href="reports.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Reports</a></div></section><section class="card"><h3>${I.doc} Bunkers</h3>
+      <div class="acts2"><a class="btn primary" id="xCollRep" href="reports.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Reports</a></div></section><section class="card"><h3>${I.doc} Bunkers</h3>
       <div class="sub">Students who were present in one lecture but absent (or B) in another on the same day: who, which lectures, which teacher, left early / came late, and repeat bunkers of the month. WhatsApp, CSV and print.</div>
-      <div class="acts2"><a class="btn primary" href="bunkers.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Bunkers</a></div></section>` : ''}<section class="card"><h3>${I.check} System health check</h3>
+      <div class="acts2"><a class="btn primary" id="xBunkA" href="bunkers.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Bunkers</a></div></section>` : ''}<section class="card"><h3>${I.check} System health check</h3>
       <div class="sub">Finds problems before they stop the work: duplicate roll numbers, students without subjects or class, timetable teachers without a login, classes with no students, sections with no attendance this month, missing sheets and automatic jobs that are off.</div>
       <div class="acts2"><button class="btn primary" type="button" id="xHc">${I.check}Run health check</button></div></section>
     <section class="card"><h3>${I.doc} Student result page</h3>

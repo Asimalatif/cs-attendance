@@ -97,6 +97,7 @@ section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
     <li><a href="#account">14. Account, sync, text size</a></li>
     <li><a href="#offline">15. Working offline</a></li>
     <li><a href="#voice">🎙 Voice: speak, listen</a></li>
+    <li><a href="#bunkers">🚸 Bunkers</a></li>
   </ol>
   <div class="grp">Admin, principal, HOD, Chief Proctor</div>
   <ol>
@@ -107,6 +108,8 @@ section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
     <li><a href="#adm">20. Admissions</a></li>
     <li><a href="#gtadmin">21. Grand test / detention settings</a></li>
     <li><a href="#board">Board results (gazette PDF)</a></li>
+    <li><a href="#collreports">📊 College reports</a></li>
+    <li><a href="#leftsync">🔄 Portal sync &amp; students who left</a></li>
     <li><a href="#faq">22. Problems and answers</a></li>
   </ol>
   <div class="grp">For the administrator</div>
@@ -268,7 +271,7 @@ section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
 <li><b>Choose</b> the student or section, subject and months.</li>
 <li><b>Create PDF</b> or <b>Excel</b>.</li></ol>
 <div class="note"><b>Attendance from</b> (for Attendance and Shortage): <b>Monthly + daily</b> uses the monthly attendance sheets first and the daily app where a subject has no monthly entry; or choose <b>Monthly sheets</b> or <b>Daily app</b> only.</div>
-<p>Further down: <b>Low attendance</b> this week/month, <b>Early warning</b> (students below 73% and at risk), and <b>Shortcuts</b> (shortage of the session or month, all data as Excel).</p></div></div>
+<p>Further down: <b>Low attendance</b> this week/month, <b>Early warning</b> (students below 73% and at risk), <b>Bunkers</b> (see <a href="#bunkers">Bunkers</a>) and <b>Shortcuts</b> (shortage of the session or month, all data as Excel).</p></div></div>
 <div class="row rev"><figure><img src="manual-img/15b-reports-section.jpg" alt="One section"><figcaption>One section: choose section, subject, months</figcaption></figure><div></div></div>
 </section>
 
@@ -339,6 +342,20 @@ section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
 <div class="warn"><b>If it does not listen:</b> use Google Chrome or Microsoft Edge (Firefox, Brave and Opera cannot listen); allow the microphone (lock icon beside the address → Microphone → Allow); on Windows also Settings → Privacy &amp; security → Microphone → allow the browser, and pick the right microphone in Sound settings; check the internet. A headset microphone works best in a noisy class. Voice settings → Test microphone tells you which of these is the problem.</div>
 </section>
 
+<section id="bunkers"><h2><span class="n">🚸</span>Bunkers <span class="who">Teacher / HOD / Chief Proctor / Admin</span></h2>
+<p class="lead"><b>Reports → Bunkers</b> (admin: also on the admin home). It finds students who were in college but skipped lectures, from the attendance you already mark. Nothing new to fill in and the attendance is never changed.</p>
+<table><tr><th>Kind</th><th>Meaning</th><th>What to do</th></tr>
+<tr><td><b style="color:#C0392B">Confirmed bunk</b></td><td>A teacher marked her <b>B</b>. If all her other lectures that day are A: <i>in college, missed every lecture</i>.</td><td>Nothing: it is counted.</td></tr>
+<tr><td><b style="color:#B4740E">Possible bunk</b></td><td><b>P</b> in one lecture, <b>A</b> in another lecture of the same day.</td><td>Tap <b>Confirm bunk</b>, or <b>Excused</b> with the reason (sent home, permission…). Excused ones are not counted anywhere. <b>undo</b> takes it back.</td></tr>
+<tr><td>Not a bunk</td><td><b>L</b> (leave); absent the whole day; or a P in the same period in another sheet (guest, moved section).</td><td>—</td></tr></table>
+<ol class="steps">
+<li><b>Day</b>: choose the day and month (‹ › move one day, Sundays skipped). Each student shows her whole day: period, subject, teacher and P / A / B, with a pattern: <i>Left early</i>, <i>Came late</i>, <i>Skipped in between</i>, and how many days she bunked this month (red at 3+).</li>
+<li><b>Week</b> (Monday–Saturday), <b>Month</b> or <b>Session</b> (September to January): tap <b>Show</b>. A strip shows confirmed · possible per day (per month for the session).</li>
+<li>Choose the table: <b>Students</b> (every bunk day with the subjects she missed and the lectures she attended), <b>Sections</b>, <b>Programs</b>, <b>Classes</b>, <b>Subjects</b>, <b>Teachers</b>, <b>Weekdays</b>, <b>Periods</b> or <b>Patterns</b>. Filters: days (1+, 2+, 3+, 5+, 10+), confirmed only, section, name or roll no.</li>
+<li><b>PDF</b> (small: one line per student, fine for 2000+ students), <b>CSV</b> for Excel, <b>WhatsApp</b>, <b>Print</b>.</li></ol>
+<div class="note"><b>Who sees what:</b> a teacher, students who bunked <b>her</b> lectures · an HOD, her department's lectures · the admin, principal and Chief Proctors, the whole college (all of them can confirm or excuse). The screen shows 80 (day) / 40 (week, month) students at a time with <b>Show more</b>; PDF and CSV always have everyone. September days typed straight into the sheets are read too (period from the Timetable).</div>
+</section>
+
 <section id="ahome"><h2><span class="n">16</span>Admin home <span class="who">Admin / principal</span></h2>
 <div class="row"><figure><img src="manual-img/30-home-admin.jpg" alt="Admin home"><figcaption>Home for admin</figcaption></figure>
 <div><p>Admin and principal see a fourth tab, <b>College</b> (HOD: <b>Department</b>). Home shows the <b>College overview</b> (sections marked today, attendance this month), <b>Tests &amp; exams</b> (with Grand test / Detention progress and settings), <b>Student search</b>, <b>Free teachers</b> and <b>Teacher contacts</b>, and the <b>Admissions</b> card (admin).</p></div></div>
@@ -396,6 +413,31 @@ section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
 <p>Position = rank by marks over all colleges (highest = 1; equal marks get the same position); private candidates get no position. Each new gazette gets its own sheet, so 1st year and 2nd year results of every year stay side by side.</p>
 </section>
 
+<section id="collreports"><h2><span class="n">📊</span>College reports <span class="who">Admin</span></h2>
+<p class="lead">Admin home → <b>College reports → Open Reports</b>. Every strength report of the old <i>JCW Reports</i> web app, with charts. Each report is also written to its own sheet in the Users workbook.</p>
+<ol class="steps">
+<li>Top bar: <b>Exclude HOMIC</b> (Enroll# with -HC), <b>Sessions</b> (e.g. 2026-27 / 2025-26: used in every heading, change once a year; <i>Follow the calendar</i> sets them by date), <b>Generate all</b>, <b>All in Excel</b> (every report in one workbook).</li>
+<li>Pick a report in the menu → <b>Generate</b>. Then <b>Open in Sheet</b>, <b>Excel</b>, <b>Print</b>; every table has <b>Filter rows</b>, <b>CSV</b> and a chart (Bar, Horizontal, Line, Share, Change, Stacked…).</li></ol>
+<table><tr><th>Menu</th><th>Reports</th></tr>
+<tr><td>Dashboard</td><td>Overview: current 1st year vs previous (now 2nd year), by program, category, quota</td></tr>
+<tr><td>Admissions</td><td><b>Admission flow</b> (total admitted before → cancelled / migrated from the <i>Left Students</i> sheet → present strength after), Merit vs Quota, Quota comparison, Quota strength, HOMIC vs Regular</td></tr>
+<tr><td>Strength analysis</td><td>Program &amp; category, Section-wise, Top movers, Subject-wise, Custom column (any column of the strength sheet)</td></tr>
+<tr><td>Official reports</td><td>PCS &amp; Category (Fancy), JCW strength summary (increased seats), Enrollment report</td></tr>
+<tr><td>F.A program</td><td>F.A subject strength, F.A subject lists</td></tr>
+<tr><td>Fee &amp; records</td><td>Fee details (CHALLAN DETAILS column of the strength sheet: entered / missing per program and class), Attendance availability (old backups)</td></tr></table>
+</section>
+
+<section id="leftsync"><h2><span class="n">🔄</span>Portal sync &amp; students who left <span class="who">Admin</span></h2>
+<p class="lead">The <b>JCW Portal Sync</b> panel on the UOP portal's Students page (Tampermonkey) reads the portal and fills only the empty cells of the strength sheet.</p>
+<ol class="steps">
+<li><b>Quick sync</b> (1–2 min) or <b>Full sync</b> (all details, can be resumed).</li>
+<li>At the end the panel shows <b>this year's batches</b> only (e.g. F26, F25): Enrolled, Cancelled, Migrated, Disenrolled, Transfer.</li>
+<li>Nothing goes to <b>Left Students</b> by itself. Two buttons ask first, with the list of names:<br>
+<b>Move N to Left Students</b>: students still in the strength sheet (and in attendance) who are no longer Enrolled; they leave attendance from this month.<br>
+<b>Add N to Left Students</b>: students of this year's batches who left but were never in the strength sheet (record only).</li>
+<li>Undo a move in the app: <b>College → Students who left → List / restore</b>.</li></ol>
+</section>
+
 <section id="faq"><h2><span class="n">22</span>Problems and answers</h2>
 <table><tr><th>Problem</th><th>What to do</th></tr>
 <tr><td>Letters too small</td><td>Status chip → Text size → Large or Extra large.</td></tr>
@@ -405,7 +447,10 @@ section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
 <tr><td>"App error: …"</td><td>Send a screenshot to the admin.</td></tr>
 <tr><td>Grand test / Detention button is locked</td><td>It opens on the date set by the admin and locks after the deadline.</td></tr>
 <tr><td>A new feature is not on my phone</td><td>Status chip → Check for update (the app version is shown there).</td></tr>
-<tr><td>Wrong mark saved</td><td>Open the same day and lecture, correct it and save again.</td></tr></table>
+<tr><td>Wrong mark saved</td><td>Open the same day and lecture, correct it and save again.</td></tr>
+<tr><td>A student is shown as a possible bunk but had permission</td><td>Bunkers → Day → that date → <b>Excused</b> (write the reason). She is no longer counted.</td></tr>
+<tr><td>Bunkers or College reports say "The server does not know …"</td><td>The admin must paste the new Bunkers.gs / Reports.gs and deploy a new version.</td></tr>
+<tr><td>Bunkers is slow the first time</td><td>It reads every sheet of the month once, then remembers it for 10 minutes. The admin can turn on the Google Sheets API service in Apps Script to make it faster.</td></tr></table>
 </section>
 </main></div>
 <div id="zoom" role="dialog" aria-label="Picture"><img alt=""></div>

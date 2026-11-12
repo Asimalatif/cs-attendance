@@ -54,7 +54,7 @@ section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
 <div class="grp">Understand</div>
 <a href="#big">1. The big picture</a><a href="#data">2. Where data is saved</a><a href="#roles">3. Users and roles</a><a href="#server">4. Server files and actions</a>
 <div class="grp">Module flows</div>
-<a href="#flow-sync">5. Sign in and sync</a><a href="#flow-save">6. Saving attendance</a><a href="#flow-exams">7. Tests and exams</a><a href="#flow-adm">8. Admissions</a><a href="#flow-check">9. Check everything</a><a href="#flow-reports">10. Reports</a><a href="#flow-search">11. Student search and board result</a><a href="#leaves">12. Approved leaves</a>
+<a href="#flow-sync">5. Sign in and sync</a><a href="#flow-save">6. Saving attendance</a><a href="#flow-exams">7. Tests and exams</a><a href="#flow-adm">8. Admissions</a><a href="#flow-check">9. Check everything</a><a href="#flow-reports">10. Reports</a><a href="#flow-search">11. Student search and board result</a><a href="#leaves">12. Approved leaves</a><a href="#bunkers-dev">Bunkers</a><a href="#collrep-dev">College reports</a><a href="#portal-dev">Portal sync &amp; Left Students</a>
 <div class="grp">Change and extend</div>
 <a href="#app">13. The app (phone side)</a><a href="#settings">14. Settings reference</a><a href="#session">15. New session / month checklist</a><a href="#deploy">16. Deploying a change</a><a href="#extend">17. Adding a new feature</a><a href="#trouble">18. Troubleshooting</a>
 </nav>
@@ -74,14 +74,18 @@ section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
 <figure class="dg"><img src="manual-img/dg-datamap.svg" alt="Data map"><figcaption>Workbooks and their sheets. Transform-ALL-COLLEGE-STRENGTH is the master list every other workbook is checked against.</figcaption></figure>
 <table>
 <tr><th>Workbook (setting in the code)</th><th>Sheet</th><th>What is in it</th><th>Written by</th></tr>
-<tr><td rowspan="12"><b>Users workbook</b><br><code>USERS_SS_ID</code> = 1ARU8zMO2daJUfU_SIIo4baeSOG7qBPuni5TYRIRLBNY</td><td>Users</td><td>Name, username (col E), password, role (ADMIN / PRINCIPAL / HOD), department, Chief Proctor column (CP, CP1 …), phone</td><td>You, by hand. Password change from the app.</td></tr>
+<tr><td rowspan="16"><b>Users workbook</b><br><code>USERS_SS_ID</code> = 1ARU8zMO2daJUfU_SIIo4baeSOG7qBPuni5TYRIRLBNY</td><td>Users</td><td>Name, username (col E), password, role (ADMIN / PRINCIPAL / HOD), department, Chief Proctor column (CP, CP1 …), phone</td><td>You, by hand. Password change from the app.</td></tr>
 <tr><td>Timetable</td><td>Class / program / section, subject, teacher, period, theory days, practical days, room. Decides which sheets a teacher may mark.</td><td>Timetable editor web app</td></tr>
 <tr><td>NTT Settings</td><td>Period timings, evening sections</td><td>Timetable editor → Settings</td></tr>
 <tr><td>Transform-ALL-COLLEGE-STRENGTH</td><td><b>Master student list</b>: Enroll#, name, father, PCS (section), Sub1–Sub7, quota, DOB, matric, photo, status …</td><td>Admissions page (<code>adm_save</code>), you</td></tr>
 <tr><td>Attendance Index</td><td>One row per daily attendance sheet: held, attended, %, low students, student data (JSON). Feeds the College overview and daily-app reports.</td><td><code>indexUpdate_</code> after every save; <code>rebuildAttendanceIndex()</code></td></tr>
 <tr><td>Portal Data</td><td>UOP portal student data, for the admissions name search</td><td>Portal sync script</td></tr>
 <tr><td>Admission Log</td><td>Every admission and change: who, when, before, after</td><td><code>adm_save</code></td></tr>
-<tr><td>Left Students</td><td>Students moved out (left college)</td><td>College → Left students</td></tr>
+<tr><td>Left Students</td><td>Students moved out (left college). First columns: MOVED ON, MOVED BY, PORTAL STATUS (Cancelled / Migrated / Disenrolled / Transfer), LEFT IN MONTH; then the strength sheet's columns. Rows added from the portal say <i>PORTAL SYNC (not in strength sheet)</i>.</td><td>College → Students who left; portal sync panel buttons (<code>portal_left</code>)</td></tr>
+<tr><td>Bunk Decisions</td><td>Date, Roll No, Student, Section, Decision (Confirmed / Excused), Note, By, When — one per student per day</td><td>Bunkers page (<code>bnk_decide</code>)</td></tr>
+<tr><td>Bunkers Log</td><td>Every day's bunkers at about 4 pm (history after the month ends): kind, pattern, missed and attended lectures, decision</td><td><code>bnkDailyLog</code> trigger (set up with <code>bnkSetupDailyLog()</code>)</td></tr>
+<tr><td>CMP … sheets, Fancy Report Fancy, JCW Strength Summary, JCW Enrollment Report</td><td>The College reports (rebuilt on every Generate)</td><td>College reports (<code>rpt_run</code>)</td></tr>
+<tr><td>CATEGORY</td><td>PCS + Class → Category (subsidized / non-subsidized), for the seat reports — read only</td><td>You</td></tr>
 <tr><td>Guests</td><td>Guest students (student of section X attending in Y)</td><td>Guest add / remove</td></tr>
 <tr><td>Change History</td><td>Every changed attendance mark: who, sheet, day, before, after</td><td><code>auditAdd_</code> on save</td></tr>
 <tr><td>Chief Proctor Reports</td><td>Discipline reports from teachers, status</td><td>Report to Chief Proctor</td></tr>
@@ -121,11 +125,11 @@ section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
 
 <section id="roles"><h2>3. Users and roles</h2>
 <table><tr><th>Who</th><th>Decided by</th><th>Can</th></tr>
-<tr><td>Teacher</td><td>A row in <i>Users</i> + her classes in <i>Timetable</i></td><td>Mark / change her own sheets, tests, grand test, detention of her subjects; reports of her subjects; student search (any student, without contact/email/address)</td></tr>
-<tr><td>HOD</td><td>Role <code>HOD</code> + department</td><td>As teacher + department overview and reports, free teachers</td></tr>
-<tr><td>Principal</td><td>Role <code>PRINCIPAL</code> (or ADMIN)</td><td>Whole college overview and reports, full student search</td></tr>
-<tr><td>Chief Proctor</td><td><i>Chief Proctor</i> column CP / CP1 / CP2 …</td><td>Receives discipline reports, free teachers, full student search, confirm board links</td></tr>
-<tr><td>Admin</td><td><code>ADMIN_USER</code> = jcw@uop.edu.pk in Code.gs</td><td>Everything: Check everything, admissions, grand test / detention settings, left students, month sheets</td></tr></table>
+<tr><td>Teacher</td><td>A row in <i>Users</i> + her classes in <i>Timetable</i></td><td>Mark / change her own sheets, tests, grand test, detention of her subjects; reports of her subjects; Bunkers of her own lectures (and confirm / excuse them); student search (any student, without contact/email/address)</td></tr>
+<tr><td>HOD</td><td>Role <code>HOD</code> + department</td><td>As teacher + department overview and reports, Bunkers of the department's lectures, free teachers</td></tr>
+<tr><td>Principal</td><td>Role <code>PRINCIPAL</code> (or ADMIN)</td><td>Whole college overview and reports, Bunkers of the whole college, full student search</td></tr>
+<tr><td>Chief Proctor</td><td><i>Chief Proctor</i> column CP / CP1 / CP2 …</td><td>Receives discipline reports, free teachers, full student search, confirm board links, Bunkers of the whole college with every facility (decisions, PDF, all views) — the CP role wins over HOD / teacher</td></tr>
+<tr><td>Admin</td><td><code>ADMIN_USER</code> = jcw@uop.edu.pk in Code.gs</td><td>Everything: Check everything, admissions, grand test / detention settings, left students, month sheets, College reports, Bunkers of the whole college</td></tr></table>
 <p>Login: the app sends username + password once and receives a <b>token</b> (valid 120 days). Changing a user's password in the Users sheet ends her token at once — use this if a phone is lost.</p>
 </section>
 
@@ -137,9 +141,14 @@ if (/^gt_/.test(String(req.action || '')))  return json_(gtRoute_(user, req));
 if (/^bk_/.test(String(req.action || '')))  return json_(bkRoute_(user, req));
 if (/^dt_/.test(String(req.action || '')))  return json_(dtRoute_(user, req));
 if (/^wr_/.test(String(req.action || '')))  return json_(wrRoute_(user, req));
-if (/^st_/.test(String(req.action || '')))  return json_(stRoute_(user, req));</pre>
+if (/^st_/.test(String(req.action || '')))  return json_(stRoute_(user, req));
+if (/^rpt_/.test(String(req.action || ''))) return json_(rptRoute_(user, req));   // Reports.gs
+if (/^bnk_/.test(String(req.action || ''))) return json_(bnkRoute_(user, req));   // Bunkers.gs
+// before the login check (sync key, not a login): portal_import, portal_left</pre>
 <table><tr><th>File</th><th>Purpose</th><th>Actions</th></tr>
-<tr><td>Code.gs</td><td>Login, attendance sheets, save, delete, guests, remarks, Chief Proctor reports, overview, reports data, registers, timetable, contacts, substitutions, health, left students, roster check/fix</td><td>login, sheets, whoami, sheet, save, delete_day, pdf, password, overview, overview_low, report_data, reg_opts, reg_find, reg_plan, reg_days, tt_all, contacts, report_save, reports_mine, report_delete, guest_search, guest_add, guest_remove, remarks_get, remarks_save, history, sub_list, sub_save, sub_delete, health, health_fix, sheets_status, left_preview, left_move, left_list, left_restore, roster_check, roster_fix, codes, results_info, portal_import, portal_key, portal_info, student_days, student_report …</td></tr>
+<tr><td>Code.gs</td><td>Login, attendance sheets, save, delete, guests, remarks, Chief Proctor reports, overview, reports data, registers, timetable, contacts, substitutions, health, left students, roster check/fix</td><td>login, sheets, whoami, sheet, save, delete_day, pdf, password, overview, overview_low, report_data, reg_opts, reg_find, reg_plan, reg_days, tt_all, contacts, report_save, reports_mine, report_delete, guest_search, guest_add, guest_remove, remarks_get, remarks_save, history, sub_list, sub_save, sub_delete, health, health_fix, sheets_status, left_preview, left_move, left_list, left_restore, roster_check, roster_fix, codes, results_info, portal_import, portal_left, portal_key, portal_info, student_days, student_report …</td></tr>
+<tr><td>Reports.gs <span class="tag">rpt_</span></td><td>College reports (admin only). Everything sits inside <code>RPT_</code> so no name clashes; settings in <code>RPT_CFG</code> (Users workbook, strength, CATEGORY, Left Students)</td><td>rpt_meta, rpt_run, rpt_xlsx, rpt_xlsx_all, rpt_sessions</td></tr>
+<tr><td>Bunkers.gs <span class="tag">bnk_</span></td><td>Bunkers from Period Data + day cells; decisions; daily log. Scope: <code>bnkWho_</code> (college / CP / department / own lectures)</td><td>bnk_day, bnk_range, bnk_month, bnk_decide</td></tr>
 <tr><td>Admissions.gs <span class="tag">adm_</span></td><td>New admissions and edits straight into the strength sheet</td><td>adm_init, adm_index, adm_next_roll, adm_portal, adm_check, adm_save</td></tr>
 <tr><td>GrandTest.gs <span class="tag">gt_</span></td><td>Grand test entry, window, settings, award list, progress</td><td>gt_list, gt_get, gt_save, gt_pdf, gt_progress, gt_window, gt_settings</td></tr>
 <tr><td>MonthlyBooks.gs <span class="tag">bk_</span></td><td>Monthly test workbook link (read/write), Check everything for monthly attendance, monthly test, grand test, detention</td><td>bk_list, bk_check, bk_fix, bk_batch · helpers <code>mtFromBook_</code>, <code>mtToBook_</code>, <code>mtCheckBooks()</code></td></tr>
@@ -147,7 +156,7 @@ if (/^st_/.test(String(req.action || '')))  return json_(stRoute_(user, req));</
 <tr><td>WorkbookReports.gs <span class="tag">wr_</span></td><td>Official sheet PDFs, toppers marks, 100% attendance, monthly attendance as report rows</td><td>wr_sections, wr_pdf, wr_marks, wr_fathers, wr_hundred, wr_rows</td></tr>
 <tr><td>StudentSearch.gs <span class="tag">st_</span></td><td>Student search, full record, board result matching</td><td>st_find, st_profile, st_month, st_tests, st_board, st_board_link</td></tr>
 <tr><td>Leavelink.gs</td><td>Approved leaves with dates → students marked L on those days</td><td>(used inside the <code>sheet</code> answer: <code>lv</code>)</td></tr></table>
-<div class="note">Functions you run by hand from the editor: <code>rebuildAttendanceIndex()</code> (fills the Attendance Index; continues by itself), <code>mtCheckBooks()</code> (logs which Monthly Test workbook each month uses).</div>
+<div class="note">Functions you run by hand from the editor: <code>rebuildAttendanceIndex()</code> (fills the Attendance Index; continues by itself), <code>mtCheckBooks()</code> (logs which Monthly Test workbook each month uses), <code>rptAuthorize()</code> (permissions for College reports, once), <code>bnkSetupDailyLog()</code> (daily Bunkers Log at about 4 pm, once).</div>
 </section>
 
 <section id="flow-sync"><h2>5. Sign in and sync</h2>
@@ -200,9 +209,29 @@ if (/^st_/.test(String(req.action || '')))  return json_(stRoute_(user, req));</
 <p>The leave in-charge enters approved leaves in <b>ApprovedLeavesStore</b> of each monthly workbook. Leavelink.gs reads the leave dates (column K, e.g. <i>10-Oct-2026 to 12-Oct-2026</i>) and sends them with each sheet (<code>lv</code>), so the app pre-marks those students <b>L</b> (cached 5 minutes). The number of approved leaves is added to the overall % in shortage reports and the student record.</p>
 </section>
 
+<section id="bunkers-dev"><h2>Bunkers (bunkers.html, Bunkers.gs)</h2>
+<ul><li><b>Source</b>: the hidden <i>Period Data</i> sheet of each month book (every lecture's mark). Days with no Period Data (typed into the sheets, e.g. September) are read from the day cells of every sheet (<code>bnkCells_</code>, one batch call if the <b>Google Sheets API</b> advanced service is on); their period comes from the Timetable row of that sheet (<code>bnkTT_</code>, <code>slotsOf_</code>). Subject, class, teacher and program names are taken exactly from the Timetable.</li>
+<li><b>Rule</b> (<code>bnkJudge_</code>): any B = confirmed; P + A (no B) = possible; L never; absent all day = not a bunker; a P in the same period in another sheet cancels A/B there. Decisions from <i>Bunk Decisions</i> turn possible → confirmed or → excused (not counted).</li>
+<li><b>Speed</b>: week / month answers cached 10 min (<code>cacheGetBig_</code>, key includes the scope and a decisions version), subject / teacher names sent once (<code>dict</code>); the page draws 80 / 40 students at a time and makes the PDF on the phone. Tested with 2,100 students: month answer ~1.3 MB, PDF ~400 KB.</li></ul>
+</section>
+
+<section id="collrep-dev"><h2>College reports (reports.html, Reports.gs)</h2>
+<ul><li>Comparison reports (<code>cmpGenerate</code>) read the strength sheet once and write a <i>CMP …</i> sheet with borders, shading and charts; the official layouts (Fancy, JCW summary, enrollment, attendance availability) are the old reports app's code inside <code>RPT_</code>.</li>
+<li>Admission flow = present (strength sheet) + Left Students rows of this year's batches (batch from Enroll# <code>-Fyy-</code>), Cancelled / Migrated from PORTAL STATUS.</li>
+<li>Session labels: Script Property <code>RPT_SESSIONS</code> (page → Sessions), otherwise by date (July starts a session).</li></ul>
+</section>
+
+<section id="portal-dev"><h2>Portal sync &amp; Left Students</h2>
+<ul><li><code>portal_import</code> (sync key) fills empty cells of the strength sheet, then <code>portalLeftPlan_()</code> returns: this year's two batches (newest two Enroll# batches with Enrolled students), counts per status, <b>move</b> (in the strength sheet, not Enrolled) and <b>add</b> (this year's batches, never in the strength sheet nor Left Students). Nothing is written.</li>
+<li><code>portal_left</code> (sync key) runs the panel's buttons: move = <code>leftMove_(PORTAL_SYNC_USER, rolls)</code> (same as the app's move, MOVED BY = PORTAL SYNC); add = <code>leftAddFromPortal_</code> (Portal Data columns → Left Students headers via <code>LEFT_ADD_MAP</code>).</li></ul>
+</section>
+
 <section id="app"><h2>13. The app (phone side)</h2>
 <table><tr><th>File</th><th>Contents</th></tr>
 <tr><td>index.html</td><td>The whole main app in one file: styles (the JCW theme block is last), the API address <code>API</code>, <code>APP_BUILD</code> (version text), screens (Home, Attendance, Reports, College, Profile, Search, Free teachers, Contacts), the PDF tools (<code>window.JCWPDF</code>, jsPDF from cdnjs), the in-app help, the registers add-on.</td></tr>
+<tr><td>reports.html</td><td>College reports (admin): menu, charts (Chart.js from jsdelivr), Excel / sheet / CSV. Talks to <code>rpt_*</code>.</td></tr>
+<tr><td>bunkers.html</td><td>Bunkers (every teacher): day / week / month / session, tables, decisions, compact PDF (jsPDF + autoTable from cdnjs). Talks to <code>bnk_*</code>.</td></tr>
+<tr><td>jcw-portal-sync.user.js</td><td>Tampermonkey script on portal.uop.edu.pk: reads the portal, sends it with the sync key (<code>portal_import</code>), shows this year's batch counts and the Left Students buttons (<code>portal_left</code>).</td></tr>
 <tr><td>admission.html, grandtest.html, detention.html, student.html</td><td>Separate pages sharing the login (<code>csa2_user</code>, <code>csa2_pass</code> in localStorage).</td></tr>
 <tr><td>sw.js</td><td>Service worker: keeps the pages offline. <code>VERSION</code> must change on every release so phones update.</td></tr>
 <tr><td>manifest.json, icon-*.png, jcw-logo.png</td><td>Install name, colours, icons, logo.</td></tr>
@@ -245,7 +274,9 @@ if (/^st_/.test(String(req.action || '')))  return json_(stRoute_(user, req));</
 <li>Board results: new sheet names in <code>ST_CFG.BOARD_LIST</code> (e.g. 1styeardata2027) and the workbook in <code>ST_CFG.BOARD_BOOK</code>.</li>
 <li>Admissions: <code>ADM_CFG.ROLL_RANGES</code>, <code>MIGRATION</code> and the session/batch.</li>
 <li>Update the Timetable and NTT Settings; check the Users sheet (new teachers, roles, CP).</li>
-<li>Deploy a new version (section 16). Run <code>rebuildAttendanceIndex()</code> once if the daily books already have data.</li></ol>
+<li>Deploy a new version (section 16). Run <code>rebuildAttendanceIndex()</code> once if the daily books already have data.</li>
+<li>College reports → <b>Sessions</b>: check the two session years (or tap <i>Follow the calendar</i>).</li>
+<li>Bunkers needs nothing: it uses the new <code>BOOK_IDS</code> and the Timetable. Old Bunk Decisions / Bunkers Log rows can stay.</li></ol>
 <h3>Every month</h3>
 <ol class="check"><li>College → <b>Month sheets</b>: check next month's sheets exist.</li><li>After admissions or section changes: <b>Check everything</b> → Fix.</li><li>Grand test (January) and detention (February): set Opens, Total and Deadline in their Settings tab.</li></ol>
 </section>
