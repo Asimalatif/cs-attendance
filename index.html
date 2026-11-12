@@ -5106,11 +5106,11 @@ function ssBunkHtml(){
   if(B.error) return h + `<div class="empty">${esc(B.error)}</div></section>`;
   h += `<div class="sub"><span class="pill bad">${B.confirmed} confirmed</span> <span class="pill mid">${B.possible} possible</span> <span class="pill">${B.excused} excused</span> · ${esc(B.scope)}. Confirmed = a teacher marked her B; possible = present in one lecture, absent in another the same day.</div>`;
   if(!B.days.length) return h + '<div class="empty">No bunks found this session.</div></section>';
-  const lec = l => esc(titleCase(l.sub)) + (l.p ? ' (P' + l.p + ')' : '') + ' <b>' + esc(l.m) + '</b>';     // the mark the teacher gave: P, A, L or B
-  h += `<div class="sswrap"><table class="mtab"><thead><tr><th>Date</th><th>Kind</th><th>Bunked (missed)</th><th>Other lectures that day</th><th>Pattern</th></tr></thead><tbody>${B.days.map(x => `<tr>
+  const lec = l => esc(titleCase(l.sub)) + (l.p ? ' (P' + l.p + ')' : '') + (l.m === 'B' ? ' <b style="color:var(--absent);background:var(--absent-bg);border-radius:6px;padding:0 5px">B</b>' : ' <b>' + esc(l.m) + '</b>');     // the mark the teacher gave: P, A, L or B (B in red)
+  h += `<div class="sswrap"><table class="mtab"><thead><tr><th>Date</th><th>Kind</th><th>Bunked (missed)</th><th>Other lectures that day</th></tr></thead><tbody>${B.days.map(x => `<tr>
     <td>${esc(sd(x.d))}</td><td><span class="pill ${x.kind === 'confirmed' ? 'bad' : x.kind === 'possible' ? 'mid' : ''}">${x.kind === 'confirmed' ? 'Confirmed' : x.kind === 'possible' ? 'Possible' : 'Excused'}</span>${x.note ? '<div class="rnote">' + esc(x.note) + '</div>' : ''}</td>
     <td>${x.lectures.filter(l => l.m === 'A' || l.m === 'B').map(l => lec(l) + (l.teacher ? ' <small>· ' + esc(l.teacher) + '</small>' : '')).join('<br>')}</td>
-    <td>${x.lectures.filter(l => l.m === 'P' || l.m === 'L').map(l => lec(l) + (l.teacher ? ' <small>· ' + esc(l.teacher) + '</small>' : '')).join('<br>') || '–'}</td><td>${esc(x.pattern)}</td></tr>`).join('')}</tbody></table></div>
+    <td>${x.lectures.filter(l => l.m === 'P' || l.m === 'L').map(l => lec(l) + (l.teacher ? ' <small>· ' + esc(l.teacher) + '</small>' : '')).join('<br>') || '–'}</td></tr>`).join('')}</tbody></table></div>
   <div class="rnote">P = present · A = absent · L = leave · B = bunk (in college, missed the lecture).</div>`;
   return h + '</section>';
 }
