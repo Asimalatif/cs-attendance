@@ -100,7 +100,8 @@ dialog#edDlg::backdrop{background:rgba(43,25,18,.45)}
 .olist{margin-bottom:14px}
 .olist h3{margin:0;padding:10px 14px;font-size:15px}
 .olist .bandr{background:var(--surface2);color:var(--brown);font-weight:800;text-align:center;padding:6px;border-top:1px solid var(--line)}
-.olist td{text-align:left}.olist td.c{text-align:center}
+.olist td{text-align:left;vertical-align:middle}.olist td.c{text-align:center;white-space:nowrap}
+table.board{table-layout:fixed;min-width:760px}table.board td{overflow-wrap:anywhere}
 tr.hit td{background:#FFF2B3!important}
 .tags{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:12px}
 .tag{background:var(--surface);border:1.5px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:var(--shadow)}
@@ -759,7 +760,8 @@ function drawOrient(){
   g.forEach(grp => {
     h += `<div class="sec olist"><h3><span>${esc(grp.title)}</span><span class="n" style="background:var(--surface2);color:var(--brown)">${grp.n}</span></h3><div class="scroll">`;
     if(OR_MODE === 'board'){
-      h += `<table><thead><tr><th style="width:44px">S#</th><th>Student name</th><th style="width:${grp.arts ? 16 : 22}%">Father name</th><th style="width:120px">Enroll#</th><th style="width:80px">PCS</th><th style="width:100px">Room</th>${grp.arts ? '<th style="width:34%">Optional subjects</th>' : ''}</tr></thead><tbody>`
+      const W = grp.arts ? [4, 19, 15, 12, 8, 11, 31] : [5, 29, 25, 14, 11, 16];
+      h += `<table class="board"><colgroup>${W.map(w => '<col style="width:' + w + '%">').join('')}</colgroup><thead><tr><th>S#</th><th>Student name</th><th>Father name</th><th>Enroll#</th><th>PCS</th><th>Room</th>${grp.arts ? '<th>Optional subjects</th>' : ''}</tr></thead><tbody>`
         + grp.rows.map((r, i) => `<tr${hit(r)}><td class="c">${i + 1}</td><td><b>${esc(r.n)}</b></td><td>${esc(r.f)}</td><td class="c">${esc(r.e)}</td><td class="c">${esc(r.pcs)}</td><td class="c">${esc(roomOf(r))}</td>${grp.arts ? '<td>' + esc(subjOf(r)) + '</td>' : ''}</tr>`).join('') + '</tbody></table>';
     } else {
       grp.parts.forEach(pt => {
