@@ -93,7 +93,10 @@ function bnkDayMarks_(L, day) {
 
 /** One student's day -> null (not a bunker) or the bunk record. */
 function bnkJudge_(rec, who) {
-  var L = rec.list.slice().sort(function (a, b) { return a.p - b.p; });
+  // the same period in two sheets (guest, moved section, duplicate roll): a P there means she WAS in class
+  var inClass = {};
+  rec.list.forEach(function (x) { if (x.m === 'P' && x.p) inClass[x.p] = 1; });
+  var L = rec.list.filter(function (x) { return x.m === 'P' || !x.p || !inClass[x.p]; }).sort(function (a, b) { return a.p - b.p; });
   var P = L.filter(function (x) { return x.m === 'P'; }), miss = L.filter(function (x) { return x.m === 'A' || x.m === 'B'; });
   var hasB = L.some(function (x) { return x.m === 'B'; });
   if (!miss.length || (!P.length && !hasB)) return null;
