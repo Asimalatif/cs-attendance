@@ -914,6 +914,14 @@ async function rfRun(apply){
     const accept = {}; if(apply){ Object.keys(rfAns).forEach(k => { if(rfAns[k]) accept[k] = rfAns[k]; }); Object.keys(rfAll).forEach(f => { if(rfAll[f]) accept['*|' + f] = 'yes'; }); }
     const r = await api({ action:'adm_refresh', fields:rfFields, apply, accept }, 300000);
     if(!r.ok) throw new Error(r.error || 'Could not update');
+    if(!r.ask || (rfFields.includes('portal') && !(r.fields || []).includes('portal'))){
+      rf = null;
+      dlgOpen(`<h2>The server needs the new Admissions.gs</h2><div class="sub">The Apps Script project is still running an older Admissions.gs, so it cannot compare every column with the portal.</div>
+        <ol style="margin:10px 0 0 18px;line-height:1.6"><li>Open the attendance Apps Script project.</li><li>Replace everything in <b>Admissions.gs</b> with the newest file from GitHub (Asimalatif/cs-attendance → Admissions.gs → Raw → copy all).</li><li><b>Deploy → Manage deployments → Edit (pencil) → Version: New version → Deploy.</b></li><li>Come back and press Preview changes again.</li></ol>
+        <div class="acts"><button class="btn primary" id="dOk">OK</button></div>`);
+      $('#dOk').onclick = dlgClose;
+      return;
+    }
     rf = r; rfAns = {}; rfAll = {};
     if(apply){ if(r.seats && init){ init.seats = r.seats; ls.set('adm_init', init); } toast('Strength sheet updated', 4000); loadIndex(true); }
   } catch(e){ if(e.fatal) fatal = e.message; else toast(e.message, 6000); }
