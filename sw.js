@@ -1,5 +1,5 @@
 // Bump VERSION every time you change index.html so phones pick up the update.
-const VERSION = 'csa-v160';
+const VERSION = 'csa-v161';
 
 // Approved leaves (leaves.html): self.LV = storage + sending of the Leave In-Charge's waiting leaves
 try { importScripts('./leavesync.js'); } catch (e) {}
@@ -27,7 +27,7 @@ self.addEventListener('fetch', e => {
   if (req.mode === 'navigate') {
     const page = /admission\.html$/.test(url.pathname) ? './admission.html' : /grandtest\.html$/.test(url.pathname) ? './grandtest.html' : /detention\.html$/.test(url.pathname) ? './detention.html' : /student\.html$/.test(url.pathname) ? './student.html' : /board\.html$/.test(url.pathname) ? './board.html' : /certificates\.html$/.test(url.pathname) ? './certificates.html' : /idcards\.html$/.test(url.pathname) ? './idcards.html' : /idcheck\.html$/.test(url.pathname) ? './idcheck.html' : /duties\.html$/.test(url.pathname) ? './duties.html' : /reports\.html$/.test(url.pathname) ? './reports.html' : /bunkers\.html$/.test(url.pathname) ? './bunkers.html' : /leaves\.html$/.test(url.pathname) ? './leaves.html' : /shortage\.html$/.test(url.pathname) ? './shortage.html' : /recordsummary\.html$/.test(url.pathname) ? './recordsummary.html' : /timetable\.html$/.test(url.pathname) ? './timetable.html' : /admintools\.html$/.test(url.pathname) ? './admintools.html' : './index.html';
     e.respondWith(
-      fetch(req).then(res => {
+      fetch(req, { cache:'no-store' }).then(res => {          // always the newest page (GitHub Pages lets browsers keep pages for 10 minutes)
         const copy = res.clone();
         caches.open(VERSION).then(c => c.put(page, copy));
         return res;
