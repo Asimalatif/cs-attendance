@@ -138,7 +138,7 @@ function admRoute_(user, req) {
     case 'adm_check':     return admCheck_(req.d || {}, req.ctx || null);
     case 'adm_save':      return admSave_(user, req.d || {}, req.ctx || null, req.override === true, String(req.cid || ''));
     case 'adm_new':       return admNew_();
-    case 'adm_refresh':   return admRefresh_(user, req.fields || [], req.apply === true);
+    case 'adm_refresh':   return admRefresh_(user, req.fields || [], req.apply === true, req.quotaSet || {});
     case 'adm_add_new':   return admAddNew_(user, req.items || [], req.override === true);
   }
   return { ok: false, error: 'UNKNOWN_ACTION' };
@@ -919,7 +919,8 @@ function admAgg_(m, t, hq) {
    merit  - 1st Year, per admission program: Open Quota students by Aggregate, highest = 1 (other quotas are not touched)
    room   - the section's room in the Timetable sheet                                                                    */
 var ADM_REFRESH = { quota: 'Quota', hq: 'HQ', aggregate: 'Aggregate', merit: 'MeritNo', room: 'Room' };
-function admRefresh_(user, fields, apply) {
+function admRefresh_(user, fields, apply, quotaSet) {
+  quotaSet = quotaSet || {};          // row -> quota you accepted (quota is never changed without your answer)
   fields = (fields && fields.length ? fields : Object.keys(ADM_REFRESH)).filter(function (f) { return ADM_REFRESH[f]; });
   var lock = LockService.getScriptLock(); lock.waitLock(30000);
   try {
@@ -950,7 +951,8 @@ function admRefresh_(user, fields, apply) {
       return /^(y|yes|true|1|hafiz)/i.test(h) ? 'Yes' : /^(n|no|false|0)/i.test(h) ? 'No' : '';
     };
     var names = admQuotaNames_(admCounts_(recs)), rooms = admRooms_();
-    var nv = {}, changes = [], cnt = {}, unknownCat = {};
+    var nv = {}, changes = [], cnt = {}, unknownCat = {}, ask = [], quotaOk = {};
+    Object.keys(names).forEach(function (k) { quotaOk[admQ_(names[k])] = names[k]; });
     fields.forEach(function (f) { cnt[f] = 0; });
     var put = function (r, f, val) {
       if (skip[f]) return;
@@ -959,21 +961,25 @@ function admRefresh_(user, fields, apply) {
       if (old === nw) return;
       (nv[f] = nv[f] || {})[r.row] = val;
       cnt[f]++;
-      if (changes.length < 400) changes.push({ roll: r.roll, name: r.name, pcs: r.pcs, field: ADM_REFRESH[f], from: old, to: nw });
+      if (f !== 'quota' && changes.length < 400) changes.push({ roll: r.roll, name: r.name, pcs: r.pcs, field: ADM_REFRESH[f], from: old, to: nw });
     };
     recs.forEach(function (r) {
       var pr = P ? (r.id && byId[r.id]) || (r.roll && byRoll[admNormRoll_(r.roll)]) : null;
       r._hq = r.hq;
-      if (fields.indexOf('quota') >= 0 && pr) {
-        if (admIsMig_(r.year)) { if (!r.quota) put(r, 'quota', ADM_CFG.MIGRATION.QUOTA); }
-        else {
-          var cat = P.g(pr, 'category');
-          if (cat) {
-            var gq = admGuessQuota_(cat, r.key, names);
-            if (gq.sure) { put(r, 'quota', gq.quota); r.quota = gq.quota; }
-            else unknownCat[cat] = (unknownCat[cat] || 0) + 1;
+      if (fields.indexOf('quota') >= 0 && pr && !admIsMig_(r.year)) {
+        var cat = P.g(pr, 'category');
+        if (cat) {
+          var gq = admGuessQuota_(cat, r.key, names);
+          if (!gq.sure || admQ_(gq.quota) !== admQ_(r.quota)) {
+            ask.push({ row: r.row, roll: r.roll, name: r.name, pcs: r.pcs, program: r.key, now: r.quota, portal: cat, suggest: gq.sure ? gq.quota : '' });
+            if (!gq.sure) unknownCat[cat] = (unknownCat[cat] || 0) + 1;
           }
         }
+      }
+      var qa = quotaSet[r.row];
+      if (fields.indexOf('quota') >= 0 && qa && quotaOk[admQ_(qa)]) {
+        r._leftOpen = admQ_(r.quota) === admQ_(ADM_CFG.OPEN_QUOTA) && admQ_(qa) !== admQ_(ADM_CFG.OPEN_QUOTA);
+        put(r, 'quota', quotaOk[admQ_(qa)]); r.quota = quotaOk[admQ_(qa)];
       }
       if (fields.indexOf('hq') >= 0 && pr && portalHasHq) { var h = hqOf(pr); if (h) { put(r, 'hq', h); r._hq = h; } }
       if (fields.indexOf('aggregate') >= 0) put(r, 'aggregate', admAgg_(r.metric, r.total, r._hq));
@@ -982,6 +988,7 @@ function admRefresh_(user, fields, apply) {
     });
     if (fields.indexOf('merit') >= 0) {
       var groups = {};
+      recs.forEach(function (r) { if (r._leftOpen && r.meritNo) put(r, 'merit', ''); });   // moved out of Open Quota now: her Open merit number goes
       recs.forEach(function (r) {
         if (admIsMig_(r.year) || !r.key || admQ_(r.quota) !== admQ_(ADM_CFG.OPEN_QUOTA) || r._agg === '') return;
         (groups[r.key] = groups[r.key] || []).push(r);
@@ -992,7 +999,7 @@ function admRefresh_(user, fields, apply) {
         }).forEach(function (r, i) { put(r, 'merit', i + 1); });
       });
     }
-    Object.keys(unknownCat).forEach(function (c) { notes.push(unknownCat[c] + ' student(s) with portal category "' + c + '" are not a known quota: their quota was kept.'); });
+    Object.keys(unknownCat).forEach(function (c) { notes.push(unknownCat[c] + ' student(s) with portal category "' + c + '" (not a known quota): choose their quota yourself or keep it.'); });
     if (apply) {
       fields.forEach(function (f) {
         if (skip[f] || !nv[f]) return;
@@ -1004,7 +1011,8 @@ function admRefresh_(user, fields, apply) {
       var total = Object.keys(cnt).reduce(function (a, f) { return a + cnt[f]; }, 0);
       admLog_(user, 'UPDATE FROM PORTAL', '', '', fields.map(function (f) { return ADM_REFRESH[f] + ' ' + cnt[f]; }).join(', ') + ' (' + total + ' cells)', '');
     }
-    return { ok: true, applied: apply, counts: cnt, fields: fields, changes: changes, notes: notes, skipped: Object.keys(skip), students: recs.length,
+    return { ok: true, applied: apply, counts: cnt, fields: fields, changes: changes, ask: ask,
+             quotas: Object.keys(quotaOk).map(function (k) { return quotaOk[k]; }).sort(), notes: notes, skipped: Object.keys(skip), students: recs.length,
              seats: apply ? admSeatState_(admAll_(admRead_(), set.sections), set) : null };
   } finally { lock.releaseLock(); }
 }
@@ -1016,7 +1024,7 @@ function admSetupAutoRefresh() {
   ScriptApp.newTrigger('admAutoRefresh').timeBased().everyHours(1).create();
   Logger.log('Hourly update from portal switched ON (quota, HQ, Aggregate, MeritNo, Room).');
 }
-function admAutoRefresh() { admRefresh_({ teacher: 'Hourly update', username: 'auto' }, [], true); }
+function admAutoRefresh() { admRefresh_({ teacher: 'Hourly update', username: 'auto' }, ['hq', 'aggregate', 'merit', 'room'], true, {}); }   // quota only with your answer
 
 /** which columns a change of form field rewrites */
 var ADM_DERIVED = {
