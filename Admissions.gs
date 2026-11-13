@@ -137,6 +137,8 @@ function admRoute_(user, req) {
     case 'adm_portal':    return admPortal_(req.q || req.id);
     case 'adm_check':     return admCheck_(req.d || {}, req.ctx || null);
     case 'adm_save':      return admSave_(user, req.d || {}, req.ctx || null, req.override === true, String(req.cid || ''));
+    case 'adm_new':       return admNew_();
+    case 'adm_add_new':   return admAddNew_(user, req.items || [], req.override === true);
   }
   return { ok: false, error: 'UNKNOWN_ACTION' };
 }
@@ -503,14 +505,35 @@ function admIndex_() {
 /* ================= Fill from the portal copy ("Portal Data" sheet, kept fresh by the UOP portal sync) ================= */
 /** Search the portal copy by name / father name (all words must match), or by Student ID / Enrollment#.
  *  Returns up to 25 students; each one says whether she is already in Transform. */
+/** the "Portal Data" sheet: { v: values, g(row, key) } or null when empty */
+function admPortalSheet_() {
+  var sh = admBook_().getSheetByName(ADM_CFG.PORTAL_SHEET);
+  if (!sh || sh.getLastRow() < 2) return null;
+  var v = sh.getDataRange().getDisplayValues(), c = {};
+  v[0].forEach(function (h, j) { var k = admH_(h); if (k && !(k in c)) c[k] = j; });
+  return { v: v, g: function (r, k) { return c[k] === undefined ? '' : admS_(r[c[k]]); } };
+}
+/** one portal row -> the fields of the admission form */
+function admPortalStu_(P, row, set) {
+  var g = P.g, yr = admYear_(g(row, 'class')), sub = [];
+  var num = function (x) { var n = admNum_(String(x).replace(/,/g, '')); return n === '' || n === 0 ? '' : String(Math.round(n * 100) / 100); };
+  for (var s = 1; s <= 7; s++) sub.push(g(row, 'sub' + s + (admIsMig_(yr) ? '2ndyear' : '1styear')) || g(row, 'sub' + s + '1styear'));
+  var progName = g(row, 'program'), en = g(row, 'enrollment');
+  return {
+    id: g(row, 'studentid'), portalRoll: en, name: g(row, 'studentname'), father: g(row, 'fathername'),
+    quota: g(row, 'category'), dob: g(row, 'dob'), contact: g(row, 'studentcontact'), email: g(row, 'emailaddress'),
+    pic: g(row, 'photoname'), board: g(row, 'boarduniversity'), passYear: g(row, 'passingyear'), matricRoll: num(g(row, 'rollno')),
+    metric: num(g(row, 'obtainmarkscgpa')), total: num(g(row, 'totalmarkscgpa')), challan: g(row, 'challandetails'), batch: g(row, 'batch'),
+    subjects: sub, program: admKeyOf_(progName, yr, '', en, set.sections), programName: progName, year: yr,
+    section: g(row, 'section'), status: g(row, 'status'), synced: g(row, 'detailssynced') };
+}
+
 function admPortal_(query) {
   var q = admS_(query);
   if (q.length < 2) return { ok: false, error: 'Type at least 2 letters of her name (or her portal ID).' };
-  var sh = admBook_().getSheetByName(ADM_CFG.PORTAL_SHEET);
-  if (!sh || sh.getLastRow() < 2) return { ok: false, error: 'The "' + ADM_CFG.PORTAL_SHEET + '" sheet is empty. Run the UOP portal sync first.' };
-  var v = sh.getDataRange().getDisplayValues(), c = {};
-  v[0].forEach(function (h, j) { var k = admH_(h); if (k && !(k in c)) c[k] = j; });
-  var g = function (r, k) { return c[k] === undefined ? '' : admS_(r[c[k]]); };
+  var P = admPortalSheet_();
+  if (!P) return { ok: false, error: 'The "' + ADM_CFG.PORTAL_SHEET + '" sheet is empty. Run the UOP portal sync first.' };
+  var v = P.v, g = P.g;
   var Q = q.toUpperCase(), words = q.toLowerCase().split(/\s+/).filter(Boolean), hits = [], exact = [];
   for (var i = 1; i < v.length; i++) {
     var r = v[i], id = g(r, 'studentid'), en = g(r, 'enrollment');
@@ -523,22 +546,205 @@ function admPortal_(query) {
   if (!all.length) return { ok: true, list: [], note: 'Nobody called "' + q + '" in "' + ADM_CFG.PORTAL_SHEET + '". If she was added on the portal today, run a quick portal sync and search again.' };
   var set = admSettings_(), T = admRead_(), byId = {}, byRoll = {};
   admAll_(T, set.sections).forEach(function (r) { if (r.id) byId[r.id] = r; if (r.roll) byRoll[admNormRoll_(r.roll)] = r; });
-  var num = function (x) { var n = admNum_(String(x).replace(/,/g, '')); return n === '' || n === 0 ? '' : String(Math.round(n * 100) / 100); };
   var list = all.slice(0, 25).map(function (row) {
-    var yr = admYear_(g(row, 'class')), sub = [];
-    for (var s = 1; s <= 7; s++) sub.push(g(row, 'sub' + s + (admIsMig_(yr) ? '2ndyear' : '1styear')) || g(row, 'sub' + s + '1styear'));
-    var progName = g(row, 'program'), en = g(row, 'enrollment'), id = g(row, 'studentid');
-    var have = byId[id] || (en ? byRoll[admNormRoll_(en)] : null);
-    return {
-      id: id, portalRoll: en, name: g(row, 'studentname'), father: g(row, 'fathername'),
-      quota: g(row, 'category'), dob: g(row, 'dob'), contact: g(row, 'studentcontact'), email: g(row, 'emailaddress'),
-      pic: g(row, 'photoname'), board: g(row, 'boarduniversity'), passYear: g(row, 'passingyear'), matricRoll: num(g(row, 'rollno')),
-      metric: num(g(row, 'obtainmarkscgpa')), total: num(g(row, 'totalmarkscgpa')), challan: g(row, 'challandetails'), batch: g(row, 'batch'),
-      subjects: sub, program: admKeyOf_(progName, yr, '', en, set.sections), programName: progName, year: yr,
-      section: g(row, 'section'), status: g(row, 'status'), synced: g(row, 'detailssynced'),
-      inTransform: have ? { roll: have.roll, pcs: have.pcs, name: have.name } : null };
+    var st = admPortalStu_(P, row, set), have = byId[st.id] || (st.portalRoll ? byRoll[admNormRoll_(st.portalRoll)] : null);
+    st.inTransform = have ? { roll: have.roll, pcs: have.pcs, name: have.name } : null;
+    return st;
   });
   return { ok: true, list: list, more: more };
+}
+
+/* ================= New on the portal (Enrolled there, not yet in Transform or Left Students) ================= */
+/** portal IDs, Enroll#s and name+father of everyone already in Transform and Left Students */
+function admKnown_(recs) {
+  var k = { ids: {}, rolls: {}, names: {} };
+  var add = function (id, roll, name, father) {
+    if (admS_(id)) k.ids[admS_(id)] = true;
+    if (admS_(roll)) k.rolls[admNormRoll_(roll)] = true;
+    var n = admNormName_(name), f = admNormName_(father);
+    if (n && f) k.names[n + '|' + f] = true;
+  };
+  recs.forEach(function (r) { add(r.id, r.roll, r.name, r.father); });
+  try {
+    var ls = admBook_().getSheetByName(ADM_CFG.LEFT_SHEET);
+    if (ls && ls.getLastRow() > 1) {
+      var v = ls.getDataRange().getDisplayValues(), c = {};
+      v[0].forEach(function (h, j) { var x = admH_(h); if (x && !(x in c)) c[x] = j; });
+      var g = function (r, x) { return c[x] === undefined ? '' : r[c[x]]; };
+      v.slice(1).forEach(function (r) {
+        add(g(r, 'portalid') || g(r, 'studentid'), g(r, 'enroll') || g(r, 'enrollment'), g(r, 'studentname'), g(r, 'fathername'));
+      });
+    }
+  } catch (e) {}
+  return k;
+}
+function admIsKnown_(k, s) {
+  if (s.id && k.ids[s.id]) return true;
+  if (s.portalRoll && k.rolls[admNormRoll_(s.portalRoll)]) return true;
+  var n = admNormName_(s.name), f = admNormName_(s.father);
+  return !!(n && f && k.names[n + '|' + f]);
+}
+/** program from the portal: Pre-Medical has 3 admission programs, so look for "self", "evening" or the section letter */
+function admGuessProg_(s, set) {
+  var h = admH_(s.programName).replace(/jinnahcollege/, 'jcw');
+  var fam = ADM_CFG.PROGRAMS.filter(function (p) { return admH_(p.program) === h; });
+  if (!fam.length) fam = ADM_CFG.PROGRAMS.filter(function (p) { return h.indexOf(admH_(p.classProgram)) === 0; });
+  if (!fam.length) return { key: '', sure: false };
+  if (fam.length === 1) return { key: fam[0].key, sure: true };
+  var txt = admQ_(s.programName + ' ' + s.quota + ' ' + s.batch + ' ' + s.section);
+  var pick = function (re) { return fam.filter(function (p) { return re.test(admQ_(p.key)); })[0]; };
+  var hit = /evening/.test(txt) ? pick(/evening/) : /self|morning/.test(txt) ? pick(/self/) : null;
+  if (hit) return { key: hit.key, sure: true };
+  var code = admS_(s.section).toUpperCase();
+  if (code) {
+    var bySec = fam.filter(function (p) {
+      return ((set.sections[p.key] || {})[s.year] || []).some(function (x) { return admSecCode_(x).toUpperCase() === code || admS_(x).toUpperCase() === code; });
+    });
+    if (bySec.length === 1) return { key: bySec[0].key, sure: false };
+  }
+  return { key: fam[0].key, sure: false };
+}
+/** portal Category -> one of the quota names, else Open Quota */
+function admGuessQuota_(cat, pk, names) {
+  var c = admQ_(cat).replace(/\bquota\b/, '').trim(), list = Object.keys(names).map(function (k) { return names[k]; });
+  if (pk && ADM_CFG.QUOTA_ONLY[pk]) list = ADM_CFG.QUOTA_ONLY[pk];
+  if (c) {
+    var hit = list.filter(function (q) { var x = admQ_(q).replace(/\bquota\b/, '').trim(); return x === c; })[0]
+      || list.filter(function (q) { var x = admQ_(q).replace(/\bquota\b/, '').trim(); return x && (c.indexOf(x) >= 0 || x.indexOf(c) >= 0); })[0];
+    if (hit) return { quota: hit, sure: true };
+  }
+  return { quota: ADM_CFG.OPEN_QUOTA, sure: !c || /open|merit|general|self|finance/.test(c) };
+}
+/** the next n free Roll Nos of a program (continuing after the highest one in use, like adm_next_roll) */
+function admFreeRolls_(used, pk, year, n) {
+  var mig = admIsMig_(year), pre, from, to, mx = 0, out = [];
+  if (mig) { pre = ADM_CFG.MIGRATION.ROLL_PREFIX; from = ADM_CFG.MIGRATION.ROLL_START; to = ADM_CFG.MIGRATION.ROLL_END; }
+  else { var rg = ADM_CFG.ROLL_RANGES[pk]; if (!rg) return { list: [], range: null }; pre = ADM_CFG.ROLL_PREFIX; from = rg[0]; to = rg[1]; }
+  Object.keys(used).forEach(function (s) { var x = admRollNum_(s, pre); if (x !== null && x >= from && x <= to && x > mx) mx = x; });
+  for (var cand = mx ? mx + 1 : from; out.length < n && cand <= to; cand++) {
+    if (!used[admNormRoll_(pre + cand)]) out.push(mig ? pre + cand : admFmtRoll_(cand));
+  }
+  return { list: out, range: [from, to] };
+}
+
+/** every student Enrolled on the portal (this year's batch, or a 2nd Year migration) who is not in Transform yet,
+ *  with a guessed program / quota, plus free Roll Nos and section strengths so the page can suggest them */
+function admNew_() {
+  var P = admPortalSheet_();
+  if (!P) return { ok: true, list: [], pools: {}, note: 'The "' + ADM_CFG.PORTAL_SHEET + '" sheet is empty. Run Quick sync on the UOP portal first.', at: admNow_() };
+  var set = admSettings_(), T = admRead_(), recs = admAll_(T, set.sections), known = admKnown_(recs), g = P.g;
+  var names = admQuotaNames_(admCounts_(recs));
+  var yearOf = function (b) { var m = String(b || '').match(/(?:19|20)\d\d/); return m ? Number(m[0]) : 0; };
+  var maxY = 0;
+  P.v.slice(1).forEach(function (r) {
+    if (/^enrolled$/i.test(g(r, 'status')) && !admIsMig_(admYear_(g(r, 'class')))) maxY = Math.max(maxY, yearOf(g(r, 'batch')));
+  });
+  var used = admUsedRolls_(T), list = [], older = 0;
+  P.v.slice(1).forEach(function (r) {
+    if (!g(r, 'studentname') || !/^enrolled$/i.test(g(r, 'status'))) return;
+    var s = admPortalStu_(P, r, set);
+    if (admIsKnown_(known, s)) return;
+    if (admIsMig_(s.year) ? /^JCW-/i.test(s.portalRoll) : (maxY && yearOf(s.batch) && yearOf(s.batch) < maxY)) { older++; return; }
+    var gp = admGuessProg_(s, set), gq = admGuessQuota_(s.quota, gp.key, names);
+    s.program = gp.key; s.progSure = gp.sure;
+    s.quotaGuess = admIsMig_(s.year) ? ADM_CFG.MIGRATION.QUOTA : gq.quota; s.quotaSure = admIsMig_(s.year) || gq.sure;
+    // an Enrollment# already typed on the portal is kept when it is free and in the program's range
+    s.rollFromPortal = '';
+    if (s.portalRoll && gp.key && !known.rolls[admNormRoll_(s.portalRoll)]) {   // (Portal Data itself counts as "used" in admUsedRolls_)
+      var pre = admIsMig_(s.year) ? ADM_CFG.MIGRATION.ROLL_PREFIX : ADM_CFG.ROLL_PREFIX, n = admRollNum_(s.portalRoll, pre);
+      var rg = admIsMig_(s.year) ? [ADM_CFG.MIGRATION.ROLL_START, ADM_CFG.MIGRATION.ROLL_END] : ADM_CFG.ROLL_RANGES[gp.key];
+      if (n !== null && rg && n >= rg[0] && n <= rg[1]) s.rollFromPortal = admS_(s.portalRoll).toUpperCase();
+    }
+    list.push(s);
+  });
+  var order = ADM_CFG.PROGRAMS.map(function (p) { return p.key; });
+  list.sort(function (a, b) {
+    var pa = order.indexOf(a.program), pb = order.indexOf(b.program);
+    if (pa !== pb) return (pa < 0 ? 99 : pa) - (pb < 0 ? 99 : pb);
+    if (a.year !== b.year) return a.year < b.year ? -1 : 1;
+    return (Number(a.id) || 0) - (Number(b.id) || 0);      // portal ID order = order of admission on the portal
+  });
+  // per program and year: free Roll Nos and how many students each section already has
+  var pools = {}, n = list.length + 40;
+  ADM_CFG.PROGRAMS.forEach(function (p) {
+    [ADM_CFG.ENTRY_YEAR, ADM_CFG.MIGRATION.YEAR].forEach(function (yr) {
+      var cnt = {};
+      recs.forEach(function (r) { if (r.key === p.key && r.year === yr && r.pcs) cnt[r.pcs] = (cnt[r.pcs] || 0) + 1; });
+      var fr = admFreeRolls_(used, p.key, yr, n);
+      pools[p.key + '|' + yr] = { free: fr.list, range: fr.range,
+        secs: ((set.sections[p.key] || {})[yr] || []).map(function (x) { return { name: x, count: cnt[x] || 0 }; }) };
+    });
+  });
+  return { ok: true, list: list, pools: pools, older: older, batch: maxY || '', at: admNow_() };
+}
+
+/** adds the chosen portal students to Transform in one go. items: [{ id, program, year, section, quota, rollNo, subjects, force }] */
+function admAddNew_(user, items, override) {
+  if (!items || !items.length) return { ok: false, error: 'Nobody was selected.' };
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    var P = admPortalSheet_();
+    if (!P) return { ok: false, error: 'The "' + ADM_CFG.PORTAL_SHEET + '" sheet is empty.' };
+    var byId = {};
+    P.v.slice(1).forEach(function (r) { var id = P.g(r, 'studentid'); if (id) byId[id] = r; });
+    var set = admSettings_(), T = admRead_(), recs = admAll_(T, set.sections), C = T.cols, sh = T.sh, rooms = admRoomMap_(recs);
+    var mx = 0;
+    if (C.sno !== undefined) T.rows.forEach(function (r) { var n = Number(r[C.sno]); if (n > mx) mx = n; });
+    var start = sh.getLastRow() + 1, lines = [], results = [], logs = [];
+    items.forEach(function (it) {
+      var res = { id: admS_(it.id), name: '', ok: false, errors: [], issues: [] };
+      results.push(res);
+      var row = byId[res.id];
+      if (!row) { res.errors.push('Portal ID ' + res.id + ' is not in "' + ADM_CFG.PORTAL_SHEET + '" any more.'); return; }
+      var s = admPortalStu_(P, row, set), p;
+      res.name = s.name;
+      try { p = admProg_(admS_(it.program)); } catch (e) { res.errors.push('Please choose her program.'); return; }
+      var d = { program: p.key, year: admYear_(it.year || s.year), section: admS_(it.section), quota: admS_(it.quota) || admGuessQuota_(s.quota, p.key, admQuotaNames_(admCounts_(recs))).quota,
+        rollNo: admS_(it.rollNo).toUpperCase(), name: s.name, father: s.father, id: s.id, dob: s.dob, contact: s.contact, email: s.email, pic: s.pic,
+        board: s.board, passYear: s.passYear, matricRoll: s.matricRoll, metric: s.metric, total: s.total, challan: s.challan, batch: s.batch,
+        hq: 'No', groupOnly: '', meritNo: '', room: '' };
+      if (admIsMig_(d.year)) d.quota = ADM_CFG.MIGRATION.QUOTA;
+      var subs = (it.subjects && it.subjects.filter(Boolean).length >= 4) ? it.subjects : s.subjects;
+      if (subs.filter(Boolean).length < 4) {     // nothing from the portal yet: compulsory + the program's only group
+        var grp = ADM_CFG.SUBJECT_DEFAULTS[p.classProgram] || [];
+        subs = ADM_CFG.COMPULSORY.concat(grp.length === 1 ? grp[0].subjects : ['', '', '']);
+      }
+      d.subjects = subs.slice(0, 7).map(function (x) { return admYearSubject_(x, p.classProgram, d.year); });
+      while (d.subjects.length < 7) d.subjects.push('');
+      if (!d.rollNo) { var nr = admNextRoll_(T, p.key, d.year); if (nr.error) { res.errors.push(nr.error); return; } d.rollNo = nr.roll; }
+      d.room = rooms[d.section] || '';
+      var v = admValidate_(d, null, null, recs, set);
+      res.roll = d.rollNo; res.section = d.section; res.issues = v.issues; res.errors = v.errors;
+      if (v.errors.length) return;
+      if (v.blocking) { res.blocked = true; return; }
+      if (!override && !it.force && v.issues.some(function (i) { return i.level === 'danger'; })) { res.needsConfirm = true; return; }
+      var vals = admValues_(d, p);
+      vals.sno = ++mx; vals.session = ADM_CFG.SESSION; vals.status = ADM_CFG.STATUS;
+      if (!vals.photo) vals.photo = vals.picurl;
+      var line = T.head.map(function (h) { var k = admH_(h); return vals[k] === undefined || vals[k] === null ? '' : vals[k]; });
+      res.row = start + lines.length; res.ok = true;
+      lines.push(line);
+      T.rows.push(line.map(String));             // later students in this batch see this Roll No as used
+      recs.push({ row: res.row, roll: d.rollNo, name: d.name, father: d.father, id: d.id, key: p.key, year: d.year, pcs: d.section,
+                  section: admSecCode_(d.section), quota: d.quota, programName: p.program });
+      logs.push([new Date(), (user.teacher || '') + ' <' + user.username + '>', admIsMig_(d.year) ? 'ADD FROM PORTAL (2nd Year migration)' : 'ADD FROM PORTAL',
+        d.rollNo, d.name, p.label + ', ' + d.year + ', ' + d.section + ', ' + d.quota + ', portal ID ' + d.id + (override || it.force ? ' (saved anyway)' : ''), '']);
+    });
+    if (lines.length) {
+      if (C.dob !== undefined) sh.getRange(start, C.dob + 1, lines.length, 1).setNumberFormat('@');
+      if (C.studentcontact !== undefined) sh.getRange(start, C.studentcontact + 1, lines.length, 1).setNumberFormat('@');
+      sh.getRange(start, 1, lines.length, T.head.length).setValues(lines);
+      SpreadsheetApp.flush();
+      try {
+        var lg = admLogSheet_();
+        lg.getRange(lg.getLastRow() + 1, 1, logs.length, 7).setValues(logs);
+      } catch (e) { /* logging never stops a save */ }
+    }
+    var T2 = admRead_(), recs2 = admAll_(T2, set.sections), added = {};
+    results.forEach(function (r) { if (r.ok) added[r.row] = true; });
+    return { ok: true, added: lines.length, results: results, seats: admSeatState_(recs2, set),
+             recs: recs2.filter(function (r) { return added[r.row]; }).map(admPack_) };
+  } finally { lock.releaseLock(); }
 }
 
 /* ================= Validation ================= */
@@ -702,15 +908,18 @@ var ADM_DERIVED = {
   metric: ['obtainedmarks', 'aggregate', 'percentage'], total: ['totalmarks', 'aggregate', 'percentage'], hq: ['hq', 'aggregate']
 };
 
+function admLogSheet_() {
+  var book = admBook_(), sh = book.getSheetByName(ADM_CFG.LOG_SHEET);
+  if (!sh) {
+    sh = book.insertSheet(ADM_CFG.LOG_SHEET);
+    sh.getRange(1, 1, 1, 7).setValues([['Time', 'User', 'Action', 'Enroll#', 'Student', 'Details', 'Client ID']]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
 function admLog_(user, action, roll, name, details, cid) {
   try {
-    var book = admBook_(), sh = book.getSheetByName(ADM_CFG.LOG_SHEET);
-    if (!sh) {
-      sh = book.insertSheet(ADM_CFG.LOG_SHEET);
-      sh.getRange(1, 1, 1, 7).setValues([['Time', 'User', 'Action', 'Enroll#', 'Student', 'Details', 'Client ID']]).setFontWeight('bold');
-      sh.setFrozenRows(1);
-    }
-    sh.appendRow([new Date(), (user.teacher || '') + ' <' + user.username + '>', action, roll, name, details, cid || '']);
+    admLogSheet_().appendRow([new Date(), (user.teacher || '') + ' <' + user.username + '>', action, roll, name, details, cid || '']);
   } catch (e) { /* logging never stops a save */ }
 }
 /** an offline entry that already reached the server (the phone lost the reply) is not saved twice */

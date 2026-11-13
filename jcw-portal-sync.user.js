@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         JCW Portal Sync
 // @namespace    jcw-attendance
-// @version      1.1
+// @version      1.2
 // @description  Reads Jinnah College students from the UOP portal (read-only) and sends them to the JCW attendance system: fills only the empty cells of Transform-ALL-COLLEGE-STRENGTH, lists cancelled / migrated / disenrolled / transferred students for Left Students (moved only when you press the button) and feeds the health check.
 // @match        https://portal.uop.edu.pk/Student/Students*
 // @match        https://portal.uop.edu.pk/student/students*
@@ -73,6 +73,7 @@
     <button id="jsFull">Full sync (all details)</button>
     <button id="jsResume" style="display:none">Resume the full sync</button>
     <div class="bar"><i id="jsBar"></i></div><div class="s" id="jsMsg">Reads the portal only. Fills empty cells in the strength sheet. Students who left go to Left Students only when you press the button.</div>
+    <label style="display:flex;gap:6px;align-items:center;font-size:12.5px;margin-top:8px;cursor:pointer"><input type="checkbox" id="jsAuto" style="width:auto;height:auto;margin:0"> Auto quick sync every 20 min while this tab is open (new admissions then show in the app by themselves)</label>
     <div id="jsLeft"></div>
     <button class="k" id="jsKey">Change sync key</button>`;
   document.body.appendChild(box);
@@ -313,9 +314,11 @@
   }
 
   // ===================== RUN =====================
-  async function run(mode, resume) {
-    if (!askKey(false)) return;
-    busy(true);
+  let running = false;
+  async function run(mode, resume, auto) {
+    if (running) return;
+    if (auto ? !GM_getValue('jcwKey', '') : !askKey(false)) return;
+    running = true; busy(true);
     try {
       let S = resume ? await loadSaved() : null;
       if (!S) {
@@ -349,8 +352,19 @@
     } catch (e) {
       say('Stopped: ' + e.message, null);
       loadSaved().then(s => { if (s && s.mode === 'full') { $('jsResume').style.display = ''; $('jsResume').textContent = 'Resume the full sync (' + Object.keys(s.done || {}).length + ' done)'; } });
-    } finally { busy(false); }
+    } finally { busy(false); running = false; GM_setValue('jcwAutoLast', Date.now()); }
   }
+  // ===================== AUTO QUICK SYNC (only while this portal tab stays open and logged in) =====================
+  const AUTO_MIN = 20;
+  $('jsAuto').checked = !!GM_getValue('jcwAuto', false);
+  $('jsAuto').onchange = () => { GM_setValue('jcwAuto', $('jsAuto').checked); if ($('jsAuto').checked) autoTick(true); };
+  function autoTick(now) {
+    if (!$('jsAuto').checked || running) return;
+    if (!now && Date.now() - GM_getValue('jcwAutoLast', 0) < AUTO_MIN * 60000) return;
+    run('quick', false, true);
+  }
+  setInterval(() => autoTick(false), 60000);
+  setTimeout(() => autoTick(false), 15000);
   $('jsQuick').onclick = () => run('quick', false);
   $('jsFull').onclick = () => { if (confirm('Full sync reads the details of every enrolled student (about 30–60 minutes). Keep this tab open. Start?')) run('full', false); };
   $('jsResume').onclick = () => run('full', true);
