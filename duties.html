@@ -2596,10 +2596,11 @@ function drawRoomTag(doc, g, scale){
     head:[['#', 'DATE / DAY', 'CLASS', 'SUBJECT', 'SUPERINTENDENT', 'OTHER STAFF']],
     body:g.items.map((it, i) => [i + 1, (it.dt || '?') + (it.day ? (compact ? ' ' + String(it.day).slice(0, 3) : '\n' + it.day) : ''), it.cls.join(', '), it.sub.join(', '), it.staff[0] || '—', it.staff.slice(1).join(', ')]),
     didDrawPage:() => { if(!compact && doc.internal.getCurrentPageInfo().pageNumber !== startPage) band(doc, 'Room tag · ' + title + ' (continued)'); },
-    styles:{ font:'helvetica', fontSize:fs, halign:'center', valign:'middle', minCellHeight:rowH, cellPadding:compact ? Math.max(0.5, 0.9 * scale) : Math.max(0.8, 1.6 * scale), textColor:INK, lineColor:[90, 60, 50], lineWidth:0.3, overflow:'linebreak' },
+    styles:{ font:'helvetica', fontSize:fs, halign:'center', valign:'middle', minCellHeight:rowH, cellPadding:compact ? { top:Math.max(0.5, 0.9 * scale), bottom:Math.max(0.5, 0.9 * scale), left:1.8, right:1.8 } : Math.max(0.8, 1.6 * scale), textColor:INK, lineColor:[90, 60, 50], lineWidth:0.3, overflow:'linebreak' },
     headStyles:{ fillColor:BROWN, textColor:[255, 255, 255], fontStyle:'bold', fontSize:Math.max(8, (compact ? 10.5 : 12) * scale), minCellHeight:Math.max(6, (compact ? 7.5 : 10) * scale) },
     alternateRowStyles:{ fillColor:SOFT },
-    columnStyles:{ 0:{ cellWidth:12, fontStyle:'bold', textColor:BROWN }, 1:{ cellWidth:compact ? 40 : 44, fontStyle:'bold' }, 2:{ cellWidth:40, fontStyle:'bold' }, 3:{ cellWidth:58, fontStyle:'bold' }, 4:{ cellWidth:52, fontStyle:'bold' } },
+    columnStyles:compact ? { 0:{ cellWidth:10, fontStyle:'bold', textColor:BROWN }, 1:{ cellWidth:33, fontStyle:'bold' }, 2:{ cellWidth:34, fontStyle:'bold' }, 3:{ cellWidth:46, fontStyle:'bold' }, 4:{ cellWidth:42, fontStyle:'bold' }, 5:{ halign:'left' } }
+                         : { 0:{ cellWidth:12, fontStyle:'bold', textColor:BROWN }, 1:{ cellWidth:44, fontStyle:'bold' }, 2:{ cellWidth:40, fontStyle:'bold' }, 3:{ cellWidth:58, fontStyle:'bold' }, 4:{ cellWidth:52, fontStyle:'bold' } },
     didParseCell:h => { if(h.section === 'body' && g.items[h.row.index] && g.items[h.row.index].x) h.cell.styles.textColor = RED; } });
 }
 async function buildRoomTags(){
