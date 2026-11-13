@@ -229,35 +229,39 @@ function bkClasses_() {
   return out;
 }
 function bkCheck_(key) {
-  var B = bkBook_(key), start = Date.now(), RM = rosterModel_(), diffs = [], checked = 0;
+  var B = bkBook_(key), RM = rosterModel_(), diffs = [], checked = 0;
   var classes = {}; bkClasses_().forEach(function (c) { classes[gtK_(c)] = c; });
-  var noSheet = [];
-  var sheets = {}; B.book.getSheets().forEach(function (s) { sheets[gtK_(s.getName())] = s; });
+  var noSheet = [], all = B.book.getSheets(), byName = {};
+  all.forEach(function (s) { byName[s.getName()] = s; });
+  var sheets = {}; all.forEach(function (s) { sheets[gtK_(s.getName())] = s; });
   Object.keys(classes).forEach(function (k) { if (!sheets[k]) noSheet.push(classes[k]); });
-  B.book.getSheets().forEach(function (sh) {
-    if (Date.now() - start > 300000) return;
-    var cls = classes[gtK_(sh.getName())];
-    if (!cls || BK_SKIP.test(sh.getName())) return;
-    var L = bkSheet_(sh);
-    if (!L) { diffs.push({ sheet: sh.getName(), cls: cls, sub: '', teacher: '', missing: [], extra: [], off: [], error: 'No Enroll# header row.' }); return; }
-    var F = null;
+  var names = all.map(function (s) { return s.getName(); }).filter(function (n) { return classes[gtK_(n)] && !BK_SKIP.test(n); });
+  var G = bkGrids_(B.book, names, '');                                  // one call for the whole workbook
+  names.forEach(function (n) {
+    var cls = classes[gtK_(n)], sh = byName[n], L = bkLayoutV_(G[n], sh);
+    if (!L) { diffs.push({ sheet: n, cls: cls, sub: '', teacher: '', missing: [], extra: [], off: [], wrong: [], error: 'No Enroll# header row.' }); return; }
     checked++;
-    var want = bkWanted_(cls, RM), struck = gtStruck_(L), inSheet = {}, d = { sheet: sh.getName(), cls: cls, sub: '', teacher: '', missing: [], extra: [], off: [] };
+    var want = bkWanted_(cls, RM), inSheet = {}, struck = null, F = null, d = { sheet: n, cls: cls, sub: '', teacher: '', missing: [], extra: [], off: [], wrong: [] };
     for (var i = L.hi + 1; i < L.v.length; i++) {
       var roll = gtS_(L.v[i][L.enroll]), e = enr_(roll); if (!e) continue;
       inSheet[e] = 1;
-      if (struck[i - L.hi - 1]) continue;                                    // cancelled: leave as it is
+      var m = RM.byRoll[e];
       if (!want[e]) {
+        struck = struck || gtStruck_(L);                                  // only read for sheets that have an extra student
+        if (struck[i - L.hi - 1]) continue;                               // cancelled: leave as it is
         F = F || sh.getRange(1, 1, L.v.length, L.lc).getFormulas();
-        var m = RM.byRoll[e], marks = bkHasData_(L, i, F);
-        d.extra.push({ roll: roll, name: gtS_(L.v[i][L.name]), father: L.father >= 0 ? gtS_(L.v[i][L.father]) : '', pcs: m ? m[2] : '', marks: marks,
+        d.extra.push({ roll: roll, name: gtS_(L.v[i][L.name]), father: L.father >= 0 ? gtS_(L.v[i][L.father]) : '', pcs: m ? m[2] : '', marks: bkHasData_(L, i, F),
                        why: m ? 'in the strength sheet as ' + m[2] : 'not in the strength sheet' });
+      } else if (m && L.name >= 0) {                                      // right student: are her name and father name right?
+        var nNow = gtS_(L.v[i][L.name]), fNow = L.father >= 0 ? gtS_(L.v[i][L.father]) : '';
+        var badN = bkNk_(nNow) !== bkNk_(m[1]), badF = L.father >= 0 && gtS_(m[4]) && bkNk_(fNow) !== bkNk_(m[4]);
+        if (badN || badF) d.wrong.push({ roll: roll, name: m[1], father: m[4] || '', pcs: m[2], nameNow: nNow, fatherNow: fNow, badName: badN, badFather: !!badF });
       }
     }
     Object.keys(want).forEach(function (e) { if (!inSheet[e]) { var r = want[e]; d.missing.push({ roll: r[0], name: r[1], father: r[4] || '', pcs: r[2] }); } });
-    if (d.missing.length || d.extra.length) diffs.push(d);
+    if (d.missing.length || d.extra.length || d.wrong.length) diffs.push(d);
   });
-  return { ok: true, book: String(key).toUpperCase(), label: B.label + ' (' + B.book.getName() + ')', checked: checked, total: checked, done: true, diffs: diffs, noSheet: noSheet };
+  return { ok: true, book: String(key).toUpperCase(), label: B.label + ' (' + B.book.getName() + ')', checked: checked, total: checked, done: true, diffs: diffs, noSheet: noSheet, names: true };
 }
 /** op 'add' (missing student) or 'remove' (extra student: row deleted if she has no marks, otherwise struck through) */
 function bkFix_(user, key, sheetName, roll, op) {
@@ -365,14 +369,24 @@ function bkNameLayout_(sh) {
   }
   return null;
 }
+function bkNameLayoutV_(v) {
+  if (!v || v.length < 2) return null;
+  for (var i = 0; i < Math.min(v.length, 8); i++) {
+    var head = (v[i] || []).map(gtK_), col = function (names) { for (var k = 0; k < names.length; k++) { var x = head.indexOf(names[k]); if (x >= 0) return x; } return -1; };
+    var en = col(['ENROLL', 'ENROLLNO', 'ENROLLMENT', 'ROLLNO']), nm = col(['STUDENTNAME', 'NAME']);
+    if (en >= 0 && nm >= 0) return { v: v, hi: i, enroll: en, name: nm, father: col(['FATHERNAME', 'FATHER']) };
+  }
+  return null;
+}
 var bkNk_ = function (s) { return String(s == null ? '' : s).toLowerCase().replace(/[^a-z]/g, ''); };
 /** students whose name or father name in the sheet is not the one in Transform-ALL-COLLEGE-STRENGTH. Goes on from req.cursor (sheet number). */
 function bkNames_(req) {
-  var book = bkNameBook_(req), sheets = book.getSheets(), RM = rosterModel_(), start = Date.now(), out = [], i = Number(req.cursor) || 0, checked = 0;
-  for (; i < sheets.length && Date.now() - start < 240000; i++) {
-    var sh = sheets[i];
-    if (BK_SKIP.test(sh.getName())) continue;
-    var L = bkNameLayout_(sh); if (!L) continue;
+  var book = bkNameBook_(req), sheets = book.getSheets(), RM = rosterModel_(), out = [], checked = 0;
+  var names = sheets.map(function (sh) { return sh.getName(); }).filter(function (n) { return !BK_SKIP.test(n); });
+  var G = bkGrids_(book, names, 'A1:L');                                 // all sheets in one call
+  for (var q = 0; q < names.length; q++) {
+    var L = bkNameLayoutV_(G[names[q]]); if (!L) continue;
+    var sh = { getName: function () { return names[q]; } };
     checked++;
     var wrong = [];
     for (var r = L.hi + 1; r < L.v.length; r++) {
@@ -384,7 +398,7 @@ function bkNames_(req) {
     }
     if (wrong.length) out.push({ sheet: sh.getName(), wrong: wrong });
   }
-  return { ok: true, diffs: out, checked: checked, cursor: i, total: sheets.length, done: i >= sheets.length };
+  return { ok: true, diffs: out, checked: checked, cursor: sheets.length, total: sheets.length, done: true };
 }
 /** writes the Transform name and father name into those rows. ops: [['name', roll], ...] */
 function bkNameFix_(req, ops) {
@@ -408,4 +422,43 @@ function bkNameFix_(req, ops) {
     SpreadsheetApp.flush();
     return out;
   } finally { lock.releaseLock(); }
+}
+
+
+/* ================= fast reading: every sheet of a workbook in one call (Sheets advanced service), else one by one ================= */
+function bkGrids_(book, names, a1) {
+  var out = {};
+  try {
+    for (var k = 0; k < names.length; k += 60) {
+      var part = names.slice(k, k + 60);
+      var res = Sheets.Spreadsheets.Values.batchGet(book.getId(), { ranges: part.map(function (n) { return "'" + n.replace(/'/g, "''") + "'" + (a1 ? '!' + a1 : ''); }),
+                                                                   valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'FORMATTED_STRING' });
+      (res.valueRanges || []).forEach(function (vr, i) { out[part[i]] = vr.values || []; });
+    }
+    return out;
+  } catch (e) {
+    out = {};
+    names.forEach(function (n) {
+      var sh = book.getSheetByName(n), lr = sh ? sh.getLastRow() : 0, lc = sh ? sh.getLastColumn() : 0;
+      if (!lr || !lc) { out[n] = []; return; }
+      if (a1 && /^A1:([A-Z]+)$/.test(a1)) lc = Math.min(lc, bkColNum_(a1.split(':')[1]));
+      out[n] = sh.getRange(1, 1, lr, lc).getValues();
+    });
+    return out;
+  }
+}
+function bkColNum_(s) { var n = 0; for (var i = 0; i < s.length; i++) n = n * 26 + s.charCodeAt(i) - 64; return n; }
+/** same layout as gtSheet_ / bkSheet_, but from values already read (rows padded to the same width) */
+function bkLayoutV_(v, sh) {
+  if (!v || !v.length) return null;
+  var lc = 0; v.forEach(function (r) { if (r.length > lc) lc = r.length; });
+  v = v.map(function (r) { r = r.slice(); while (r.length < lc) r.push(''); return r; });
+  var hi = -1, i;
+  for (i = 0; i < Math.min(v.length, 8); i++) if (gtK_(v[i][0]) === 'SNO') { hi = i; break; }
+  if (hi < 1) { hi = -1; for (i = 0; i < Math.min(v.length, 8); i++) if (v[i].some(function (h) { return gtK_(h) === 'ENROLL'; })) { hi = i; break; } }
+  if (hi < 0) return null;
+  var head = v[hi].map(gtK_), col = function (names) { for (var k = 0; k < names.length; k++) { var x = head.indexOf(names[k]); if (x >= 0) return x; } return -1; };
+  var L = { sh: sh, v: v, hi: hi, lc: lc, sno: col(['SNO', 'SRNO']), enroll: col(['ENROLL']), name: col(['STUDENTNAME', 'NAME']),
+            father: col(['FATHERNAME', 'FATHER']), cs: col(['CLASSSEC', 'CLASSSECTION', 'PCS']), subjects: {} };
+  return L.enroll < 0 ? null : L;
 }
