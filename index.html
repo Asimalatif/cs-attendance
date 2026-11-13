@@ -6316,7 +6316,7 @@ let ros = { mon:'', busy:false, res:null, pct:0, err:'' };
 function rosCard(){
   if(scope !== 'all') return '';
   const R = ros.res;
-  const n = R ? R.diffs.reduce((a, d) => a + d.missing.length + d.extra.length + d.off.length, 0) : 0;
+  const n = R ? R.diffs.reduce((a, d) => a + d.missing.length + d.extra.length + d.off.length + ((d.wrong || []).length), 0) : 0;
   return `<section class="card" id="rosCard"><h3>${I.check} Daily attendance sheets vs strength sheet</h3>
     <div class="sub">Checks the <b>daily attendance workbooks</b> (one per month, the workbooks this app marks in; one sheet per class and subject, e.g. "FCS-1 OCT COMPUTER SCIENCE") against Transform-ALL-COLLEGE-STRENGTH: nobody missing, nobody extra. Nothing changes until you press a button. The monthly attendance, monthly test, grand test and detention workbooks are in the next card.</div>
     <div class="acts2">${SEAS.map(m => `<button class="btn ${ros.mon === m ? 'primary' : ''}" type="button" data-xros="${m}" ${ros.busy ? 'disabled' : ''}>Check ${esc(monName(m))}</button>`).join('')}</div>
@@ -6335,7 +6335,7 @@ async function rosCheck(mon){
       if(!all) all = r; else { all.diffs = all.diffs.concat(r.diffs); all.checked += r.checked; }
       cursor = r.cursor; all.done = r.done; ros.pct = Math.round(r.cursor / Math.max(1, r.total) * 100); refreshRos();
     } while(!all.done);
-    ros.res = all;
+    ros.res = mergeNames(all, await namesCheck({ kind:'daily', mon }));
   }catch(e){ ros.err = 'Check stopped: ' + e.message; }
   ros.busy = false; refreshRos();
   if(ros.res && ros.res.diffs.length) rosOpen();
@@ -6349,25 +6349,47 @@ function rosOpen(){
       ${d.missing.map(x => `<div class="li"><span class="tx">${rosWho(x)}<small>In the strength sheet, <b>missing</b> in this sheet</small></span><button class="pill good" type="button" data-xrf="${k}|add|${esc(x.roll)}">Add</button></div>`).join('')}
       ${d.extra.map(x => `<div class="li"><span class="tx">${rosWho(x)}<small><b>Extra</b>: ${esc(x.why)}${x.marks ? ' · has marks: she will be struck through, marks kept' : ''}</small></span><button class="pill bad" type="button" data-xrf="${k}|remove|${esc(x.roll)}">Remove</button></div>`).join('')}
       ${d.off.map(x => `<div class="li"><span class="tx">${rosWho(x)}<small><b>Struck off</b> here but she is in the strength sheet (${esc(x.why)})</small></span><button class="pill good" type="button" data-xrf="${k}|on|${esc(x.roll)}">Switch on</button></div>`).join('')}
-      <button class="btn small" type="button" data-xrfa="${k}" style="margin-top:6px">Fix this sheet (${d.missing.length + d.extra.length + d.off.length})</button></details>`).join('')}</div>
+${(d.wrong || []).map(x => `<div class="li"><span class="tx">${rosWho(x)}<small><b>Wrong name</b> in this sheet: “${esc(x.nameNow || '–')}”${x.badFather ? ' D/O “' + esc(x.fatherNow || '–') + '”' : ''}</small></span><button class="pill good" type="button" data-xrf="${k}|name|${esc(x.roll)}">Fix name</button></div>`).join('')}
+      <button class="btn small" type="button" data-xrfa="${k}" style="margin-top:6px">Fix this sheet (${d.missing.length + d.extra.length + d.off.length + ((d.wrong || []).length)})</button></details>`).join('')}</div>
     <div class="acts"><button class="btn small primary grow" type="button" id="xRosFixAll">Fix all sheets of ${esc(R.label)}</button><button class="btn small grow" type="button" id="xRosCsv">Excel</button><button class="btn small grow" id="closeDlg">Close</button></div>`);
 }
 async function rosFix(k, op, roll, btn){
   const d = ros.res.diffs[k]; if(btn){ btn.disabled = true; btn.textContent = '…'; }
   try{
-    const r = await srv({ action:'roster_fix', sheet:d.sheet, roll, op }, 120000);
-    ['missing', 'extra', 'off'].forEach(f => { d[f] = d[f].filter(x => !(x.roll === roll && ({ missing:'add', extra:'remove', off:'on' })[f] === op)); });
+    const r = op === 'name' ? await nameFix({ kind:'daily', mon:ros.mon }, d.sheet, roll) : await srv({ action:'roster_fix', sheet:d.sheet, roll, op }, 120000);
+    ['missing', 'extra', 'off', 'wrong'].forEach(f => { d[f] = (d[f] || []).filter(x => !(x.roll === roll && ({ missing:'add', extra:'remove', off:'on', wrong:'name' })[f] === op)); });
     if(btn){ const li = btn.closest('.li'); if(li) li.innerHTML = `<span class="tx"><small>✓ ${esc(roll)}: ${esc(r.result)}</small></span>`; }
     return true;
   }catch(e){ toast(roll + ': ' + e.message); if(btn){ btn.disabled = false; btn.textContent = op === 'add' ? 'Add' : op === 'on' ? 'Switch on' : 'Remove'; } return false; }
 }
 async function rosFixAll(k, btn){
-  const d = ros.res.diffs[k], jobs = d.missing.map(x => ['add', x.roll]).concat(d.extra.map(x => ['remove', x.roll]), d.off.map(x => ['on', x.roll]));
+  const d = ros.res.diffs[k], jobs = d.missing.map(x => ['add', x.roll]).concat(d.extra.map(x => ['remove', x.roll]), d.off.map(x => ['on', x.roll]), (d.wrong || []).map(x => ['name', x.roll]));
   if(!jobs.length || !confirm('Fix ' + d.cls + ' · ' + titleCase(d.sub) + ': ' + jobs.length + ' change(s)?')) return;
   btn.disabled = true;
   for(let i = 0; i < jobs.length; i++){ btn.textContent = 'Fixing ' + (i + 1) + ' of ' + jobs.length + '…'; await rosFix(k, jobs[i][0], jobs[i][1], document.querySelector(`[data-xrf="${k}|${jobs[i][0]}|${jobs[i][1]}"]`)); }
   btn.textContent = '✓ Fixed'; refreshRos();
 }
+/* ----- wrong Student Name / Father Name: checked with every workbook check, fixed from the strength sheet ----- */
+async function namesCheck(q){
+  let cursor = 0, out = [];
+  do{ const r = await srv(Object.assign({ action:'bk_names', cursor }, q), 330000); out = out.concat(r.diffs || []); cursor = r.cursor; if(r.done || !r.ok) break; } while(true);
+  return out;
+}
+function mergeNames(res, nd){
+  if(!res || !res.diffs) return res;
+  nd.forEach(n => {
+    let d = res.diffs.find(x => x.sheet === n.sheet);
+    if(!d){ d = { sheet:n.sheet, cls:n.sheet, sub:'', teacher:'', missing:[], extra:[], off:[] }; res.diffs.push(d); }
+    d.wrong = n.wrong;
+  });
+  return res;
+}
+async function nameFix(q, sheet, roll){
+  const r = await srv(Object.assign({ action:'bk_batch', sheet, ops:[['name', roll]] }, q), 120000);
+  const x = (r.done || [])[0]; if(!x || !x.ok) throw new Error(x ? x.result : 'not fixed');
+  return { result:x.result };
+}
+
 /* ----- Check everything: run the strength-sheet check on many workbooks in one go, then fix all ----- */
 let evs = { sel:store.get('evsel', null), busy:false, msg:'', res:{} };   // res[key] = { label, kind, res, fixed }
 function evTargets(){
@@ -6380,7 +6402,7 @@ function evSelected(t){
   if(t.kind === 'daily') return SEAS.indexOf(t.mon) <= seasNow() + 1;
   return true;
 }
-const evCount = r => r && r.res ? r.res.diffs.reduce((a, d) => a + d.missing.length + d.extra.length + (d.off ? d.off.length : 0), 0) : 0;
+const evCount = r => r && r.res ? r.res.diffs.reduce((a, d) => a + d.missing.length + d.extra.length + (d.off ? d.off.length : 0) + ((d.wrong || []).length), 0) : 0;
 function evCard(){
   if(scope !== 'all') return '';
   if(!bk.list && !bk.loading && navigator.onLine){ bk.loading = true; srv({ action:'bk_list' }, 120000).then(r => { bk.list = r.books || []; }).catch(e => { bk.list = []; bk.err = e.message; }).finally(() => { bk.loading = false; refreshEv(); }); }
@@ -6407,9 +6429,10 @@ async function evCheckOne(t){
       cursor = r.cursor; all.done = r.done;
 
     } while(!all.done);
-    return all;
+    return mergeNames(all, await namesCheck({ kind:'daily', mon:t.mon }));
   }
-  return srv({ action:'bk_check', book:t.book }, 330000);
+  const res = await srv({ action:'bk_check', book:t.book }, 330000);
+  return mergeNames(res, await namesCheck({ kind:'book', book:t.book }));
 }
 async function evCheck(){
   const T = evTargets().filter(evSelected); if(!T.length) return toast('Tick at least one workbook.');
@@ -6432,16 +6455,16 @@ async function evCheck(){
 async function evFixOne(key, label){
   const t = evTargets().find(x => x.key === key), r = evs.res[key]; if(!t || !r || !r.res) return 0;
   let ok = 0, bad = 0;
-  const sheets = r.res.diffs.filter(d => d.missing.length || d.extra.length || (d.off && d.off.length));
+  const sheets = r.res.diffs.filter(d => d.missing.length || d.extra.length || (d.off && d.off.length) || (d.wrong && d.wrong.length));
   for(let i = 0; i < sheets.length; i++){
     const d = sheets[i];
-    let ops = d.missing.map(x => ['add', x.roll]).concat(d.extra.map(x => ['remove', x.roll]), (d.off || []).map(x => ['on', x.roll]));
+    let ops = d.missing.map(x => ['add', x.roll]).concat(d.extra.map(x => ['remove', x.roll]), (d.off || []).map(x => ['on', x.roll]), (d.wrong || []).map(x => ['name', x.roll]));
     evs.msg = 'Fixing ' + esc(label || t.label) + ': sheet ' + (i + 1) + ' of ' + sheets.length + ' (' + esc(d.sheet) + ')…'; refreshEv();
     while(ops.length){
       let res;
-      try{ res = await srv({ action:'bk_batch', kind:t.kind, book:t.book, sheet:d.sheet, ops }, 330000); }
+      try{ res = await srv({ action:'bk_batch', kind:t.kind, book:t.book, mon:t.mon, sheet:d.sheet, ops }, 330000); }
       catch(e){ bad += ops.length; toast(d.sheet + ': ' + e.message); break; }
-      res.done.forEach(x => { if(x.ok){ ok++; const f = x.op === 'add' ? 'missing' : x.op === 'remove' ? 'extra' : 'off'; d[f] = (d[f] || []).filter(y => y.roll !== x.roll); } else bad++; });
+      res.done.forEach(x => { if(x.ok){ ok++; const f = x.op === 'add' ? 'missing' : x.op === 'remove' ? 'extra' : x.op === 'name' ? 'wrong' : 'off'; d[f] = (d[f] || []).filter(y => y.roll !== x.roll); } else bad++; });
       ops = res.left || [];
     }
   }
@@ -6451,7 +6474,7 @@ async function evFixOne(key, label){
 async function evFix(keys){
   const list = keys.filter(k => evCount(evs.res[k]));
   const n = list.reduce((a, k) => a + evCount(evs.res[k]), 0);
-  if(!n || !confirm('Fix ' + n + ' difference(s) in ' + list.length + ' workbook(s)? Missing students are added, extra students removed.')) return;
+  if(!n || !confirm('Fix ' + n + ' difference(s) in ' + list.length + ' workbook(s)? Missing students are added, extra students removed, wrong names corrected from the strength sheet.')) return;
   evs.busy = true; let ok = 0;
   for(const k of list){ const t = evTargets().find(x => x.key === k); ok += await evFixOne(k, t ? t.group + ' · ' + t.label : k); }
   evs.busy = false; evs.msg = '✓ ' + ok + ' change' + (ok === 1 ? '' : 's') + ' made. Press <b>Check selected</b> again to confirm.'; refreshEv();
@@ -6475,7 +6498,7 @@ let bk = { list:null, key:'', busy:false, res:null, err:'' };
 function bkCard(){
   if(scope !== 'all') return '';
   if(!bk.list && !bk.loading && navigator.onLine){ bk.loading = true; srv({ action:'bk_list' }, 60000).then(r => { bk.list = r.books || []; }).catch(e => { bk.list = []; bk.err = e.message; }).finally(() => { bk.loading = false; refreshBk(); refreshEv(); }); }
-  const R = bk.res, n = R ? R.diffs.reduce((a, d) => a + d.missing.length + d.extra.length, 0) : 0;
+  const R = bk.res, n = R ? R.diffs.reduce((a, d) => a + d.missing.length + d.extra.length + ((d.wrong || []).length), 0) : 0;
   const groups = bk.list ? [...new Set(bk.list.map(b => b.group || ''))] : [];
   return `<section class="card" id="bkCard"><h3>${I.check} Monthly attendance, test, grand test &amp; detention workbooks vs strength sheet</h3>
     <div class="sub">Checks the workbooks that have <b>one sheet per section</b> (e.g. "FCS-1 D3"): the <b>monthly attendance</b> workbooks (lectures per subject for the month), the <b>monthly test</b> workbooks, the <b>grand test</b> and the <b>detention</b> workbook, against Transform-ALL-COLLEGE-STRENGTH. Every section sheet in the chosen workbook is checked. Nothing changes until you press a button.</div>
@@ -6488,7 +6511,7 @@ function bkCard(){
 function refreshBk(){ const c = $q('#bkCard'); if(c){ const t = document.createElement('div'); t.innerHTML = bkCard(); c.replaceWith(t.firstElementChild); } }
 async function bkCheck(key){
   bk.key = key; bk.busy = true; bk.res = null; bk.err = ''; refreshBk();
-  try{ bk.res = await srv({ action:'bk_check', book:key }, 330000); }catch(e){ bk.err = 'Check stopped: ' + e.message; }
+  try{ bk.res = mergeNames(await srv({ action:'bk_check', book:key }, 330000), await namesCheck({ kind:'book', book:key })); }catch(e){ bk.err = 'Check stopped: ' + e.message; }
   bk.busy = false; refreshBk();
   if(bk.res && bk.res.diffs.length) bkOpen();
 }
@@ -6499,19 +6522,20 @@ function bkOpen(){
       ${d.error ? `<div class="err2">${esc(d.error)}</div>` : ''}
       ${d.missing.map(x => `<div class="li"><span class="tx">${rosWho(x)}<small>In the strength sheet, <b>missing</b> in this sheet</small></span><button class="pill good" type="button" data-xbf="${k}|add|${esc(x.roll)}">Add</button></div>`).join('')}
       ${d.extra.map(x => `<div class="li"><span class="tx">${rosWho(x)}<small><b>Extra</b>: ${esc(x.why)}${x.marks ? ' · has marks: she will be struck through, marks kept' : ''}</small></span><button class="pill bad" type="button" data-xbf="${k}|remove|${esc(x.roll)}">Remove</button></div>`).join('')}
-      <button class="btn small" type="button" data-xbfa="${k}" style="margin-top:6px">Fix this sheet (${d.missing.length + d.extra.length})</button></details>`).join('')}</div>
+${(d.wrong || []).map(x => `<div class="li"><span class="tx">${rosWho(x)}<small><b>Wrong name</b> in this sheet: “${esc(x.nameNow || '–')}”${x.badFather ? ' D/O “' + esc(x.fatherNow || '–') + '”' : ''}</small></span><button class="pill good" type="button" data-xbf="${k}|name|${esc(x.roll)}">Fix name</button></div>`).join('')}
+      <button class="btn small" type="button" data-xbfa="${k}" style="margin-top:6px">Fix this sheet (${d.missing.length + d.extra.length + ((d.wrong || []).length)})</button></details>`).join('')}</div>
     <div class="acts"><button class="btn small primary grow" type="button" id="xBkFixAll">Fix all sheets</button><button class="btn small grow" id="closeDlg">Close</button></div>`);
 }
 async function bkFix(k, op, roll, btn){
   const d = bk.res.diffs[k]; if(btn){ btn.disabled = true; btn.textContent = '…'; }
   try{
-    const r = await srv({ action:'bk_fix', book:bk.res.book, sheet:d.sheet, roll, op }, 120000);
-    if(op === 'add') d.missing = d.missing.filter(x => x.roll !== roll); else d.extra = d.extra.filter(x => x.roll !== roll);
+    const r = op === 'name' ? await nameFix({ kind:'book', book:bk.res.book }, d.sheet, roll) : await srv({ action:'bk_fix', book:bk.res.book, sheet:d.sheet, roll, op }, 120000);
+    if(op === 'add') d.missing = d.missing.filter(x => x.roll !== roll); else if(op === 'name') d.wrong = (d.wrong || []).filter(x => x.roll !== roll); else d.extra = d.extra.filter(x => x.roll !== roll);
     if(btn){ const li = btn.closest('.li'); if(li) li.innerHTML = `<span class="tx"><small>✓ ${esc(roll)}: ${esc(r.result)}</small></span>`; }
   }catch(e){ toast(roll + ': ' + e.message); if(btn){ btn.disabled = false; btn.textContent = op === 'add' ? 'Add' : 'Remove'; } }
 }
 async function bkFixAll(k, btn){
-  const d = bk.res.diffs[k], jobs = d.missing.map(x => ['add', x.roll]).concat(d.extra.map(x => ['remove', x.roll]));
+  const d = bk.res.diffs[k], jobs = d.missing.map(x => ['add', x.roll]).concat(d.extra.map(x => ['remove', x.roll]), (d.wrong || []).map(x => ['name', x.roll]));
   if(!jobs.length || !confirm('Fix ' + d.sheet + ': ' + jobs.length + ' change(s)?')) return;
   btn.disabled = true;
   for(let i = 0; i < jobs.length; i++){ btn.textContent = 'Fixing ' + (i + 1) + ' of ' + jobs.length + '…'; await bkFix(k, jobs[i][0], jobs[i][1], document.querySelector(`[data-xbf="${k}|${jobs[i][0]}|${jobs[i][1]}"]`)); }
