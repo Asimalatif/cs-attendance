@@ -626,7 +626,7 @@ function render0(){
     h += `<section class="card"><h2>${esc(EX.title || 'Duty list')}</h2>
       <div class="chips"><div class="chip"><b>${c.L.teacher.length}</b>teachers</div><div class="chip"><b>${c.duties}</b>duties</div><div class="chip"><b>${c.L.room.length}</b>rooms</div><div class="chip"><b>${c.L.class.length}</b>classes</div><div class="chip"><b>${c.dates.length}</b>days${c.dates.length ? '<br><span class="muted" style="font-weight:600">' + esc(fmtIso(c.dates[0])) + ' – ' + esc(fmtIso(c.dates[c.dates.length - 1])) + '</span>' : ''}</div>
       <div class="chip ${c.clashes.length ? 'bad' : 'good'}"><b>${c.clashes.length}</b>clashes</div>${c.check.noRoom.length ? `<div class="chip mid"><b>${c.check.noRoom.length}</b>staff with no room</div>` : ''}${fxCount() ? `<button class="chip bad" data-tab="names" style="cursor:pointer;text-align:left;font:inherit;font-weight:700"><b>${fxCount()}</b>names to fix ›</button>` : ''}${CTS && c.unknown.length ? `<button class="chip bad" data-tab="check" style="cursor:pointer;text-align:left;font:inherit;font-weight:700"><b>${c.unknown.length}</b>left / not in Users ›</button>` : ''}${CTS && c.missing.length ? `<button class="chip good" data-tab="check" style="cursor:pointer;text-align:left;font:inherit;font-weight:700"><b>${c.missing.length}</b>teachers with no duty ›</button>` : ''}</div>
-      <div class="grid"><label class="f">Duty timings (printed on every list)<input id="iTime" value="${esc(EX.timing || '08:30-12:30 PM (morning)')}" autocomplete="off"></label><label class="c" style="align-self:end;padding-bottom:10px"><input type="checkbox" id="iNp" ${V.newPage ? 'checked' : ''}> Each teacher / room / date / class on a new page</label></div>
+      <div class="grid"><label class="f">Duty timings (printed on every list)<input id="iTime" value="${esc(EX.timing || '08:30-12:30 PM (morning)')}" autocomplete="off"></label><div class="sub" style="align-self:end;padding-bottom:10px">Every PDF list puts each teacher / room / date / class / subject on <b>one page</b> (long ones shrink to fit).</div></div>
       <h3 style="margin-top:14px">PDF lists <span class="sub">(file names carry today’s date, e.g. ${esc(fileName('teacher', 'pdf'))})</span></h3>
       <div class="acts">${Object.keys(KINDS).map(k => `<button class="btn sm pri" data-pdf="${k}">${KINDS[k].tab}</button>`).join('')}<button class="btn sm pri" data-pdf="sumdates">Teacher · Day/Date</button><button class="btn sm pri" data-pdf="sumcount">Teacher · Total duties</button><button class="btn sm pri" data-pdf="roomtags" title="One A4 page per room, for the room door">Room tags (1 page per room)</button></div>
       <div class="acts"><button class="btn good" id="bAll">All PDFs at once</button><button class="btn" id="bXlsx">Excel (all lists)</button><button class="btn pri" id="bDocx">Corrected Word file</button><button class="btn ${EX.saved ? '' : 'pri'}" id="bSave">${EX.saved ? '✓ Saved on server' : 'Save on server'}</button><button class="btn" id="bSheet">${EX.sheet ? 'Update Google Sheet' : 'Make Google Sheet'}</button>${EX.sheetUrl ? `<a class="btn" href="${esc(EX.sheetUrl)}" target="_blank" rel="noopener">Open Google Sheet</a>` : ''}</div></section>`;
@@ -2517,6 +2517,7 @@ const tableStyle = (extra) => Object.assign({
 const WIDTH = { '#':9, date:40, time:28, room:24, cls:30, sub:44, head:40 };      // staff takes the rest
 
 async function buildPdf(kind, only){
+  if(KINDS[kind]) return buildPages(kind, only);                 // one page per teacher / room / date / class / subject
   await pdfLibs(); await logo();
   const doc = new window.jspdf.jsPDF({ unit:'mm', format:'a4', orientation:'landscape' }), H = doc.internal.pageSize.getHeight();
   const kt = KINDS[kind] ? KINDS[kind].tab + ' duty list' : kind === 'sumdates' ? 'Teacher · Day/Date' : 'Teacher · Total duties';
@@ -2563,63 +2564,79 @@ async function buildPdf(kind, only){
   footers(doc);
   return { blob:doc.output('blob'), name:fileName(kind, 'pdf') };
 }
-/* ---------- room tags: one A4 landscape page per room (for the door), like the timetable room tags ---------- */
+/* ---------- every list: ONE A4 landscape page per teacher / room / date / class / subject (shrinks to fit) ---------- */
 const roomNo = label => String(label || '').replace(/^\s*room\s*(no\.?|#)?\s*[:#.-]?\s*/i, '').trim() || String(label || '');
-function drawRoomTag(doc, g, scale){
+const pdfTxt = t => String(t == null ? '' : t).replace(/✓/g, 'OK').replace(/[^\x20-\x7E\xA0-\xFF\n]/g, '');   // the PDF font has no ✓ / emoji
+const PAGE_KT = { teacher:'Teacher-wise duty list', room:'Room-wise duty list', date:'Date-wise duty list', class:'Class-wise duty list', subject:'Subject-wise duty list', roomtags:'Room tag' };
+function pageTitle(kind, g){
+  if(kind === 'room' || kind === 'roomtags'){ const nm = roomNo(g.label); return /^\d/.test(nm) ? 'ROOM # ' + nm : String(g.label).toUpperCase(); }
+  return String(g.label || '').toUpperCase();
+}
+function drawGroupPage(doc, kind, g, scale){
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
-  const n = Math.max(1, g.items.length), compact = n > 10;            // a big room: no header band, the whole page for its rows
-  const nm = roomNo(g.label), title = (/^\d/.test(nm) ? 'ROOM # ' + nm : String(g.label).toUpperCase());
-  const tm = EX.timing || '';
+  const lk = kind === 'roomtags' ? 'room' : kind, n = Math.max(1, g.items.length), compact = n > 10;   // a long list: no header band, the whole page for its rows
+  const title = pdfTxt(pageTitle(kind, g)), tm = EX.timing || '';
+  const sub = pdfTxt(lk === 'teacher' ? tLine(g.label) + (g.clash ? '  ·  clash shown in red' : '') : n + ' paper' + (n === 1 ? '' : 's'));
   let Y;
   if(!compact){
-    band(doc, 'Room tag');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(Math.max(20, 34 * scale)); doc.setTextColor(...BROWN);
-    doc.text(title, W / 2, 41, { align:'center' });
-    doc.setDrawColor(...GOLD); doc.setLineWidth(0.9); doc.line(W / 2 - 40, 45, W / 2 + 40, 45);
-    doc.setFontSize(11.5); doc.setTextColor(...INK); doc.text((EX.title || '').toUpperCase(), 12, 53);
-    if(tm){ doc.setTextColor(...RED); doc.text('Timing: ' + tm, W - 12, 53, { align:'right' }); }
-    doc.setTextColor(...MUT); doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-    doc.text(n + ' paper' + (n === 1 ? '' : 's') + ' in this room', W / 2, 53, { align:'center' });
-    Y = 57;
-  } else {                                                            // one slim line: room · exam · timing
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(...BROWN);
-    doc.text(title, W / 2, 13, { align:'center' });
-    doc.setFontSize(9.5); doc.setTextColor(...INK); doc.text('JINNAH COLLEGE FOR WOMEN  ·  ' + (EX.title || '').toUpperCase(), 10, 13);
-    if(tm){ doc.setTextColor(...RED); doc.text('Timing: ' + tm, W - 10, 13, { align:'right' }); }
-    doc.setDrawColor(...GOLD); doc.setLineWidth(0.6); doc.line(10, 16, W - 10, 16);
-    Y = 18.5;
+    band(doc, PAGE_KT[kind]);
+    let fsT = Math.max(18, 32 * scale); doc.setFont('helvetica', 'bold'); doc.setFontSize(fsT);
+    while(fsT > 14 && doc.getTextWidth(title) > W - 30){ fsT -= 1; doc.setFontSize(fsT); }
+    doc.setTextColor(...BROWN); doc.text(title, W / 2, 40, { align:'center' });
+    doc.setDrawColor(...GOLD); doc.setLineWidth(0.9); doc.line(W / 2 - 40, 44, W / 2 + 40, 44);
+    doc.setFontSize(11); doc.setTextColor(...INK); doc.text(pdfTxt((EX.title || '').toUpperCase()), 12, 52);
+    if(tm){ doc.setTextColor(...RED); doc.text('Duty Timings: ' + pdfTxt(tm), W - 12, 52, { align:'right' }); }
+    doc.setTextColor(...MUT); doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.text(doc.splitTextToSize(sub, 120)[0] || '', W / 2, 52, { align:'center' });
+    Y = 56;
+  } else {                                                            // one slim line: college · exam · title · timing
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...INK);
+    doc.text('JINNAH COLLEGE FOR WOMEN  ·  ' + pdfTxt((EX.title || '').toUpperCase()), 10, 9);
+    if(tm){ doc.setTextColor(...RED); doc.text('Duty Timings: ' + pdfTxt(tm), W - 10, 9, { align:'right' }); }
+    let fsT = 18; doc.setFontSize(fsT); while(fsT > 12 && doc.getTextWidth(title) > W - 30){ fsT -= 1; doc.setFontSize(fsT); }
+    doc.setTextColor(...BROWN); doc.text(title, W / 2, 16.5, { align:'center' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...MUT); doc.text(PAGE_KT[kind].toUpperCase() + '  ·  ' + (doc.splitTextToSize(sub, 110)[0] || ''), 10, 16.5);
+    doc.setDrawColor(...GOLD); doc.setLineWidth(0.6); doc.line(10, 19, W - 10, 19);
+    Y = 21;
   }
-  const avail = H - Y - (compact ? 13 : 22) - (compact ? 0 : 12);
+  const cols = (kind === 'roomtags' ? ['date', 'cls', 'sub', 'staff'] : colsOf(lk)).flatMap(c => c === 'staff' ? ['head', 'others'] : [c]);
+  const NAME = Object.assign({}, COLNAME, { date:'DATE / DAY', head:'SUPERINTENDENT', others:'OTHER STAFF' });
+  const cell = (it, c) => c === 'head' ? (it.staff[0] || '—') : c === 'others' ? it.staff.slice(1).join(', ') : c === 'date' ? (it.dt || '?') + (it.day ? (compact ? ' ' + String(it.day).slice(0, 3) : '\n' + it.day) : '') : cellOf(it, c);
+  const WD = compact ? { date:33, time:24, room:26, cls:34, sub:46, head:42 } : { date:42, time:28, room:30, cls:40, sub:56, head:50 };
+  const cs = { 0:{ cellWidth:compact ? 10 : 12, fontStyle:'bold', textColor:BROWN } };
+  cols.forEach((c, k) => { cs[k + 1] = c === 'others' ? { halign:'left' } : { cellWidth:WD[c], fontStyle:'bold' }; });
+  const avail = H - Y - (compact ? 13 : 16);
   const per = Math.min(16, avail / n), rowH = Math.max(3, per * scale), fs = Math.max(6.5, Math.min(compact ? 12 : 15, per * (compact ? 1.6 : 0.95)) * scale);
   const startPage = doc.internal.getCurrentPageInfo().pageNumber;
-  doc.autoTable({ startY:Y, margin:{ left:compact ? 10 : 12, right:compact ? 10 : 12, top:compact ? 10 : 30, bottom:compact ? 12 : 16 }, theme:'grid', pageBreak:'auto', rowPageBreak:'avoid',
-    head:[['#', 'DATE / DAY', 'CLASS', 'SUBJECT', 'SUPERINTENDENT', 'OTHER STAFF']],
-    body:g.items.map((it, i) => [i + 1, (it.dt || '?') + (it.day ? (compact ? ' ' + String(it.day).slice(0, 3) : '\n' + it.day) : ''), it.cls.join(', '), it.sub.join(', '), it.staff[0] || '—', it.staff.slice(1).join(', ')]),
-    didDrawPage:() => { if(!compact && doc.internal.getCurrentPageInfo().pageNumber !== startPage) band(doc, 'Room tag · ' + title + ' (continued)'); },
+  doc.autoTable({ startY:Y, margin:{ left:compact ? 10 : 12, right:compact ? 10 : 12, top:compact ? 10 : 30, bottom:compact ? 12 : 14 }, theme:'grid', pageBreak:'auto', rowPageBreak:'avoid',
+    head:[['#', ...cols.map(c => NAME[c])]],
+    body:g.items.map((it, k) => [k + 1, ...cols.map(c => pdfTxt(cell(it, c)))]),
+    didDrawPage:() => { if(!compact && doc.internal.getCurrentPageInfo().pageNumber !== startPage) band(doc, PAGE_KT[kind] + ' · ' + title + ' (continued)'); },
     styles:{ font:'helvetica', fontSize:fs, halign:'center', valign:'middle', minCellHeight:rowH, cellPadding:compact ? { top:Math.max(0.5, 0.9 * scale), bottom:Math.max(0.5, 0.9 * scale), left:1.8, right:1.8 } : Math.max(0.8, 1.6 * scale), textColor:INK, lineColor:[90, 60, 50], lineWidth:0.3, overflow:'linebreak' },
     headStyles:{ fillColor:BROWN, textColor:[255, 255, 255], fontStyle:'bold', fontSize:Math.max(8, (compact ? 10.5 : 12) * scale), minCellHeight:Math.max(6, (compact ? 7.5 : 10) * scale) },
-    alternateRowStyles:{ fillColor:SOFT },
-    columnStyles:compact ? { 0:{ cellWidth:10, fontStyle:'bold', textColor:BROWN }, 1:{ cellWidth:33, fontStyle:'bold' }, 2:{ cellWidth:34, fontStyle:'bold' }, 3:{ cellWidth:46, fontStyle:'bold' }, 4:{ cellWidth:42, fontStyle:'bold' }, 5:{ halign:'left' } }
-                         : { 0:{ cellWidth:12, fontStyle:'bold', textColor:BROWN }, 1:{ cellWidth:44, fontStyle:'bold' }, 2:{ cellWidth:40, fontStyle:'bold' }, 3:{ cellWidth:58, fontStyle:'bold' }, 4:{ cellWidth:52, fontStyle:'bold' } },
-    didParseCell:h => { if(h.section === 'body' && g.items[h.row.index] && g.items[h.row.index].x) h.cell.styles.textColor = RED; } });
+    alternateRowStyles:{ fillColor:SOFT }, columnStyles:cs,
+    didParseCell:h => { if(h.section === 'body' && g.items[h.row.index] && g.items[h.row.index].x){ h.cell.styles.textColor = RED; } } });
 }
-async function buildRoomTags(){
+/** kind: teacher | room | date | class | subject | roomtags. only = some groups (e.g. one teacher for WhatsApp). */
+async function buildPages(kind, only){
   await pdfLibs(); await logo();
-  const G = groups('room').filter(g => g.items.length && g.label && !/^(no room|—|-)$/i.test(String(g.label).trim()))
+  let G = only || groups(kind === 'roomtags' ? 'room' : kind);
+  if(kind === 'roomtags') G = G.filter(g => g.items.length && g.label && !/^(no room|—|-)$/i.test(String(g.label).trim()))
     .sort((a, b) => String(roomNo(a.label)).localeCompare(String(roomNo(b.label)), undefined, { numeric:true }));
-  if(!G.length) throw new Error('No rooms in this duty list.');
+  G = G.filter(g => g.items.length);
+  if(!G.length) throw new Error('Nothing to print in this list.');
   const mk = () => new window.jspdf.jsPDF({ unit:'mm', format:'a4', orientation:'landscape' });
   const doc = mk();
-  doc.setProperties({ title:(EX.title || '') + ' — Room tags', author:'Jinnah College for Women', creator:'JCW attendance app' });
+  doc.setProperties({ title:(EX.title || '') + ' — ' + PAGE_KT[kind], author:'Jinnah College for Women', creator:'JCW attendance app' });
   G.forEach((g, i) => {
-    let sc = 1;                                                   // shrink until the room fits on ONE page
-    for(; sc > 0.36; sc -= 0.06){ const t = mk(); drawRoomTag(t, g, sc); if(t.internal.getNumberOfPages() === 1) break; }
+    let sc = 1;                                                   // shrink until the group fits on ONE page
+    for(; sc > 0.36; sc -= 0.06){ const t = mk(); drawGroupPage(t, kind, g, sc); if(t.internal.getNumberOfPages() === 1) break; }
     if(i) doc.addPage('a4', 'landscape');
-    drawRoomTag(doc, g, sc);                                      // (a very long room still continues on a 2nd page: no row is ever dropped)
+    drawGroupPage(doc, kind, g, sc);                              // (an extremely long group still continues: no row is ever dropped)
   });
   footers(doc);
-  return { blob:doc.output('blob'), name:fileName('roomtags', 'pdf') };
+  return { blob:doc.output('blob'), name:fileName(kind, 'pdf') };
 }
+const buildRoomTags = () => buildPages('roomtags');
 
 /* every file: Open · Print · Share (WhatsApp, Gmail, Drive…) · Download */
 const isPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
