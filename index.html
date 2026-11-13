@@ -6391,7 +6391,7 @@ async function nameFix(q, sheet, roll){
 }
 
 /* ----- Check everything: run the strength-sheet check on many workbooks in one go, then fix all ----- */
-let evs = { sel:store.get('evsel', null), busy:false, msg:'', res:{} };   // res[key] = { label, kind, res, fixed }
+let evs = { sel:store.get('evsel', null), busy:false, msg:'', res:{}, prog:{}, t0:0 };   // res[key] = { label, kind, res, fixed }
 function evTargets(){
   const out = SEAS.map(m => ({ key:'D_' + m, kind:'daily', mon:m, group:'Daily attendance', label:monName(m) }));
   (bk.list || []).forEach(b => out.push({ key:'B_' + b.key, kind:'book', book:b.key, group:b.group || 'Other', label:b.label.replace(/ (attendance|monthly test)$/i, '') }));
@@ -6424,29 +6424,43 @@ async function evCheckOne(t){
   if(t.kind === 'daily'){
     let cursor = 0, all = null;
     do{
+      evs.prog[t.key] = cursor ? 'reading sheets ' + Math.round(cursor / Math.max(1, all.total) * 100) + '%' : 'reading sheets…'; refreshEv();
       const r = await srv({ action:'roster_check', mon:t.mon, cursor }, 330000);
+      if(!r.ok) throw new Error(r.error || 'server error');
       if(!all) all = r; else { all.diffs = all.diffs.concat(r.diffs); all.checked += r.checked; }
       cursor = r.cursor; all.done = r.done;
 
     } while(!all.done);
-    return all.names ? all : mergeNames(all, await namesCheck({ kind:'daily', mon:t.mon }).catch(() => []));   // new server: names already checked
+    if(all.names) return all;                                                   // new server: names already checked
+    evs.prog[t.key] = 'checking names…'; refreshEv();
+    return mergeNames(all, await namesCheck({ kind:'daily', mon:t.mon }).catch(() => []));
   }
+  evs.prog[t.key] = 'reading sheets…'; refreshEv();
   const res = await srv({ action:'bk_check', book:t.book }, 330000);
+  if(!res.ok) throw new Error(res.error || 'server error');
   return res.names ? res : mergeNames(res, await namesCheck({ kind:'book', book:t.book }));
 }
 async function evCheck(){
   const T = evTargets().filter(evSelected); if(!T.length) return toast('Tick at least one workbook.');
-  evs.busy = true; evs.res = {};
+  evs.busy = true; evs.res = {}; evs.prog = {}; evs.t0 = Date.now();
   let next = 0, done = 0;
+  const show = () => {
+    const sec = Math.round((Date.now() - evs.t0) / 1000), clock = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+    const lines = T.filter(t => evs.prog[t.key]).map(t => '<br>· ' + esc(t.group) + ' · ' + esc(t.label) + ': ' + esc(evs.prog[t.key]));
+    evs.msg = '⏳ Working… <b>' + clock + '</b> · ' + done + ' of ' + T.length + ' done' + lines.join('') + (sec > 90 ? '<br><small>A whole month can take a few minutes. Keep this page open.</small>' : '');
+    refreshEv();
+  };
+  const tick = setInterval(show, 1000);
   const worker = async () => {
     while(next < T.length){
       const t = T[next++];
-      try{ evs.res[t.key] = { res:await evCheckOne(t) }; }catch(e){ evs.res[t.key] = { err:'Check stopped: ' + e.message }; }
-      done++; evs.msg = 'Checked ' + done + ' of ' + T.length + '…'; refreshEv();
+      try{ evs.res[t.key] = { res:await evCheckOne(t) }; evs.prog[t.key] = ''; }
+      catch(e){ evs.res[t.key] = { err:'Check stopped: ' + e.message }; evs.prog[t.key] = ''; toast(t.label + ': ' + e.message, 6000); }
+      done++; show();
     }
   };
-  evs.msg = 'Checking ' + T.length + ' workbook' + (T.length === 1 ? '' : 's') + ', five at a time…'; refreshEv();
-  await Promise.all([worker(), worker(), worker(), worker(), worker()]);
+  show();
+  try{ await Promise.all([worker(), worker(), worker(), worker(), worker()]); } finally { clearInterval(tick); }
   const n = T.reduce((a, t) => a + evCount(evs.res[t.key]), 0);
   evs.busy = false; evs.msg = n ? `<b style="color:var(--absent)">${n} difference${n === 1 ? '' : 's'} found.</b> Press <b>Fix all</b> on a line, or <b>Fix everything</b>.` : '<b style="color:var(--present)">✓ Every selected workbook matches the strength sheet.</b>';
   refreshEv();
