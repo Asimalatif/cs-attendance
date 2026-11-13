@@ -6330,13 +6330,12 @@ async function rosCheck(mon){
   ros = { mon, busy:true, res:null, pct:1, err:'' }; refreshRos();
   let cursor = 0, all = null;
   try{
-    const names = namesCheck({ kind:'daily', mon }).catch(() => []);
     do{
       const r = await srv({ action:'roster_check', mon, cursor }, 330000);
       if(!all) all = r; else { all.diffs = all.diffs.concat(r.diffs); all.checked += r.checked; }
       cursor = r.cursor; all.done = r.done; ros.pct = Math.round(r.cursor / Math.max(1, r.total) * 100); refreshRos();
     } while(!all.done);
-    ros.res = mergeNames(all, await names);
+    ros.res = all.names ? all : mergeNames(all, await namesCheck({ kind:'daily', mon }).catch(() => []));
   }catch(e){ ros.err = 'Check stopped: ' + e.message; }
   ros.busy = false; refreshRos();
   if(ros.res && ros.res.diffs.length) rosOpen();
@@ -6424,14 +6423,13 @@ function refreshEv(){ const c = $q('#evCard'); if(c){ const t = document.createE
 async function evCheckOne(t){
   if(t.kind === 'daily'){
     let cursor = 0, all = null;
-    const names = namesCheck({ kind:'daily', mon:t.mon }).catch(() => []);     // runs at the same time as the roster check
     do{
       const r = await srv({ action:'roster_check', mon:t.mon, cursor }, 330000);
       if(!all) all = r; else { all.diffs = all.diffs.concat(r.diffs); all.checked += r.checked; }
       cursor = r.cursor; all.done = r.done;
 
     } while(!all.done);
-    return mergeNames(all, await names);
+    return all.names ? all : mergeNames(all, await namesCheck({ kind:'daily', mon:t.mon }).catch(() => []));   // new server: names already checked
   }
   const res = await srv({ action:'bk_check', book:t.book }, 330000);
   return res.names ? res : mergeNames(res, await namesCheck({ kind:'book', book:t.book }));
