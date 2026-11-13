@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         JCW Portal Sync
 // @namespace    jcw-attendance
-// @version      1.3
+// @version      1.4
 // @description  Reads Jinnah College students from the UOP portal (read-only) and sends them to the JCW attendance system: fills only the empty cells of Transform-ALL-COLLEGE-STRENGTH, lists cancelled / migrated / disenrolled / transferred students for Left Students (moved only when you press the button) and feeds the health check.
 // @match        https://portal.uop.edu.pk/Student/Students*
 // @match        https://portal.uop.edu.pk/student/students*
@@ -133,6 +133,7 @@
     if (!id) id = idFrom(tr.outerHTML || '');
     return {
       id: sp(id), status: first(o, ['Status', 'StudentStatus']) || status, links,
+      listCourses: (Object.keys(o).find(h => /course|subject/i.test(h)) || '') ? o[Object.keys(o).find(h => /course|subject/i.test(h))] : '',
       row: { 'Student Id': sp(id), 'Enrollment#': first(o, ['Enrollment#', 'Enrollment No', 'EnrollmentNo', 'Enrollment']),
         'Reg#': first(o, ['Reg#', 'RegistrationNo', 'Registration No', 'Registration#', 'Registration']), 'Batch': first(o, ['Batch']), 'Session': first(o, ['Session']),
         'Student Name': first(o, ['Student Name', 'StudentName', 'Name']), 'Father Name': first(o, ['Father Name', 'FatherName']), 'Category': first(o, ['Category']),
@@ -218,9 +219,24 @@
     const yr = { '1st': [], '2nd': [] }; let lab = '';
     t.querySelectorAll('tr').forEach(tr => { const c = [...tr.children]; if (!c.length) return;
       if (c.length < 4 && /(1st|2nd|first|second)\s*year/i.test(txt(tr))) { lab = /2nd|second/i.test(txt(tr)) ? '2nd' : '1st'; return; }
-      if (c.length >= 4 && /^\d+$/.test(clean(txt(c[0])))) { const s = clean(txt(c[ti])); if (s && lab) yr[lab].push(s); } });
+      if (c.length >= 4 && /^\d+$/.test(clean(txt(c[0])))) {
+        const s = clean(txt(c[ti])), rt = txt(tr);
+        // the course code tells the year (JCW-ENG II-ENGLISH = 2nd Year), so a page without a "1st/2nd Year" heading still works
+        const y = /(^|[-\s])II\s*-/.test(rt) ? '2nd' : (lab || (/(^|[-\s])I\s*-/.test(rt) ? '1st' : ''));
+        if (s && y) yr[y].push(s);
+      } });
     ['1st', '2nd'].forEach(y => { for (let i = 0; i < 7; i++) out['sub' + (i + 1) + ' ' + y + ' year'] = yr[y][i] || ''; });
     return out;
+  }
+  /** "1) JCW-ENG II-ENGLISH (CH:4)-(Regular) 2) ..." from the Students list -> { '1st': [...], '2nd': [...] } */
+  function listCourses(text) {
+    const yr = { '1st': [], '2nd': [] };
+    String(text || '').split(/(?:^|\s)\d+\)\s*/).map(x => x.trim()).filter(Boolean).forEach(c => {
+      c = c.replace(/\s*\(CH:[^)]*\).*$/i, '').trim();
+      const m = c.match(/(?:^|[-\s])(II|I)\s*-\s*(.+)$/);
+      if (m) yr[m[1] === 'II' ? '2nd' : '1st'].push(sp(m[2]).toUpperCase());
+    });
+    return yr;
   }
   async function details(it) {
     const row = Object.assign({}, it.row), warn = [];
@@ -244,6 +260,12 @@
     }
     const cu = it.links.find(l => /^courses$/i.test(l.text)) || it.links.find(l => /courses/i.test(l.text)) || it.links.find(l => /courses/i.test(l.href));
     if (cu) { try { Object.assign(row, courses(await getText(cu.href))); } catch (e) { if (e.message === 'LOGIN') throw e; warn.push('courses'); } }
+    // a year with no subjects from the Courses page: take them from the course list on the Students page
+    const lc = listCourses(it.listCourses);
+    ['1st', '2nd'].forEach(y => {
+      let have = false; for (let i = 1; i <= 7; i++) if (row['sub' + i + ' ' + y + ' year']) have = true;
+      if (!have && lc[y].length) for (let i = 0; i < 7; i++) row['sub' + (i + 1) + ' ' + y + ' year'] = lc[y][i] || '';
+    });
     row['Load Status'] = warn.length ? 'OK (' + warn.join(', ') + ' failed)' : 'OK';
     return row;
   }
