@@ -6330,12 +6330,13 @@ async function rosCheck(mon){
   ros = { mon, busy:true, res:null, pct:1, err:'' }; refreshRos();
   let cursor = 0, all = null;
   try{
+    const names = namesCheck({ kind:'daily', mon }).catch(() => []);
     do{
       const r = await srv({ action:'roster_check', mon, cursor }, 330000);
       if(!all) all = r; else { all.diffs = all.diffs.concat(r.diffs); all.checked += r.checked; }
       cursor = r.cursor; all.done = r.done; ros.pct = Math.round(r.cursor / Math.max(1, r.total) * 100); refreshRos();
     } while(!all.done);
-    ros.res = mergeNames(all, await namesCheck({ kind:'daily', mon }));
+    ros.res = mergeNames(all, await names);
   }catch(e){ ros.err = 'Check stopped: ' + e.message; }
   ros.busy = false; refreshRos();
   if(ros.res && ros.res.diffs.length) rosOpen();
@@ -6423,16 +6424,17 @@ function refreshEv(){ const c = $q('#evCard'); if(c){ const t = document.createE
 async function evCheckOne(t){
   if(t.kind === 'daily'){
     let cursor = 0, all = null;
+    const names = namesCheck({ kind:'daily', mon:t.mon }).catch(() => []);     // runs at the same time as the roster check
     do{
       const r = await srv({ action:'roster_check', mon:t.mon, cursor }, 330000);
       if(!all) all = r; else { all.diffs = all.diffs.concat(r.diffs); all.checked += r.checked; }
       cursor = r.cursor; all.done = r.done;
 
     } while(!all.done);
-    return mergeNames(all, await namesCheck({ kind:'daily', mon:t.mon }));
+    return mergeNames(all, await names);
   }
   const res = await srv({ action:'bk_check', book:t.book }, 330000);
-  return mergeNames(res, await namesCheck({ kind:'book', book:t.book }));
+  return res.names ? res : mergeNames(res, await namesCheck({ kind:'book', book:t.book }));
 }
 async function evCheck(){
   const T = evTargets().filter(evSelected); if(!T.length) return toast('Tick at least one workbook.');
@@ -6442,11 +6444,11 @@ async function evCheck(){
     while(next < T.length){
       const t = T[next++];
       try{ evs.res[t.key] = { res:await evCheckOne(t) }; }catch(e){ evs.res[t.key] = { err:'Check stopped: ' + e.message }; }
-      done++; evs.msg = 'Checked ' + done + ' of ' + T.length + '… (three at a time)'; refreshEv();
+      done++; evs.msg = 'Checked ' + done + ' of ' + T.length + '…'; refreshEv();
     }
   };
-  evs.msg = 'Checking ' + T.length + ' workbook' + (T.length === 1 ? '' : 's') + ', three at a time…'; refreshEv();
-  await Promise.all([worker(), worker(), worker()]);
+  evs.msg = 'Checking ' + T.length + ' workbook' + (T.length === 1 ? '' : 's') + ', five at a time…'; refreshEv();
+  await Promise.all([worker(), worker(), worker(), worker(), worker()]);
   const n = T.reduce((a, t) => a + evCount(evs.res[t.key]), 0);
   evs.busy = false; evs.msg = n ? `<b style="color:var(--absent)">${n} difference${n === 1 ? '' : 's'} found.</b> Press <b>Fix all</b> on a line, or <b>Fix everything</b>.` : '<b style="color:var(--present)">✓ Every selected workbook matches the strength sheet.</b>';
   refreshEv();
@@ -6511,7 +6513,7 @@ function bkCard(){
 function refreshBk(){ const c = $q('#bkCard'); if(c){ const t = document.createElement('div'); t.innerHTML = bkCard(); c.replaceWith(t.firstElementChild); } }
 async function bkCheck(key){
   bk.key = key; bk.busy = true; bk.res = null; bk.err = ''; refreshBk();
-  try{ bk.res = mergeNames(await srv({ action:'bk_check', book:key }, 330000), await namesCheck({ kind:'book', book:key })); }catch(e){ bk.err = 'Check stopped: ' + e.message; }
+  try{ const r = await srv({ action:'bk_check', book:key }, 330000); bk.res = r.names ? r : mergeNames(r, await namesCheck({ kind:'book', book:key })); }catch(e){ bk.err = 'Check stopped: ' + e.message; }
   bk.busy = false; refreshBk();
   if(bk.res && bk.res.diffs.length) bkOpen();
 }
