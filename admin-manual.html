@@ -332,6 +332,7 @@ if(!r.ok) throw new Error(r.error);</pre>
 <tr><td>Teachers get "Lock timeout" / items stay in Waiting at the end of a period</td><td>Too many saves at once. Deploy Code.gs v7.4.1 (short save lock, 60 s wait); the Waiting items are sent again by themselves.</td></tr>
 <tr><td>Check everything stays on "Working…" for long</td><td>Old Code.gs (no fast check) → deploy v7.4.1; or the Google Sheets API advanced service is off (Services → Google Sheets API).</td></tr>
 <tr><td>"Exceeded maximum execution time"</td><td>Apps Script stops after 6 minutes; checks and fixes work in rounds — run again.</td></tr>
+<tr><td>PDFs in colour / too much toner</td><td>Black &amp; white is the default (13 Nov 2026): <code>inksaver.js</code> (loaded first on every page that makes PDFs) turns every jsPDF colour into black text, light-grey or white fills and grey lines; printed pages drop backgrounds. Server PDFs: <code>INK_SAVER = true</code> in Code.gs (<code>inkHtml_</code> for HTML PDFs; attendance-sheet PDFs are exported from a colourless temporary copy). ID cards keep their colours. Colour again on one browser: <code>localStorage.setItem('jcw_color_pdf','1')</code>; on the server: <code>INK_SAVER = false</code>.</td></tr>
 <tr><td>Phones show an old version</td><td><code>VERSION</code> in sw.js was not changed; or the phone has been offline.</td></tr></table>
 </section>
 </main></div>
