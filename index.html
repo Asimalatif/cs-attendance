@@ -8046,5 +8046,135 @@ document.addEventListener('visibilitychange', () => { if(document.hidden){ stopS
 window.JCWVOICE = { rollCall, sayAbsent, speakMarks, settings, speak, markOf, wordsToNums, stop:() => { Ear.stop(); stopSpeak(); } };
 })();
 </script>
+<script>
+/* ===================== v7: tidy admin screens — Home, Reports and College show a menu of tiles; tap a tile to open that tool ===================== */
+(function(){
+const css = `
+.org-menu{grid-column:1/-1;display:flex;flex-direction:column;gap:4px;min-width:0}
+.org-g{display:flex;align-items:center;gap:8px;margin:12px 2px 4px;font-size:12px;font-weight:850;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.org-g::after{content:"";flex:1;height:1px;background:var(--line)}
+.org-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:10px}
+.org-t{--c:var(--c1);--t:var(--t1);position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;text-decoration:none;color:var(--ink);
+  padding:13px 12px 12px;min-height:104px;border:1.5px solid var(--line);border-radius:16px;background:linear-gradient(160deg,var(--t),var(--surface) 75%);box-shadow:var(--shadow);transition:transform .12s,border-color .12s,box-shadow .12s}
+.org-t:hover{transform:translateY(-2px);border-color:var(--c);box-shadow:var(--shadow2,var(--shadow))}
+.org-t .oi{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:var(--surface);border:1.5px solid var(--line);color:var(--c);flex:none}
+.org-t .oi svg{width:19px;height:19px}
+.org-t b{font-size:14.5px;line-height:1.2;font-weight:800}
+.org-t small{font-size:12px;line-height:1.3;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.org-t .oc{position:absolute;top:10px;right:10px;min-width:22px;padding:2px 7px;border-radius:999px;background:var(--c);color:var(--surface);font-size:11.5px;font-weight:850;text-align:center}
+.org-t .ox{position:absolute;top:12px;right:12px;color:var(--muted);font-size:13px}
+.org-c1{--c:var(--c1);--t:var(--t1)}.org-c2{--c:var(--c2);--t:var(--t2)}.org-c3{--c:var(--c3);--t:var(--t3)}.org-c4{--c:var(--c4);--t:var(--t4)}.org-c5{--c:var(--c5);--t:var(--t5)}.org-c6{--c:var(--c6);--t:var(--t6)}
+.org-back{grid-column:1/-1;display:flex;align-items:center;gap:10px;margin:2px 0 2px}
+.org-back button{display:inline-flex;align-items:center;gap:6px;padding:8px 14px 8px 10px;border-radius:999px;border:1.5px solid var(--tabline);background:var(--tabbg);color:var(--tabink);font-weight:800}
+.org-back span{font-size:12.5px;color:var(--muted)}
+.org-hide{display:none!important}
+.org-solo{grid-template-columns:minmax(0,1fr)!important}
+@media(max-width:420px){.org-grid{grid-template-columns:1fr 1fr;gap:8px}.org-t{min-height:96px;padding:11px 10px}.org-t small{-webkit-line-clamp:2}}`;
+const st = document.createElement('style'); st.id = 'orgCss'; st.textContent = css; document.head.appendChild(st);
+
+/* groups: [title, colour, regex on the card title]; cards are shown in the order of the groups. 'pin' = always visible above the tiles */
+const CFG = {
+  home:{ pin:/^Today\b/i, groups:[
+    ['My classes', 1, /Tests|exams|My sections|Chief Proctor|My timetable/i],
+    ['Students', 2, /Student search|Approved leaves/i],
+    ['College', 3, /overview|Free teachers/i] ] },
+  reports:{ pin:null, groups:[
+    ['Make a report', 1, /Create a report|Shortcuts|Official sheet/i],
+    ['Students', 2, /Low attendance|Early warning|Student profile|Toppers|Bunkers/i] ] },
+  admin:{ pin:/^Teachers, sections/i, groups:[
+    ['Students & admissions', 1, /Admissions|ID cards|Students who left|Student result page/i],
+    ['Attendance & records', 2, /Month sheets|Check everything|Approved leaves|shortage|Bunkers|Record summary/i],
+    ['Exams & results', 4, /Board results|certificates|duty lists/i],
+    ['Timetable & reports', 3, /Timetable|Admin tools|College reports/i],
+    ['System', 5, /health check|portal sync/i] ] }
+};
+let openKey = '', lastV = '';
+const txt = el => (el ? el.textContent : '').replace(/\s+/g, ' ').trim();
+function cardTitle(c){
+  const h = c.querySelector(':scope > h3, :scope > summary h3, :scope > summary b'); if(!h) return '';
+  const k = h.cloneNode(true); k.querySelectorAll('button,.ct,.tdate,.pill,small,svg').forEach(x => x.remove());
+  return txt(k);
+}
+function topCards(main){
+  return [...main.querySelectorAll('section.card, details.card')].filter(c => !c.parentElement.closest('.card'));
+}
+/** one action in the card (outside its heading) → the tile does that action straight away */
+function single(c){
+  const acts = [...c.querySelectorAll('a[href], button, input, select, textarea')].filter(x => !x.closest('h3') && !x.closest('summary'));
+  return acts.length === 1 && (acts[0].tagName === 'A' || acts[0].tagName === 'BUTTON') ? acts[0] : null;
+}
+function organize(){
+  const v = document.body.dataset.screen, C = CFG[v], main = document.querySelector('#app main');
+  if(v !== lastV){ lastV = v; openKey = ''; }
+  if(!C || !main) return;
+  main.querySelectorAll('.org-menu,.org-back').forEach(x => x.remove());
+  main.querySelectorAll('.org-hide').forEach(x => x.classList.remove('org-hide'));
+  main.querySelectorAll('.org-solo').forEach(x => x.classList.remove('org-solo'));
+  const cards = topCards(main).map(c => ({ c, t:cardTitle(c) })).filter(x => x.t);
+  const pinned = cards.filter(x => C.pin && C.pin.test(x.t)), tools = cards.filter(x => !pinned.includes(x));
+  if(tools.length < 3) return;                                       // a short screen needs no menu
+  tools.forEach(x => { x.g = C.groups.findIndex(g => g[2].test(x.t)); if(x.g < 0) x.g = C.groups.length; });
+  const cur = openKey && tools.find(x => x.t === openKey);
+  if(cur){
+    /* one tool open: hide everything else on the screen, a back button on top */
+    let n = cur.c;
+    while(n && n !== main){ [...n.parentElement.children].forEach(s => { if(s !== n) s.classList.add('org-hide'); }); n = n.parentElement; if(n !== main) n.classList.add('org-solo'); }
+    const g = C.groups[cur.g];
+    cur.c.insertAdjacentHTML('beforebegin', `<div class="org-back"><button type="button" data-orgback="1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg> All tools</button><span>${g ? esc(g[0]) : 'More'}</span></div>`);
+    if(cur.c.tagName === 'DETAILS' && !cur.c.open) cur.c.open = true;
+    return;
+  }
+  openKey = '';
+  tools.forEach(x => x.c.classList.add('org-hide'));
+  const groups = C.groups.concat([['More', 6]]);
+  let h = '<div class="org-menu">';
+  groups.forEach((g, gi) => {
+    const L = tools.filter(x => x.g === gi); if(!L.length) return;
+    h += `<div class="org-g">${esc(g[0])}</div><div class="org-grid">`;
+    L.forEach(x => {
+      const h3 = x.c.querySelector('h3, summary'), ic = h3 && h3.querySelector('svg'), ct = h3 && h3.querySelector('.ct');
+      let sub = txt(x.c.querySelector('.sub') || (x.c.tagName === 'DETAILS' ? x.c.querySelector('summary small') : null));
+      sub = sub.split(/(?<=\.)\s|:\s/)[0].slice(0, 90);
+      const one = single(x.c), link = one && one.tagName === 'A' ? one : null;
+      const inner = `<span class="oi">${ic ? ic.outerHTML : ''}</span><b>${esc(x.t)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}${ct && txt(ct) ? `<span class="oc">${esc(txt(ct).split(' ')[0])}</span>` : link ? '<span class="ox">↗</span>' : ''}`;
+      h += link ? `<a class="org-t org-c${g[1]}" href="${esc(link.getAttribute('href'))}"${link.target ? ` target="${esc(link.target)}" rel="noopener"` : ''}${link.id ? ` data-orgproxy="${esc(link.id)}"` : ''}>${inner}</a>`
+        : `<button type="button" class="org-t org-c${g[1]}" data-orgopen="${esc(x.t)}"${one && one.id ? ` data-orgproxy="${esc(one.id)}"` : ''}>${inner}</button>`;
+    });
+    h += '</div>';
+  });
+  h += '</div>';
+  const first = pinned.length ? pinned[pinned.length - 1].c : null;
+  if(first) first.insertAdjacentHTML('afterend', h); else tools[0].c.insertAdjacentHTML('beforebegin', h);
+}
+let busy = false;
+function safeOrganize(){ if(busy) return; busy = true; try{ organize(); }catch(e){ console.error(e); } finally{ obs.takeRecords(); busy = false; } }
+/* some cards redraw themselves after their data arrives (Students who left, Month sheets …): put the screen in order again */
+let tmr = 0;
+const isCard = n => n.nodeType === 1 && (n.matches('section.card, details.card') || n.querySelector('section.card, details.card'));
+const obs = new MutationObserver(list => {
+  if(busy || !CFG[document.body.dataset.screen]) return;
+  if(list.some(m => [...m.addedNodes].some(isCard))){ clearTimeout(tmr); tmr = setTimeout(safeOrganize, 30); }
+});
+obs.observe(document.getElementById('app'), { childList:true, subtree:true });
+const base = window.renderMain;
+window.renderMain = function(){ const r = base.apply(this, arguments); clearTimeout(tmr); safeOrganize(); return r; };
+document.addEventListener('click', ev => {
+  const t = ev.target; if(!t.closest) return;
+  const b = t.closest('[data-orgopen]');
+  if(b){
+    ev.preventDefault();
+    const px = b.dataset.orgproxy && document.getElementById(b.dataset.orgproxy);
+    if(px && px.tagName === 'BUTTON'){ px.click(); return; }       // a one-button tool (health check): just run it
+    openKey = b.dataset.orgopen; safeOrganize(); window.scrollTo(0, 0); return;
+  }
+  if(t.closest('[data-orgback]')){ if(history.state && history.state.org){ history.back(); return; } openKey = ''; safeOrganize(); window.scrollTo(0, 0); }
+});
+/* the browser / phone Back button closes an open tool first */
+window.addEventListener('popstate', () => { if(openKey){ openKey = ''; safeOrganize(); window.scrollTo(0, 0); } });
+document.addEventListener('click', ev => { if(ev.target.closest && ev.target.closest('[data-orgopen]') && !ev.target.closest('[data-orgproxy]')) try{ history.pushState({ org:1 }, ''); }catch(e){} }, true);
+window.JCWORG = { organize:safeOrganize, close(){ openKey = ''; safeOrganize(); } };
+if(document.body.dataset.screen) safeOrganize();
+})();
+</script>
 </body>
 </html>
