@@ -2567,26 +2567,37 @@ async function buildPdf(kind, only){
 const roomNo = label => String(label || '').replace(/^\s*room\s*(no\.?|#)?\s*[:#.-]?\s*/i, '').trim() || String(label || '');
 function drawRoomTag(doc, g, scale){
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
-  band(doc, 'Room tag');
+  const n = Math.max(1, g.items.length), compact = n > 10;            // a big room: no header band, the whole page for its rows
   const nm = roomNo(g.label), title = (/^\d/.test(nm) ? 'ROOM # ' + nm : String(g.label).toUpperCase());
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(Math.max(20, 34 * scale)); doc.setTextColor(...BROWN);
-  doc.text(title, W / 2, 41, { align:'center' });
-  doc.setDrawColor(...GOLD); doc.setLineWidth(0.9); doc.line(W / 2 - 40, 45, W / 2 + 40, 45);
-  doc.setFontSize(11.5); doc.setTextColor(...INK);
   const tm = EX.timing || '';
-  doc.text((EX.title || '').toUpperCase(), 12, 53);
-  if(tm){ doc.setTextColor(...RED); doc.text('Timing: ' + tm, W - 12, 53, { align:'right' }); }
-  doc.setTextColor(...MUT); doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-  doc.text(g.items.length + ' paper' + (g.items.length === 1 ? '' : 's') + ' in this room', W / 2, 53, { align:'center' });
-  const Y = 57, n = Math.max(1, g.items.length), avail = H - 22 - Y - 12;
-  const compact = n > 10, per = Math.min(16, avail / n), rowH = Math.max(3, per * scale), fs = Math.max(6.5, Math.min(compact ? 11 : 15, per * (compact ? 1.6 : 0.95)) * scale);
+  let Y;
+  if(!compact){
+    band(doc, 'Room tag');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(Math.max(20, 34 * scale)); doc.setTextColor(...BROWN);
+    doc.text(title, W / 2, 41, { align:'center' });
+    doc.setDrawColor(...GOLD); doc.setLineWidth(0.9); doc.line(W / 2 - 40, 45, W / 2 + 40, 45);
+    doc.setFontSize(11.5); doc.setTextColor(...INK); doc.text((EX.title || '').toUpperCase(), 12, 53);
+    if(tm){ doc.setTextColor(...RED); doc.text('Timing: ' + tm, W - 12, 53, { align:'right' }); }
+    doc.setTextColor(...MUT); doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+    doc.text(n + ' paper' + (n === 1 ? '' : 's') + ' in this room', W / 2, 53, { align:'center' });
+    Y = 57;
+  } else {                                                            // one slim line: room · exam · timing
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(...BROWN);
+    doc.text(title, W / 2, 13, { align:'center' });
+    doc.setFontSize(9.5); doc.setTextColor(...INK); doc.text('JINNAH COLLEGE FOR WOMEN  ·  ' + (EX.title || '').toUpperCase(), 10, 13);
+    if(tm){ doc.setTextColor(...RED); doc.text('Timing: ' + tm, W - 10, 13, { align:'right' }); }
+    doc.setDrawColor(...GOLD); doc.setLineWidth(0.6); doc.line(10, 16, W - 10, 16);
+    Y = 18.5;
+  }
+  const avail = H - Y - (compact ? 13 : 22) - (compact ? 0 : 12);
+  const per = Math.min(16, avail / n), rowH = Math.max(3, per * scale), fs = Math.max(6.5, Math.min(compact ? 12 : 15, per * (compact ? 1.6 : 0.95)) * scale);
   const startPage = doc.internal.getCurrentPageInfo().pageNumber;
-  doc.autoTable({ startY:Y, margin:{ left:12, right:12, top:30, bottom:16 }, theme:'grid', pageBreak:'auto', rowPageBreak:'avoid',
+  doc.autoTable({ startY:Y, margin:{ left:compact ? 10 : 12, right:compact ? 10 : 12, top:compact ? 10 : 30, bottom:compact ? 12 : 16 }, theme:'grid', pageBreak:'auto', rowPageBreak:'avoid',
     head:[['#', 'DATE / DAY', 'CLASS', 'SUBJECT', 'SUPERINTENDENT', 'OTHER STAFF']],
     body:g.items.map((it, i) => [i + 1, (it.dt || '?') + (it.day ? (compact ? ' ' + String(it.day).slice(0, 3) : '\n' + it.day) : ''), it.cls.join(', '), it.sub.join(', '), it.staff[0] || '—', it.staff.slice(1).join(', ')]),
-    didDrawPage:() => { if(doc.internal.getCurrentPageInfo().pageNumber !== startPage) band(doc, 'Room tag · ' + title + ' (continued)'); },
+    didDrawPage:() => { if(!compact && doc.internal.getCurrentPageInfo().pageNumber !== startPage) band(doc, 'Room tag · ' + title + ' (continued)'); },
     styles:{ font:'helvetica', fontSize:fs, halign:'center', valign:'middle', minCellHeight:rowH, cellPadding:compact ? Math.max(0.5, 0.9 * scale) : Math.max(0.8, 1.6 * scale), textColor:INK, lineColor:[90, 60, 50], lineWidth:0.3, overflow:'linebreak' },
-    headStyles:{ fillColor:BROWN, textColor:[255, 255, 255], fontStyle:'bold', fontSize:Math.max(8.5, 12 * scale), minCellHeight:Math.max(7, 10 * scale) },
+    headStyles:{ fillColor:BROWN, textColor:[255, 255, 255], fontStyle:'bold', fontSize:Math.max(8, (compact ? 10.5 : 12) * scale), minCellHeight:Math.max(6, (compact ? 7.5 : 10) * scale) },
     alternateRowStyles:{ fillColor:SOFT },
     columnStyles:{ 0:{ cellWidth:12, fontStyle:'bold', textColor:BROWN }, 1:{ cellWidth:compact ? 40 : 44, fontStyle:'bold' }, 2:{ cellWidth:40, fontStyle:'bold' }, 3:{ cellWidth:58, fontStyle:'bold' }, 4:{ cellWidth:52, fontStyle:'bold' } },
     didParseCell:h => { if(h.section === 'body' && g.items[h.row.index] && g.items[h.row.index].x) h.cell.styles.textColor = RED; } });
