@@ -235,10 +235,10 @@ let pnew = ls.get('adm_pnew', null);          // students Enrolled on the portal
 let pnSel = ls.get('adm_pn_sel', {});         // portal ID -> { on, program, year, section, rollNo, quota, rollManual, secManual }
 let pnHide = ls.get('adm_pn_hide', []);       // portal IDs you chose to hide
 let pnShowHidden = false, pnLoading = false, pnBusy = false;
-let rfAns = {};   // row -> quota you accepted ('' = keep)
-let rf = null, rfBusy = false, rfFields = ls.get('adm_rf_fields', ['quota', 'hq', 'aggregate', 'merit', 'room']), rfShow = '';
-const RF = { quota:'Quota (portal category)', hq:'HQ (Hafiz-e-Quran)', aggregate:'Aggregate', merit:'MeritNo', room:'Room (timetable)' };
-const RFN = { quota:'Quota', hq:'HQ', aggregate:'Aggregate', merit:'MeritNo', room:'Room' };
+let rfAns = {}, rfAll = {}, rfCol = '';   // 'row|field' -> accepted value ('' = keep) · field -> accept the whole column
+let rf = null, rfBusy = false, rfFields = ls.get('adm_rf_fields', ['portal', 'hq', 'aggregate', 'merit', 'room']).map(f => f === 'quota' ? 'portal' : f), rfShow = '';
+const RF = { portal:'Every column vs portal (ask me)', hq:'HQ (Hafiz-e-Quran)', aggregate:'Aggregate', merit:'MeritNo', room:'Room (timetable)' };
+const RFN = { portal:'Accepted from portal', hq:'HQ', aggregate:'Aggregate', merit:'MeritNo', room:'Room' };
 const saveQ = () => { ls.set('adm_q', queue); paintBadge(); };
 
 async function api(payload, ms = 60000){
@@ -854,12 +854,12 @@ async function pnAdd(list, force){
 
 /* ---------- update everybody from the portal: quota, HQ, aggregate, merit no, room ---------- */
 function rfHtml(){
-  const nAcc = rf ? Object.values(rfAns).filter(Boolean).length : 0;
-  const cnt = rf ? rfFields.filter(f => f !== 'quota').reduce((a, f) => a + (rf.counts[f] || 0), 0) + nAcc : 0;
+  const nAcc = rf && rf.ask ? rf.ask.filter(a => !a.info && (rfAns[a.key] || (rfAll[a.f] && a.suggest))).length : 0;
+  const cnt = rf ? rfFields.filter(f => f !== 'portal').reduce((a, f) => a + (rf.counts[f] || 0), 0) + nAcc : 0;
   const list = rf ? rf.changes.filter(c => !rfShow || c.field === RFN[rfShow]) : [];
   return `<section class="card"><h3>Update all students from the portal</h3>
     <div class="sub">The portal sync only fills <b>empty</b> cells. This rewrites these columns of Transform-ALL-COLLEGE-STRENGTH for every student:
-    <b>Quota</b> = portal category, <b>only where you press Accept</b> (2nd Year migration is not touched) · <b>HQ</b> = portal Hafiz-e-Quran · <b>Aggregate</b> = (Obtained Marks + 20 if HQ is Yes) × 100 / Total Marks ·
+    <b>Every column vs portal</b> = name, father name, quota, DOB, contact, email, picture, board, passing year, matric roll no, marks, challans, batch, subjects, portal ID (plus Enroll#, program, class, section, status shown for information): <b>only what you Accept</b> is written · <b>HQ</b> = portal Hafiz-e-Quran · <b>Aggregate</b> = (Obtained Marks + 20 if HQ is Yes) × 100 / Total Marks ·
     <b>MeritNo</b> = 1st Year, Open Quota of each program, highest Aggregate = 1 (other quotas keep theirs) · <b>Room</b> = the section's room in the Timetable.</div>
     <div style="display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:10px">${Object.keys(RF).map(f => `<label style="display:flex;gap:6px;align-items:center;margin:0;font-weight:700"><input type="checkbox" data-rf="${f}" ${rfFields.includes(f) ? 'checked' : ''} style="width:20px;height:20px;min-height:0">${RF[f]}</label>`).join('')}</div>
     <div class="acts"><button class="btn" type="button" id="rfPre" ${online() && !rfBusy && rfFields.length ? '' : 'disabled'}>${rfBusy ? 'Working…' : 'Preview changes'}</button>
@@ -873,24 +873,35 @@ function rfHtml(){
   </section>`;
 }
 function rfAskHtml(){
-  if(!rf || rf.applied || !rf.ask || !rf.ask.length || (rfShow && rfShow !== 'quota')) return '';
-  const nAcc = rf.ask.filter(a => rfAns[a.row]).length;
+  if(!rf || rf.applied || !rf.ask || !rf.ask.length) return '';
+  const by = {}; rf.ask.forEach(a => (by[a.label] = by[a.label] || []).push(a));
+  const cols = Object.keys(by), cur = by[rfCol] ? rfCol : cols[0], L = by[cur];
+  const accN = lab => (by[lab] || []).filter(a => !a.info && (rfAns[a.key] || (rfAll[a.f] && a.suggest))).length;
+  const f0 = L[0].f, info = L.every(a => a.info);
+  const shown = L.slice(0, 300);
   return `<div class="card" style="padding:12px;margin-top:10px;border-top:4px solid var(--mid)">
-    <h3 style="margin:0">Quota on the portal ≠ strength sheet (${rf.ask.length})</h3>
-    <div class="sub">Nothing changes unless you press <b>Accept</b>. ${nAcc} accepted.</div>
-    <div class="acts" style="margin-top:8px"><button class="btn small" type="button" id="rfAccAll">Accept all with a suggestion</button><button class="btn small" type="button" id="rfKeepAll">Keep all</button></div>
-    <div style="max-height:60vh;overflow:auto;margin-top:8px"><table><thead><tr><th>Student</th><th>Strength sheet</th><th>Portal</th><th>Your answer</th></tr></thead><tbody>
-    ${rf.ask.map(a => { const v = rfAns[a.row] || '';
-      return `<tr><td><b>${esc(a.name)}</b><div class="sub">${esc(a.roll)} · ${esc(a.pcs)}</div></td><td>${esc(a.now || '–')}</td><td>${esc(a.portal)}${a.suggest ? '<div class="sub">= ' + esc(a.suggest) + '</div>' : '<div class="sub" style="color:var(--mid)">not a known quota</div>'}</td>
-        <td class="nw">${a.suggest ? `<button class="btn small${v === a.suggest ? ' primary' : ''}" type="button" data-qa="${a.row}" data-qv="${esc(a.suggest)}">Accept</button> ` : ''}<button class="btn small${!v ? ' primary' : ''}" type="button" data-qa="${a.row}" data-qv="">Keep</button>
-        <select data-qs="${a.row}" style="min-height:36px;margin-top:6px;font-size:13px"><option value="">${a.suggest ? 'or choose…' : 'Choose quota…'}</option>${rf.quotas.map(q => `<option ${v === q && v !== a.suggest ? 'selected' : ''}>${esc(q)}</option>`).join('')}</select></td></tr>`; }).join('')}
-    </tbody></table></div></div>`;
+    <h3 style="margin:0">Strength sheet ≠ portal (${rf.ask.length})</h3>
+    <div class="sub">Every column is compared with the portal copy. Nothing is taken from the portal unless you press <b>Accept</b>. Tap a column:</div>
+    <div class="acts" style="margin-top:8px;flex-wrap:wrap">${cols.map(c => `<button class="btn small${c === cur ? ' primary' : ''}" type="button" data-rcol="${esc(c)}">${esc(c)} ${by[c].length}${accN(c) ? ' · ✓' + accN(c) : ''}</button>`).join('')}</div>
+    ${info ? `<div class="seat near" style="margin-top:8px">${esc(L[0].info)}.</div>` : `<div class="acts" style="margin-top:8px"><button class="btn small" type="button" id="rfAccAll">${rfAll[f0] ? '✓ ' : ''}Accept all ${esc(cur)} from the portal</button><button class="btn small" type="button" id="rfKeepAll">Keep all ${esc(cur)}</button></div>`}
+    <div style="max-height:60vh;overflow:auto;margin-top:8px"><table><thead><tr><th>Student</th><th>Strength sheet</th><th>Portal</th>${info ? '' : '<th>Your answer</th>'}</tr></thead><tbody>
+    ${shown.map(a => { const v = rfAns[a.key] || (rfAll[a.f] && a.suggest ? (a.f === 'quota' ? a.suggest : 'yes') : '');
+      const portalTxt = esc(a.portal) + (a.f === 'quota' ? (a.suggest ? '<div class="sub">= ' + esc(a.suggest) + '</div>' : '<div class="sub" style="color:var(--mid)">not a known quota</div>') : '');
+      return `<tr><td><b>${esc(a.name)}</b><div class="sub">${esc(a.roll)} · ${esc(a.pcs)}</div></td><td class="sub">${esc(a.now || '–')}</td><td>${portalTxt}</td>
+        ${a.info ? '' : `<td class="nw">${a.suggest ? `<button class="btn small${v && v !== '' && (a.f !== 'quota' || v === a.suggest) ? ' primary' : ''}" type="button" data-qa="${esc(a.key)}" data-qv="${esc(a.f === 'quota' ? a.suggest : 'yes')}">Accept</button> ` : ''}<button class="btn small${!v ? ' primary' : ''}" type="button" data-qa="${esc(a.key)}" data-qv="">Keep</button>
+        ${a.f === 'quota' ? `<select data-qs="${esc(a.key)}" style="min-height:36px;margin-top:6px;font-size:13px"><option value="">${a.suggest ? 'or choose…' : 'Choose quota…'}</option>${rf.quotas.map(q => `<option ${v === q && v !== a.suggest ? 'selected' : ''}>${esc(q)}</option>`).join('')}</select>` : ''}</td>`}</tr>`; }).join('')}
+    </tbody></table></div>${L.length > shown.length ? `<div class="sub">First 300 of ${L.length} shown; “Accept all” covers all ${L.length}.</div>` : ''}</div>`;
 }
 function wireRf(){
-  document.querySelectorAll('[data-qa]').forEach(b => b.onclick = () => { const y = window.scrollY; rfAns[b.dataset.qa] = b.dataset.qv; render(); window.scrollTo(0, y); });
+  document.querySelectorAll('[data-qa]').forEach(b => b.onclick = () => { const y = window.scrollY, a = rf.ask.find(x => x.key === b.dataset.qa);
+    rfAns[b.dataset.qa] = b.dataset.qv;
+    if(!b.dataset.qv && a && rfAll[a.f]){ rfAll[a.f] = false; rf.ask.forEach(x => { if(x.f === a.f && x.key !== a.key && x.suggest) rfAns[x.key] = x.f === 'quota' ? x.suggest : 'yes'; }); }
+    render(); window.scrollTo(0, y); });
   document.querySelectorAll('[data-qs]').forEach(el => el.onchange = () => { const y = window.scrollY; rfAns[el.dataset.qs] = el.value; render(); window.scrollTo(0, y); });
-  const AA = $('#rfAccAll'); if(AA) AA.onclick = () => { rf.ask.forEach(a => { if(a.suggest) rfAns[a.row] = a.suggest; }); render(); };
-  const KA = $('#rfKeepAll'); if(KA) KA.onclick = () => { rfAns = {}; render(); };
+  document.querySelectorAll('[data-rcol]').forEach(b => b.onclick = () => { rfCol = b.dataset.rcol; render(); });
+  const curF = () => { const a = rf.ask.find(x => x.label === (rf.ask.some(y => y.label === rfCol) ? rfCol : rf.ask[0].label)); return a ? a.f : ''; };
+  const AA = $('#rfAccAll'); if(AA) AA.onclick = () => { const f = curF(); rfAll[f] = !rfAll[f]; rf.ask.forEach(a => { if(a.f === f) delete rfAns[a.key]; }); render(); };
+  const KA = $('#rfKeepAll'); if(KA) KA.onclick = () => { const f = curF(); rfAll[f] = false; rf.ask.forEach(a => { if(a.f === f) delete rfAns[a.key]; }); render(); };
   document.querySelectorAll('[data-rf]').forEach(el => el.onchange = () => {
     rfFields = Object.keys(RF).filter(f => (document.querySelector(`[data-rf="${f}"]`) || {}).checked); ls.set('adm_rf_fields', rfFields); rf = null; render(); });
   document.querySelectorAll('[data-rfs]').forEach(a => a.onclick = ev => { ev.preventDefault(); rfShow = a.dataset.rfs; render(); });
@@ -900,10 +911,10 @@ function wireRf(){
 async function rfRun(apply){
   rfBusy = true; render();
   try{
-    const quotaSet = {}; if(apply) Object.keys(rfAns).forEach(k => { if(rfAns[k]) quotaSet[k] = rfAns[k]; });
-    const r = await api({ action:'adm_refresh', fields:rfFields, apply, quotaSet }, 240000);
+    const accept = {}; if(apply){ Object.keys(rfAns).forEach(k => { if(rfAns[k]) accept[k] = rfAns[k]; }); Object.keys(rfAll).forEach(f => { if(rfAll[f]) accept['*|' + f] = 'yes'; }); }
+    const r = await api({ action:'adm_refresh', fields:rfFields, apply, accept }, 300000);
     if(!r.ok) throw new Error(r.error || 'Could not update');
-    rf = r; rfAns = {};
+    rf = r; rfAns = {}; rfAll = {};
     if(apply){ if(r.seats && init){ init.seats = r.seats; ls.set('adm_init', init); } toast('Strength sheet updated', 4000); loadIndex(true); }
   } catch(e){ if(e.fatal) fatal = e.message; else toast(e.message, 6000); }
   finally { rfBusy = false; render(); }

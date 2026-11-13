@@ -138,7 +138,7 @@ function admRoute_(user, req) {
     case 'adm_check':     return admCheck_(req.d || {}, req.ctx || null);
     case 'adm_save':      return admSave_(user, req.d || {}, req.ctx || null, req.override === true, String(req.cid || ''));
     case 'adm_new':       return admNew_();
-    case 'adm_refresh':   return admRefresh_(user, req.fields || [], req.apply === true, req.quotaSet || {});
+    case 'adm_refresh':   return admRefresh_(user, req.fields || [], req.apply === true, req.accept || {});
     case 'adm_add_new':   return admAddNew_(user, req.items || [], req.override === true);
   }
   return { ok: false, error: 'UNKNOWN_ACTION' };
@@ -918,20 +918,64 @@ function admAgg_(m, t, hq) {
    aggregate - (Obtained + 20 if HQ) x 100 / Total
    merit  - 1st Year, per admission program: Open Quota students by Aggregate, highest = 1 (other quotas are not touched)
    room   - the section's room in the Timetable sheet                                                                    */
-var ADM_REFRESH = { quota: 'Quota', hq: 'HQ', aggregate: 'Aggregate', merit: 'MeritNo', room: 'Room' };
-function admRefresh_(user, fields, apply, quotaSet) {
-  quotaSet = quotaSet || {};          // row -> quota you accepted (quota is never changed without your answer)
-  fields = (fields && fields.length ? fields : Object.keys(ADM_REFRESH)).filter(function (f) { return ADM_REFRESH[f]; });
+var ADM_REFRESH = { portal: 'Portal', hq: 'HQ', aggregate: 'Aggregate', merit: 'MeritNo', room: 'Room' };
+/* every Transform column that has a matching value on the portal: f = field of the record (admRec_) and of the portal student (admPortalStu_),
+   t = Transform column keys written, type = how values are compared, info = shown only (the college decides it, change it in Find & edit) */
+var ADM_CMP = [
+  { f: 'name', label: 'Student Name', t: ['studentname'], type: 'name' },
+  { f: 'father', label: 'Father Name', t: ['fathername'], type: 'name' },
+  { f: 'quota', label: 'Quota', t: ['quota'], type: 'quota' },
+  { f: 'dob', label: 'DOB', t: ['dob'], type: 'date' },
+  { f: 'contact', label: 'Student Contact', t: ['studentcontact'], type: 'phone' },
+  { f: 'email', label: 'Email', t: ['email'], type: 'name' },
+  { f: 'pic', label: 'Picture', t: ['picurl', 'photo'], type: 'text' },
+  { f: 'board', label: 'Board', t: ['board'], type: 'name' },
+  { f: 'passYear', label: 'Passing Year', t: ['passingyear'], type: 'num' },
+  { f: 'matricRoll', label: 'Matric Roll No', t: ['matricrollno', 'metricrollno'], type: 'num' },
+  { f: 'metric', label: 'Obtained Marks', t: ['obtainedmarks'], type: 'num' },
+  { f: 'total', label: 'Total Marks', t: ['totalmarks'], type: 'num' },
+  { f: 'challan', label: 'Challan Details', t: ['challandetails'], type: 'text' },
+  { f: 'batch', label: 'Batch', t: ['batch'], type: 'name' },
+  { f: 'subjects', label: 'Subjects', t: ['sub1', 'sub2', 'sub3', 'sub4', 'sub5', 'sub6', 'sub7'], type: 'subjects' },
+  { f: 'id', label: 'Portal ID', t: ['portalid'], type: 'text' },
+  { f: 'roll', label: 'Enroll#', type: 'roll', info: true },
+  { f: 'programName', label: 'Program', type: 'program', info: true },
+  { f: 'year', label: 'Class', type: 'name', info: true },
+  { f: 'section', label: 'Section', type: 'section', info: true },
+  { f: 'status', label: 'Status', type: 'name', info: true }
+];
+function admYmd_(v) {
+  var s = admS_(v), m;
+  if ((m = s.match(/^(\d{1,2})[\/\-. ](\d{1,2})[\/\-. ](\d{4})/))) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  if ((m = s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/))) return m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2);
+  var d = new Date(s); return isNaN(d) ? admQ_(s) : Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+/** true when the two values mean the same thing */
+function admSame_(type, a, b) {
+  a = admS_(a); b = admS_(b);
+  if (type === 'num') { var x = admNum_(a.replace(/,/g, '')), y = admNum_(b.replace(/,/g, '')); return x !== '' && y !== '' ? Math.abs(x - y) < 0.001 : admQ_(a) === admQ_(b); }
+  if (type === 'date') return admYmd_(a) === admYmd_(b);
+  if (type === 'phone') { var p = a.replace(/\D/g, '').slice(-10), q = b.replace(/\D/g, '').slice(-10); return p === q; }
+  if (type === 'roll') return admNormRoll_(a) === admNormRoll_(b);
+  if (type === 'program') return admH_(a).replace(/jinnahcollege/, 'jcw') === admH_(b).replace(/jinnahcollege/, 'jcw');
+  if (type === 'section') return admSecCode_(a).toUpperCase() === admSecCode_(b).toUpperCase() || a.toUpperCase() === b.toUpperCase();
+  if (type === 'text') return a.replace(/\s+/g, '') === b.replace(/\s+/g, '');
+  return admH_(a) === admH_(b);
+}
+function admRefresh_(user, fields, apply, accept) {
+  accept = accept || {};              // 'row|field' -> yes (quota: the quota you chose). Nothing taken from the portal without your answer.
+  fields = (fields && fields.length ? fields : Object.keys(ADM_REFRESH)).map(function (f) { return f === 'quota' ? 'portal' : f; })
+    .filter(function (f, i, a) { return ADM_REFRESH[f] && a.indexOf(f) === i; });
   var lock = LockService.getScriptLock(); lock.waitLock(30000);
   try {
     var set = admSettings_(), T = admRead_(), recs = admAll_(T, set.sections), C = T.cols, sh = T.sh;
-    var colOf = { quota: C.quota, hq: C.hq, aggregate: C.aggregate, merit: C.meritno, room: C.room };
+    var colOf = { portal: -1, hq: C.hq, aggregate: C.aggregate, merit: C.meritno, room: C.room };
     var notes = [], skip = {};
     fields.forEach(function (f) { if (colOf[f] === undefined) { skip[f] = true; notes.push('No "' + ADM_REFRESH[f] + '" column in the strength sheet.'); } });
     // columns made by a formula are never overwritten
     var n = T.rows.length;
     if (n) fields.forEach(function (f) {
-      if (skip[f]) return;
+      if (skip[f] || colOf[f] < 0) return;
       var fm = sh.getRange(2, colOf[f] + 1, n, 1).getFormulas();
       if (fm.some(function (x) { return x[0]; })) { skip[f] = true; notes.push('"' + ADM_REFRESH[f] + '" is made by a formula in the sheet, so it was not changed.'); }
     });
@@ -951,7 +995,11 @@ function admRefresh_(user, fields, apply, quotaSet) {
       return /^(y|yes|true|1|hafiz)/i.test(h) ? 'Yes' : /^(n|no|false|0)/i.test(h) ? 'No' : '';
     };
     var names = admQuotaNames_(admCounts_(recs)), rooms = admRooms_();
-    var nv = {}, changes = [], cnt = {}, unknownCat = {}, ask = [], quotaOk = {};
+    var nv = {}, changes = [], cnt = {}, unknownCat = {}, ask = [], quotaOk = {}, gw = {}, fcol = {};
+    var formulaCol = function (j) {           // portal values are never written over a formula
+      if (!(j in fcol)) fcol[j] = n ? sh.getRange(2, j + 1, n, 1).getFormulas().some(function (x) { return x[0]; }) : false;
+      return fcol[j];
+    };
     Object.keys(names).forEach(function (k) { quotaOk[admQ_(names[k])] = names[k]; });
     fields.forEach(function (f) { cnt[f] = 0; });
     var put = function (r, f, val) {
@@ -966,22 +1014,54 @@ function admRefresh_(user, fields, apply, quotaSet) {
     recs.forEach(function (r) {
       var pr = P ? (r.id && byId[r.id]) || (r.roll && byRoll[admNormRoll_(r.roll)]) : null;
       r._hq = r.hq;
-      if (fields.indexOf('quota') >= 0 && pr && !admIsMig_(r.year)) {
-        var cat = P.g(pr, 'category');
-        if (cat) {
-          var gq = admGuessQuota_(cat, r.key, names);
-          if (!gq.sure || admQ_(gq.quota) !== admQ_(r.quota)) {
-            ask.push({ row: r.row, roll: r.roll, name: r.name, pcs: r.pcs, program: r.key, now: r.quota, portal: cat, suggest: gq.sure ? gq.quota : '' });
-            if (!gq.sure) unknownCat[cat] = (unknownCat[cat] || 0) + 1;
+      if (fields.indexOf('portal') >= 0 && pr) {
+        var ps = admPortalStu_(P, pr, set);
+        ADM_CMP.forEach(function (d) {
+          var key = r.row + '|' + d.f, now, pv, sug = '';
+          if (d.f === 'quota') {
+            if (admIsMig_(r.year)) return;
+            pv = P.g(pr, 'category'); if (!pv) return;
+            var gq = admGuessQuota_(pv, r.key, names);
+            if (gq.sure && admQ_(gq.quota) === admQ_(r.quota)) return;
+            if (!gq.sure) unknownCat[pv] = (unknownCat[pv] || 0) + 1;
+            now = r.quota; sug = gq.sure ? gq.quota : '';
+          } else if (d.f === 'subjects') {
+            var mine = [1, 2, 3, 4, 5, 6, 7].map(function (k) { return admS_(r['s' + k]).toUpperCase(); });
+            var cp = admProg_(r.key || 'FCS');
+            var theirs = (ps.subjects || []).map(function (x) { return admYearSubject_(x, r.key ? cp.classProgram : '', r.year); });
+            if (theirs.filter(Boolean).length < 4) return;
+            var A = mine.filter(Boolean).slice().sort().join(', '), B = theirs.filter(Boolean).slice().sort().join(', ');
+            if (A === B) return;
+            now = mine.filter(Boolean).join(', '); pv = theirs.filter(Boolean).join(', '); sug = theirs;
+          } else {
+            pv = admS_(ps[d.f]); if (!pv) return;
+            now = admS_(r[d.f]);
+            if (d.f === 'id' && (!r.roll || byId[r.id])) return;         // only when matched by Enroll#
+            if (admSame_(d.type, now, pv)) return;
+            sug = pv;
           }
-        }
-      }
-      var qa = quotaSet[r.row];
-      if (fields.indexOf('quota') >= 0 && qa && quotaOk[admQ_(qa)]) {
-        r._leftOpen = admQ_(r.quota) === admQ_(ADM_CFG.OPEN_QUOTA) && admQ_(qa) !== admQ_(ADM_CFG.OPEN_QUOTA);
-        put(r, 'quota', quotaOk[admQ_(qa)]); r.quota = quotaOk[admQ_(qa)];
+          var cols = (d.t || []).map(function (k) { return C[k]; }).filter(function (c) { return c !== undefined; });
+          var info = d.info || !cols.length || cols.some(formulaCol);
+          if (ask.length < 4000) ask.push({ key: key, row: r.row, f: d.f, label: d.label, roll: r.roll, name: r.name, pcs: r.pcs, now: now, portal: d.f === 'quota' ? pv : pv,
+                     suggest: d.f === 'subjects' ? pv : sug, info: info ? (d.info ? 'set by the college: change it in Find & edit (or on the portal)' : 'no such column, or it is a formula') : '' });
+          var ans = accept[key] || (accept['*|' + d.f] && sug ? (d.f === 'quota' ? sug : 'yes') : '');    // '*|field' = Accept the whole column
+          if (!ans || info) return;
+          if (d.f === 'quota') {
+            if (!quotaOk[admQ_(ans)]) return;
+            r._leftOpen = admQ_(r.quota) === admQ_(ADM_CFG.OPEN_QUOTA) && admQ_(ans) !== admQ_(ADM_CFG.OPEN_QUOTA);
+            sug = quotaOk[admQ_(ans)]; r.quota = sug;
+          }
+          var vals = d.f === 'subjects' ? sug.concat(['', '', '', '', '', '', '']).slice(0, 7) : null;
+          (d.t || []).forEach(function (k, ix) {
+            if (C[k] === undefined) return;
+            (gw[C[k]] = gw[C[k]] || {})[r.row] = vals ? vals[ix] : sug;
+          });
+          cnt.portal++;
+          if (d.f === 'metric' || d.f === 'total') r[d.f] = sug;               // the aggregate uses the new marks
+        });
       }
       if (fields.indexOf('hq') >= 0 && pr && portalHasHq) { var h = hqOf(pr); if (h) { put(r, 'hq', h); r._hq = h; } }
+      if (!r._hq && C.hq !== undefined) r._hq = r.hq;
       if (fields.indexOf('aggregate') >= 0) put(r, 'aggregate', admAgg_(r.metric, r.total, r._hq));
       r._agg = admAgg_(r.metric, r.total, r._hq);
       if (fields.indexOf('room') >= 0 && r.pcs && rooms[r.pcs]) put(r, 'room', rooms[r.pcs]);
@@ -1001,13 +1081,21 @@ function admRefresh_(user, fields, apply, quotaSet) {
     }
     Object.keys(unknownCat).forEach(function (c) { notes.push(unknownCat[c] + ' student(s) with portal category "' + c + '" (not a known quota): choose their quota yourself or keep it.'); });
     if (apply) {
+      Object.keys(gw).forEach(function (j) {
+        var rng = sh.getRange(2, Number(j) + 1, n, 1), cur = rng.getValues(), txt = Number(j) === C.dob || Number(j) === C.studentcontact;
+        if (txt) rng.setNumberFormat('@');
+        Object.keys(gw[j]).forEach(function (row) { cur[Number(row) - 2][0] = gw[j][row]; });
+        rng.setValues(cur);
+      });
       fields.forEach(function (f) {
+        if (f === 'portal') return;
         if (skip[f] || !nv[f]) return;
         var rng = sh.getRange(2, colOf[f] + 1, n, 1), cur = rng.getValues();
         Object.keys(nv[f]).forEach(function (row) { cur[Number(row) - 2][0] = nv[f][row]; });
         rng.setValues(cur);
       });
       SpreadsheetApp.flush();
+      cnt.portalCells = Object.keys(gw).reduce(function (a, j) { return a + Object.keys(gw[j]).length; }, 0);
       var total = Object.keys(cnt).reduce(function (a, f) { return a + cnt[f]; }, 0);
       admLog_(user, 'UPDATE FROM PORTAL', '', '', fields.map(function (f) { return ADM_REFRESH[f] + ' ' + cnt[f]; }).join(', ') + ' (' + total + ' cells)', '');
     }
