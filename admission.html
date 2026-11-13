@@ -109,6 +109,17 @@ dialog::backdrop{background:rgba(10,15,25,.55)}
 .err{background:var(--bad-bg);color:var(--bad);border-radius:12px;padding:12px;font-weight:650;margin-bottom:12px}
 .req{color:var(--bad)}
 .hidden{display:none!important}
+.pn{padding:12px}
+.pn.off{opacity:.55}
+.pn .hd{display:flex;gap:10px;align-items:flex-start}
+.pn .hd input[type=checkbox]{width:22px;height:22px;min-height:0;flex:0 0 22px;margin-top:2px;accent-color:var(--brown)}
+.pn .hd .who{flex:1;min-width:0}
+.pn .hd b{font-size:15px}
+.pn .g2 label,.pn .g3 label{margin-top:8px}
+.pn select,.pn input[type=text]{min-height:42px;font-size:14.5px}
+.pn .warnp{color:var(--mid);font-weight:700;font-size:12.5px}
+.stickbar{position:sticky;top:0;z-index:5;background:var(--glass);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);padding:8px 0;margin-bottom:8px}
+.stickbar .acts{margin-top:0}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 /* ===== JCW uniform theme: brown, tea pink and white (keep this block last in the <style>) ===== */
 :root{--brown:#6B3423;--brown2:#8A4A35;--brown3:#A86A52;--tea:#E7B7AE;--tea2:#F4D6D0;--tea3:#FBEDEA;
@@ -172,6 +183,7 @@ dialog{border:1.5px solid var(--line);box-shadow:var(--shadow2)}
   <div class="hsub">New students and changes go straight into Transform-ALL-COLLEGE-STRENGTH. Works without internet.</div>
   <nav role="tablist">
     <button role="tab" data-tab="form" aria-selected="true">New</button>
+    <button role="tab" data-tab="pnew" aria-selected="false">From portal<span class="badge hidden" id="pb">0</span></button>
     <button role="tab" data-tab="find" aria-selected="false">Find &amp; edit</button>
     <button role="tab" data-tab="seats" aria-selected="false">Seats</button>
     <button role="tab" data-tab="wait" aria-selected="false">Waiting<span class="badge hidden" id="qb">0</span></button>
@@ -209,6 +221,10 @@ let init = ls.get('adm_init', null);          // programs, sections, seats, subj
 let idx = null;                               // { cols, rows, at }
 let queue = ls.get('adm_q', []);              // saves waiting for the server
 let tab = 'form', form = null, lastDone = null, syncing = false, nextRoll = {}, searchQ = '', fatal = '';
+let pnew = ls.get('adm_pnew', null);          // students Enrolled on the portal but not yet in Transform (adm_new)
+let pnSel = ls.get('adm_pn_sel', {});         // portal ID -> { on, program, year, section, rollNo, quota, rollManual, secManual }
+let pnHide = ls.get('adm_pn_hide', []);       // portal IDs you chose to hide
+let pnShowHidden = false, pnLoading = false, pnBusy = false;
 const saveQ = () => { ls.set('adm_q', queue); paintBadge(); };
 
 async function api(payload, ms = 60000){
@@ -312,7 +328,8 @@ function paintNet(){
   n.textContent = (online() ? 'Online' : 'Offline') + (w ? ' · ' + w + ' waiting' : '');
   n.classList.toggle('off', !online());
 }
-function paintBadge(){ const b = $('#qb'); b.textContent = queue.length; b.classList.toggle('hidden', !queue.length); paintNet(); }
+function paintBadge(){ const b = $('#qb'); b.textContent = queue.length; b.classList.toggle('hidden', !queue.length);
+  const n = pnList().length, p = $('#pb'); p.textContent = n; p.classList.toggle('hidden', !n); paintNet(); }
 function setTab(t){
   tab = t;
   document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t ? 'true' : 'false'));
@@ -329,10 +346,12 @@ function render(){
   const top = fatal ? `<div class="err">${esc(fatal)}</div>` : '';
   if(tab === 'form') m.innerHTML = top + formHtml();
   else if(tab === 'find') m.innerHTML = top + findHtml();
+  else if(tab === 'pnew') m.innerHTML = top + pnHtml();
   else if(tab === 'seats') m.innerHTML = top + seatsHtml();
   else m.innerHTML = top + waitHtml();
   if(tab === 'form') wireForm();
   if(tab === 'find') wireFind();
+  if(tab === 'pnew') wirePn();
   if(tab === 'wait') wireWait();
 }
 const opt = (v, cur, label) => `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(label == null ? v : label)}</option>`;
@@ -621,6 +640,175 @@ async function sync(){
   } finally { syncing = false; render(); }
 }
 
+/* ---------- new on the portal: Enrolled there, not yet in the strength sheet ---------- */
+const pnList = () => pnew && pnew.list ? pnew.list.filter(s => pnShowHidden || !pnHide.includes(s.id)) : [];
+const pnSave = () => { ls.set('adm_pn_sel', pnSel); ls.set('adm_pn_hide', pnHide); };
+function pnEntry(s){
+  let e = pnSel[s.id];
+  if(!e){
+    e = pnSel[s.id] = { on:true, program:s.program || '', year:s.year || '1st Year', section:'', rollNo:'', quota:s.quotaGuess || 'Open Quota', rollManual:false, secManual:false };
+  }
+  return e;
+}
+/** gives every ticked student a Roll No (next free numbers of her program, in portal order) and the section with fewest students */
+function pnSuggest(){
+  if(!pnew || !pnew.list) return;
+  const used = new Set(), cnt = {}, ptr = {};
+  const pool = e => pnew.pools[e.program + '|' + e.year];
+  const counts = k => cnt[k] || (cnt[k] = Object.fromEntries((pnew.pools[k] ? pnew.pools[k].secs : []).map(x => [x.name, x.count])));
+  const act = pnew.list.filter(s => !pnHide.includes(s.id)).map(s => [s, pnEntry(s)]);
+  if(idx) idx.rows.forEach(r => { if(r[1]) used.add(nroll(r[1])); });
+  // what you typed or chose yourself is kept and reserved first
+  act.forEach(([s, e]) => {
+    if(!e.on) return;
+    if(e.rollManual && e.rollNo) used.add(nroll(e.rollNo));
+    if(e.secManual && e.section) { const c = counts(e.program + '|' + e.year); c[e.section] = (c[e.section] || 0) + 1; }
+  });
+  act.forEach(([s, e]) => {
+    if(isMig(e.year)) e.quota = init ? init.cfg.mig.QUOTA : 'Open Quota';
+    if(!e.on){ if(!e.rollManual) e.rollNo = ''; if(!e.secManual) e.section = ''; return; }
+    const k = e.program + '|' + e.year, pl = pool(e);
+    if(!pl){ if(!e.rollManual) e.rollNo = ''; if(!e.secManual) e.section = ''; return; }
+    if(!e.secManual){
+      const c = counts(k), cand = pl.secs.filter(x => !/optional/i.test(x.name)), list = cand.length ? cand : pl.secs;
+      let best = ''; list.forEach(x => { if(!best || (c[x.name] || 0) < (c[best] || 0)) best = x.name; });
+      e.section = best; if(best) c[best] = (c[best] || 0) + 1;
+    }
+    if(!e.rollManual){
+      if(s.rollFromPortal && s.program === e.program && s.year === e.year && !used.has(nroll(s.rollFromPortal))) e.rollNo = s.rollFromPortal;
+      else { let i = ptr[k] || 0; while(i < pl.free.length && used.has(nroll(pl.free[i]))) i++; e.rollNo = pl.free[i] || ''; ptr[k] = i + 1; }
+      if(e.rollNo) used.add(nroll(e.rollNo));
+    }
+  });
+  pnSave();
+}
+async function pnLoad(show){
+  if(!online() || !user || pnLoading) return;
+  pnLoading = true; if(tab === 'pnew') render();
+  try{
+    const before = pnew ? pnList().length : null;
+    const r = await api({ action:'adm_new' }, 120000);
+    if(!r.ok) throw new Error(r.error || 'Could not read the portal list');
+    pnew = r; ls.set('adm_pnew', pnew);
+    const ids = new Set(r.list.map(s => s.id));
+    Object.keys(pnSel).forEach(id => { if(!ids.has(id)) delete pnSel[id]; });
+    pnHide = pnHide.filter(id => ids.has(id));
+    pnSuggest();
+    const n = pnList().length;
+    if(show) toast(n ? n + ' new on the portal' : 'Nobody new on the portal');
+    else if(n && before !== null && n > before && tab !== 'pnew') toast((n - before) + ' new admission' + (n - before === 1 ? '' : 's') + ' on the portal (From portal tab)', 5000);
+  } catch(e){ if(e.fatal) fatal = e.message; else if(show) toast(e.message, 5000); }
+  finally { pnLoading = false; render(); }
+}
+function pnHtml(){
+  if(!pnew) return `<div class="card"><h2>${pnLoading ? 'Reading the portal list…' : 'From the portal'}</h2><div class="sub">${online() ? 'Looking for students who are Enrolled on the UOP portal but not yet in the strength sheet.' : 'Connect to the internet to see new admissions from the portal.'}</div></div>`;
+  const list = pnList(), lbl = k => { const p = prog(k); return p ? p.label : 'Choose program'; };
+  const on = list.filter(s => pnEntry(s).on && !pnHide.includes(s.id));
+  const by = {}; on.forEach(s => { const e = pnEntry(s), k = lbl(e.program) + (isMig(e.year) ? ' (2nd Year)' : ''); by[k] = (by[k] || 0) + 1; });
+  const hiddenN = pnew.list.filter(s => pnHide.includes(s.id)).length;
+  const head = `<section class="card"><h3>New on the UOP portal</h3>
+    <div class="sub">Students who are <b>Enrolled</b> on the portal${pnew.batch ? ' (batch ' + esc(pnew.batch) + ', plus 2nd Year migrations)' : ''} but are not in Transform-ALL-COLLEGE-STRENGTH or Left Students yet. List read ${esc(pnew.at || '')}.
+    The portal copy is refreshed by <b>Quick sync</b> in the JCW Portal Sync panel on the portal.</div>
+    ${pnew.note ? `<div class="seat near">${esc(pnew.note)}</div>` : ''}
+    <div class="hint"><b>Suggested Roll No</b>: the next free numbers of her program's range, in the order the portal admitted them (an Enrollment# already on the portal is kept). <b>Suggested section</b>: the section of her program with the fewest students, so sections stay even ("Optional Subjects" is never suggested). Change any of them; the rest re-arrange.</div>
+  </section>`;
+  if(!pnew.list.length) return head + `<div class="card"><h2>Nobody new</h2><div class="sub">Everyone Enrolled on the portal is already in the strength sheet.</div><div class="acts"><button class="btn" type="button" id="pnRef" ${online() && !pnLoading ? '' : 'disabled'}>${pnLoading ? 'Checking…' : 'Check again'}</button></div></div>`;
+  const bar = `<div class="stickbar"><div class="acts">
+      <button class="btn small" type="button" id="pnAll">${on.length === list.filter(s => !pnHide.includes(s.id)).length ? 'Untick all' : 'Tick all'}</button>
+      <button class="btn small" type="button" id="pnRe">Suggest again</button>
+      <button class="btn small" type="button" id="pnRef" ${online() && !pnLoading ? '' : 'disabled'}>${pnLoading ? 'Checking…' : 'Refresh'}</button>
+      <button class="btn primary" type="button" id="pnAdd" ${on.length && online() && !pnBusy ? '' : 'disabled'}>${pnBusy ? 'Adding…' : 'Add ' + on.length + ' to strength sheet'}</button></div>
+    <div class="hint">${Object.keys(by).map(k => esc(k) + ' ' + by[k]).join(' · ') || 'Nobody ticked.'}${hiddenN ? ` · <a href="#" id="pnSh">${pnShowHidden ? 'hide' : 'show'} ${hiddenN} hidden</a>` : ''}</div></div>`;
+  const cards = list.map(s => {
+    const e = pnEntry(s), hid = pnHide.includes(s.id), mig = isMig(e.year), pl = pnew.pools[e.program + '|' + e.year];
+    const secs = pl ? pl.secs : [];
+    const secCount = n => { const x = secs.find(y => y.name === n); return x ? x.count : 0; };
+    const extra = {}; list.forEach(o => { const oe = pnEntry(o); if(oe.on && !pnHide.includes(o.id) && oe.program === e.program && oe.year === e.year && oe.section) extra[oe.section] = (extra[oe.section] || 0) + 1; });
+    const qs = mig ? [init ? init.cfg.mig.QUOTA : 'Open Quota'] : quotasOf(e.program);
+    const qopts = qs.includes(e.quota) ? qs : qs.concat(e.quota ? [e.quota] : []);
+    return `<section class="card pn${e.on && !hid ? '' : ' off'}" data-pn="${esc(s.id)}">
+      <div class="hd"><input type="checkbox" data-k="on" ${e.on && !hid ? 'checked' : ''} ${hid ? 'disabled' : ''} aria-label="Add ${esc(s.name)}">
+        ${s.pic ? `<img src="${esc(s.pic)}" alt="" loading="lazy" style="width:44px;height:44px;border-radius:50%;object-fit:cover" onerror="this.style.display='none'">` : `<span class="av">${esc((s.name || '?').charAt(0).toUpperCase())}</span>`}
+        <div class="who"><b>${esc(s.name)}</b><div class="sub">d/o ${esc(s.father || '-')} · portal ID ${esc(s.id)}${s.portalRoll ? ' · ' + esc(s.portalRoll) : ''}</div>
+          <div class="sub">Portal: ${esc(s.programName || '-')} · ${esc(s.year)}${s.section ? ' · sec ' + esc(s.section) : ''}${s.quota ? ' · ' + esc(s.quota) : ''}${s.metric ? ' · ' + esc(s.metric) + '/' + esc(s.total) : ''}${s.batch ? ' · batch ' + esc(s.batch) : ''}</div>
+          ${!s.progSure ? `<div class="warnp">Check the program: the portal does not say which ${esc((prog(s.program) || {}).classProgram || '')} program.</div>` : ''}
+          ${!s.quotaSure && !mig ? `<div class="warnp">Portal category "${esc(s.quota)}" is not a known quota: check it.</div>` : ''}
+          ${!s.dob && !s.metric ? `<div class="sub">Details (DOB, marks, photo) fill in after the next Full sync.</div>` : ''}</div>
+        <button class="btn small" type="button" data-hide="${esc(s.id)}">${hid ? 'Unhide' : 'Hide'}</button></div>
+      ${hid ? '' : `<div class="g2">
+        <div><label>Program</label><select data-k="program">${init.programs.map(p => opt(p.key, e.program, p.label)).join('')}${e.program ? '' : opt('', '', 'Choose…')}</select></div>
+        <div><label>Year</label><select data-k="year">${opt('1st Year', e.year)}${opt('2nd Year', e.year, '2nd Year (migration)')}</select></div>
+        <div><label>Section</label><select data-k="section">${e.section ? '' : opt('', '', '–')}${secs.map(x => opt(x.name, e.section, x.name + ' · ' + secCount(x.name) + (extra[x.name] ? ' +' + extra[x.name] : ''))).join('')}</select></div>
+        <div><label>Roll No${e.rollManual ? ' (typed)' : ''}</label><input type="text" data-k="rollNo" value="${esc(e.rollNo)}" placeholder="${pl && pl.range ? 'free in ' + pl.range[0] + '–' + pl.range[1] : ''}" autocomplete="off" style="text-transform:uppercase"></div>
+      </div>
+      <label>Quota</label><select data-k="quota" ${mig ? 'disabled' : ''}>${qopts.map(q => opt(q, e.quota)).join('')}</select>`}
+    </section>`;
+  }).join('');
+  return head + bar + cards;
+}
+function wirePn(){
+  const R = $('#pnRef'); if(R) R.onclick = () => pnLoad(true);
+  const A = $('#pnAll'); if(A) A.onclick = () => { const vis = pnList().filter(s => !pnHide.includes(s.id)), all = vis.every(s => pnEntry(s).on); vis.forEach(s => pnEntry(s).on = !all); pnSuggest(); render(); };
+  const S = $('#pnRe'); if(S) S.onclick = () => { pnList().forEach(s => { const e = pnEntry(s); e.rollManual = false; e.secManual = false; }); pnSuggest(); render(); toast('Roll numbers and sections suggested again'); };
+  const H = $('#pnSh'); if(H) H.onclick = ev => { ev.preventDefault(); pnShowHidden = !pnShowHidden; render(); };
+  const D = $('#pnAdd'); if(D) D.onclick = pnAddAsk;
+  document.querySelectorAll('[data-hide]').forEach(b => b.onclick = () => {
+    const id = b.dataset.hide; pnHide = pnHide.includes(id) ? pnHide.filter(x => x !== id) : pnHide.concat([id]); pnSuggest(); render(); });
+  document.querySelectorAll('[data-pn]').forEach(card => {
+    const s = pnew.list.find(x => x.id === card.dataset.pn); if(!s) return;
+    card.querySelectorAll('[data-k]').forEach(el => el.onchange = () => {
+      const e = pnEntry(s), k = el.dataset.k, y = window.scrollY;
+      if(k === 'on') e.on = el.checked;
+      else if(k === 'program' || k === 'year'){ e[k] = el.value; e.rollManual = false; e.secManual = false; if(k === 'program' && !isMig(e.year)) { const q = quotasOf(e.program); if(!q.some(x => qk(x) === qk(e.quota))) e.quota = q[0] || 'Open Quota'; } }
+      else if(k === 'section'){ e.section = el.value; e.secManual = !!el.value; }
+      else if(k === 'rollNo'){ e.rollNo = el.value.trim().toUpperCase(); e.rollManual = !!e.rollNo; }
+      else e[k] = el.value;
+      pnSuggest(); render(); window.scrollTo(0, y);
+    });
+  });
+}
+function pnItems(list, force){
+  return list.map(s => { const e = pnEntry(s); return { id:s.id, program:e.program, year:e.year, section:e.section, quota:e.quota, rollNo:e.rollNo, force:!!force }; });
+}
+function pnAddAsk(){
+  const on = pnList().filter(s => pnEntry(s).on && !pnHide.includes(s.id));
+  const miss = on.filter(s => { const e = pnEntry(s); return !e.program || !e.section || !e.rollNo; });
+  if(miss.length) return dlgOpen(`<h2>Please fill in first</h2><div class="sub">Program, section and Roll No are needed for:</div><ul class="iss">${miss.map(s => `<li class="error">${esc(s.name)}</li>`).join('')}</ul><div class="acts"><button class="btn primary" id="dOk">OK</button></div>`), ($('#dOk').onclick = dlgClose);
+  const rolls = on.map(s => nroll(pnEntry(s).rollNo)), dup = rolls.find((r, i) => rolls.indexOf(r) !== i);
+  if(dup) return dlgOpen(`<h2>Same Roll No twice</h2><div class="sub">${esc(dup)} is given to more than one student. Change one of them.</div><div class="acts"><button class="btn primary" id="dOk">OK</button></div>`), ($('#dOk').onclick = dlgClose);
+  dlgOpen(`<h2>Add ${on.length} student${on.length === 1 ? '' : 's'}?</h2><div class="sub">They are written into Transform-ALL-COLLEGE-STRENGTH with these Roll Nos and sections. The server checks seats and duplicates again first.</div>
+    <div style="max-height:50vh;overflow:auto;margin-top:8px"><table><thead><tr><th>Student</th><th>Roll No</th><th>Section</th><th>Quota</th></tr></thead><tbody>
+    ${on.map(s => { const e = pnEntry(s); return `<tr><td>${esc(s.name)}</td><td><b>${esc(e.rollNo)}</b></td><td>${esc(e.section)}</td><td class="sub">${esc(e.quota)}</td></tr>`; }).join('')}</tbody></table></div>
+    <div class="acts"><button class="btn" id="dBack">Back</button><button class="btn primary" id="dGo">Add to strength sheet</button></div>`);
+  $('#dBack').onclick = dlgClose;
+  $('#dGo').onclick = () => pnAdd(on, false);
+}
+async function pnAdd(list, force){
+  pnBusy = true;
+  dlgOpen(`<h2>Adding…</h2><div class="sub">Writing ${list.length} student${list.length === 1 ? '' : 's'} into the strength sheet. This can take up to a minute.</div>`);
+  try{
+    const r = await api({ action:'adm_add_new', items:pnItems(list, force) }, 180000);
+    if(!r.ok) throw new Error(r.error || 'Could not add');
+    if(r.seats && init){ init.seats = r.seats; ls.set('adm_init', init); }
+    (r.recs || []).forEach(row => putRec(row, null));
+    const ok = r.results.filter(x => x.ok), ask = r.results.filter(x => x.needsConfirm), bad = r.results.filter(x => !x.ok && !x.needsConfirm);
+    const okIds = new Set(ok.map(x => x.id));
+    pnew.list = pnew.list.filter(s => !okIds.has(s.id)); okIds.forEach(id => delete pnSel[id]); ls.set('adm_pnew', pnew); pnSuggest();
+    const askList = ask.map(x => pnew.list.find(s => s.id === x.id)).filter(Boolean);
+    dlgOpen(`<h2>${ok.length} added${ask.length || bad.length ? ', ' + (ask.length + bad.length) + ' not added' : ''}</h2>
+      ${ok.length ? `<div class="done" style="margin-top:8px">${ok.map(x => esc(x.name) + ' → <b>' + esc(x.roll) + '</b> · ' + esc(x.section)).join('<br>')}</div>` : ''}
+      ${ask.concat(bad).map(x => `<div class="card" style="padding:10px;margin:8px 0"><b>${esc(x.name || x.id)}</b>${x.roll ? ' · ' + esc(x.roll) + ' · ' + esc(x.section || '') : ''}${issuesHtml(x.errors, (x.issues || []).filter(i => i.level !== 'info' && i.level !== 'good'))}</div>`).join('')}
+      ${ok.length ? '<div class="hint">Next: run <b>Sheets vs strength sheet</b> on the College screen so they appear in the attendance sheets, and send the new Enroll# and sections to the portal with the Enrollment Manager.</div>' : ''}
+      <div class="acts"><button class="btn${askList.length ? '' : ' primary'}" id="dOk">OK</button>${askList.length ? `<button class="btn danger" id="dForce">Add ${askList.length} anyway</button>` : ''}</div>`);
+    $('#dOk').onclick = dlgClose;
+    const F = $('#dForce'); if(F) F.onclick = () => pnAdd(askList, true);
+    if(ok.length) toast(ok.length + ' added to the strength sheet', 4000);
+  } catch(e){
+    if(e.fatal){ dlgClose(); fatal = e.message; }
+    else dlgOpen(`<h2>Not added</h2><div class="err">${esc(e.message)}</div><div class="sub">Nothing is lost: the list stays here. If the internet dropped while adding, press Refresh first so nobody is added twice.</div><div class="acts"><button class="btn primary" id="dOk">OK</button></div>`), ($('#dOk').onclick = dlgClose);
+  } finally { pnBusy = false; render(); }
+}
+
 /* ---------- find ---------- */
 function findHtml(){
   const q = searchQ.trim().toLowerCase();
@@ -726,10 +914,11 @@ $('#bClear').onclick = () => {
   $('#dBack').onclick = dlgClose; $('#dGo').onclick = () => { dlgClose(); readForm(); form = blankForm(form.ctx ? null : form); lastDone = null; render(); };
 };
 $('#dlg').addEventListener('click', e => { if(e.target.id === 'dlg') dlgClose(); });
-window.addEventListener('online', () => { paintNet(); sync(); refreshInit(); render(); });
+window.addEventListener('online', () => { paintNet(); sync(); refreshInit(); pnLoad(false); render(); });
 window.addEventListener('offline', () => { paintNet(); render(); });
 window.addEventListener('beforeunload', () => { if(tab === 'form' && form) { readForm(); ls.set('adm_draft', form); } });
 setInterval(() => { if(queue.some(q => q.state === 'wait')) sync(); }, 60000);
+setInterval(() => { if(!pnBusy && document.visibilityState === 'visible') pnLoad(false); }, 5 * 60000);   // new portal admissions show up by themselves
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
 (async function start(){
@@ -737,7 +926,7 @@ if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch
   if(init) form = draft && draft.program ? Object.assign(blankForm(), draft) : blankForm();
   render();
   idx = await idbGet('index');
-  if(online() && user){ await refreshInit(); await loadIndex(false); sync(); if(tab === 'find') render(); }
+  if(online() && user){ await refreshInit(); await loadIndex(false); sync(); if(tab === 'find') render(); pnLoad(false); }
 })();
 </script>
 </body>
