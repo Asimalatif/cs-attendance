@@ -51,7 +51,7 @@ var REMARK_HEAD   = ['Key', 'Teacher', 'Class', 'Roll No', 'Student', 'Tags', 'L
 var REMARK_MAX_LOG = 50, REMARK_MAX_TAGS = 10;
 
 function doGet() {
-  return json_({ ok: true, service: 'JCW Daily Attendance backend v7.4' });
+  return json_({ ok: true, service: 'JCW Daily Attendance backend v7.4.1' });
 }
 
 function doPost(e) {
@@ -1221,7 +1221,8 @@ function saveRecords_(user, records) {
   });
 
   var lock = LockService.getScriptLock();
-  lock.waitLock(30000);
+  lock.waitLock(60000);                                                // v7.4: wait up to 60 s for the teacher before (was 30 s)
+  var locked = true;
   try {
     records.forEach(function (rec) {
       try {
@@ -1310,19 +1311,22 @@ function saveRecords_(user, records) {
     });
 
     Object.keys(touched).forEach(function (name) {
-      try {
-        var I = info[name];
-        stampTeacher_(I.sheet, okNames[name]);
-        updateLectures_(I.sheet, I.L, I.n);
-      } catch (e) {}
+      try { stampTeacher_(info[name].sheet, okNames[name]); } catch (e) {}
+    });
+    try { auditFlush_(); } catch (e) { Logger.log('Change history skipped: ' + e.message); }   // v6.7
+    SpreadsheetApp.flush();
+    lock.releaseLock(); locked = false;                                // v7.4: the next teacher can save now
+
+    // after the lock: lecture count (T.L) and the Attendance Index row of each sheet saved.
+    // Both are worked out again from the sheet itself, so a save that runs at the same time cannot spoil them.
+    Object.keys(touched).forEach(function (name) {
+      try { var I = info[name]; updateLectures_(I.sheet, I.L, I.n); } catch (e) {}
       try { indexUpdate_(info[name].sheet, okNames[name]); } catch (e) { Logger.log('Index skipped for ' + name + ': ' + e.message); }
     });
-
-    try { auditFlush_(); } catch (e) { Logger.log('Change history skipped: ' + e.message); }   // v6.7
     SpreadsheetApp.flush();
     return { ok: true, saved: saved, failed: failed, confirmed: confirmed };
   } finally {
-    lock.releaseLock();
+    if (locked) lock.releaseLock();
   }
 }
 
@@ -2051,11 +2055,18 @@ function indexUpdate_(sh, meta) {
     row[14] = mtTotal; row[15] = JSON.stringify(all).slice(0, 49000);
   }
   var ix = indexSheet_(), last = ix.getLastRow(), r = 0;
-  if (last > 1) {
-    var f = ix.getRange(2, 1, last - 1, 1).createTextFinder(row[0]).matchCase(true).matchEntireCell(true).findNext();
-    if (f) r = f.getRow();
+  var find = function () {
+    var lr = ix.getLastRow(); if (lr < 2) return 0;
+    var f = ix.getRange(2, 1, lr - 1, 1).createTextFinder(row[0]).matchCase(true).matchEntireCell(true).findNext();
+    return f ? f.getRow() : 0;
+  };
+  r = last > 1 ? find() : 0;
+  if (!r) {                                                            // v7.4: new sheet in the index: appendRow is one step,
+    ix.appendRow([row[0]]);                                            //       so two saves at the same time never take the same row
+    SpreadsheetApp.flush();
+    r = find();
+    if (!r) return;
   }
-  if (!r) r = last + 1;
   ix.getRange(r, 12).setNumberFormat('@');
   ix.getRange(r, 1, 1, INDEX_HEAD.length).setValues([row]);
 }
