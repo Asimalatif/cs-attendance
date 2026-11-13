@@ -376,9 +376,14 @@ section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
 <section id="check"><h2><span class="n">18</span>Check everything <span class="who">Admin</span></h2>
 <div class="row"><figure><img src="manual-img/33-check-everything.jpg" alt="Check everything"><figcaption>Check everything</figcaption></figure>
 <div><p>Compares every workbook with the strength sheet (Transform-ALL-COLLEGE-STRENGTH): daily attendance (Sep–Jan), monthly attendance, monthly test, grand test and detention.</p>
-<ol class="steps"><li>Tick the workbooks (months) to check.</li><li><b>Check selected</b>: three workbooks are checked at a time.</li>
-<li>Each line shows missing and extra students. <b>Show</b> lists them with Add / Remove; <b>Fix all</b> fixes one workbook; <b>Fix everything</b> fixes all.</li></ol>
-<div class="note">Missing students are added with the sheet's format and formulas. Extra students who already have marks are <b>struck through</b> (kept); empty extra rows are removed.</div></div></div>
+<ol class="steps"><li>Tick the workbooks (months) to check.</li><li><b>Check selected</b>: five workbooks are checked at a time. A running clock (⏳ <i>Working… 1:25</i>) and a line per workbook (<i>reading sheets 40%</i>, <i>checking names…</i>) show that it is busy. Keep the page open: a whole month can take a few minutes.</li>
+<li>Each line shows the differences. <b>Show</b> lists them with a button per student; <b>Fix all</b> fixes one workbook; <b>Fix everything</b> fixes all.</li></ol>
+<table><tr><th>Difference</th><th>Button</th><th>What it does</th></tr>
+<tr><td>In the strength sheet, <b>missing</b> in the sheet</td><td>Add</td><td>Adds her row with the sheet's format and formulas</td></tr>
+<tr><td><b>Extra</b>: not (any more) in that section / subject</td><td>Remove</td><td>Deletes the row, or <b>strikes it through</b> if she already has marks or attendance</td></tr>
+<tr><td><b>Wrong name</b>: right Enroll#, but the Student Name or Father Name is not the one in the strength sheet (e.g. empty father name)</td><td>Fix name</td><td>Writes the name and father name from the strength sheet. Attendance and marks in the row are not touched. Capital letters, spaces and dots are ignored.</td></tr>
+<tr><td>Struck off but she is in the strength sheet (daily sheets)</td><td>Switch on</td><td>Counts her again</td></tr></table>
+<div class="note">If a workbook fails, its name and the reason pop up at once and its line shows ⚠.</div></div></div>
 </section>
 
 <section id="free"><h2><span class="n">19</span>Free teachers <span class="who">Admin / principal / HOD / CP</span></h2>
@@ -393,6 +398,23 @@ section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
 <li><b>Search the portal by name</b> to fill the student's details from the UOP portal data.</li>
 <li>The <b>roll no. / Enroll #</b> is the next free number of the program's range (given when you save).</li>
 <li>Subjects are filled for the group; choose electives where needed. <b>Save</b> shows a check of everything before writing.</li></ol></div></div>
+<h3>From portal: new admissions on the UOP portal</h3>
+<p>The <b>From portal</b> tab (red badge = how many) lists every student who is <b>Enrolled</b> on the portal (this year's batch and 2nd Year migrations) but is not yet in the strength sheet or in Left Students. It refreshes by itself every 5 minutes; the portal copy itself is refreshed by <b>Quick sync</b> on the portal (or the automatic quick sync, see Portal sync).</p>
+<ol class="steps"><li>Each student shows a <b>big photo</b> (tap it, or <b>Full details</b>, for the full-size photo and every detail the portal has), DOB, contact, email, board, matric roll no, marks, percentage, batch, portal subjects and her <b>fee challans</b> (green = paid, red = unpaid, with the amount still due).</li>
+<li><b>Suggested Roll No</b>: the next free numbers of her program's range, in the order the portal admitted them (an Enrollment# already on the portal is kept). <b>Suggested section</b>: the section of her program with the fewest students (Optional Subjects is never suggested). The section list shows how many each section has, e.g. <i>FCS-1 D3 · 29 +2</i>.</li>
+<li>Change program, year, section, Roll No or quota if needed: the others re-arrange. <i>Check the program</i> means the portal does not say which Pre-Medical program (Open, Self, Evening). Untick or <b>Hide</b> anyone you do not want to add.</li>
+<li><b>Add N to strength sheet</b> → check the list → <b>Add</b>. The server checks seats and duplicates again; anything with a warning is listed with <b>Add anyway</b>.</li>
+<li>Then run <b>Check everything</b> (so they appear in the sheets) and send the new Enroll# and sections to the portal with the Enrollment Manager.</li></ol>
+<h3>Update all students from the portal</h3>
+<p>At the bottom of the From portal tab. The portal sync only fills <b>empty</b> cells; this card compares <b>every column</b> of the strength sheet with the portal and also works out four columns:</p>
+<table><tr><th>Tick</th><th>What happens</th></tr>
+<tr><td>Every column vs portal (ask me)</td><td>Name, father name, quota, DOB, contact, email, picture, board, passing year, matric roll no, marks, challans, batch, subjects, portal ID. Differences are listed per column (tap a column button, e.g. <i>Quota 12</i>) with <b>Accept</b> / <b>Keep</b> per student, or <b>Accept all</b> / <b>Keep all</b> for the column. For quota you can also <b>choose</b> another quota. <b>Nothing is taken from the portal unless you Accept.</b> Enroll#, program, class, section and status are shown for information only (change them in Find &amp; edit).</td></tr>
+<tr><td>HQ (Hafiz-e-Quran)</td><td>From the portal (needs portal script 1.3 or later and a Full sync).</td></tr>
+<tr><td>Aggregate</td><td>(Obtained Marks + 20 if HQ is Yes) × 100 / Total Marks, 2 decimals.</td></tr>
+<tr><td>MeritNo</td><td>1st Year, Open Quota of each program: highest aggregate = 1. Other quotas keep theirs; a student you move out of Open Quota loses her Open merit number.</td></tr>
+<tr><td>Room (timetable)</td><td>The section's (theory) room from the Timetable.</td></tr></table>
+<ol class="steps"><li>Tick the columns → <b>Preview changes</b> (up to a minute).</li><li>Answer the differences → <b>Write N changes</b>. Every write goes to the Admission Log.</li></ol>
+<div class="note">If Preview shows nothing (only "N students checked"), the server still has an old Admissions.gs: the app says how to update it.</div>
 <div class="row rev"><figure><img src="manual-img/36-admission-find.jpg" alt="Find and edit"><figcaption>Find &amp; edit</figcaption></figure>
 <div><p><b>Find &amp; edit</b>: search any student by name, father name or roll no., change any column and save (only changed cells are written; every change goes to the Admission Log).</p></div></div>
 <div class="row"><figure><img src="manual-img/37-admission-seats.jpg" alt="Seats"><figcaption>Seats</figcaption></figure>
@@ -438,12 +460,18 @@ section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
 <b>Move N to Left Students</b>: students still in the strength sheet (and in attendance) who are no longer Enrolled; they leave attendance from this month.<br>
 <b>Add N to Left Students</b>: students of this year's batches who left but were never in the strength sheet (record only).</li>
 <li>Undo a move in the app: <b>College → Students who left → List / restore</b>.</li></ol>
+<h3>Portal script 1.4 (reinstall it in Tampermonkey from GitHub: jcw-portal-sync.user.js)</h3>
+<ul><li><b>Auto quick sync</b>: tick <i>Auto quick sync every 20 min while this tab is open</i> in the panel. While the portal tab stays open and logged in, new admissions reach the app's <b>From portal</b> tab by themselves.</li>
+<li><b>HQ</b>: Full sync also reads the Hafiz-e-Quran field of each student's portal edit page (column HQ in Portal Data).</li>
+<li><b>Subjects</b>: the year of a course comes from its code (JCW-ENG <b>II</b>-ENGLISH = 2nd Year); if the Courses page has nothing, the course list of the Students page is used. This fixes "Subjects missing on the portal" for students who do have courses.</li></ul>
 </section>
 
 <section id="faq"><h2><span class="n">22</span>Problems and answers</h2>
 <table><tr><th>Problem</th><th>What to do</th></tr>
 <tr><td>Letters too small</td><td>Status chip → Text size → Large or Extra large.</td></tr>
 <tr><td>"N to sync" does not go away</td><td>Status chip → Sync now. If it says the login changed, sign in again (the waiting marks are kept).</td></tr>
+<tr><td>Check everything seems to do nothing</td><td>Look at the clock in the card: it is working. A whole month takes a few minutes; keep the page open. If a workbook fails, its reason pops up.</td></tr>
+<tr><td>Duty lists page: "Page Unresponsive"</td><td>Fixed (the page is 10–25 times faster). Close it and open it again; press Wait once if the old version is still loading.</td></tr>
 <tr><td>A student is missing from my list</td><td>She may have left the subject (grey row) or the strength sheet has another section/subject. Tell the admin; Check everything adds her.</td></tr>
 <tr><td>"Could not reach the server"</td><td>No internet or the internet is blocked. Try again; your work is kept.</td></tr>
 <tr><td>"App error: …"</td><td>Send a screenshot to the admin.</td></tr>
