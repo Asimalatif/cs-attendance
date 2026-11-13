@@ -138,6 +138,7 @@ function admRoute_(user, req) {
     case 'adm_check':     return admCheck_(req.d || {}, req.ctx || null);
     case 'adm_save':      return admSave_(user, req.d || {}, req.ctx || null, req.override === true, String(req.cid || ''));
     case 'adm_new':       return admNew_();
+    case 'adm_refresh':   return admRefresh_(user, req.fields || [], req.apply === true);
     case 'adm_add_new':   return admAddNew_(user, req.items || [], req.override === true);
   }
   return { ok: false, error: 'UNKNOWN_ACTION' };
@@ -899,10 +900,124 @@ function admValues_(d, p) {
   v.programclasssection = p.program + ' - ' + year + ' - ' + sec;
   v.appearedin = p.appeared;
   for (var i = 1; i <= 7; i++) v['sub' + i] = admS_((d.subjects || [])[i - 1]).toUpperCase();
-  v.aggregate = m !== '' && t ? Math.round(((m + (hq === 'Yes' ? 20 : 0)) / t) * 100) : '';
+  v.aggregate = admAgg_(m, t, hq);
   v.percentage = m !== '' && t ? Math.round((m / t) * 10000) / 100 : '';
   return v;
 }
+/** Aggregate = (Obtained Marks + 20 if Hafiz-e-Quran) x 100 / Total Marks, 2 decimals */
+function admAgg_(m, t, hq) {
+  m = admNum_(String(m).replace(/,/g, '')); t = admNum_(String(t).replace(/,/g, ''));
+  if (m === '' || !t) return '';
+  return Math.round((m + (/^y/i.test(admS_(hq)) ? 20 : 0)) * 10000 / t) / 100;
+}
+
+/* ================= Update from portal: quota, HQ, Aggregate, MeritNo, Room for every student =================
+   The portal sync only fills EMPTY cells. This rewrites these five columns for everybody:
+   quota  - portal Category (when it clearly names one of the quotas; 2nd Year migration stays Open Quota)
+   hq     - portal "HQ" (Hafiz-e-Quran) when the portal copy has it
+   aggregate - (Obtained + 20 if HQ) x 100 / Total
+   merit  - 1st Year, per admission program: Open Quota students by Aggregate, highest = 1 (other quotas are not touched)
+   room   - the section's room in the Timetable sheet                                                                    */
+var ADM_REFRESH = { quota: 'Quota', hq: 'HQ', aggregate: 'Aggregate', merit: 'MeritNo', room: 'Room' };
+function admRefresh_(user, fields, apply) {
+  fields = (fields && fields.length ? fields : Object.keys(ADM_REFRESH)).filter(function (f) { return ADM_REFRESH[f]; });
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    var set = admSettings_(), T = admRead_(), recs = admAll_(T, set.sections), C = T.cols, sh = T.sh;
+    var colOf = { quota: C.quota, hq: C.hq, aggregate: C.aggregate, merit: C.meritno, room: C.room };
+    var notes = [], skip = {};
+    fields.forEach(function (f) { if (colOf[f] === undefined) { skip[f] = true; notes.push('No "' + ADM_REFRESH[f] + '" column in the strength sheet.'); } });
+    // columns made by a formula are never overwritten
+    var n = T.rows.length;
+    if (n) fields.forEach(function (f) {
+      if (skip[f]) return;
+      var fm = sh.getRange(2, colOf[f] + 1, n, 1).getFormulas();
+      if (fm.some(function (x) { return x[0]; })) { skip[f] = true; notes.push('"' + ADM_REFRESH[f] + '" is made by a formula in the sheet, so it was not changed.'); }
+    });
+    // portal copy by portal ID and by Enroll#
+    var P = admPortalSheet_(), byId = {}, byRoll = {};
+    if (P) P.v.slice(1).forEach(function (r) {
+      var id = P.g(r, 'studentid'), en = P.g(r, 'enrollment');
+      if (id) byId[id] = r; if (en) byRoll[admNormRoll_(en)] = r;
+    });
+    else notes.push('The "' + ADM_CFG.PORTAL_SHEET + '" sheet is empty: quota and HQ need a portal sync first.');
+    var portalHasHq = !!P && P.head.some(function (h) { return /^(hq|hafiz.*|hifz.*)$/i.test(admS_(h).replace(/[^a-z]/gi, '')); });
+    if (P && !portalHasHq && fields.indexOf('hq') >= 0) notes.push('The portal copy has no HQ (Hafiz-e-Quran) column yet: update the Tampermonkey script to 1.3 and run a Full sync. HQ already in the sheet is kept.');
+    var hqOf = function (r) {
+      var h = '';
+      P.head.forEach(function (x, j) { if (!h && /^(hq|hafiz.*|hifz.*)$/i.test(admS_(x).replace(/[^a-z]/gi, ''))) h = admS_(r[j]); });
+      if (!h) return '';
+      return /^(y|yes|true|1|hafiz)/i.test(h) ? 'Yes' : /^(n|no|false|0)/i.test(h) ? 'No' : '';
+    };
+    var names = admQuotaNames_(admCounts_(recs)), rooms = admRooms_();
+    var nv = {}, changes = [], cnt = {}, unknownCat = {};
+    fields.forEach(function (f) { cnt[f] = 0; });
+    var put = function (r, f, val) {
+      if (skip[f]) return;
+      var old = admS_(T.rows[r.row - 2][colOf[f]]), nw = admS_(val);
+      if (f === 'aggregate' && old !== '' && nw !== '' && Math.abs(Number(old) - Number(nw)) < 0.005) return;
+      if (old === nw) return;
+      (nv[f] = nv[f] || {})[r.row] = val;
+      cnt[f]++;
+      if (changes.length < 400) changes.push({ roll: r.roll, name: r.name, pcs: r.pcs, field: ADM_REFRESH[f], from: old, to: nw });
+    };
+    recs.forEach(function (r) {
+      var pr = P ? (r.id && byId[r.id]) || (r.roll && byRoll[admNormRoll_(r.roll)]) : null;
+      r._hq = r.hq;
+      if (fields.indexOf('quota') >= 0 && pr) {
+        if (admIsMig_(r.year)) { if (!r.quota) put(r, 'quota', ADM_CFG.MIGRATION.QUOTA); }
+        else {
+          var cat = P.g(pr, 'category');
+          if (cat) {
+            var gq = admGuessQuota_(cat, r.key, names);
+            if (gq.sure) { put(r, 'quota', gq.quota); r.quota = gq.quota; }
+            else unknownCat[cat] = (unknownCat[cat] || 0) + 1;
+          }
+        }
+      }
+      if (fields.indexOf('hq') >= 0 && pr && portalHasHq) { var h = hqOf(pr); if (h) { put(r, 'hq', h); r._hq = h; } }
+      if (fields.indexOf('aggregate') >= 0) put(r, 'aggregate', admAgg_(r.metric, r.total, r._hq));
+      r._agg = admAgg_(r.metric, r.total, r._hq);
+      if (fields.indexOf('room') >= 0 && r.pcs && rooms[r.pcs]) put(r, 'room', rooms[r.pcs]);
+    });
+    if (fields.indexOf('merit') >= 0) {
+      var groups = {};
+      recs.forEach(function (r) {
+        if (admIsMig_(r.year) || !r.key || admQ_(r.quota) !== admQ_(ADM_CFG.OPEN_QUOTA) || r._agg === '') return;
+        (groups[r.key] = groups[r.key] || []).push(r);
+      });
+      Object.keys(groups).forEach(function (k) {
+        groups[k].sort(function (a, b) {
+          return b._agg - a._agg || (admNum_(b.metric) || 0) - (admNum_(a.metric) || 0) || String(a.name).localeCompare(String(b.name));
+        }).forEach(function (r, i) { put(r, 'merit', i + 1); });
+      });
+    }
+    Object.keys(unknownCat).forEach(function (c) { notes.push(unknownCat[c] + ' student(s) with portal category "' + c + '" are not a known quota: their quota was kept.'); });
+    if (apply) {
+      fields.forEach(function (f) {
+        if (skip[f] || !nv[f]) return;
+        var rng = sh.getRange(2, colOf[f] + 1, n, 1), cur = rng.getValues();
+        Object.keys(nv[f]).forEach(function (row) { cur[Number(row) - 2][0] = nv[f][row]; });
+        rng.setValues(cur);
+      });
+      SpreadsheetApp.flush();
+      var total = Object.keys(cnt).reduce(function (a, f) { return a + cnt[f]; }, 0);
+      admLog_(user, 'UPDATE FROM PORTAL', '', '', fields.map(function (f) { return ADM_REFRESH[f] + ' ' + cnt[f]; }).join(', ') + ' (' + total + ' cells)', '');
+    }
+    return { ok: true, applied: apply, counts: cnt, fields: fields, changes: changes, notes: notes, skipped: Object.keys(skip), students: recs.length,
+             seats: apply ? admSeatState_(admAll_(admRead_(), set.sections), set) : null };
+  } finally { lock.releaseLock(); }
+}
+/** run once from the Apps Script editor: updates these columns every hour by itself (run again to switch it off) */
+function admSetupAutoRefresh() {
+  var had = ScriptApp.getProjectTriggers().filter(function (t) { return t.getHandlerFunction() === 'admAutoRefresh'; });
+  had.forEach(function (t) { ScriptApp.deleteTrigger(t); });
+  if (had.length) { Logger.log('Hourly update from portal switched OFF.'); return; }
+  ScriptApp.newTrigger('admAutoRefresh').timeBased().everyHours(1).create();
+  Logger.log('Hourly update from portal switched ON (quota, HQ, Aggregate, MeritNo, Room).');
+}
+function admAutoRefresh() { admRefresh_({ teacher: 'Hourly update', username: 'auto' }, [], true); }
+
 /** which columns a change of form field rewrites */
 var ADM_DERIVED = {
   rollNo: ['enroll', 'reg'], program: ['program', 'programclasssection', 'appearedin', 'section', 'pcs', 'class'],

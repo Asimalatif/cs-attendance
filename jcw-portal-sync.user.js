@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         JCW Portal Sync
 // @namespace    jcw-attendance
-// @version      1.2
+// @version      1.3
 // @description  Reads Jinnah College students from the UOP portal (read-only) and sends them to the JCW attendance system: fills only the empty cells of Transform-ALL-COLLEGE-STRENGTH, lists cancelled / migrated / disenrolled / transferred students for Left Students (moved only when you press the button) and feeds the health check.
 // @match        https://portal.uop.edu.pk/Student/Students*
 // @match        https://portal.uop.edu.pk/student/students*
@@ -234,6 +234,8 @@
         row['EmailAddress'] = first(f, ['EmailAddress', 'emailAddress', 'Email', 'txtEmailAddress']);
         row['PhotoName'] = photo(first(f, ['PhotoName', 'photoName', 'Photo', 'photo']));
         if (!row['Category']) row['Category'] = first(f, ['CategoryId', 'categoryId', 'Category']);
+        const hk = Object.keys(f).find(k => /hafiz|hifz|quran/i.test(k));      // Hafiz-e-Quran (+20 marks in the aggregate)
+        if (hk) { const v = String(f[hk]).trim(); row['HQ'] = /^(yes|true|1|y|hafiz)/i.test(v) ? 'Yes' : /^(no|false|0|n)$/i.test(v) ? 'No' : v; }
       } catch (e) { if (e.message === 'LOGIN') throw e; warn.push('edit page'); }
     } else warn.push('no edit link');
     if (it.id) {

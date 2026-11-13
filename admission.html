@@ -235,6 +235,9 @@ let pnew = ls.get('adm_pnew', null);          // students Enrolled on the portal
 let pnSel = ls.get('adm_pn_sel', {});         // portal ID -> { on, program, year, section, rollNo, quota, rollManual, secManual }
 let pnHide = ls.get('adm_pn_hide', []);       // portal IDs you chose to hide
 let pnShowHidden = false, pnLoading = false, pnBusy = false;
+let rf = null, rfBusy = false, rfFields = ls.get('adm_rf_fields', ['quota', 'hq', 'aggregate', 'merit', 'room']), rfShow = '';
+const RF = { quota:'Quota (portal category)', hq:'HQ (Hafiz-e-Quran)', aggregate:'Aggregate', merit:'MeritNo', room:'Room (timetable)' };
+const RFN = { quota:'Quota', hq:'HQ', aggregate:'Aggregate', merit:'MeritNo', room:'Room' };
 const saveQ = () => { ls.set('adm_q', queue); paintBadge(); };
 
 async function api(payload, ms = 60000){
@@ -356,12 +359,12 @@ function render(){
   const top = fatal ? `<div class="err">${esc(fatal)}</div>` : '';
   if(tab === 'form') m.innerHTML = top + formHtml();
   else if(tab === 'find') m.innerHTML = top + findHtml();
-  else if(tab === 'pnew') m.innerHTML = top + pnHtml();
+  else if(tab === 'pnew') m.innerHTML = top + pnHtml() + rfHtml();
   else if(tab === 'seats') m.innerHTML = top + seatsHtml();
   else m.innerHTML = top + waitHtml();
   if(tab === 'form') wireForm();
   if(tab === 'find') wireFind();
-  if(tab === 'pnew') wirePn();
+  if(tab === 'pnew'){ wirePn(); wireRf(); }
   if(tab === 'wait') wireWait();
 }
 const opt = (v, cur, label) => `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(label == null ? v : label)}</option>`;
@@ -846,6 +849,42 @@ async function pnAdd(list, force){
     if(e.fatal){ dlgClose(); fatal = e.message; }
     else dlgOpen(`<h2>Not added</h2><div class="err">${esc(e.message)}</div><div class="sub">Nothing is lost: the list stays here. If the internet dropped while adding, press Refresh first so nobody is added twice.</div><div class="acts"><button class="btn primary" id="dOk">OK</button></div>`), ($('#dOk').onclick = dlgClose);
   } finally { pnBusy = false; render(); }
+}
+
+/* ---------- update everybody from the portal: quota, HQ, aggregate, merit no, room ---------- */
+function rfHtml(){
+  const cnt = rf ? rfFields.reduce((a, f) => a + (rf.counts[f] || 0), 0) : 0;
+  const list = rf ? rf.changes.filter(c => !rfShow || c.field === RFN[rfShow]) : [];
+  return `<section class="card"><h3>Update all students from the portal</h3>
+    <div class="sub">The portal sync only fills <b>empty</b> cells. This rewrites these columns of Transform-ALL-COLLEGE-STRENGTH for every student:
+    <b>Quota</b> = portal category (2nd Year migration stays Open Quota) · <b>HQ</b> = portal Hafiz-e-Quran · <b>Aggregate</b> = (Obtained Marks + 20 if HQ is Yes) × 100 / Total Marks ·
+    <b>MeritNo</b> = 1st Year, Open Quota of each program, highest Aggregate = 1 (other quotas keep theirs) · <b>Room</b> = the section's room in the Timetable.</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:10px">${Object.keys(RF).map(f => `<label style="display:flex;gap:6px;align-items:center;margin:0;font-weight:700"><input type="checkbox" data-rf="${f}" ${rfFields.includes(f) ? 'checked' : ''} style="width:20px;height:20px;min-height:0">${RF[f]}</label>`).join('')}</div>
+    <div class="acts"><button class="btn" type="button" id="rfPre" ${online() && !rfBusy && rfFields.length ? '' : 'disabled'}>${rfBusy ? 'Working…' : 'Preview changes'}</button>
+      ${rf && !rf.applied ? `<button class="btn primary" type="button" id="rfGo" ${cnt && !rfBusy ? '' : 'disabled'}>Write ${cnt} change${cnt === 1 ? '' : 's'}</button>` : ''}</div>
+    ${rf ? `<div class="${rf.applied ? 'done' : 'hint'}" style="margin-top:8px">${rf.applied ? 'Written: ' : 'Would change: '}${rf.fields.map(f => `<a href="#" data-rfs="${f}" style="${rfShow === f ? 'font-weight:800' : ''}">${RFN[f]} ${rf.counts[f] || 0}</a>`).join(' · ')} — ${rf.students} students checked.${rfShow ? ' <a href="#" data-rfs="">show all</a>' : ''}</div>
+      ${rf.notes.length ? `<ul class="iss">${rf.notes.map(n => `<li class="warn">${esc(n)}</li>`).join('')}</ul>` : ''}
+      ${list.length ? `<div style="max-height:55vh;overflow:auto;margin-top:8px"><table><thead><tr><th>Enroll#</th><th>Student</th><th>Section</th><th>Column</th><th>Now</th><th>New</th></tr></thead><tbody>
+        ${list.map(c => `<tr><td class="nw">${esc(c.roll)}</td><td>${esc(c.name)}</td><td class="nw">${esc(c.pcs)}</td><td>${esc(c.field)}</td><td class="sub">${esc(c.from || '–')}</td><td><b>${esc(c.to || '–')}</b></td></tr>`).join('')}</tbody></table></div>
+        ${rf.changes.length >= 400 ? '<div class="sub">Only the first 400 changes are listed.</div>' : ''}` : ''}` : ''}
+  </section>`;
+}
+function wireRf(){
+  document.querySelectorAll('[data-rf]').forEach(el => el.onchange = () => {
+    rfFields = Object.keys(RF).filter(f => (document.querySelector(`[data-rf="${f}"]`) || {}).checked); ls.set('adm_rf_fields', rfFields); rf = null; render(); });
+  document.querySelectorAll('[data-rfs]').forEach(a => a.onclick = ev => { ev.preventDefault(); rfShow = a.dataset.rfs; render(); });
+  const P = $('#rfPre'); if(P) P.onclick = () => rfRun(false);
+  const G = $('#rfGo'); if(G) G.onclick = () => rfRun(true);
+}
+async function rfRun(apply){
+  rfBusy = true; render();
+  try{
+    const r = await api({ action:'adm_refresh', fields:rfFields, apply }, 240000);
+    if(!r.ok) throw new Error(r.error || 'Could not update');
+    rf = r;
+    if(apply){ if(r.seats && init){ init.seats = r.seats; ls.set('adm_init', init); } toast('Strength sheet updated', 4000); loadIndex(true); }
+  } catch(e){ if(e.fatal) fatal = e.message; else toast(e.message, 6000); }
+  finally { rfBusy = false; render(); }
 }
 
 /* ---------- find ---------- */
