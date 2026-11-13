@@ -511,7 +511,7 @@ function admPortalSheet_() {
   if (!sh || sh.getLastRow() < 2) return null;
   var v = sh.getDataRange().getDisplayValues(), c = {};
   v[0].forEach(function (h, j) { var k = admH_(h); if (k && !(k in c)) c[k] = j; });
-  return { v: v, g: function (r, k) { return c[k] === undefined ? '' : admS_(r[c[k]]); } };
+  return { v: v, head: v[0], g: function (r, k) { return c[k] === undefined ? '' : admS_(r[c[k]]); } };
 }
 /** one portal row -> the fields of the admission form */
 function admPortalStu_(P, row, set) {
@@ -647,6 +647,9 @@ function admNew_() {
     if (admIsMig_(s.year) ? /^JCW-/i.test(s.portalRoll) : (maxY && yearOf(s.batch) && yearOf(s.batch) < maxY)) { older++; return; }
     var gp = admGuessProg_(s, set), gq = admGuessQuota_(s.quota, gp.key, names);
     s.program = gp.key; s.progSure = gp.sure;
+    s.all = [];                                   // every filled column of her "Portal Data" row, for the details view
+    P.head.forEach(function (h, j) { var x = admS_(r[j]); if (admS_(h) && x && !/^(load status|details synced)$/i.test(admS_(h))) s.all.push([admS_(h), x]); });
+    s.reg = g(r, 'reg'); s.session = g(r, 'session'); s.division = g(r, 'division'); s.pct = g(r, 'agemarks') || g(r, 'percentagemarks');
     s.quotaGuess = admIsMig_(s.year) ? ADM_CFG.MIGRATION.QUOTA : gq.quota; s.quotaSure = admIsMig_(s.year) || gq.sure;
     // an Enrollment# already typed on the portal is kept when it is free and in the program's range
     s.rollFromPortal = '';

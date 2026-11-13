@@ -120,6 +120,16 @@ dialog::backdrop{background:rgba(10,15,25,.55)}
 .pn .warnp{color:var(--mid);font-weight:700;font-size:12.5px}
 .stickbar{position:sticky;top:0;z-index:5;background:var(--glass);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);padding:8px 0;margin-bottom:8px}
 .stickbar .acts{margin-top:0}
+.pn .ph{width:76px;height:92px;border-radius:12px;object-fit:cover;flex:0 0 76px;background:var(--surface2);border:1.5px solid var(--line);cursor:zoom-in}
+.pn .phx{width:76px;height:92px;border-radius:12px;flex:0 0 76px;display:grid;place-items:center;font-size:28px;font-weight:800;background:var(--tea2);color:var(--brown)}
+.facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin-top:10px}
+.facts div{background:var(--surface2);border-radius:10px;padding:6px 9px;font-size:13px;min-width:0}
+.facts small{display:block;color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.facts b{display:block;overflow-wrap:anywhere}
+.fee{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;align-items:center}
+.fee .pill{font-variant-numeric:tabular-nums}
+.bigpic{width:100%;max-height:60vh;object-fit:contain;border-radius:14px;background:var(--surface2)}
+.dtab td:first-child{color:var(--muted);font-weight:700;width:40%}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 /* ===== JCW uniform theme: brown, tea pink and white (keep this block last in the <style>) ===== */
 :root{--brown:#6B3423;--brown2:#8A4A35;--brown3:#A86A52;--tea:#E7B7AE;--tea2:#F4D6D0;--tea3:#FBEDEA;
@@ -700,6 +710,33 @@ async function pnLoad(show){
   } catch(e){ if(e.fatal) fatal = e.message; else if(show) toast(e.message, 5000); }
   finally { pnLoading = false; render(); }
 }
+/** "P-5000.00, U-1200.00" -> [{paid, amount}] */
+function feeOf(t){ return String(t || '').split(',').map(x => x.trim()).filter(Boolean).map(x => { const m = x.match(/^([PU])-?([\d.]+)/i); return m ? { paid:/p/i.test(m[1]), amount:Number(m[2]) } : null; }).filter(Boolean); }
+const money = n => 'Rs ' + Math.round(n).toLocaleString('en-PK');
+function feeHtml(t){
+  const f = feeOf(t); if(!f.length) return `<div class="fee"><span class="pill">Fee: no challan on the portal copy yet</span></div>`;
+  const paid = f.filter(x => x.paid).reduce((a, x) => a + x.amount, 0), due = f.filter(x => !x.paid).reduce((a, x) => a + x.amount, 0);
+  return `<div class="fee"><b style="font-size:13px">Fee:</b>${f.map(x => `<span class="pill ${x.paid ? 'ok' : 'full'}">${x.paid ? 'Paid' : 'Unpaid'} ${money(x.amount)}</span>`).join('')}
+    <span class="sub">· paid ${money(paid)}${due ? ' · <b style="color:var(--bad)">due ' + money(due) + '</b>' : ''}</span></div>`;
+}
+function pnFacts(s){
+  const subs1 = (s.subjects || []).filter(Boolean);
+  const F = [['DOB', s.dob], ['Contact', s.contact], ['Email', s.email], ['Category', s.quota], ['Batch', s.batch], ['Session', s.session], ['Reg#', s.reg],
+    ['Board', s.board], ['Passing year', s.passYear], ['Matric roll no', s.matricRoll],
+    ['Matric marks', s.metric ? s.metric + (s.total ? ' / ' + s.total : '') : ''], ['Percentage', s.pct || (s.metric && s.total ? (Math.round(s.metric / s.total * 10000) / 100) + '%' : '')], ['Division', s.division],
+    ['Portal section', s.section], ['Portal status', s.status]].filter(x => x[1]);
+  return `<div class="facts">${F.map(x => `<div><small>${esc(x[0])}</small><b>${esc(x[1])}</b></div>`).join('')}</div>
+    ${subs1.length ? `<div class="sub" style="margin-top:6px"><b>Subjects on the portal:</b> ${esc(subs1.join(', '))}</div>` : ''}${feeHtml(s.challan)}`;
+}
+function pnDetails(id){
+  const s = pnew && pnew.list.find(x => x.id === id); if(!s) return;
+  dlgOpen(`<h2>${esc(s.name)}</h2><div class="sub">d/o ${esc(s.father || '-')} · portal ID ${esc(s.id)}</div>
+    ${s.pic ? `<img class="bigpic" src="${esc(s.pic)}" alt="Photo of ${esc(s.name)}" style="margin-top:10px" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'seat',textContent:'Photo could not be loaded from the portal.'}))">` : '<div class="seat">No photo on the portal copy yet (it comes with the Full sync).</div>'}
+    ${feeHtml(s.challan)}
+    <div style="max-height:45vh;overflow:auto;margin-top:10px"><table class="dtab"><tbody>${(s.all && s.all.length ? s.all : [['Name', s.name]]).map(x => `<tr><td>${esc(x[0])}</td><td>${/^https?:\/\//.test(x[1]) ? `<a href="${esc(x[1])}" target="_blank" rel="noopener">open</a>` : esc(x[1])}</td></tr>`).join('')}</tbody></table></div>
+    <div class="acts"><button class="btn primary" id="dOk">Close</button></div>`);
+  $('#dOk').onclick = dlgClose;
+}
 function pnHtml(){
   if(!pnew) return `<div class="card"><h2>${pnLoading ? 'Reading the portal list…' : 'From the portal'}</h2><div class="sub">${online() ? 'Looking for students who are Enrolled on the UOP portal but not yet in the strength sheet.' : 'Connect to the internet to see new admissions from the portal.'}</div></div>`;
   const list = pnList(), lbl = k => { const p = prog(k); return p ? p.label : 'Choose program'; };
@@ -728,13 +765,14 @@ function pnHtml(){
     const qopts = qs.includes(e.quota) ? qs : qs.concat(e.quota ? [e.quota] : []);
     return `<section class="card pn${e.on && !hid ? '' : ' off'}" data-pn="${esc(s.id)}">
       <div class="hd"><input type="checkbox" data-k="on" ${e.on && !hid ? 'checked' : ''} ${hid ? 'disabled' : ''} aria-label="Add ${esc(s.name)}">
-        ${s.pic ? `<img src="${esc(s.pic)}" alt="" loading="lazy" style="width:44px;height:44px;border-radius:50%;object-fit:cover" onerror="this.style.display='none'">` : `<span class="av">${esc((s.name || '?').charAt(0).toUpperCase())}</span>`}
+        ${s.pic ? `<img class="ph" src="${esc(s.pic)}" alt="Photo of ${esc(s.name)}" loading="lazy" data-det="${esc(s.id)}" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'phx',textContent:'${esc((s.name || '?').charAt(0).toUpperCase())}'}))">` : `<span class="phx">${esc((s.name || '?').charAt(0).toUpperCase())}</span>`}
         <div class="who"><b>${esc(s.name)}</b><div class="sub">d/o ${esc(s.father || '-')} · portal ID ${esc(s.id)}${s.portalRoll ? ' · ' + esc(s.portalRoll) : ''}</div>
           <div class="sub">Portal: ${esc(s.programName || '-')} · ${esc(s.year)}${s.section ? ' · sec ' + esc(s.section) : ''}${s.quota ? ' · ' + esc(s.quota) : ''}${s.metric ? ' · ' + esc(s.metric) + '/' + esc(s.total) : ''}${s.batch ? ' · batch ' + esc(s.batch) : ''}</div>
           ${!s.progSure ? `<div class="warnp">Check the program: the portal does not say which ${esc((prog(s.program) || {}).classProgram || '')} program.</div>` : ''}
           ${!s.quotaSure && !mig ? `<div class="warnp">Portal category "${esc(s.quota)}" is not a known quota: check it.</div>` : ''}
           ${!s.dob && !s.metric ? `<div class="sub">Details (DOB, marks, photo) fill in after the next Full sync.</div>` : ''}</div>
-        <button class="btn small" type="button" data-hide="${esc(s.id)}">${hid ? 'Unhide' : 'Hide'}</button></div>
+        <div style="display:flex;flex-direction:column;gap:6px"><button class="btn small" type="button" data-det="${esc(s.id)}">Full details</button><button class="btn small" type="button" data-hide="${esc(s.id)}">${hid ? 'Unhide' : 'Hide'}</button></div></div>
+      ${pnFacts(s)}
       ${hid ? '' : `<div class="g2">
         <div><label>Program</label><select data-k="program">${init.programs.map(p => opt(p.key, e.program, p.label)).join('')}${e.program ? '' : opt('', '', 'Choose…')}</select></div>
         <div><label>Year</label><select data-k="year">${opt('1st Year', e.year)}${opt('2nd Year', e.year, '2nd Year (migration)')}</select></div>
@@ -752,6 +790,7 @@ function wirePn(){
   const S = $('#pnRe'); if(S) S.onclick = () => { pnList().forEach(s => { const e = pnEntry(s); e.rollManual = false; e.secManual = false; }); pnSuggest(); render(); toast('Roll numbers and sections suggested again'); };
   const H = $('#pnSh'); if(H) H.onclick = ev => { ev.preventDefault(); pnShowHidden = !pnShowHidden; render(); };
   const D = $('#pnAdd'); if(D) D.onclick = pnAddAsk;
+  document.querySelectorAll('[data-det]').forEach(b => b.onclick = () => pnDetails(b.dataset.det));
   document.querySelectorAll('[data-hide]').forEach(b => b.onclick = () => {
     const id = b.dataset.hide; pnHide = pnHide.includes(id) ? pnHide.filter(x => x !== id) : pnHide.concat([id]); pnSuggest(); render(); });
   document.querySelectorAll('[data-pn]').forEach(card => {
