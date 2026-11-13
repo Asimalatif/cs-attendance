@@ -332,7 +332,8 @@ function gridsToRows(grids){
    2) TEACHER NAMES  (the old extractTeachers + formatTeacherNames + replaceTeacherNames)
    ===================================================================== */
 const TITLE_SPLIT = /(?=\b(?:ms|mrs|miss|dr|mr|prof|madam)\b\.?\s*[a-z])/i;
-const nkey = s => String(s || '').toLowerCase().replace(/\b(ms|mrs|miss|dr|mr|prof|madam)\b\.?/g, ' ').replace(/[^a-z]/g, '');
+const _nk = new Map();   // name -> key, remembered (called very often while the lists are built)
+const nkey = s => { s = String(s || ''); let k = _nk.get(s); if(k === undefined){ k = s.toLowerCase().replace(/\b(ms|mrs|miss|dr|mr|prof|madam)\b\.?/g, ' ').replace(/[^a-z]/g, ''); if(_nk.size > 20000) _nk.clear(); _nk.set(s, k); } return k; };
 function cleanName(raw){
   let s = String(raw || '').replace(/\(.*?\)/g, ' ').replace(/^[\s\d.)\-–:*•#]+/, '').replace(/[\s\d.(\-–:*•#]+$/, '').replace(/\s+/g, ' ').trim();
   s = s.replace(/^(ms|mrs|dr|mr|prof)\b\.?\s*/i, (m, t) => t[0].toUpperCase() + t.slice(1).toLowerCase() + '. ').replace(/^(miss|madam)\b\.?\s*/i, (m, t) => t[0].toUpperCase() + t.slice(1).toLowerCase() + ' ');
@@ -354,15 +355,19 @@ function splitStaff(raw){
   const seen = new Set();
   return parts.map(cleanName).filter(n => { const k = nkey(n); if(k.length < 2 || seen.has(k) || /^(staff|onduty|duty|invigilators?|nil|none|na)$/.test(k)) return false; seen.add(k); return true; });
 }
-let _ix = null, _ixAt = -1;
+let _ix = null, _ixAt = -1, _ixP = null, _ixC = null, _ixSig = '';
 function nameIndex(){
-  const at = (CTS && CTS.at || 0) + ':' + PAIRS.length + ':' + JSON.stringify(PAIRS).length;
-  if(_ix && _ixAt === at) return _ix;
+  // cheap check first: this runs tens of thousands of times while the lists are built (turning all name fixes into text every time froze the page)
+  if(_ix && _ixP === PAIRS && _ixC === CTS && _ixAt === PAIRS.length) return _ix;
+  const sig = (CTS && CTS.at || 0) + ':' + PAIRS.length + ':' + JSON.stringify(PAIRS).length;
+  _ixP = PAIRS; _ixC = CTS;
+  if(_ix && _ixSig === sig){ _ixAt = PAIRS.length; return _ix; }
+  _ixSig = sig;
   const map = {}, ct = {}, exact = {};
   ((CTS && CTS.list) || []).forEach(c => { const f = fullKey(c.name); if(f && !exact[f]) exact[f] = c.name; });
   PAIRS.forEach(p => { const k = nkey(p[0]); if(k && String(p[1] || '').trim()) map[k] = String(p[1]).trim(); });
   ((CTS && CTS.list) || []).forEach(c => { const k = nkey(c.name); if(k && !ct[k]) ct[k] = c; });
-  _ixAt = at; return (_ix = { map, ct, exact });
+  _ixAt = PAIRS.length; return (_ix = { map, ct, exact });
 }
 /** the whole name with its title (DR. SAEEDA ≠ MS. SAEEDA) */
 const fullKey = n => String(n || '').toUpperCase().replace(/\bMRS\b|\bMISS\b/g, 'MS').replace(/[^A-Z0-9]/g, '');
@@ -696,7 +701,9 @@ function lev(a, b){ const m = a.length, n = b.length; if(!m) return n; if(!n) re
 const ratio = (a, b) => { const L = Math.max(a.length, b.length); return L ? 1 - lev(a, b) / L : 1; };
 const collapse = s => s.replace(/(.)\1+/g, '$1');
 const skel = s => collapse(s[0] + s.slice(1).replace(/[AEIOUY]/g, ''));
-function tokSim(a, b){ if(a === b) return 1; let r = ratio(collapse(a), collapse(b)); const sa = skel(a), sb = skel(b); if(sa.length > 1 && sb.length > 1) r = Math.max(r, .8 * ratio(sa, sb)); if((a.length === 1 || b.length === 1) && a[0] === b[0]) r = Math.max(r, .75); return r; }
+const _ts = new Map();   // remembered word-to-word likeness (the same pairs are compared again and again)
+function tokSim(a, b){ if(a === b) return 1; const key = a + '|' + b; let v = _ts.get(key); if(v === undefined){ v = tokSim0(a, b); if(_ts.size > 200000) _ts.clear(); _ts.set(key, v); } return v; }
+function tokSim0(a, b){ let r = ratio(collapse(a), collapse(b)); const sa = skel(a), sb = skel(b); if(sa.length > 1 && sb.length > 1) r = Math.max(r, .8 * ratio(sa, sb)); if((a.length === 1 || b.length === 1) && a[0] === b[0]) r = Math.max(r, .75); return r; }
 function dirSim(A, B){ let t = 0, w = 0; A.forEach(x => { let best = 0; B.forEach(y => { const v = tokSim(x, y); if(v > best) best = v; }); t += best * x.length; w += x.length; }); return t / w; }
 function textSim(A, B){ if(!A.length || !B.length) return 0; return Math.max((dirSim(A, B) + dirSim(B, A)) / 2, ratio(collapse(A.join('')), collapse(B.join('')))); }
 const titleOf = n => (String(n).match(/^(Ms|Mrs|Dr|Mr|Prof|Miss|Madam)\b/i) || [''])[0].toLowerCase().replace('miss', 'ms').replace('mrs', 'ms');
@@ -1070,7 +1077,10 @@ function sgApply(){
    subjects matches (Maths = Mathematics = G.Maths, Psycology = Psychology, Urdu = Urdu Comp …). */
 const SUBALIAS = { MATHEMATICS:'MATH', MATHS:'MATH', MATH:'MATH', GMATHS:'MATH', GMATH:'MATH', GENERALMATHEMATICS:'MATH', GENERALMATHS:'MATH', PAKISTANSTUDIES:'PAKSTUDY', PAKSTUDIES:'PAKSTUDY', PAKSTUDY:'PAKSTUDY', ISLAMIAT:'ISLAMIYAT', ISLAMYAT:'ISLAMIYAT', CS:'COMPUTERSCIENCE', COMPUTER:'COMPUTERSCIENCE', PSYCOLOGY:'PSYCHOLOGY', STATSTIC:'STATISTICS', STATISTIC:'STATISTICS', STATS:'STATISTICS' };
 const subjK = x => { const k = vnorm(x).replace(/^(ADVANCED|ADVANCE|ADV)/, '').replace(/(ADVANCED|ADVANCE|ADV)$/, ''); return SUBALIAS[k] || k; };
-function subjMatch(a, b){ const x = subjK(a), y = subjK(b); if(x.length < 3 || y.length < 3) return false; return x === y || x.includes(y) || y.includes(x) || ratio(collapse(x), collapse(y)) >= .82; }
+const _sm = new Map();
+function subjMatch(a, b){ const key = a + '\u0001' + b; let v = _sm.get(key); if(v !== undefined) return v;
+  const x = subjK(a), y = subjK(b); v = !(x.length < 3 || y.length < 3) && (x === y || x.includes(y) || y.includes(x) || ratio(collapse(x), collapse(y)) >= .82);
+  if(_sm.size > 20000) _sm.clear(); _sm.set(key, v); return v; }
 const paperSubs = d => ((d && d.sub) || []).flatMap(x => String(x).split(/[\/,&+\n]+/)).map(x => x.trim()).filter(Boolean);
 const mySubs = n => { const ct = contactOf(n) || {}; return [ct.dept, ...(ct.subs || [])].filter(Boolean); };
 /** class → programme + year: "F.Sc-I" → FSC1, "FCS-1 D3" → FCS1, "F.A II" → FA2, "ICS-II" → FCS2 (null when unknown) */
@@ -1336,7 +1346,9 @@ function yearFix(y){
 
 /* ---------- names not in the app's teacher list: same as an app teacher, or not a teacher (lab staff, left, on leave) ---------- */
 let UNK = {};
-function appScore(name, app){
+const _as = new Map();
+function appScore(name, app){ const key = name + '\u0001' + app; let v = _as.get(key); if(v === undefined){ v = appScore0(name, app); if(_as.size > 100000) _as.clear(); _as.set(key, v); } return v; }
+function appScore0(name, app){
   const A = ntok(name), B = ntok(app); if(!A.length || !B.length) return 0;
   const [S, L] = A.length <= B.length ? [A, B] : [B, A];
   const cov = S.filter(x => L.some(y => tokSim(x, y) >= .85)).length / S.length;
