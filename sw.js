@@ -1,5 +1,5 @@
 // Bump VERSION every time you change index.html so phones pick up the update.
-const VERSION = 'csa-v155';
+const VERSION = 'csa-v156';
 
 // Approved leaves (leaves.html): self.LV = storage + sending of the Leave In-Charge's waiting leaves
 try { importScripts('./leavesync.js'); } catch (e) {}

@@ -51,7 +51,7 @@ var REMARK_HEAD   = ['Key', 'Teacher', 'Class', 'Roll No', 'Student', 'Tags', 'L
 var REMARK_MAX_LOG = 50, REMARK_MAX_TAGS = 10;
 
 function doGet() {
-  return json_({ ok: true, service: 'JCW Daily Attendance backend v7.3.2' });
+  return json_({ ok: true, service: 'JCW Daily Attendance backend v7.4' });
 }
 
 function doPost(e) {
@@ -181,9 +181,8 @@ function deleteReport_(user, id) {
   } finally { lock.releaseLock(); }
 }
 function getProctors_() {
-  var sh = SpreadsheetApp.openById(USERS_SS_ID).getSheetByName('Users');
-  if (!sh) return [];
-  var v = sh.getDataRange().getValues();
+  var v = usersTable_();
+  if (!v.length) return [];
   var n = function (s) { return String(s).toLowerCase().replace(/[^a-z0-9]/g, ''); };
   var hdr = v[0].map(n);
   var col = function (name, fallback) { var i = hdr.indexOf(name); return i === -1 ? fallback : i; };
@@ -386,7 +385,7 @@ function cacheClear_(k) {
 
 /** Run this by hand after you change the Timetable, Users or the strength sheet. */
 function clearAppCaches() {
-  CACHE_KEYS.concat(['master_att', 'users_att', 'tt_att', 'tt_att2']).forEach(cacheClear_);
+  CACHE_KEYS.concat(['master_att', 'users_att', 'tt_att', 'tt_att2', 'users_full']).forEach(cacheClear_);
     SEASON.forEach(function (t) { cacheClear_('ll2_' + t); });
 }
 
@@ -397,6 +396,19 @@ function usersCol_(hdr, name, fallback) {
   var h = hdr.map(function (s) { return String(s).toLowerCase().replace(/[^a-z0-9]/g, ''); });
   var i = h.indexOf(name);
   return i === -1 ? fallback : i;
+}
+
+/** The whole Users sheet (as text), kept in the cache for 10 minutes. clearAppCaches / a password change empties it. */
+var USERS_MEMO_ = null;
+function usersTable_() {
+  if (USERS_MEMO_) return USERS_MEMO_;
+  var v = cacheGetBig_('users_full');
+  if (!v) {
+    var sh = SpreadsheetApp.openById(USERS_SS_ID).getSheetByName('Users');
+    v = sh ? sh.getDataRange().getValues().map(function (r) { return r.map(function (x) { return x == null ? '' : String(x); }); }) : [];
+    cachePutBig_('users_full', v);
+  }
+  return (USERS_MEMO_ = v);
 }
 
 function getUsers_() {
@@ -437,7 +449,7 @@ function changePassword_(user, oldPass, newPass) {
   for (var i = 1; i < d.length; i++) {
     if (String(d[i][4]).trim().toLowerCase() === user.username.toLowerCase()) {
       sh.getRange(i + 1, 6).setValue(String(newPass));
-      cacheClear_('users_att2');
+      cacheClear_('users_att2'); cacheClear_('users_full');
       return { ok: true };
     }
   }
@@ -995,7 +1007,10 @@ function syncSubjectChanges_(book, sh, meta, allowOff) {
 /** Finds Roll No / Name / M.T columns and the column of each day (1..31) from the header row. */
 function readLayout_(sheet) {
   var lastCol = sheet.getLastColumn();
-  var hdr = sheet.getRange(HEADER_ROW, 1, 1, lastCol).getValues()[0];
+  return layoutOf_(sheet.getRange(HEADER_ROW, 1, 1, lastCol).getValues()[0], sheet.getName());
+}
+/** same as readLayout_, from a header row that was already read */
+function layoutOf_(hdr, sheetName) {
 
   var L = { rollCol: -1, nameCol: -1, mtCol: -1, dayCols: {} };
   for (var c = 0; c < hdr.length; c++) {
@@ -1008,7 +1023,7 @@ function readLayout_(sheet) {
       if (d >= 1 && d <= 31 && !L.dayCols[d]) L.dayCols[d] = c + 1;
     }
   }
-  if (L.rollCol < 0) throw new Error('Roll No header not found in ' + sheet.getName());
+  if (L.rollCol < 0) throw new Error('Roll No header not found in ' + sheetName);
   return L;
 }
 
@@ -1033,19 +1048,23 @@ function getSheetData_(user, name, create) {
     sheet = ensureSheet_(book, meta);
   }
 
-  var L = readLayout_(sheet);
-  var n = sheet.getLastRow() - FIRST_ROW + 1;
+  // v7.4: the whole sheet in ONE read, all notes in ONE read (was about ten reads)
+  var lastR = Math.max(sheet.getLastRow(), HEADER_ROW), lastC = sheet.getLastColumn();
+  var V = sheet.getRange(1, 1, lastR, lastC).getValues();
+  var NT = sheet.getRange(HEADER_ROW, 1, lastR - HEADER_ROW + 1, lastC).getNotes();     // row 0 = header notes, then the students
+  var L = layoutOf_(V[HEADER_ROW - 1], name);
+  var n = lastR - FIRST_ROW + 1;
   var students = [], marks = {}, notes = {}, rolls = [];
   var days = Object.keys(L.dayCols).map(Number).sort(function (a, b) { return a - b; });
   var rg = dayColRange_(L);
       var pd = pdLoad_(book, name);
   var guestAt = guestAtMap_(meta);
+  var colOf = function (c) { var out = []; for (var r = 0; r < n; r++) out.push([V[FIRST_ROW - 1 + r][c - 1]]); return out; };
 
   if (n > 0) {
-    var rollRange = sheet.getRange(FIRST_ROW, L.rollCol, n, 1);
-    rolls = rollRange.getValues();
-    var rollNotes = rollRange.getNotes();     // a LEFT SUBJECT note = disabled student
-    var names = L.nameCol > 0 ? sheet.getRange(FIRST_ROW, L.nameCol, n, 1).getValues() : null;
+    rolls = colOf(L.rollCol);
+    var rollNotes = []; for (var q0 = 0; q0 < n; q0++) rollNotes.push([NT[q0 + 1][L.rollCol - 1]]);   // a LEFT SUBJECT note = disabled student
+    var names = L.nameCol > 0 ? colOf(L.nameCol) : null;
     var rollList = [];
     for (var i = 0; i < n; i++) {
       var roll = String(rolls[i][0]).trim();
@@ -1059,8 +1078,8 @@ function getSheetData_(user, name, create) {
       students.push(st);
     }
     if (rg) {
-      // ONE read for the whole month instead of one per day
-      var block = sheet.getRange(FIRST_ROW, rg.c1, n, rg.c2 - rg.c1 + 1).getValues();
+      // the day columns of the whole month, from the one read above
+      var block = []; for (var b0 = 0; b0 < n; b0++) block.push(V[FIRST_ROW - 1 + b0].slice(rg.c1 - 1, rg.c2));
       days.forEach(function (d) {
         if (pd.d[d] && Object.keys(pd.d[d]).length) { marks[d] = pd.d[d]; return; }   // period-wise day
         var j = L.dayCols[d] - rg.c1, m = {}, any = false;                              // old day: single letters = period 1
@@ -1073,14 +1092,14 @@ function getSheetData_(user, name, create) {
     }
   }
   if (rg) {
-    var nr = sheet.getRange(HEADER_ROW, rg.c1, 1, rg.c2 - rg.c1 + 1).getNotes()[0];
+    var nr = NT[0].slice(rg.c1 - 1, rg.c2);
     days.forEach(function (d) { var t = nr[L.dayCols[d] - rg.c1]; if (t) notes[d] = t; });
   }
 
   var mt = { total: 0, marks: {} };
   if (L.mtCol > 0 && n > 0) {
-    mt.total = Number(sheet.getRange(2, L.mtCol).getValue()) || 0;
-    var mv = sheet.getRange(FIRST_ROW, L.mtCol, n, 1).getValues();
+    mt.total = Number(V[1][L.mtCol - 1]) || 0;
+    var mv = colOf(L.mtCol);
     for (var q = 0; q < n; q++) {
       var rr = String(rolls[q][0]).trim(), mval = String(mv[q][0]).trim();
       if (rr && mval !== '') mt.marks[rr] = mval;
@@ -1089,7 +1108,7 @@ function getSheetData_(user, name, create) {
 
    try { mt = mtFromBook_(meta, mt); } catch (e) { Logger.log('Monthly test workbook skipped for ' + name + ': ' + e.message); }
   var my = monthYear_(meta.mon);
-  var title = String(sheet.getRange(1, 1).getValue() || '').trim();
+  var title = String(V[0][0] || '').trim();
   var lv = {};
   try { lv = leavesForSheet_(meta, students); } catch (e) { Logger.log('Approved leaves skipped for ' + name + ': ' + e.message); }
   return { ok: true, sheet: name, title: title, m: my.m, y: my.y, days: days, students: students, marks: marks, notes: notes, mt: mt, lv: lv };
@@ -2070,9 +2089,9 @@ function whoami_(user) {
 
 /** normalized teacher name -> department (from the Users sheet). */
 function teacherDepts_() {
-  var sh = SpreadsheetApp.openById(USERS_SS_ID).getSheetByName('Users'), map = {};
-  if (!sh) return map;
-  var v = sh.getDataRange().getValues(), iD = usersCol_(v[0], 'department', 3);
+  var map = {}, v = usersTable_();
+  if (!v.length) return map;
+  var iD = usersCol_(v[0], 'department', 3);
   for (var i = 1; i < v.length; i++) if (v[i][0]) map[normalizeName(v[i][0])] = String(v[i][iD] || '').trim();
   return map;
 }
@@ -2295,9 +2314,9 @@ function contacts_(user) {
   var scope = scopeOf_(user);
   if (isCP_(user)) scope = { all: true, dept: '' };                    // a Chief Proctor (even if also HOD) reaches every teacher
   if (!scope) return { ok: false, error: 'NOT_ALLOWED' };
-  var sh = SpreadsheetApp.openById(USERS_SS_ID).getSheetByName('Users'), out = [];
-  if (!sh) return { ok: true, list: out };
-  var v = sh.getDataRange().getValues(), h = v[0];
+  var out = [], v = usersTable_();
+  if (!v.length) return { ok: true, list: out };
+  var h = v[0];
   var iSt = usersCol_(h, 'status', 1), iDs = usersCol_(h, 'designation', 2), iDp = usersCol_(h, 'department', 3),
       iPh = usersCol_(h, 'contact', 6), iWa = usersCol_(h, 'whatsapplink', 7);
   for (var i = 1; i < v.length; i++) {
@@ -2317,9 +2336,9 @@ function contacts_(user) {
    ===================================================================================================== */
 /** normalized teacher name -> { phone, status, desig, dept } from the Users sheet */
 function usersInfo_() {
-  var sh = SpreadsheetApp.openById(USERS_SS_ID).getSheetByName('Users'), map = {};
-  if (!sh) return map;
-  var v = sh.getDataRange().getValues(), h = v[0];
+  var map = {}, v = usersTable_();
+  if (!v.length) return map;
+  var h = v[0];
   var iSt = usersCol_(h, 'status', 1), iDs = usersCol_(h, 'designation', 2), iDp = usersCol_(h, 'department', 3), iPh = usersCol_(h, 'contact', 6);
   for (var i = 1; i < v.length; i++) {
     if (!v[i][0]) continue;
@@ -2330,9 +2349,9 @@ function usersInfo_() {
 }
 /** true when this user is marked CP / CP1 / CP2 ... in the Chief Proctor column of the Users sheet */
 function isCP_(user) {
-  var sh = SpreadsheetApp.openById(USERS_SS_ID).getSheetByName('Users');
-  if (!sh) return false;
-  var v = sh.getDataRange().getValues(), iCP = usersCol_(v[0], 'chiefproctor', 9), me = String(user.username || '').trim().toLowerCase();
+  var v = usersTable_();
+  if (!v.length) return false;
+  var iCP = usersCol_(v[0], 'chiefproctor', 9), me = String(user.username || '').trim().toLowerCase();
   for (var i = 1; i < v.length; i++) {
     if (String(v[i][4] || '').trim().toLowerCase() === me) return /^CP\d*$/.test(String(v[i][iCP] || '').trim().toUpperCase());
   }
@@ -3662,6 +3681,10 @@ function rosterCheck_(user, mon, cursor) {
   if (SEASON.indexOf(mon) === -1) return { ok: false, error: 'Choose a month.' };
   var start = Date.now(), book = bookFor_(mon), RM = rosterModel_();
   var A = getAssignments_({ teacher: '', username: ADMIN_USER }).map(function (a) { return { name: makeName_(a.cls, mon, a.subject), cls: a.cls, sub: a.subject, mon: mon, teacher: a.teacher }; });
+  if (!Number(cursor)) {                                                 // v7.4 fast: whole month in 2 calls (Sheets advanced service)
+    try { var fast = rosterCheckFast_(book, A, RM, mon); if (fast) return fast; }
+    catch (e) { Logger.log('Fast roster check not used: ' + e.message); }
+  }
   var i = Number(cursor) || 0, diffs = [], made = 0;
   for (; i < A.length; i++) {
     if (Date.now() - start > ROSTER_MS) break;
@@ -3672,6 +3695,69 @@ function rosterCheck_(user, mon, cursor) {
   }
   var my = monthYear_(mon);
   return { ok: true, mon: mon, label: titleCase_(MONTH_NAMES[my.m]) + ' ' + my.y, total: A.length, cursor: i, done: i >= A.length, checked: made, diffs: diffs };
+}
+/** v7.4: every sheet of the month read with 2 Sheets API calls per 60 sheets (values + Roll No notes), compared in memory.
+ *  Also lists rows whose Student Name / Father Name differ from the strength sheet (d.wrong). Returns null if a sheet looks different. */
+function rosterCheckFast_(book, A, RM, mon) {
+  var have = {}; book.getSheets().forEach(function (s) { have[s.getName()] = true; });
+  var list = A.filter(function (a) { return have[a.name]; }), id = book.getId(), V = {}, N = {};
+  var q = function (n) { return "'" + n.replace(/'/g, "''") + "'"; };
+  for (var k = 0; k < list.length; k += 60) {
+    var part = list.slice(k, k + 60).map(function (a) { return a.name; });
+    var res = Sheets.Spreadsheets.Values.batchGet(id, { ranges: part.map(function (n) { return q(n) + '!A1:AP'; }) });
+    (res.valueRanges || []).forEach(function (vr, j) { V[part[j]] = vr.values || []; });
+    var g = Sheets.Spreadsheets.get(id, { ranges: part.map(function (n) { return q(n) + '!B' + FIRST_ROW + ':B'; }), fields: 'sheets(properties(title),data(rowData(values(note))))' });
+    (g.sheets || []).forEach(function (s) {
+      var rd = (s.data && s.data[0] && s.data[0].rowData) || [];
+      N[s.properties.title] = rd.map(function (r) { return (r.values && r.values[0] && r.values[0].note) || ''; });
+    });
+  }
+  var diffs = [], made = 0;
+  for (var i = 0; i < list.length; i++) {
+    var d = rosterDiffV_(V[list[i].name] || [], N[list[i].name] || [], list[i], RM);
+    if (!d) return null;                                                 // unusual layout: let the old way do it
+    made++;
+    if (d.missing.length || d.extra.length || d.off.length || d.wrong.length) diffs.push(d);
+  }
+  var my = monthYear_(mon);
+  return { ok: true, mon: mon, label: titleCase_(MONTH_NAMES[my.m]) + ' ' + my.y, total: A.length, cursor: A.length, done: true, checked: made, diffs: diffs, names: true };
+}
+/** rosterDiff_ from values already read (v = sheet from A1, notes = Roll No notes from row FIRST_ROW) */
+function rosterDiffV_(v, notes, meta, RM) {
+  var hdr = v[HEADER_ROW - 1] || [], rollCol = -1, nameCol = -1, fatherCol = -1, mtCol = -1, dayIdx = [];
+  for (var c = 0; c < hdr.length; c++) {
+    var t = norm_(hdr[c]);
+    if (t === 'ROLLNO' && rollCol < 0) rollCol = c;
+    else if (t === 'STUDENTNAME' && nameCol < 0) nameCol = c;
+    else if (t === 'FATHERNAME' && fatherCol < 0) fatherCol = c;
+    else if ((t === 'M.T' || t === 'MT') && mtCol < 0) mtCol = c;
+    else if (/^\d+$/.test(t) && Number(t) >= 1 && Number(t) <= 31) dayIdx.push(c);
+  }
+  if (rollCol !== 1) return null;                                       // the notes were read from column B only
+  var nk = function (s) { return String(s == null ? '' : s).toLowerCase().replace(/[^a-z]/g, ''); };
+  var want = RM.want(meta.cls, meta.sub), wantSet = {}, inSheet = {};
+  want.forEach(function (r) { wantSet[enr_(r[0])] = r; });
+  var guests = {}; try { activeGuests_(meta.cls, meta.sub, meta.mon).forEach(function (g) { guests[enr_(g.roll)] = 1; }); } catch (e) {}
+  var d = { sheet: meta.name, mon: meta.mon, cls: meta.cls, sub: meta.sub, teacher: meta.teacher || '', missing: [], extra: [], off: [], wrong: [] };
+  for (var i = FIRST_ROW - 1; i < v.length; i++) {
+    var r = v[i] || [], e = enr_(r[rollCol]); if (!e) continue;
+    var note = String(notes[i - FIRST_ROW + 1] || ''), off = isOffNote_(note), guest = note.indexOf('GUEST|') === 0;
+    var marks = dayIdx.some(function (c) { return String(r[c] == null ? '' : r[c]).trim(); }) || (mtCol >= 0 && String(r[mtCol] == null ? '' : r[mtCol]).trim() !== '');
+    inSheet[e] = 1;
+    var m = RM.byRoll[e], nameNow = String(nameCol >= 0 && r[nameCol] != null ? r[nameCol] : '').trim();
+    var who = { roll: String(r[rollCol]).trim(), name: nameNow || (m ? m[1] : ''), father: m ? m[4] || '' : '', pcs: m ? m[2] : '', marks: !!marks };
+    if (wantSet[e]) {
+      if (off && note.indexOf('guest removed') === -1) d.off.push(Object.assign(who, { why: note.split(' (')[0] }));
+      else if (!off && m) {
+        var fNow = String(fatherCol >= 0 && r[fatherCol] != null ? r[fatherCol] : '').trim();
+        var badN = nk(nameNow) !== nk(m[1]), badF = fatherCol >= 0 && String(m[4] || '').trim() && nk(fNow) !== nk(m[4]);
+        if (badN || badF) d.wrong.push({ roll: who.roll, name: m[1], father: m[4] || '', pcs: m[2], nameNow: nameNow, fatherNow: fNow, badName: badN, badFather: !!badF });
+      }
+    }
+    else if (!off && !guest && !guests[e]) d.extra.push(Object.assign(who, { why: m ? 'in the strength sheet as ' + m[2] + (m[3].length ? ' (' + m[3].join(', ') + ')' : '') : 'not in the strength sheet' }));
+  }
+  want.forEach(function (r) { if (!inSheet[enr_(r[0])]) d.missing.push({ roll: r[0], name: r[1], father: r[4] || '', pcs: r[2] }); });
+  return d;
 }
 /** op: 'add' (missing student), 'remove' (extra student: row deleted when she has no marks, otherwise struck through), 'on' (switch on again) */
 function rosterFix_(user, name, roll, op) {
