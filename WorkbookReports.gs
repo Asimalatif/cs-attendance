@@ -148,7 +148,7 @@ function wrTeacherFor_(map, subject) {
   return hit.length === 1 ? map[hit[0]] : '';
 }
 function wrPdfOut_(html, name) {
-  var blob = HtmlService.createHtmlOutput(html).getBlob().getAs('application/pdf').setName(name);
+  var blob = HtmlService.createHtmlOutput(typeof inkHtml_ === 'function' ? inkHtml_(html) : html).getBlob().getAs('application/pdf').setName(name);
   return { ok: true, name: name, pdf: Utilities.base64Encode(blob.getBytes()) };
 }
 function wrNow_() { return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd-MMM-yyyy hh:mm a'); }

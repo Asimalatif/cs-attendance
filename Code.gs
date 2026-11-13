@@ -51,7 +51,7 @@ var REMARK_HEAD   = ['Key', 'Teacher', 'Class', 'Roll No', 'Student', 'Tags', 'L
 var REMARK_MAX_LOG = 50, REMARK_MAX_TAGS = 10;
 
 function doGet() {
-  return json_({ ok: true, service: 'JCW Daily Attendance backend v7.4.1' });
+  return json_({ ok: true, service: 'JCW Daily Attendance backend v7.4.2' });
 }
 
 function doPost(e) {
@@ -1511,6 +1511,18 @@ function logDeletedDay_(user, meta, day, deleted, note) {
 
 /* ---------- print: sheet as PDF ---------- */
 
+/* ---------- ink saver: every PDF the server makes is black & white (the college prints on a black & white printer) ---------- */
+var INK_SAVER = true;            // false = colour PDFs again
+var INK_CSS_ = '<style>*{color:#000!important;background:#fff!important;background-color:#fff!important;box-shadow:none!important;text-shadow:none!important;' +
+  '-webkit-print-color-adjust:economy!important}th,thead td{background:#ececec!important;background-color:#ececec!important}' +
+  'table,th,td{border-color:#555!important}img{filter:grayscale(1)}</style>';
+/** HTML that is turned into a PDF: add the black & white style */
+function inkHtml_(html) {
+  if (!INK_SAVER) return html;
+  html = String(html);
+  return /<\/head>/i.test(html) ? html.replace(/<\/head>/i, INK_CSS_ + '</head>') : INK_CSS_ + html;
+}
+
 function exportPdf_(user, name) {
   var meta = allowed_(user)[name];
   if (!meta) return { ok: false, error: 'NOT_ALLOWED: ' + name };
@@ -1519,6 +1531,7 @@ function exportPdf_(user, name) {
   var sh = book.getSheetByName(name);
   if (!sh) return { ok: false, error: 'This sheet does not exist yet.' };
 
+  if (INK_SAVER) return exportPdfInk_(bookId, book, sh, name);          // v7.4.2: black & white copy of the sheet
   // hide notes from the printout: take them off, export, then put every one back
   var rng = sh.getDataRange();
   var notes = rng.getNotes();
@@ -1544,6 +1557,27 @@ function exportPdf_(user, name) {
   if (resp.getResponseCode() !== 200) {
     return { ok: false, error: 'PDF export failed (' + resp.getResponseCode() + ').' };
   }
+  return { ok: true, name: name, pdf: Utilities.base64Encode(resp.getBlob().getBytes()) };
+}
+
+/** Black & white PDF of an attendance sheet: a temporary copy without colours, colour rules and notes is exported, then deleted.
+ *  The teacher's sheet is never changed. */
+function exportPdfInk_(bookId, book, sh, name) {
+  var tmp = sh.copyTo(book), resp;
+  try {
+    tmp.setName('PDF ' + Date.now());
+    var rng = tmp.getDataRange();
+    tmp.setConditionalFormatRules([]);
+    rng.setBackground(null).setFontColor('#000000').clearNote();
+    SpreadsheetApp.flush();
+    var url = 'https://docs.google.com/spreadsheets/d/' + bookId + '/export?format=pdf' + '&gid=' + tmp.getSheetId() +
+      '&size=A4&portrait=false&fitw=true&gridlines=true&printtitle=false&sheetnames=false' +
+      '&pagenum=UNDEFINED&shownotes=false&fzr=false&top_margin=0.4&bottom_margin=0.4&left_margin=0.3&right_margin=0.3';
+    resp = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
+  } finally {
+    try { book.deleteSheet(tmp); } catch (e) { Logger.log('Temporary PDF sheet not deleted: ' + e.message); }
+  }
+  if (resp.getResponseCode() !== 200) return { ok: false, error: 'PDF export failed (' + resp.getResponseCode() + ').' };
   return { ok: true, name: name, pdf: Utilities.base64Encode(resp.getBlob().getBytes()) };
 }
 

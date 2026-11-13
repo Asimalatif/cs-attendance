@@ -509,6 +509,6 @@ function pcPdf_(req) {
     list.map(function (v, i) { return pcPage_(v, A.logo, A.sign, i === 0); }).join('') + '</body></html>';
   var tz = Session.getScriptTimeZone(), nm = list.length === 1 ? pcClean_(list[0].roll + ' - ' + list[0].name).replace(/[\\/:*?"<>|]/g, '') : 'Provisional Certificates ' + d.sheet + ' ' + Utilities.formatDate(new Date(), tz, 'dd-MM-yyyy HHmm');
   var it = DriveApp.getFoldersByName(PC_CFG.FOLDER), folder = it.hasNext() ? it.next() : DriveApp.createFolder(PC_CFG.FOLDER);
-  var file = folder.createFile(Utilities.newBlob(html, 'text/html', nm + '.html').getAs('application/pdf').setName(nm + '.pdf'));
+  var file = folder.createFile(Utilities.newBlob(typeof inkHtml_ === 'function' ? inkHtml_(html) : html, 'text/html', nm + '.html').getAs('application/pdf').setName(nm + '.pdf'));
   return { ok: true, url: file.getUrl(), id: file.getId(), n: list.length };
 }

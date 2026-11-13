@@ -352,7 +352,7 @@ function gtPdf_(user, cls, sub) {
     '<div class="sum">Total students: ' + list.length + ' | Present: ' + pres + ' | Absent: ' + abs + ' | Leave: ' + lv + ' | N/R: ' + nr + ' | Pass: ' + pass + ' | Fail: ' + fail + (hi ? ' | Highest: ' + hi : '') + '</div>' +
     '<div class="sig">___________________________<br>' + esc(a.teacher) + '</div></body></html>';
   var name = 'G.T_' + x.sh.getName() + '_' + x.S.name + '_' + a.teacher + '_' + gtSession_() + '.pdf';
-  var blob = HtmlService.createHtmlOutput(html).getBlob().getAs('application/pdf').setName(name);
+  var blob = HtmlService.createHtmlOutput(typeof inkHtml_ === 'function' ? inkHtml_(html) : html).getBlob().getAs('application/pdf').setName(name);
   return { ok: true, name: name, pdf: Utilities.base64Encode(blob.getBytes()) };
 }
 
