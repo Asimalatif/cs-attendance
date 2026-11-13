@@ -184,6 +184,7 @@ function bkRoute_(user, req) {
     case 'bk_check': return bkCheck_(req.book);
     case 'bk_fix':   return bkFix_(user, req.book, req.sheet, req.roll, req.op);
     case 'bk_batch': return bkBatch_(user, req);
+    case 'bk_names': return bkNames_(req);
   }
   return { ok: false, error: 'UNKNOWN_ACTION' };
 }
@@ -290,6 +291,8 @@ function bkFix_(user, key, sheetName, roll, op) {
  *  Stops after about 4 minutes and returns what is left, so the app sends the rest again. */
 function bkBatch_(user, req) {
   var start = Date.now(), ops = (req.ops || []).slice(), done = [];
+  var nm = ops.filter(function (o) { return o[0] === 'name'; });
+  if (nm.length) { done = bkNameFix_(req, nm); ops = ops.filter(function (o) { return o[0] !== 'name'; }); }
   while (ops.length && Date.now() - start < 240000) {
     var o = ops.shift(), r;
     if (req.kind !== 'daily') { ops.unshift(o); var all = bkFixSheet_(req.book, req.sheet, ops); return { ok: true, done: done.concat(all), left: [] }; }
@@ -339,6 +342,70 @@ function bkFixSheet_(key, sheetName, ops) {
     ops.filter(function (o) { return o[0] !== 'add' && o[0] !== 'remove'; }).forEach(function (o) { out.push({ op: o[0], roll: o[1], ok: false, result: 'Unknown action' }); });
     SpreadsheetApp.flush();
     try { CacheService.getScriptCache().remove('gt_progress_v1'); CacheService.getScriptCache().remove('dt_progress_v1'); } catch (e) {}
+    return out;
+  } finally { lock.releaseLock(); }
+}
+
+
+/* ================= Wrong Student Name / Father Name (any workbook, daily or section sheets) ================= */
+/** the workbook of a check: daily attendance (kind 'daily', mon = SEPT/OCT...) or a section-sheet workbook (book key) */
+function bkNameBook_(req) {
+  if (req.kind === 'daily') return bookFor_(String(req.mon || '').toUpperCase());
+  return bkBook_(req.book).book;
+}
+/** header row, Enroll#, name and father columns of a sheet (reads only the first 12 columns) */
+function bkNameLayout_(sh) {
+  var lr = sh.getLastRow(), lc = Math.min(sh.getLastColumn(), 12);
+  if (lr < 2 || lc < 2) return null;
+  var v = sh.getRange(1, 1, lr, lc).getValues();
+  for (var i = 0; i < Math.min(v.length, 8); i++) {
+    var head = v[i].map(gtK_), col = function (names) { for (var k = 0; k < names.length; k++) { var x = head.indexOf(names[k]); if (x >= 0) return x; } return -1; };
+    var en = col(['ENROLL', 'ENROLLNO', 'ENROLLMENT', 'ROLLNO']), nm = col(['STUDENTNAME', 'NAME']);
+    if (en >= 0 && nm >= 0) return { v: v, hi: i, enroll: en, name: nm, father: col(['FATHERNAME', 'FATHER']) };
+  }
+  return null;
+}
+var bkNk_ = function (s) { return String(s == null ? '' : s).toLowerCase().replace(/[^a-z]/g, ''); };
+/** students whose name or father name in the sheet is not the one in Transform-ALL-COLLEGE-STRENGTH. Goes on from req.cursor (sheet number). */
+function bkNames_(req) {
+  var book = bkNameBook_(req), sheets = book.getSheets(), RM = rosterModel_(), start = Date.now(), out = [], i = Number(req.cursor) || 0, checked = 0;
+  for (; i < sheets.length && Date.now() - start < 240000; i++) {
+    var sh = sheets[i];
+    if (BK_SKIP.test(sh.getName())) continue;
+    var L = bkNameLayout_(sh); if (!L) continue;
+    checked++;
+    var wrong = [];
+    for (var r = L.hi + 1; r < L.v.length; r++) {
+      var roll = gtS_(L.v[r][L.enroll]), e = enr_(roll), m = e && RM.byRoll[e];
+      if (!m) continue;
+      var nNow = gtS_(L.v[r][L.name]), fNow = L.father >= 0 ? gtS_(L.v[r][L.father]) : '';
+      var badN = bkNk_(nNow) !== bkNk_(m[1]), badF = L.father >= 0 && gtS_(m[4]) && bkNk_(fNow) !== bkNk_(m[4]);
+      if (badN || badF) wrong.push({ roll: roll, name: m[1], father: m[4] || '', pcs: m[2], nameNow: nNow, fatherNow: fNow, badName: badN, badFather: !!badF });
+    }
+    if (wrong.length) out.push({ sheet: sh.getName(), wrong: wrong });
+  }
+  return { ok: true, diffs: out, checked: checked, cursor: i, total: sheets.length, done: i >= sheets.length };
+}
+/** writes the Transform name and father name into those rows. ops: [['name', roll], ...] */
+function bkNameFix_(req, ops) {
+  var book = bkNameBook_(req), sh = book.getSheetByName(String(req.sheet)), RM = rosterModel_();
+  if (!sh) return ops.map(function (o) { return { op: 'name', roll: o[1], ok: false, result: 'Sheet not found' }; });
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    var L = bkNameLayout_(sh), out = [];
+    if (!L) return ops.map(function (o) { return { op: 'name', roll: o[1], ok: false, result: 'No header row' }; });
+    ops.forEach(function (o) {
+      var e = enr_(o[1]), m = RM.byRoll[e], n = 0;
+      if (!m) { out.push({ op: 'name', roll: o[1], ok: false, result: 'not in the strength sheet' }); return; }
+      for (var r = L.hi + 1; r < L.v.length; r++) {
+        if (enr_(L.v[r][L.enroll]) !== e) continue;
+        sh.getRange(r + 1, L.name + 1).setValue(m[1]);
+        if (L.father >= 0 && gtS_(m[4])) sh.getRange(r + 1, L.father + 1).setValue(m[4]);
+        n++;
+      }
+      out.push({ op: 'name', roll: o[1], ok: !!n, result: n ? 'name and father name corrected' : 'not in this sheet' });
+    });
+    SpreadsheetApp.flush();
     return out;
   } finally { lock.releaseLock(); }
 }
