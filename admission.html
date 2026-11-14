@@ -1468,11 +1468,17 @@ function omlFee(t, v){
   const twice = Object.keys(n).filter(a => n[a] > 1 && Number(a) >= SUB_FEE * 0.5);
   let text = due ? 'installments: ' + rs(paid) + ' paid, ' + rs(due) + ' still due' : 'fee paid ' + rs(paid);
   let L = due ? 'warn' : 'ok';
+  if(v && v.row && omlEmp(v.row) && v.state === 'ok'){            // confirmed UoP employee: the fee is Rs 60,000 in every program
+    if(tot > SUB_FEE * 1.1){ text += ' — the UoP Employee fee is ' + rs(SUB_FEE) + ': adjust / refund ' + rs(tot - SUB_FEE); L = 'warn'; }
+    else if(tot < SUB_FEE * 0.95){ text += ' — the UoP Employee fee is ' + rs(SUB_FEE) + ': ' + rs(SUB_FEE - tot) + ' more to pay'; L = 'bad'; }
+    else text += ' (UoP Employee fee)';
+    return { lvl:L, paid, due, tot, text };
+  }
   if(pm && pr && pr.fee === 'sub' && lvl === 'non'){ text += ' — this is the NON-subsidized fee, but she is selected Subsidized (half fee): adjust / refund the difference'; L = 'warn'; }
   else if(pm && pr && pr.fee === 'non' && lvl === 'sub'){ text += ' — this is only the subsidized fee, but she is selected Non-Subsidized (double fee): about ' + rs(tot) + ' more to pay'; L = 'bad'; }
   else if(pm && pr) text += lvl === 'sub' ? ' (subsidized fee)' : ' (non-subsidized fee)';
   if(twice.length && L !== 'ok') text += ' · ' + rs(Number(twice[0])) + ' paid twice: check for a double payment';
-  return { lvl:L, paid, due, text };
+  return { lvl:L, paid, due, tot, text };
 }
 /** one clear message per student of the official lists: official decision + fee + strength sheet */
 function omlStu(r, S, PN){
@@ -1491,6 +1497,8 @@ function omlStu(r, S, PN){
   else if(v.state === 'claim'){ lvl = 'warn'; msg = 'Ask for the UoP employee proof (service certificate), then confirm. ' + v.text.replace(/^Applied in UoP Employee Quota[^:]*:\s*check her proof[^.]*\.\s*/, '');
     const pq = omlPortalQ(t || p || r), fullFee = cv && cv.cls === 'Pre-Medical' && fee.paid && /non-subsidized fee\)/.test(fee.text);
     const why = [fullFee ? 'she paid the full non-subsidized fee' : '', pq && !/employ|\buop\b/i.test(pq) && pq !== '(empty)' ? 'the portal has her in ' + pq : '', t && alt && alt.key && t.key === alt.key && !/employ/i.test(t.quota || '') ? 'her record already matches her ' + (alt.quota || 'Open') + ' seat' : ''].filter(Boolean);
+    const empFee = fee.tot && Math.abs(fee.tot - SUB_FEE) <= SUB_FEE * 0.05;
+    if(empFee && why.length < 2) msg += ' Her fee (' + rs(fee.tot) + ') matches the ' + rs(SUB_FEE) + ' UoP Employee fee.';
     if(why.length >= 2) msg = 'Probably NOT an employee (wrongly on the UoP Employee list): ' + why.join(', ') + '. Press "Not employee" unless she shows the service certificate. ' + (alt ? 'Her seat: ' + alt.text + '.' : ''); }
   else if(v.state === 'check'){ lvl = 'warn'; msg = v.text; }
   else if(t){ lvl = wrong ? 'bad' : fee.lvl === 'bad' ? 'bad' : fee.lvl === 'warn' ? 'warn' : 'ok';
