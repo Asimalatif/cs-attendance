@@ -576,6 +576,68 @@ function reviewPhotos(fix, bad){
   const fl = $('#fxList'); if(fl) fl.onclick = () => window.JCWOUT ? JCWOUT.list({ title:'Photos to check', head:['#', 'Enroll#', 'Student', 'Father', 'Section', 'Problem'], rows:bad.map((b, i) => [i + 1, b.st.roll, b.st.name, b.st.father || '', b.st.pcs || b.st.section || '', b.issues.join('; ')]) }) : null;
   $('#fxClose').onclick = () => { dlg.close(); render(); };
 }
+/* ---------- v7.6.8: board photos: upright, zoomed, white background, square 3 × 3, named by Metric RollNo, one ZIP ---------- */
+const BP_SIZES = [
+  { label:'3 × 3 cm (354 × 354 px, 300 dpi)', px:354 }, { label:'3 × 3 in (900 × 900 px, 300 dpi)', px:900 },
+  { label:'300 × 300 px', px:300 }, { label:'600 × 600 px', px:600 }];
+const BP = () => Object.assign({ size:0, kb:0, who:'sel' }, ls.get('idc_bp', {}));
+function bpName(st){ return String(st.matric || '').replace(/\.0+$/, '').replace(/[^0-9A-Za-z-]/g, ''); }
+async function boardPhoto(st, px, kb){
+  const r = await DB.get('raw', st.roll).catch(() => null); if(!r || !r.data) throw new Error('no photo on this device');
+  const im = await loadImg(r.data), fd = await faceDetector();
+  let best = null;
+  for(const rot of [0, 90, 270, 180]){
+    const c = turned(im, rot, 640), D = (fd.detect(c).detections || []).filter(d => d.categories[0].score >= .5);
+    const top = D.sort((a, b) => b.categories[0].score - a.categories[0].score)[0]; if(!top) continue;
+    const kp = top.keypoints || [], up = kp.length >= 4 && kp[0].y < kp[3].y && kp[1].y < kp[3].y;
+    const val = (up ? 1 : 0) + top.categories[0].score;
+    if(!best || val > best.val) best = { rot, val, b:top.boundingBox, w:c.width, h:c.height };
+    if(rot === 0 && up && top.categories[0].score > .8) break;
+  }
+  if(!best) throw new Error('no face found');
+  const full = turned(im, best.rot, 1200), k = full.width / best.w;   // 1200: the same size the background step works at
+  const white = await loadImg(await bgData(await loadImg(full.toDataURL('image/jpeg', .95)), '#FFFFFF'));
+  // square round the head and shoulders: face about 45% of the height, a little space above the head
+  const fx = best.b.originX * k, fy = best.b.originY * k, fw = best.b.width * k, fh = best.b.height * k;
+  const side = Math.max(fh / .45, fw * 1.9), x0 = fx + fw / 2 - side / 2, y0 = fy - fh * .55;
+  const c = document.createElement('canvas'); c.width = c.height = px;
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, px, px);
+  g.drawImage(white, x0, y0, side, side, 0, 0, px, px);            // parts outside the photo stay white
+  let q = .92, out = c.toDataURL('image/jpeg', q);
+  while(kb && out.length * .75 / 1024 > kb && q > .35){ q -= .07; out = c.toDataURL('image/jpeg', q); }
+  return out;
+}
+async function boardPhotos(list, onlyTry){
+  const o = BP(), px = BP_SIZES[o.size].px;
+  S.bpOut = null; S.bpTry = null; S.err = '';
+  if(!list.length){ S.err = 'No students: tick some, or choose "Shown by the filters".'; return render(); }
+  S.busy = 'Loading the photo tools…'; render();
+  try{ await faceDetector(); await segmenter(); if(!onlyTry && !window.JSZip) await loadScript(JSZIP); }
+  catch(e){ S.busy = ''; S.err = 'The photo tools could not load (internet?): ' + (e.message || e); return render(); }
+  await fetchPhotos(list);
+  const zip = onlyTry ? null : new JSZip(), bad = [], used = {}; let n = 0, i = 0; S.cancel = false;
+  for(const st of (onlyTry ? list.slice(0, 1) : list)){
+    if(S.cancel) break;
+    i++; S.busy = 'Board photos: ' + i + ' of ' + list.length + '…'; S.prog = i / list.length; if(i % 3 === 0) render();
+    const nm = bpName(st);
+    if(!nm){ bad.push([st, 'no Metric RollNo']); continue; }
+    try{
+      const d = await boardPhoto(st, px, o.kb);
+      if(onlyTry){ S.bpTry = { src:d, name:nm + '.jpg', px, kb:Math.round(d.length * .75 / 1024) }; break; }
+      const file = used[nm] ? nm + '_' + st.roll + '.jpg' : nm + '.jpg'; used[nm] = 1;
+      zip.file(file, d.split(',')[1], { base64:true }); n++;
+    }catch(e){ bad.push([st, e.message || String(e)]); }
+  }
+  if(!onlyTry){
+    if(bad.length) zip.file('_not included.csv', '\uFEFFEnroll#,Student Name,Father Name,Section,Metric RollNo,Problem\n' + bad.map(([st, w]) => [st.roll, st.name, st.father, st.pcs || st.section, st.matric || '', w].map(v => '"' + String(v || '').replace(/"/g, '""') + '"').join(',')).join('\n'));
+    const name = 'Board photos ' + px + 'px ' + new Date().toISOString().slice(0, 10) + '.zip';
+    S.bpBlob = await zip.generateAsync({ type:'blob' });
+    S.bpOut = { n, bad, name };
+    if(n) bpSave();
+  } else if(!S.bpTry) S.err = 'First student: ' + (bad[0] ? bad[0][1] : 'not done');
+  S.busy = ''; S.prog = 0; render();
+}
+function bpSave(){ const a = document.createElement('a'), u = URL.createObjectURL(S.bpBlob); a.href = u; a.download = S.bpOut.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 120000); }
 async function openPhoto(roll){
   const st = S.list.find(x => x.roll === roll); if(!st) return;
   const dlg = $('#dlg'), ps = photoState(st);
@@ -812,6 +874,17 @@ function render(){
     ${Object.keys(sectionsSel).length > 1 ? `<div class="sub" style="margin-top:10px">Or one section at a time:</div><div class="acts" style="margin-top:6px">${Object.keys(sectionsSel).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map(k => `<button class="btn sm" data-secpdf="${esc(k)}" ${S.busy ? 'disabled' : ''}>${esc(k)} (${sectionsSel[k]})</button>`).join('')}</div>` : ''}
     <div id="busy" class="${S.busy ? '' : 'hidden'}"><div class="bar"><i style="width:${Math.round(S.prog * 100)}%"></i></div><span class="sub">${esc(S.busy)}</span></div>
   </section>
+  <section class="card"><h2>Board photos (named by Matric Roll No)</h2>
+    <div class="sub">For the board: each photo is turned upright, zoomed in when taken from far, the background made <b>white</b>, extra margins cut, made square <b>3 × 3</b> and saved as JPG named by the student's <b>Metric RollNo</b> (e.g. <i>512345.jpg</i>). All in one ZIP folder to download. Done on this device; Drive is not changed.</div>
+    <div class="grid" style="margin-top:8px">
+      <label class="f">Size<select id="bpSize">${BP_SIZES.map((z, i) => `<option value="${i}" ${i === BP().size ? 'selected' : ''}>${esc(z.label)}</option>`).join('')}</select></label>
+      <label class="f">Largest file (KB, 0 = any)<input id="bpKb" type="number" min="0" value="${BP().kb}"></label>
+      <label class="f">Students<select id="bpWho"><option value="sel" ${BP().who === 'sel' ? 'selected' : ''}>Ticked (${sel.length})</option><option value="shown" ${BP().who === 'shown' ? 'selected' : ''}>Shown by the filters above (${filtered().length})</option></select></label>
+    </div>
+    <div class="acts"><button class="btn pri" id="bpGo" ${!S.busy ? '' : 'disabled'}>Make board photos (ZIP)</button><button class="btn" id="bpOne" ${!S.busy ? '' : 'disabled'}>Try on the first student</button></div>
+    ${S.bpOut ? `<div class="note ${S.bpOut.bad.length ? 'mid' : 'ok'}" style="margin-top:8px">${S.bpOut.n} photos in <b>${esc(S.bpOut.name)}</b>.${S.bpOut.bad.length ? ` ${S.bpOut.bad.length} left out (no photo, no Metric RollNo or no face): <button class="btn sm" id="bpBad">Show them</button>` : ''} <button class="btn sm" id="bpAgain">Download the ZIP again</button></div>` : ''}
+    ${S.bpTry ? `<div style="display:flex;gap:12px;align-items:center;margin-top:8px"><img src="${S.bpTry.src}" style="width:150px;height:150px;border:1px solid var(--line)"><div class="sub">${esc(S.bpTry.name)}<br>${S.bpTry.px} px · ${S.bpTry.kb} KB</div></div>` : ''}
+  </section>
   <section class="card"><h2>Preview</h2>
     <div class="sub">${sel.length ? 'Ticked students' : 'First students of the list'}. Tap a card to change its photo.</div>
     <div class="prev">${prevList.map(st => `<div class="pair" data-pv="${esc(st.roll)}"><div class="who"><span>${esc(st.roll)}</span><span>${esc(st.pcs || st.section)}</span></div><div class="fr" data-p="${esc(st.roll)}"></div><div class="bk" data-e="${esc(st.roll)}"></div></div>`).join('')}</div>
@@ -878,6 +951,13 @@ function render(){
     stuList(PHN[k], all.filter(st => k === 'own' ? st.own : k === 'gone' ? st.gone : photoState(st) === k), k === 'gone' ? st => st.gone : k === 'own' ? st => st.own || '' : null); });
   $('#phMiss').onclick = () => { S.f.photo = 'missing'; S.f.ticked = false; ls.set('idc_f', S.f); render(); };
   $('#phCsv').onclick = () => csvDownload([['Enroll#', 'Student Name', 'Father Name', 'Section', 'Program', 'Problem']].concat(missing().sort((a, b) => (a.pcs || '').localeCompare(b.pcs || '') || a.roll.localeCompare(b.roll, undefined, { numeric: true })).map(st => [st.roll, st.name, st.father, st.pcs || st.section, progKey(st.program), photoState(st) === 'none' ? 'No photo link' : 'Link gives no picture'])), 'Students without photo.csv');
+  const bpSet = () => ls.set('idc_bp', { size:+$('#bpSize').value, kb:Math.max(0, +$('#bpKb').value || 0), who:$('#bpWho').value });
+  ['#bpSize', '#bpKb', '#bpWho'].forEach(id => $(id).onchange = () => { bpSet(); render(); });
+  const bpList = () => BP().who === 'shown' ? filtered() : chosen();
+  $('#bpGo').onclick = () => { bpSet(); boardPhotos(bpList()); };
+  $('#bpOne').onclick = () => { bpSet(); boardPhotos(bpList(), true); };
+  if($('#bpAgain')) $('#bpAgain').onclick = bpSave;
+  if($('#bpBad')) $('#bpBad').onclick = () => stuList('Not in the board photos ZIP', S.bpOut.bad.map(x => x[0]), st => (S.bpOut.bad.find(x => x[0] === st) || [])[1] || '');
   $('#phCheck').onclick = () => checkPhotos(all.filter(st => photoState(st) === 'ready'));
   $('#phWhite').onchange = e => { ls.set('idc_white', e.target.checked); CARDPIC.clear(); render(); };
   $('#phWhiteAll').onclick = async () => {
