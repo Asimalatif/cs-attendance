@@ -618,7 +618,11 @@ async function boardPhotos(list, onlyTry){
     list = S.list.filter(x => keep.has(x.roll));
     if(!S.list.some(x => 'matric' in x)){ S.err = 'The server does not send Metric RollNo yet: paste the new IdCards.gs in Apps Script and deploy a New version, then try again.'; return render(); }
   }
-  if(!list.some(x => bpName(x))){ S.err = 'None of these ' + list.length + ' students has a Metric RollNo in Transform-ALL-COLLEGE-STRENGTH (column "Metric RollNo").'; return render(); }
+  if(!list.some(x => bpName(x))){                                // maybe an old list on this device: read the sheet once more
+    S.busy = 'Reading the strength sheet again (for the matric roll numbers)…'; render();
+    const keep = new Set(list.map(x => x.roll)); await load(true); S.busy = ''; list = S.list.filter(x => keep.has(x.roll));
+  }
+  if(!list.some(x => bpName(x))){ S.err = 'None of these ' + list.length + ' students has a matric roll number in Transform-ALL-COLLEGE-STRENGTH (column MATRIC ROLL NO or Metric RollNo). If the column has numbers, paste the new IdCards.gs, deploy a New version and press Reload sheet.'; return render(); }
   S.busy = 'Loading the photo tools…'; render();
   try{ await faceDetector(); await segmenter(); if(!onlyTry && !window.JSZip) await loadScript(JSZIP); }
   catch(e){ S.busy = ''; S.err = 'The photo tools could not load (internet?): ' + (e.message || e); return render(); }
