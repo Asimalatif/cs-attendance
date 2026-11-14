@@ -125,7 +125,7 @@ var ADM_FIELDS = {
 /* Fields sent to the phone for every student (offline search / edit) */
 var ADM_INDEX = ['sno', 'roll', 'name', 'father', 'id', 'key', 'year', 'pcs', 'quota', 's1', 's2', 's3', 's4', 's5', 's6', 's7',
   'dob', 'metric', 'total', 'hq', 'room', 'pic', 'contact', 'email', 'board', 'passYear', 'matricRoll', 'challan',
-  'groupOnly', 'meritNo', 'batch', 'session', 'status'];
+  'groupOnly', 'meritNo', 'batch', 'session', 'status', 'aggregate', 'agewise', 'feepaid'];   // v7.7: + merit lists
 
 /* ================= Router (called from doPost) ================= */
 function admRoute_(user, req) {
@@ -266,7 +266,8 @@ function admRec_(T, r, i, sections) {
     dob: g('dob'), metric: g('obtainedmarks'), total: g('totalmarks'), hq: g('hq'), room: g('room'), pic: g('picurl') || g('photo'),
     contact: g('studentcontact'), email: g('email'), board: g('board'), passYear: g('passingyear'),
     matricRoll: g('matricrollno') || g('metricrollno'), challan: g('challandetails'),
-    groupOnly: g('grouponly'), meritNo: g('meritno'), batch: g('batch'), session: g('session'), status: g('status') };
+    groupOnly: g('grouponly'), meritNo: g('meritno'), batch: g('batch'), session: g('session'), status: g('status'),
+    aggregate: g('aggregate'), agewise: g('agewise'), feepaid: g('feepaiddate') };
   if (/^null$/i.test(rec.groupOnly)) rec.groupOnly = '';
   for (var s = 1; s <= 7; s++) rec['s' + s] = g('sub' + s);
   if (!rec.pcs && rec.section) rec.pcs = rec.section;
