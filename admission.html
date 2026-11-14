@@ -685,7 +685,7 @@ function pnEntry(s){
   if(!e){
     e = pnSel[s.id] = { on:true, program:s.program || '', year:s.year || '1st Year', section:'', rollNo:'', quota:s.quotaGuess || 'Open Quota', rollManual:false, secManual:false };
     // v7.8: the official merit list decides program (subsidized / non-subsidized) and quota, not the early portal copy
-    const v = !isMig(e.year) ? omlVerdict(omlFind(s.name, s.father, s.metric, s.total), (prog(s.program) || {}).classProgram) : null;
+    const v = !isMig(e.year) ? omlVerdict(omlFind(s.name, s.father, s.metric, s.total), (prog(s.program) || {}).classProgram, s.quota) : null;
     if(v){ e.oml = v; if(v.key) e.program = v.key; if(v.quota) e.quota = v.quota; if(v.state !== 'ok') e.on = false; }
   }
   return e;
@@ -1376,16 +1376,18 @@ function omlQuota(q, emp){                       // official quota words -> the 
   return names.find(n => k(n) === w) || names.find(n => k(n).startsWith(w) || w.startsWith(k(n))) || names.find(n => k(n).includes(w.split(' ')[0])) || (q + ' Quota');
 }
 /** what the official list means for the college: { state:'ok'|'wait'|'claim'|'check'|'no', key, quota, text, row } */
-function omlVerdict(rows, want){
+function omlVerdict(rows, want, pq){
   if(!rows || !rows.length || !init) return null;
+  const pqE = /employ|\buop\b/i.test(pq || '');   // v7.9: the portal saying UoP Employee is proof enough (no confirmation needed)
   // confirmed UoP employee first (always subsidized), then Selected Subsidized, an unconfirmed employee claim, other Selected, IBCC, Waiting; a refused claim last
-  const rank = r => omlEmp(r) ? (r.confirmed === 'Yes' ? 0 : r.confirmed === 'No' ? 6 : 2) : /Selected/i.test(r.pos) && !/Non-Sub/i.test(r.pos) && /Subsidized/i.test(r.pos) ? 1 : /Selected/i.test(r.pos) ? 3 : /IBCC/i.test(r.pos) ? 4 : /Waiting/i.test(r.pos) ? 5 : 7;
+  const rank = r => omlEmp(r) ? (r.confirmed === 'Yes' || (pqE && r.confirmed !== 'No') ? 0 : r.confirmed === 'No' ? 6 : 2) : /Selected/i.test(r.pos) && !/Non-Sub/i.test(r.pos) && /Subsidized/i.test(r.pos) ? 1 : /Selected/i.test(r.pos) ? 3 : /IBCC/i.test(r.pos) ? 4 : /Waiting/i.test(r.pos) ? 5 : 7;
   const fit = r => want && omlClass(r.program) === want ? 0 : 0.5;   // same rank: the row of the program she applied for (employee list can have her in 2 programs)
   const r = rows.slice().sort((a, b) => rank(a) + fit(a) - rank(b) - fit(b))[0], cls = omlClass(r.program), P = init.programs.filter(p => p.classProgram === cls);
   const sub = P.find(p => p.fee === 'sub'), non = P.filter(p => p.fee === 'non'), morning = non.find(p => /morning/i.test(p.label + p.key)) || non[0];
   const emp = omlEmp(r), quota = omlQuota(r.quota, emp), base = { row:r, quota, cls };
   if(emp){
     if(r.confirmed === 'Yes') return Object.assign(base, { state:'ok', key:(sub || P[0] || {}).key, text:'UoP Employee Quota, confirmed by ' + (r.confirmedBy || '') + ': always subsidized' });
+    if(pqE && r.confirmed !== 'No') return Object.assign(base, { state:'ok', key:(sub || P[0] || {}).key, text:'UoP Employee Quota: the portal has her in ' + pq + ' (proof): always subsidized' });
     if(r.confirmed === 'No') return Object.assign(base, { state:'no', key:'', text:'UoP Employee Quota claim NOT confirmed' + (r.note ? ': ' + r.note : '') });
     const alt = rows.filter(x => !omlEmp(x)).sort((a, b) => rank(a) - rank(b))[0], also = rows.filter(x => omlEmp(x) && x !== r).map(x => x.program);
     return Object.assign(base, { state:'claim', key:(sub || P[0] || {}).key, text:'Applied in UoP Employee Quota (' + r.program + (also.length ? '; also on the employee list for ' + also.join(', ') : '') + '): check her proof (employee card / letter) and confirm' + (alt ? '. If not an employee: ' + (alt.pos || '-') + ' in ' + (alt.quota || 'Open') + ' ' + alt.program : '. If not an employee: not on any other list') });
@@ -1489,7 +1491,7 @@ function omlFee(t, v){
 function omlStu(r, S, PN){
   const R = omlFind(r.name, r.father, r.obt, r.total), T = S.get(omlK(r.name, r.father)) || [], t = T[0];
   const p = !t && PN ? PN.get(omlK(r.name, r.father)) : null, want = t ? (prog(t.key) || {}).classProgram : p ? (prog(p.program) || {}).classProgram : '';
-  const v = omlVerdict(R.length ? R : [r], want), lab = k => (prog(k) || {}).label || k;
+  const v = omlVerdict(R.length ? R : [r], want, omlPortalQ(t || p || r)), lab = k => (prog(k) || {}).label || k;
   // v7.9: an employee claim not confirmed yet: weigh the signs. For: portal quota employee, record quota employee, fee = Rs 60,000.
   // Against: full non-subsidized fee, portal quota not employee, record on her other (open) seat. Mostly against -> check against her other seat.
   const alt = v && v.state === 'claim' ? omlVerdict(R.filter(z => !omlEmp(z)), want) : null, ch = t ? t.challan : p ? p.challan : '', f0 = omlFee(ch, null), pq0 = omlPortalQ(t || p || r);
@@ -1520,7 +1522,7 @@ function omlHtml(){
   const rows = oml ? oml.rows : [], lists = [...new Set(rows.map(r => r.list))];
   const q = nrm(omlQ), qd = omlQ.replace(/\D/g, ''), S = omlStrength();
   const hits = !omlQ.trim() ? [] : rows.filter(r => (qd.length >= 4 && r.form === qd) || (q && nrm(r.name + ' ' + r.father).includes(q))).slice(0, 25);
-  const card = r => { const v = omlVerdict([r]), T = S.get(omlK(r.name, r.father)) || [], t = T[0];
+  const card = r => { const v = omlVerdict([r], '', omlPortalQ(r)), T = S.get(omlK(r.name, r.father)) || [], t = T[0];
     const lab = k => (prog(k) || {}).label || k;
     const wrong = t && v && v.key && (t.key !== v.key || (v.quota && qk(t.quota) !== qk(v.quota)));
     return `<div class="oml-c ${v ? v.state : ''}"><div><b>${esc(r.name)}</b> <span class="sub">d/o ${esc(r.father)} · Form# ${esc(r.form)} · ${esc(r.obt)}/${esc(r.total)} · HQ ${esc(r.hq)} · AGG ${esc(r.agg)}</span></div>
@@ -1534,7 +1536,7 @@ function omlHtml(){
         ${!t && v && (v.state === 'ok' || v.state === 'check') ? `<button class="btn primary" data-oa="${esc(r.list)}|${esc(r.form)}">Admit: Roll No and section…</button>` : ''}
         ${t && wrong ? `<button class="btn" data-oe="${esc(t.roll || '')}">Open her record to correct</button>` : ''}
       </div></div>`; };
-  const st = rows.reduce((a, r) => { const v = omlVerdict([r]) || {}; a[v.state || 'x'] = (a[v.state || 'x'] || 0) + 1; return a; }, {});
+  const st = rows.reduce((a, r) => { const v = omlVerdict([r], '', omlPortalQ(r)) || {}; a[v.state || 'x'] = (a[v.state || 'x'] || 0) + 1; return a; }, {});
   return `<section class="card"><h3>Orientation desk</h3>
     <div class="sub">Type her name, father name or Form#. The official merit list says if she was selected, in which quota and subsidized or not; the portal copy is often still "Open Quota" in the first days.</div>
     <input id="omlQ" value="${esc(omlQ)}" placeholder="Name, father name or Form#" style="width:100%;height:46px;margin-top:8px" autocomplete="off">
@@ -1581,7 +1583,7 @@ function omlStuHtml(rows, lists, S){
     ${cur.length > omlN ? `<div class="acts"><button class="btn" type="button" id="omlMore">Show more (${cur.length - omlN} left)</button></div>` : ''}</section>`;
 }
 function omlAdmit(r){
-  const v = omlVerdict([r]); if(!v) return;
+  const v = omlVerdict([r], '', omlPortalQ(r)); if(!v) return;
   form = Object.assign(blankForm({ program:v.key || (init.programs.find(p => p.classProgram === v.cls) || {}).key, year:'1st Year', quota:v.quota || 'Open Quota' }),
     { name:r.name, father:r.father, metric:r.obt, total:r.total, hq:/^y/i.test(r.hq) ? 'Yes' : 'No' });
   lastDone = null; setTab('form'); window.scrollTo({ top:0 });
@@ -1590,7 +1592,7 @@ function omlAdmit(r){
 function omlCheck(){
   const S = omlStrength(), lab = k => (prog(k) || {}).label || k, out = [];
   idx.rows.forEach(row => { const o = recOf(row); if(isMig(o.year) || mlGone(o)) return;
-    const R = omlFind(o.name, o.father, o.metric, o.total), v = omlVerdict(R, (prog(o.key) || {}).classProgram);
+    const R = omlFind(o.name, o.father, o.metric, o.total), v = omlVerdict(R, (prog(o.key) || {}).classProgram, omlPortalQ(o));
     let p = '';
     if(!v) p = 'Not in the official lists';
     else if(v.state === 'wait') p = 'Official list: waiting, not selected';
