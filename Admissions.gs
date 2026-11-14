@@ -930,7 +930,7 @@ function admAgg_(m, t, hq) {
    aggregate - (Obtained + 20 if HQ) x 100 / Total
    merit  - 1st Year, per admission program and per quota: students by Aggregate, highest = 1
    room   - the section's room in the Timetable sheet                                                                    */
-var ADM_REFRESH = { portal: 'Portal', hq: 'HQ', aggregate: 'Aggregate', merit: 'MeritNo', room: 'Room' };
+var ADM_REFRESH = { portal: 'Portal', hq: 'HQ', aggregate: 'Aggregate', merit: 'MeritNo', room: 'Room', agewise: 'Age-wise' };
 /* every Transform column that has a matching value on the portal: f = field of the record (admRec_) and of the portal student (admPortalStu_),
    t = Transform column keys written, type = how values are compared, info = shown only (the college decides it, change it in Find & edit) */
 var ADM_CMP = [
@@ -981,13 +981,15 @@ function admRefresh_(user, fields, apply, accept) {
   var lock = LockService.getScriptLock(); lock.waitLock(30000);
   try {
     var set = admSettings_(), T = admRead_(), recs = admAll_(T, set.sections), C = T.cols, sh = T.sh;
-    var colOf = { portal: -1, hq: C.hq, aggregate: C.aggregate, merit: C.meritno, room: C.room };
-    var notes = [], skip = {};
+    var colOf = { portal: -1, hq: C.hq, aggregate: C.aggregate, merit: C.meritno, room: C.room, agewise: C.agewise };
+    var notes = [], skip = {}, newAgeCol = false;
+    if (fields.indexOf('merit') >= 0 && fields.indexOf('agewise') < 0) fields.push('agewise');       // v7.6.3: Age-wise goes with MeritNo
+    if (fields.indexOf('agewise') >= 0 && colOf.agewise === undefined) { colOf.agewise = T.width; newAgeCol = true; notes.push('A new column "Age-wise" is added at the end of the strength sheet.'); }
     fields.forEach(function (f) { if (colOf[f] === undefined) { skip[f] = true; notes.push('No "' + ADM_REFRESH[f] + '" column in the strength sheet.'); } });
     // columns made by a formula are never overwritten
     var n = T.rows.length;
     if (n) fields.forEach(function (f) {
-      if (skip[f] || colOf[f] < 0) return;
+      if (skip[f] || colOf[f] < 0 || (f === 'agewise' && newAgeCol)) return;
       var fm = sh.getRange(2, colOf[f] + 1, n, 1).getFormulas();
       if (fm.some(function (x) { return x[0]; })) { skip[f] = true; notes.push('"' + ADM_REFRESH[f] + '" is made by a formula in the sheet, so it was not changed.'); }
     });
@@ -1092,6 +1094,7 @@ function admRefresh_(user, fields, apply, accept) {
     });
     if (fields.indexOf('merit') >= 0) {
       var groups = {};
+      // v7.6.3: equal Aggregate = the same MeritNo (1, 2, 2, 4 …); among them Age-wise 1st, 2nd … (older first, from DOB)
       // v7.6.2: merit inside every program AND every quota separately (Pre-Medical Open (S) · UET Quota, Self Morning · Open Quota …),
       // by Aggregate, highest = 1. Students with no Aggregate or no quota get no merit number.
       recs.forEach(function (r) {
@@ -1099,10 +1102,20 @@ function admRefresh_(user, fields, apply, accept) {
         var g = r.key + '|' + admQ_(r.quota);
         (groups[g] = groups[g] || []).push(r);
       });
+      var ordinal = function (n) { var t = n % 100, u = n % 10; return n + (t >= 11 && t <= 13 ? 'th' : u === 1 ? 'st' : u === 2 ? 'nd' : u === 3 ? 'rd' : 'th'); };
+      var dobKey = function (r) { var d = admYmd_(r.dob); return /^\d{4}-\d\d-\d\d$/.test(d) ? d : '9999-99-99'; };     // no DOB = youngest
+      var aggOf = function (r) { return Math.round(Number(r._agg) * 100); };
       Object.keys(groups).forEach(function (k) {
-        groups[k].sort(function (a, b) {
-          return Number(b._agg) - Number(a._agg) || (admNum_(b.metric) || 0) - (admNum_(a.metric) || 0) || String(a.name).localeCompare(String(b.name));
-        }).forEach(function (r, i) { put(r, 'merit', i + 1); });
+        var L = groups[k].sort(function (a, b) {
+          return aggOf(b) - aggOf(a) || dobKey(a).localeCompare(dobKey(b)) || String(a.name).localeCompare(String(b.name));
+        });
+        var rank = 0, tie = 0;
+        L.forEach(function (r, i) {
+          if (i === 0 || aggOf(r) !== aggOf(L[i - 1])) { rank = i + 1; tie = 0; }
+          tie++;
+          put(r, 'merit', rank);
+          put(r, 'agewise', ordinal(tie));
+        });
       });
     }
     Object.keys(unknownCat).forEach(function (c) { notes.push(unknownCat[c] + ' student(s) with portal category "' + c + '" (not a known quota): choose their quota yourself or keep it.'); });
@@ -1113,6 +1126,10 @@ function admRefresh_(user, fields, apply, accept) {
         Object.keys(gw[j]).forEach(function (row) { cur[Number(row) - 2][0] = gw[j][row]; });
         rng.setValues(cur);
       });
+      if (newAgeCol && nv.agewise) {
+        if (sh.getMaxColumns() < colOf.agewise + 1) sh.insertColumnsAfter(sh.getMaxColumns(), colOf.agewise + 1 - sh.getMaxColumns());
+        sh.getRange(1, colOf.agewise + 1).setValue('Age-wise').setFontWeight('bold');
+      }
       fields.forEach(function (f) {
         if (f === 'portal') return;
         if (skip[f] || !nv[f]) return;
