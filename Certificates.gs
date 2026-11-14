@@ -513,8 +513,17 @@ function pcPdf_(req) {
   });
   if (!list.length) return { ok: false, error: 'No students to print.' };
   list.sort(function (a, b) { var x = Number(a.roll), y = Number(b.roll); return (isNaN(x) || isNaN(y)) ? String(a.roll).localeCompare(String(b.roll)) : x - y; });
-  var html = '<html><head><meta charset="utf-8"></head><body style="font-family:\'Times New Roman\',serif;font-size:15px;margin:0;">' +
-    list.map(function (v, i) { return pcPage_(v, A.logo, A.sign, i === 0); }).join('') + '</body></html>';
+  var mk = function (L) { return '<html><head><meta charset="utf-8"></head><body style="font-family:\'Times New Roman\',serif;font-size:15px;margin:0;">' +
+    L.map(function (v, i) { return pcPage_(v, A.logo, A.sign, i === 0); }).join('') + '</body></html>'; };
+  // v7.6: big lists (1,000+ certificates) are too much for one HTML -> PDF conversion: the page asks for parts of 40 and joins them
+  if (req.chunk) {
+    var from = Math.max(0, Number(req.from) || 0), n = Math.min(60, Number(req.n) || 40), part = list.slice(from, from + n);
+    if (!part.length) return { ok: true, total: list.length, from: from, n: 0, b64: '' };
+    var h = mk(part), pdf = Utilities.newBlob(typeof inkHtml_ === 'function' ? inkHtml_(h) : h, 'text/html', 'part.html').getAs('application/pdf');
+    return { ok: true, total: list.length, from: from, n: part.length, b64: Utilities.base64Encode(pdf.getBytes()), sheet: d.sheet };
+  }
+  if (list.length > 60) return { ok: false, error: 'TOO_BIG', total: list.length };
+  var html = mk(list);
   var tz = Session.getScriptTimeZone(), nm = list.length === 1 ? pcClean_(list[0].roll + ' - ' + list[0].name).replace(/[\\/:*?"<>|]/g, '') : 'Provisional Certificates ' + d.sheet + ' ' + Utilities.formatDate(new Date(), tz, 'dd-MM-yyyy HHmm');
   var it = DriveApp.getFoldersByName(PC_CFG.FOLDER), folder = it.hasNext() ? it.next() : DriveApp.createFolder(PC_CFG.FOLDER);
   var file = folder.createFile(Utilities.newBlob(typeof inkHtml_ === 'function' ? inkHtml_(html) : html, 'text/html', nm + '.html').getAs('application/pdf').setName(nm + '.pdf'));

@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         JCW Portal Sync
 // @namespace    jcw-attendance
-// @version      1.5
+// @version      1.6
 // @description  Reads Jinnah College students from the UOP portal (read-only) and sends them to the JCW attendance system: fills only the empty cells of Transform-ALL-COLLEGE-STRENGTH, lists cancelled / migrated / disenrolled / transferred students for Left Students (moved only when you press the button) and feeds the health check.
 // @match        https://portal.uop.edu.pk/Student/Students*
 // @match        https://portal.uop.edu.pk/student/students*
@@ -261,6 +261,9 @@
         if (!row['Category']) row['Category'] = first(f, ['CategoryId', 'categoryId', 'Category']);
         const hk = '__HQ' in f ? '__HQ' : Object.keys(f).find(k => /hafiz|hifz|quran|^is_?hq$|^hq$/i.test(k));      // Hafiz-e-Quran (+20 marks in the aggregate)
         if (hk) { const v = String(f[hk]).trim(); row['HQ'] = /^(yes|true|1|y|hafiz)/i.test(v) ? 'Yes' : /^(no|false|0|n)$/i.test(v) ? 'No' : v; }
+        // v1.6: every other field of the edit page goes too (the server makes a column for each one, nothing is dropped)
+        Object.keys(f).filter(k => !/^__|password|token/i.test(k) && String(f[k]).length <= 500).slice(0, 80)
+          .forEach(k => { const c = 'Portal ' + k.replace(/^txt/, ''); if (!(c in row) && String(f[k]).trim() !== '') row[c] = String(f[k]).trim(); });
       } catch (e) { if (e.message === 'LOGIN') throw e; warn.push('edit page'); }
     } else warn.push('no edit link');
     if (it.id) {

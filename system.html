@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<script src="inksaver.js"></script><script src="jcwout.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#6B3423">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<title>JCW Backups &amp; new session</title>
+<style>
+:root{--bg:#F7EDEA;--surface:#fff;--surface2:#FBEDEA;--ink:#2B1912;--muted:#7C6159;--line:#E2C0B8;--brown:#6B3423;--brown2:#8A4A35;
+  --pos:#0E8A5F;--pos-bg:#E3F4EC;--neg:#C0392B;--neg-bg:#FDE3E1;--mid:#B4740E;--mid-bg:#FFF2DA;--shadow:0 1px 2px rgba(74,36,24,.06),0 4px 16px rgba(74,36,24,.07)}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;padding-bottom:40px}
+button,select,input{font:inherit;color:inherit}
+header{position:sticky;top:0;z-index:10;background:linear-gradient(120deg,#4A2418,#8A4A35);color:#fff;padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px;display:flex;align-items:center;gap:10px}
+header h1{margin:0;font-size:18px}header small{display:block;opacity:.8;font-size:12px}header .sp{flex:1}
+.tb{height:36px;border-radius:999px;border:0;background:rgba(255,255,255,.15);color:#fff;font-weight:700;padding:0 14px;text-decoration:none;display:inline-flex;align-items:center;font-size:13px}
+.wrap{max-width:980px;margin:0 auto;padding:16px 12px}
+.sec{background:var(--surface);border:1.5px solid var(--line);border-top:5px solid var(--brown);border-radius:18px;margin-bottom:14px;box-shadow:var(--shadow);padding:14px}
+.sec.danger{border-top-color:var(--neg)}
+.sec h2{margin:0 0 6px;font-size:17px}
+.sub{color:var(--muted);font-size:13px}
+.btn{height:42px;padding:0 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-weight:800;cursor:pointer;white-space:nowrap}
+.btn.p{background:linear-gradient(180deg,#8A4A35,#6B3423);border-color:#6B3423;color:#fff}
+.btn.red{background:var(--neg);border-color:var(--neg);color:#fff}
+.btn:disabled{opacity:.45;cursor:default}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+th{background:var(--surface2)}
+.pill{display:inline-block;border-radius:20px;padding:1px 9px;font-size:12px;font-weight:700}
+.pill.ok{background:var(--pos-bg);color:var(--pos)}.pill.no{background:var(--mid-bg);color:var(--mid)}
+.note{border-radius:12px;padding:10px 12px;margin:10px 0;font-size:13px}
+.note.bad{background:var(--neg-bg);color:var(--neg)}.note.ok{background:var(--pos-bg);color:var(--pos)}.note.mid{background:var(--mid-bg);color:var(--mid)}
+.log{background:#1d1411;color:#f6e9e5;border-radius:12px;padding:10px;font:12px/1.5 ui-monospace,Consolas,monospace;max-height:280px;overflow:auto;white-space:pre-wrap;margin-top:10px}
+.bar{height:10px;border-radius:6px;background:var(--surface2);overflow:hidden;margin-top:8px}.bar i{display:block;height:100%;background:var(--brown);width:0}
+label.ck{display:flex;gap:8px;align-items:flex-start;margin:4px 0;font-size:13.5px}label.ck input{width:18px;height:18px;margin-top:2px;accent-color:var(--brown)}
+.f{display:block;margin:8px 0}.f input{display:block;width:100%;max-width:360px;height:42px;border:1.5px solid var(--line);border-radius:12px;padding:0 10px;margin-top:4px}
+dialog{border:0;border-radius:18px;padding:18px;max-width:560px;width:94vw;box-shadow:0 20px 60px rgba(43,25,18,.35)}dialog::backdrop{background:rgba(43,25,18,.5)}
+details summary{cursor:pointer;font-weight:700}
+</style>
+</head>
+<body>
+<header><div><h1>Backups &amp; new session</h1><small id="hSub">JCW attendance software · main admin only</small></div><span class="sp"></span><a class="tb" href="index.html">← App</a></header>
+<div class="wrap" id="app"><div class="sec">Loading…</div></div>
+<dialog id="dlg"><div id="dlgIn"></div></dialog>
+<script src="jcwkit.js"></script>
+<script>
+'use strict';
+const $ = s => document.querySelector(s), esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const api = (p, ms) => JCW.api(p, ms || 330000);
+const S = { info:null, err:'', busy:'', log:[], prog:0, ns:null };
+const say = t => { S.log.push(new Date().toLocaleTimeString() + '  ' + t); const l = $('#log'); if(l){ l.textContent = S.log.join('\n'); l.scrollTop = 1e9; } };
+const prog = p => { S.prog = p; const b = $('#barI'); if(b) b.style.width = Math.round(p * 100) + '%'; };
+const fmt = ms => new Date(ms).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+const dateOf = name => (String(name).match(/(\d\d-\d\d-\d{4})/) || [])[1] || '';
+
+async function load(){
+  try{ S.info = await api({ action:'sys_info' }, 120000); S.err = ''; }
+  catch(e){ S.err = /UNKNOWN_ACTION|does not know/.test(e.message) ? 'Paste System.gs (and the new Code.gs) in Apps Script and deploy a new version first.' : e.message; }
+  render();
+}
+function render(){
+  const I = S.info;
+  if(!I){ $('#app').innerHTML = `<div class="sec">${S.err ? `<div class="note bad">${esc(S.err)}</div>` : 'Loading…'}</div>`; return; }
+  $('#hSub').textContent = 'Session ' + I.session + ' · ' + I.books.length + ' workbooks';
+  const busy = !!S.busy;
+  $('#app').innerHTML = `
+  ${S.err ? `<div class="note bad">${esc(S.err)}</div>` : ''}
+  <section class="sec"><h2>Backups</h2>
+    <div class="sub">A backup copies <b>every workbook</b> the software uses (${I.books.length}) into one Drive folder: <a href="${esc(I.root.url)}" target="_blank" rel="noopener">${esc('JCW System Backups')}</a> › <i>JCW session ${esc(I.session)} complete backup ${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')} …</i>. A backup never changes or deletes anything.</div>
+    <details style="margin-top:8px"><summary>The ${I.books.length} workbooks</summary><div style="overflow:auto"><table><thead><tr><th>Workbook</th><th>Used for</th></tr></thead><tbody>
+      ${I.books.map(b => `<tr><td>${b.url ? `<a href="${esc(b.url)}" target="_blank" rel="noopener">${esc(b.name)}</a>` : esc(b.name)}${b.error ? ` <span class="pill no">${esc(b.error)}</span>` : ''}</td><td class="sub">${esc(b.role)}</td></tr>`).join('')}</tbody></table></div></details>
+    ${I.last ? `<div class="note ok">Last complete backup: <b>${esc(I.last.name)}</b> (${fmt(I.last.at)})</div>` : '<div class="note mid">No complete backup made from this page yet.</div>'}
+    <div class="acts"><button class="btn p" id="bk" ${busy ? 'disabled' : ''}>${S.busy === 'backup' ? 'Backing up…' : 'Make a complete backup now'}</button><a class="btn" href="${esc(I.root.url)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Open the backups folder</a></div>
+    ${S.busy ? `<div class="bar"><i id="barI" style="width:${Math.round(S.prog * 100)}%"></i></div>` : ''}
+    ${S.log.length ? `<div class="log" id="log">${esc(S.log.join('\n'))}</div>` : ''}
+  </section>
+  <section class="sec"><h2>Previous backups</h2>
+    ${I.backups.length ? `<div style="overflow:auto"><table><thead><tr><th>Backup</th><th>Files</th><th></th></tr></thead><tbody>
+      ${I.backups.map(b => `<tr><td><a href="${esc(b.url)}" target="_blank" rel="noopener"><b>${esc(b.name)}</b></a><div class="sub">${fmt(b.at)}${b.kind ? ' · ' + esc(b.kind) : ''}</div></td>
+        <td>${b.done} / ${b.files} ${b.complete ? '<span class="pill ok">complete</span>' : '<span class="pill no">not complete</span>'}</td>
+        <td><a class="btn" href="${esc(b.url)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none;height:36px">Open</a>
+          ${b.complete ? `<button class="btn" data-rs="${esc(b.id)}" style="height:36px;color:var(--neg)" ${busy ? 'disabled' : ''}>Restore…</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="sub">No backups yet.</div>'}
+  </section>
+  <section class="sec danger"><h2>Prepare the system for a new session</h2>
+    <div class="sub">For the start of a new session (August). Each step asks first; a complete backup is made before anything is changed, and the old strength sheet is kept as a copy.</div>
+    <ol class="sub" style="margin:8px 0 0 18px;padding:0"><li>Complete backup of every workbook.</li><li>A copy of the strength sheet is kept as <i>Transform-ALL-COLLEGE-STRENGTH ${new Date().getFullYear() - 1}</i> (board results and reports still find the students who leave).</li>
+      <li>2nd Year students are taken out of Transform-ALL-COLLEGE-STRENGTH.</li><li>1st Year students become 2nd Year (Class, PCS, Section: A1 → A2, FCS-1 D2 → FCS-2 D2 …).</li>
+      <li>The attendance, monthly test, monthly attendance, grand test and detention sheets are emptied (headers, formulas and the first pattern row stay), and the session tabs you tick in the Users workbook.</li></ol>
+    <div class="acts"><button class="btn red" id="nsOpen" ${busy ? 'disabled' : ''}>Start: check what will happen…</button></div>
+  </section>`;
+  $('#bk').onclick = () => backup('Complete').then(load).catch(e => { S.busy = ''; S.err = e.message; render(); });
+  document.querySelectorAll('[data-rs]').forEach(b => b.onclick = () => restoreAsk(b.dataset.rs));
+  $('#nsOpen').onclick = nsAsk;
+}
+
+/* ---------- backup ---------- */
+async function backup(kind){
+  S.busy = 'backup'; S.err = ''; S.log = []; prog(0); render();
+  say('Making the backup folder…');
+  const st = await api({ action:'sys_backup_start', kind });
+  say('Folder: ' + st.name + ' (' + st.files.length + ' workbooks)');
+  const todo = st.files.slice(); let done = 0;
+  const worker = async () => { while(todo.length){ const f = todo.shift(); let k = 0;
+    for(;;){ try{ await api({ action:'sys_backup_copy', folder:st.folder, id:f.id }, 360000); break; }catch(e){ if(++k >= 3){ say('✗ ' + f.name + ': ' + e.message); throw e; } say('… again: ' + f.name); } }
+    done++; prog(done / st.files.length); say('✓ ' + f.name + '  (' + done + '/' + st.files.length + ')'); } };
+  await Promise.all([worker(), worker(), worker()]);
+  const fin = await api({ action:'sys_backup_finish', folder:st.folder });
+  say('✔ Backup complete: ' + fin.name);
+  S.busy = ''; render();
+  return st;
+}
+
+/* ---------- restore (very careful) ---------- */
+function dlg(html){ $('#dlgIn').innerHTML = html; const d = $('#dlg'); if(!d.open) d.showModal(); return d; }
+function restoreAsk(id){
+  const b = S.info.backups.find(x => x.id === id); if(!b) return;
+  const day = dateOf(b.name);
+  const d = dlg(`<h2 style="margin:0 0 6px;color:var(--neg)">Restore a backup</h2>
+    <div class="note bad"><b>${esc(b.name)}</b><br>Every workbook you tick gets back the sheets as they were in this backup. <b>Everything entered after ${fmt(b.at)} in those workbooks is replaced</b> (attendance, marks, new students…). First a safety backup of today is made, so this can be undone.</div>
+    <div id="rsFiles" class="sub">Reading the backup…</div>
+    <label class="f">Your password<input type="password" id="rsPass" autocomplete="current-password"></label>
+    <label class="f">Type <b>RESTORE</b><input id="rsWord" autocomplete="off"></label>
+    <label class="f">Type the date of this backup: <b>${esc(day)}</b><input id="rsDay" autocomplete="off" placeholder="dd-mm-yyyy"></label>
+    <div class="acts"><button class="btn red" id="rsGo" disabled>Restore</button><button class="btn" id="rsNo">Cancel</button></div>`);
+  $('#rsNo').onclick = () => d.close();
+  let files = null;
+  api({ action:'sys_info' }).then(() => {
+    // the file list comes from the manifest via restore_plan, which needs the password; show the workbook names from the folder instead
+    $('#rsFiles').innerHTML = `<b>Workbooks to restore</b> (untick the ones to keep as they are now):<div>${S.info.books.map(x => `<label class="ck"><input type="checkbox" data-rf="${esc(x.id)}" checked><span>${esc(x.name)} <span class="sub">· ${esc(x.role)}</span></span></label>`).join('')}</div>`;
+    files = true; check();
+  }).catch(e => { $('#rsFiles').textContent = e.message; });
+  const check = () => { $('#rsGo').disabled = !(files && $('#rsPass').value && $('#rsWord').value.trim().toUpperCase() === 'RESTORE' && $('#rsDay').value.trim() === day && document.querySelector('[data-rf]:checked')); };
+  ['#rsPass', '#rsWord', '#rsDay'].forEach(s => $(s).oninput = check);
+  $('#dlgIn').onchange = check;
+  $('#rsGo').onclick = async () => {
+    const pass = $('#rsPass').value, only = [...document.querySelectorAll('[data-rf]:checked')].map(x => x.dataset.rf);
+    if(!confirm('Last check: restore ' + only.length + ' workbook(s) to ' + b.name + '?\nA safety backup of today is made first.')) return;
+    d.close();
+    try{ await restore(b, pass, only); }catch(e){ S.busy = ''; S.err = 'Restore stopped: ' + e.message + ' (the safety backup made before it is in the backups list)'; render(); }
+    load();
+  };
+}
+async function restore(b, pass, only){
+  await backup('Before restore');
+  S.busy = 'restore'; render(); say('Restoring ' + b.name + '…');
+  const base = { pass, phrase:'RESTORE', folder:b.id };
+  const plan = await api(Object.assign({ action:'sys_restore_plan', only }, base));
+  const jobs = []; plan.files.forEach(f => f.sheets.forEach(s => jobs.push({ f, s })));
+  let n = 0;
+  for(const j of jobs){
+    let start = 1;
+    while(start){ const r = await api(Object.assign({ action:'sys_restore_sheet', id:j.f.id, copy:j.f.copy, sheet:j.s.name, start }, base), 360000); start = r.next; }
+    n++; prog(n / jobs.length); say('✓ ' + j.f.name + ' › ' + j.s.name);
+  }
+  for(const f of plan.files){ const r = await api(Object.assign({ action:'sys_restore_tidy', id:f.id, copy:f.copy }, base)); if(r.removed.length) say('  removed new sheets in ' + f.name + ': ' + r.removed.join(', ')); }
+  say('✔ Restore finished. Teachers should pull down to refresh the app.');
+  S.busy = ''; render();
+}
+
+/* ---------- new session ---------- */
+async function nsAsk(){
+  const d = dlg('<h2 style="margin:0 0 6px">New session: checking…</h2><div class="sub">Reading the strength sheet and the workbooks…</div>');
+  let P;
+  try{ P = await api({ action:'sys_ns_preview' }, 300000); }catch(e){ $('#dlgIn').innerHTML = `<div class="note bad">${esc(e.message)}</div><div class="acts"><button class="btn" onclick="this.closest('dialog').close()">Close</button></div>`; return; }
+  const secs = Object.keys(P.sections).filter(Boolean).sort();
+  dlg(`<h2 style="margin:0 0 6px;color:var(--neg)">Prepare a new session</h2>
+    <div class="note mid"><b>${P.secondYear}</b> 2nd Year students will be taken out · <b>${P.firstYear}</b> 1st Year students become 2nd Year${P.unknownYear ? ` · <b>${P.unknownYear}</b> rows with no clear year are left as they are` : ''}.</div>
+    <label class="f">The session that is ending started in<input id="nsOut" type="number" value="${new Date().getFullYear() - 1}" style="max-width:140px"></label>
+    <div class="sub">Copy kept as <b id="nsSnap">${esc(P.snapshot)}</b>${P.snapshotExists ? ' (already there: it is kept)' : ''}.</div>
+    <details style="margin-top:8px" open><summary>1st Year → 2nd Year sections (change any that are wrong)</summary><div style="max-height:200px;overflow:auto"><table><tbody>
+      ${secs.map(s => `<tr><td>${esc(s)}</td><td>→ <input data-sec="${esc(s)}" value="${esc(P.sections[s])}" style="height:32px;border:1.5px solid var(--line);border-radius:8px;padding:0 6px"></td></tr>`).join('')}</tbody></table></div></details>
+    <details style="margin-top:8px"><summary>Workbooks to empty (${P.books.length})</summary>${P.books.map(g => `<label class="ck"><input type="checkbox" data-bk="${esc(g.key)}" checked><span>${esc(g.label)}</span></label>`).join('')}</details>
+    <details style="margin-top:8px"><summary>Session tabs in the Users workbook</summary>${P.users.map(u => `<label class="ck"><input type="checkbox" data-us="${esc(u.name)}" ${u.on ? 'checked' : ''}><span>${esc(u.name)} <span class="sub">· ${u.rows} rows</span></span></label>`).join('')}
+      <div class="sub">Not touched: Users, Timetable, Transform (except the steps above), Portal Data, Student Codes, Student Results.</div></details>
+    <label class="f">Your password<input type="password" id="nsPass" autocomplete="current-password"></label>
+    <label class="f">Type <b>NEW SESSION</b><input id="nsWord" autocomplete="off"></label>
+    <div class="acts"><button class="btn red" id="nsGo" disabled>Back up and prepare the new session</button><button class="btn" id="nsNo">Cancel</button></div>`);
+  $('#nsOut').oninput = () => { $('#nsSnap').textContent = 'Transform-ALL-COLLEGE-STRENGTH ' + $('#nsOut').value; };
+  const check = () => { $('#nsGo').disabled = !($('#nsPass').value && $('#nsWord').value.trim().toUpperCase() === 'NEW SESSION'); };
+  $('#nsPass').oninput = $('#nsWord').oninput = check;
+  $('#nsNo').onclick = () => $('#dlg').close();
+  $('#nsGo').onclick = async () => {
+    const o = { pass:$('#nsPass').value, phrase:'NEW SESSION', outgoing:Number($('#nsOut').value) };
+    const sections = {}; document.querySelectorAll('[data-sec]').forEach(x => sections[x.dataset.sec] = x.value.trim());
+    const books = [...document.querySelectorAll('[data-bk]:checked')].map(x => x.dataset.bk), users = [...document.querySelectorAll('[data-us]:checked')].map(x => x.dataset.us);
+    if(books.some(k => /^ATT_/.test(k)) && !users.includes('Attendance Index')) users.push('Attendance Index');     // deleted sheets must leave the index too
+    if(!confirm('This changes the strength sheet and empties ' + books.length + ' workbook(s) and ' + users.length + ' tab(s).\nA complete backup is made first. Go on?')) return;
+    $('#dlg').close();
+    try{ await newSession(o, sections, books, users); }catch(e){ S.busy = ''; S.err = 'Stopped: ' + e.message + '. Nothing after this step was changed; the backup made first is in the list.'; render(); }
+    load();
+  };
+}
+async function newSession(o, sections, books, users){
+  await backup('Before new session');
+  S.busy = 'session'; render(); say('— New session —');
+  const snap = await api(Object.assign({ action:'sys_ns_snapshot' }, o)); say('✓ Copy kept: ' + snap.name + (snap.existed ? ' (was already there)' : ''));
+  const pr = await api(Object.assign({ action:'sys_ns_promote', sections }, o), 360000);
+  say('✓ ' + pr.removed + ' 2nd Year students taken out · ' + pr.promoted + ' 1st Year students are now 2nd Year · ' + pr.left + ' students in the strength sheet');
+  const groups = books.sort((a, b) => (/^ATT_/.test(b) ? 1 : 0) - (/^ATT_/.test(a) ? 1 : 0)).concat(users.length ? ['USERS'] : []);   // daily attendance first (it needs the index)
+  let all = 0, done = 0; const plan = [];
+  for(const g of groups){ const r = await api({ action:'sys_ns_sheets', key:g }); const L = g === 'USERS' ? r.sheets.filter(n => users.includes(n)) : r.sheets; L.forEach(s => plan.push({ g, s })); }
+  all = plan.length; say(all + ' sheets to empty…');
+  const worker = async () => { while(plan.length){ const j = plan.shift(); let k = 0, r;
+    for(;;){ try{ r = await api(Object.assign({ action:'sys_ns_empty', key:j.g, sheet:j.s }, o), 360000); break; }catch(e){ if(++k >= 3) throw e; } }
+    done++; prog(done / all); say('✓ ' + j.g + ' › ' + j.s + ': ' + r.did); } };
+  // daily attendance sheets are deleted one book at a time (Sheets does not like two deletes in one file at once)
+  await worker();
+  say('✔ The system is ready for the new session. Next: new timetable, then admissions; run Check everything once the new 1st Year is in.');
+  S.busy = ''; render();
+}
+
+if(!JCW || !localStorage.getItem('csa2_user')) $('#app').innerHTML = '<div class="sec"><div class="note bad">Sign in to the attendance app first (as the main admin).</div><a class="btn" href="index.html">Open the app</a></div>';
+else load();
+</script>
+</body>
+</html>

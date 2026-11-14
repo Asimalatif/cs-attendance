@@ -170,6 +170,8 @@ async function saveToDrive(blob, name, folder){
 /** the app's panel: Share · Download · Open / Print · (Save to Drive) */
 function offer(blob, name, title, opt){
   opt = opt || {};
+  if(window.JCWOUT) return window.JCWOUT.offer({ blob, name, title, extra: opt.drive === false ? [] : [{ label:'Save to Google Drive', fn:async (o, d) => {
+    toast('Saving to Drive…'); try{ const r = await saveToDrive(blob, name, opt.folder); if(d.open) d.close(); toast('✔ Saved to Drive: ' + r.name); if(r.url) window.open(r.url, '_blank'); }catch(e){ toast(e.message); } } }] });
   ensureUi();
   const d = $('jkDlg'), isPdf = /\.pdf$/i.test(name), file = new File([blob], name, { type:blob.type });
   const canShare = !!(navigator.canShare && navigator.canShare({ files:[file] })), kb = Math.max(1, Math.round(blob.size / 1024));

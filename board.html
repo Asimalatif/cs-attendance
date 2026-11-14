@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<script src="inksaver.js"></script>
+<script src="inksaver.js"></script><script src="jcwout.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#6B3423">
 <meta name="robots" content="noindex">
@@ -126,10 +126,9 @@ function render(){
     ${S.saved ? `<div class="note ok">Saved ${S.saved.rows.toLocaleString()} rows in “${esc(S.saved.sheet)}”${S.saved.top ? ' and ' + S.saved.top.rows + ' in “' + esc(S.saved.top.sheet) + '”' : ''}. <a href="${esc(S.saved.url)}" target="_blank" rel="noopener">Open the sheet</a></div>` : ''}
   </section>` : ''}
   <section class="card" style="--c:#B4740E"><h2>Result sheets in the workbook</h2>
-    ${S.list ? `<div class="sub">Open a sheet in Google Sheets, or make it as an Excel or PDF file on this device to save or send (big sheets take a while: a 60,000-row PDF is about 1,500 pages).</div><ul class="list">${S.list.sheets.map((x, i) => `<li><span>${esc(x.name)}</span><b>${x.rows.toLocaleString()}</b>
-      <span class="ra"><a href="${esc(S.list.url + (x.gid != null ? '#gid=' + x.gid : ''))}" target="_blank" rel="noopener">Open</a>
-        <button type="button" data-rs="${i}" data-k="xlsx" ${S.rsBusy ? 'disabled' : ''}>Excel</button><button type="button" data-rs="${i}" data-k="pdf" ${S.rsBusy ? 'disabled' : ''}>PDF</button>
-        <button type="button" data-rs="${i}" data-k="sxlsx" ${S.rsBusy ? 'disabled' : ''}>Share Excel</button><button type="button" data-rs="${i}" data-k="spdf" ${S.rsBusy ? 'disabled' : ''}>Share PDF</button></span>
+    ${S.list ? `<div class="sub">Excel / PDF of a result sheet = <b>only Jinnah College for Women</b> students, with their <b>Section (PCS)</b> and <b>Contact</b> from the strength sheets (Contact only in Excel, not in the PDF). <b>Open</b> shows the whole sheet in Google Sheets.</div><ul class="list">${S.list.sheets.map((x, i) => `<li><span>${esc(x.name)}</span><b>${x.rows.toLocaleString()}</b>
+      ${/HSSC|SSC|result/i.test(x.name) ? `<span class="ra"><a href="${esc(S.list.url + (x.gid != null ? '#gid=' + x.gid : ''))}" target="_blank" rel="noopener">Open</a>
+        <button type="button" data-rs="${i}" data-k="xlsx" ${S.rsBusy ? 'disabled' : ''}>Excel (JCW)</button><button type="button" data-rs="${i}" data-k="pdf" ${S.rsBusy ? 'disabled' : ''}>PDF (JCW)</button></span>` : ''}
       ${S.rsBusy && S.rsBusy.i === i ? `<span class="sub" id="rsProg" style="width:100%">${esc(S.rsBusy.t)}</span>` : ''}</li>`).join('')}</ul>
       ${S.rsErr ? `<div class="note bad">${esc(S.rsErr)}</div>` : ''}<div class="acts"><a class="btn" href="${esc(S.list.url)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Open the workbook</a></div>` : `<div class="sub">${navigator.onLine ? 'Loading…' : 'Needs internet.'}</div>`}
   </section>`;
@@ -213,13 +212,13 @@ const rsProg = t => { if(S.rsBusy) S.rsBusy.t = t; const p = $('#rsProg'); if(p)
 async function rsData(name){
   let start = 2, head = [], rows = [], total = 0;
   for(;;){
-    const r = await api({ action:'br_get', sheet:name, start, n:10000 }, 300000);
+    const r = await api({ action:'br_get', sheet:name, start, n:10000, jcw:1 }, 300000);
     if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'Paste the new BoardResults.gs and deploy a new version first.' : r.error || 'Could not read the sheet');
-    head = r.header; total = r.total; rows = rows.concat(r.rows);
+    head = r.header; total = r.total; rows = rows.concat(r.rows); if(r.contactCol != null) S.rsCc = r.contactCol; S.rsMatched = r.matched;
     rsProg('Reading the sheet: ' + rows.length.toLocaleString() + ' of ' + total.toLocaleString() + ' rows…');
     if(!r.next || !r.rows.length) break; start = r.next;
   }
-  return { head, rows };
+  return { head, rows, cc:S.rsCc != null ? S.rsCc : -1 };
 }
 async function rsXlsx(name, D){
   if(!window.XLSX) await loadScript(XLSX_LIB);
@@ -231,6 +230,7 @@ async function rsXlsx(name, D){
   return new Blob([X.write(wb, { bookType:'xlsx', type:'array' })], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
 async function rsPdf(name, D){
+  if(D.cc >= 0) D = { head:D.head.filter((h, j) => j !== D.cc), rows:D.rows.map(r => r.filter((v, j) => j !== D.cc)) };     // no contact numbers in the PDF
   if(!window.jspdf) await loadScript('jspdf.umd.min.js');
   if(!(window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API.autoTable)) await loadScript('jspdf.plugin.autotable.min.js');
   const doc = new window.jspdf.jsPDF({ orientation:D.head.length > 6 ? 'landscape' : 'portrait', unit:'mm', format:'a4' }), W = doc.internal.pageSize.getWidth();
@@ -244,14 +244,16 @@ async function rsPdf(name, D){
 }
 function rsSave(blob, file){ const a = document.createElement('a'), url = URL.createObjectURL(blob); a.href = url; a.download = file; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000); }
 async function rsDo(i, k){
-  const x = S.list && S.list.sheets[i]; if(!x || S.rsBusy) return;
+  let x = S.list && S.list.sheets[i]; if(!x || S.rsBusy) return; S.rsCc = null;
   const pdf = /pdf/.test(k), share = /^s/.test(k);
-  if(pdf && x.rows > 5000 && !confirm(x.name + ' has ' + x.rows.toLocaleString() + ' rows: the PDF is about ' + Math.ceil(x.rows / 45).toLocaleString() + ' pages and can take several minutes. Excel is much smaller. Make the PDF anyway?')) return;
+  if(false && !confirm(x.name + ' has ' + x.rows.toLocaleString() + ' rows: the PDF is about ' + Math.ceil(x.rows / 45).toLocaleString() + ' pages and can take several minutes. Excel is much smaller. Make the PDF anyway?')) return;
   S.rsErr = ''; S.rsBusy = { i, t:'Reading the sheet…' }; render();
   try{
     const D = await rsData(x.name);
     rsProg(pdf ? 'Making the PDF… (a big sheet takes a few minutes)' : 'Making the Excel file…'); await new Promise(z => setTimeout(z, 50));
+    S.rsCc = null; x = Object.assign({}, x, { name:/JCW/i.test(x.name) ? x.name : x.name + ' - JCW' });
     const blob = pdf ? await rsPdf(x.name, D) : await rsXlsx(x.name, D), file = x.name.replace(/[\\/:*?"<>|]+/g, ' ').trim() + (pdf ? '.pdf' : '.xlsx');
+    if(window.JCWOUT){ S.rsBusy = null; render(); JCWOUT.offer({ blob, name:file, title:x.name + ' (' + D.rows.length + ' students)', noXl:pdf, noPdf:!pdf }); return; }
     const f = new File([blob], file, { type:blob.type });
     if(share && navigator.canShare && navigator.canShare({ files:[f] })){
       try{ await navigator.share({ files:[f], title:x.name }); }catch(e){ if(e && e.name !== 'AbortError') rsSave(blob, file); }

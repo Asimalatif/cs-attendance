@@ -68,6 +68,7 @@ td .bad{color:var(--bad);font-weight:700}td .mid{color:var(--mid);font-weight:70
 </style>
 <style>@page{size:7.2in 11.2in;margin:0}</style>
 <script src="spinner.js"></script>
+<script src="jcwout.js"></script>
 </head>
 <body>
 <header><div class="in"><img src="jcw-logo.png" alt=""><h1>Student ID cards · 1st year<small>From Transform-ALL-COLLEGE-STRENGTH · same design as the printed cards</small></h1><a href="./">← App</a></div></header>
@@ -435,6 +436,37 @@ async function markPrinted(){
 }
 
 /* ---------- photo: rotate, trim (zoom + move), or a new one from the phone; saved to Drive for every device ---------- */
+/* v7.6: white / blue background: MediaPipe selfie segmentation (runs on this device; model loaded once from the internet) */
+let SEG = null;
+async function segmenter(){
+  if(SEG) return SEG;
+  const V = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+  const m = await import(V + '/vision_bundle.mjs');
+  const fs = await m.FilesetResolver.forVisionTasks(V + '/wasm');
+  SEG = await m.ImageSegmenter.createFromOptions(fs, { baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite' },
+    runningMode: 'IMAGE', outputConfidenceMasks: true, outputCategoryMask: false });
+  return SEG;
+}
+async function bgReplace(img, color){
+  const seg = await segmenter(), W0 = img.naturalWidth, H0 = img.naturalHeight, k = Math.min(1, 1200 / Math.max(W0, H0));
+  const c = document.createElement('canvas'); c.width = Math.round(W0 * k); c.height = Math.round(H0 * k);
+  const g = c.getContext('2d'); g.drawImage(img, 0, 0, c.width, c.height);
+  const res = seg.segment(c), mk = res.confidenceMasks[0], M = mk.getAsFloat32Array(), mw = mk.width, mh = mk.height;
+  const at = (x, y) => M[Math.min(mh - 1, Math.floor(y * mh / c.height)) * mw + Math.min(mw - 1, Math.floor(x * mw / c.width))];
+  // which side is the person: the centre of a portrait is the student
+  const ctr = at(c.width / 2, c.height * .45), crn = (at(2, 2) + at(c.width - 3, 2)) / 2, inv = ctr < crn;
+  const D = g.getImageData(0, 0, c.width, c.height), d = D.data;
+  const col = [parseInt(color.slice(1, 3), 16), parseInt(color.slice(3, 5), 16), parseInt(color.slice(5, 7), 16)];
+  for(let y = 0; y < c.height; y++) for(let x = 0; x < c.width; x++){
+    let a = at(x, y); if(inv) a = 1 - a;
+    a = Math.min(1, Math.max(0, (a - .25) / .5));                      // soft edge
+    const i = (y * c.width + x) * 4;
+    d[i] = d[i] * a + col[0] * (1 - a); d[i + 1] = d[i + 1] * a + col[1] * (1 - a); d[i + 2] = d[i + 2] * a + col[2] * (1 - a);
+  }
+  g.putImageData(D, 0, 0);
+  if(res.close) res.close();
+  return loadImg(c.toDataURL('image/jpeg', .95));
+}
 async function openPhoto(roll){
   const st = S.list.find(x => x.roll === roll); if(!st) return;
   const dlg = $('#dlg'), ps = photoState(st);
@@ -444,21 +476,23 @@ async function openPhoto(roll){
       <div class="side">
         <div class="acts" style="margin:0"><button class="btn sm" id="pL">⟲ Rotate</button><button class="btn sm" id="pR">Rotate ⟳</button><button class="btn sm" id="pReset">Reset</button></div>
         <label class="f">Zoom (trim edges)<input type="range" id="pZ" min="1" max="4" step="0.01" value="1" style="height:32px;padding:0"></label>
+        <div class="f">Background <span class="sub">(the student stays, the rest is painted)</span>
+          <div class="acts" style="margin:4px 0 0"><button class="btn sm" data-bg="">Original</button><button class="btn sm" data-bg="#FFFFFF">White</button><button class="btn sm" data-bg="#438EDB">Blue</button></div></div>
         <label class="f">New photo (camera or gallery)<input type="file" id="pF" accept="image/*"></label>
         <div id="pMsg" class="sub">${ps === 'none' ? 'No photo link in the sheet: choose or take one.' : ps === 'failed' ? 'The photo link in the sheet gave no picture: choose or take one.' : ''}</div>
         <div class="acts" style="margin:0"><button class="btn pri" id="pSave" disabled>Save photo</button><button class="btn" id="pClose">Close</button></div>
       </div></div>`;
   dlg.showModal();
-  const cv = $('#pc'), x = cv.getContext('2d'), E = { im: null, rot: 0, z: 1, px: 0, py: 0 };
+  const cv = $('#pc'), x = cv.getContext('2d'), E = { im: null, src: null, bg: '', rot: 0, z: 1, px: 0, py: 0 };
   function draw(){
-    x.fillStyle = '#fff'; x.fillRect(0, 0, cv.width, cv.height);
+    x.fillStyle = E.bg || '#fff'; x.fillRect(0, 0, cv.width, cv.height);
     if(!E.im){ x.fillStyle = '#999'; x.font = '700 28px sans-serif'; x.textAlign = 'center'; x.fillText('PHOTO', cv.width / 2, cv.height / 2); return; }
     const sw = E.rot % 180 ? E.im.naturalHeight : E.im.naturalWidth, sh = E.rot % 180 ? E.im.naturalWidth : E.im.naturalHeight;
     const k = Math.max(cv.width / sw, cv.height / sh) * E.z;
     x.save(); x.translate(cv.width / 2 + E.px, cv.height / 2 + E.py); x.rotate(E.rot * Math.PI / 180); x.scale(k, k);
     x.drawImage(E.im, -E.im.naturalWidth / 2, -E.im.naturalHeight / 2); x.restore();
   }
-  async function use(src, fresh){ try{ E.im = await loadImg(src); E.rot = 0; E.z = 1; E.px = E.py = 0; $('#pZ').value = 1; draw(); if(fresh) $('#pSave').disabled = false; }catch(e){ $('#pMsg').textContent = 'That picture could not be opened.'; } }
+  async function use(src, fresh){ try{ E.im = E.src = await loadImg(src); E.bg = ''; E.rot = 0; E.z = 1; E.px = E.py = 0; $('#pZ').value = 1; draw(); if(fresh) $('#pSave').disabled = false; }catch(e){ $('#pMsg').textContent = 'That picture could not be opened.'; } }
   const r = (EDIT[roll] || {}).photo ? { data: EDIT[roll].photo } : (ps === 'ready' ? await DB.get('raw', roll).catch(() => null) : null);
   if(r && r.data) await use(r.data); else draw();
   const changed = () => { $('#pSave').disabled = !E.im; draw(); };
@@ -471,6 +505,14 @@ async function openPhoto(roll){
   cv.onpointermove = e => { if(!drag) return; const s = cv.width / cv.getBoundingClientRect().width; E.px = drag.px + (e.clientX - drag.x) * s; E.py = drag.py + (e.clientY - drag.y) * s; changed(); };
   cv.onpointerup = cv.onpointercancel = () => { drag = null; };
   cv.onwheel = e => { e.preventDefault(); E.z = Math.min(4, Math.max(1, E.z * (e.deltaY < 0 ? 1.06 : 1 / 1.06))); $('#pZ').value = E.z; changed(); };
+  $('#dlgIn').querySelectorAll('[data-bg]').forEach(b => b.onclick = async () => {
+    if(!E.src) return;
+    const col = b.dataset.bg;
+    if(!col){ E.im = E.src; E.bg = ''; return changed(); }
+    $('#pMsg').textContent = 'Finding the student in the photo… (the first time takes a few seconds)';
+    try{ E.im = await bgReplace(E.src, col); E.bg = col; $('#pMsg').textContent = 'Background ' + (col === '#FFFFFF' ? 'white' : 'blue') + '. Check the edges, then Save photo.'; changed(); }
+    catch(e){ $('#pMsg').textContent = 'Background not changed: ' + (e.message || e) + ' (needs internet the first time).'; }
+  });
   $('#pF').onchange = ev => { const f = ev.target.files[0]; if(!f) return; const rd = new FileReader(); rd.onload = async () => use(await toRaw(rd.result).catch(() => rd.result), true); rd.readAsDataURL(f); };
   $('#pClose').onclick = () => dlg.close();
   $('#pSave').onclick = async () => {
@@ -532,13 +574,14 @@ function stuList(title, list, extra){
   $('#dlgIn').innerHTML = `<h2 style="margin:0 0 4px;color:var(--brown);font-size:17px">${esc(title)} · ${list.length}</h2>
     <div class="tw" style="max-height:55vh;overflow:auto"><table><thead><tr><th>#</th><th>Enroll#</th><th>Student</th><th>Section</th>${extra ? '<th></th>' : ''}</tr></thead><tbody>
     ${list.map((st, i) => `<tr><td>${i + 1}</td><td>${esc(st.roll)}</td><td>${esc(st.name)}<div class="sub">d/o ${esc(st.father || '-')}</div></td><td>${esc(st.pcs || st.section || '-')}</td>${extra ? `<td class="sub">${esc(extra(st))}</td>` : ''}</tr>`).join('') || '<tr><td colspan="5" class="sub">Nobody.</td></tr>'}</tbody></table></div>
-    <div class="acts"><button class="btn sm" id="slCsv" ${list.length ? '' : 'disabled'}>Download (CSV)</button><button class="btn sm" id="slTick" ${list.length ? '' : 'disabled'}>Tick these for cards</button><button class="btn sm pri" id="slOk">Close</button></div>`;
+    <div class="acts"><button class="btn sm" id="slCsv" ${list.length ? '' : 'disabled'}>PDF / Excel / print / share</button><button class="btn sm" id="slTick" ${list.length ? '' : 'disabled'}>Tick these for cards</button><button class="btn sm pri" id="slOk">Close</button></div>`;
   const dlg = $('#dlg'); dlg.showModal();
   $('#slOk').onclick = () => dlg.close();
   $('#slCsv').onclick = () => csvDownload([['Enroll#', 'Student Name', 'Father Name', 'Section', 'Program'].concat(extra ? ['Note'] : [])].concat(list.map(st => [st.roll, st.name, st.father, st.pcs || st.section, progKey(st.program)].concat(extra ? [extra(st)] : []))), fileSafe(title) + '.csv');
   $('#slTick').onclick = () => { list.forEach(st => S.sel.add(st.roll)); dlg.close(); S.msg = list.length + ' ticked.'; render(); };
 }
 function csvDownload(rows, name){
+  if(window.JCWOUT) return JCWOUT.list({ title:name.replace(/\.csv$/i, ''), head:rows[0], rows:rows.slice(1) });
   const csv = rows.map(r => r.map(v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : v).join(',')).join('\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' })); a.download = name; a.click();
 }
@@ -715,7 +758,9 @@ function render(){
   const missing = () => all.filter(st => ['none', 'failed'].includes(photoState(st)));
   const CKN = { Confirmed: 'Confirmed their card', Pending: 'Waiting for you', Approved: 'Approved', Rejected: 'Rejected', none: 'Not checked yet' };
   const PHN = { ready: 'Photo ready on this device', pending: 'Photo not read yet', none: 'No photo link in the sheet', failed: 'Photo link gives no picture', own: 'Photo given / fixed in this app', gone: 'Left / migrated / cancelled (still in Transform)' };
-  m.querySelectorAll('[data-lck]').forEach(b => b.onclick = () => { const k = b.dataset.lck; stuList(CKN[k], all.filter(st => (chkN[st.chk] != null ? st.chk : 'none') === k), st => st.chkAt || ''); });
+  m.querySelectorAll('[data-lck]').forEach(b => b.onclick = () => { const k = b.dataset.lck; stuList(CKN[k], all.filter(st => (chkN[st.chk] != null ? st.chk : 'none') === k),
+    k === 'Rejected' || k === 'Approved' ? st => [st.chkAsk ? 'She asked: ' + st.chkAsk + ' (' + st.chkAt + ')' : 'Sent ' + (st.chkAt || ''), (k === 'Rejected' ? 'rejected' : 'approved') + (st.chkBy ? ' by ' + st.chkBy : '') + (st.chkOn ? ' on ' + st.chkOn : ''), st.chkWhy ? 'reason: ' + st.chkWhy : (k === 'Rejected' ? 'no reason written' : '')].filter(String).join(' · ')
+    : k === 'Pending' ? st => (st.chkAsk ? 'She asks: ' + st.chkAsk + ' · ' : '') + (st.chkAt || '') : st => st.chkAt || ''); });
   m.querySelectorAll('[data-lph]').forEach(b => b.onclick = () => { const k = b.dataset.lph;
     stuList(PHN[k], all.filter(st => k === 'own' ? st.own : k === 'gone' ? st.gone : photoState(st) === k), k === 'gone' ? st => st.gone : k === 'own' ? st => st.own || '' : null); });
   $('#phMiss').onclick = () => { S.f.photo = 'missing'; S.f.ticked = false; ls.set('idc_f', S.f); render(); };

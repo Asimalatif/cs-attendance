@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<script src="inksaver.js"></script>
+<script src="inksaver.js"></script><script src="jcwout.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#6B3423">
 <meta name="robots" content="noindex">
@@ -350,6 +350,7 @@ function markDone(id) { done.add(id); const d = $('dot_' + id); if (d) d.classLi
 function triggerDownload(result) {
   const bytes = atob(result.base64), arr = new Uint8Array(bytes.length);
   for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  if (window.JCWOUT) return JCWOUT.offer({ blob: new Blob([arr], { type: result.mimeType }), name: result.filename, title: result.filename.replace(/\.[^.]+$/, '') });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([arr], { type: result.mimeType }));
   a.download = result.filename;
@@ -364,6 +365,7 @@ function downloadAll() { withBtn($('allDl'), 'Preparing…', async () => trigger
 function openUrl(k) { if (urls[k]) window.open(urls[k], '_blank'); else alert('Generate the report first.'); }
 
 function downloadCsv(name, data) {
+  if (window.JCWOUT && data.length) return JCWOUT.list({ title: name, head: data[0], rows: data.slice(1) });
   const csv = data.map(r => r.map(c => '"' + String(c === null || c === undefined ? '' : c).replace(/"/g, '""') + '"').join(',')).join('\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' }));

@@ -92,7 +92,7 @@ function idcList_() {
     if (o) { var st = out[out.length - 1]; st.pic = 'https://drive.google.com/file/d/' + o.id + '/view'; st.own = o.at; }
   }
   var chk = idcReqLatest_(book);
-  out.forEach(function (st) { var q = chk[idcK_(st.roll)]; if (q) { st.chk = q.status; st.chkAt = q.when; } });
+  out.forEach(function (st) { var q = chk[idcK_(st.roll)]; if (q) { st.chk = q.status; st.chkAt = q.when; st.chkAsk = q.asked; st.chkBy = q.by; st.chkOn = q.at; st.chkWhy = q.reason; } });
   // v7.5: left / migrated / cancelled students still in Transform get a warning on the card
   var gone = {};
   try {
@@ -309,7 +309,8 @@ function idcReqSheet_(book) {
 function idcReqLatest_(book) {
   var sh = book.getSheetByName(IDC_CFG.REQS), map = {};
   if (!sh || sh.getLastRow() < 2) return map;
-  sh.getRange(2, 1, sh.getLastRow() - 1, 3).getDisplayValues().forEach(function (r, i) { if (r[1]) map[idcK_(r[1])] = { when: r[0], status: r[2], row: i + 2 }; });
+  sh.getRange(2, 1, sh.getLastRow() - 1, 12).getDisplayValues().forEach(function (r, i) { if (r[1]) map[idcK_(r[1])] = { when: r[0], status: r[2], row: i + 2,
+    asked: [r[5] ? 'name → ' + r[5] : '', r[6] ? 'father → ' + r[6] : '', r[8] ? 'new photo' : '', r[7] ? 'note: ' + r[7] : ''].filter(String).join('; '), by: r[9], at: r[10], reason: r[11] }; });
   return map;
 }
 function idcPublic_(req) {

@@ -999,13 +999,19 @@ function admRefresh_(user, fields, apply, accept) {
     });
     else notes.push('The "' + ADM_CFG.PORTAL_SHEET + '" sheet is empty: quota and HQ need a portal sync first.');
     var portalHasHq = !!P && P.head.some(function (h) { return /^(hq|hafiz.*|hifz.*)$/i.test(admS_(h).replace(/[^a-z]/gi, '')); });
-    if (P && !portalHasHq && fields.indexOf('hq') >= 0) notes.push('The portal copy has no HQ (Hafiz-e-Quran) column yet: update the Tampermonkey script to 1.3 and run a Full sync. HQ already in the sheet is kept.');
+    if (P && !portalHasHq && fields.indexOf('hq') >= 0) notes.push('The portal copy has no HQ (Hafiz-e-Quran) column yet: update the Tampermonkey script to 1.6 and run a Full sync. HQ already in the sheet is kept.');
     var hqOf = function (r) {
       var h = '';
       P.head.forEach(function (x, j) { if (!h && /^(hq|hafiz.*|hifz.*)$/i.test(admS_(x).replace(/[^a-z]/gi, ''))) h = admS_(r[j]); });
       if (!h) return '';
       return /^(y|yes|true|1|hafiz)/i.test(h) ? 'Yes' : /^(n|no|false|0)/i.test(h) ? 'No' : '';
     };
+    // v7.6: every other strength-sheet column that the portal copy also has (same header, or "Portal <header>") is compared too
+    var covered = {}; ADM_CMP.forEach(function (d) { (d.t || []).forEach(function (k) { covered[k] = 1; }); });
+    var pHas = {}; if (P) P.head.forEach(function (h) { var k = admH_(h); if (k) pHas[k.replace(/^portal/, '')] = 1; });
+    var CMPS = ADM_CMP.concat(Object.keys(C).filter(function (k) {
+      return !covered[k] && pHas[k] && !/^(s?no|sr|srno|serial|enroll.*|rollno|roll|program.*|class|section|pcs|status|category|session|aggregate|merit.*|room.*|quota|year|group.*|key|id|sub\d.*)$/.test(k);
+    }).map(function (k) { return { f: 'x_' + k, label: admS_(T.head[C[k]]), t: [k], type: 'name', raw: true }; }));
     var names = admQuotaNames_(admCounts_(recs)), rooms = admRooms_();
     var nv = {}, changes = [], cnt = {}, unknownCat = {}, ask = [], quotaOk = {}, gw = {}, fcol = {};
     var formulaCol = function (j) {           // portal values are never written over a formula
@@ -1028,9 +1034,15 @@ function admRefresh_(user, fields, apply, accept) {
       r._hq = r.hq;
       if (fields.indexOf('portal') >= 0 && pr) {
         var ps = admPortalStu_(P, pr, set);
-        ADM_CMP.forEach(function (d) {
+        CMPS.forEach(function (d) {
           var key = r.row + '|' + d.f, now, pv, sug = '';
-          if (d.f === 'quota') {
+          if (d.raw) {
+            pv = P.g(pr, d.t[0]) || P.g(pr, 'portal' + d.t[0]); if (!pv) return;
+            now = admS_(T.rows[r.row - 2][C[d.t[0]]]);
+            if (/^hq$/.test(d.t[0])) pv = /^(y|yes|true|1|hafiz)/i.test(pv) ? 'Yes' : /^(n|no|false|0)/i.test(pv) ? 'No' : pv;
+            if (admSame_(d.type, now, pv)) return;
+            sug = pv;
+          } else if (d.f === 'quota') {
             if (admIsMig_(r.year)) return;
             pv = P.g(pr, 'category'); if (!pv) return;
             var gq = admGuessQuota_(pv, r.key, names);

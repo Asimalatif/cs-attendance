@@ -54,8 +54,48 @@ function brGet_(req) {
   if (!sh) return { ok: false, error: 'Sheet not found: ' + req.sheet };
   var last = sh.getLastRow(), w = sh.getLastColumn(), start = Math.max(2, Number(req.start) || 2), n = Math.min(Number(req.n) || 10000, 15000);
   var head = w ? sh.getRange(1, 1, 1, w).getDisplayValues()[0] : [];
+  if (req.jcw) {          // v7.6: only Jinnah College for Women (University of Peshawar) rows, with Section (PCS) and Contact from the strength sheets
+    var all = last > 1 ? sh.getRange(2, 1, last - 1, w).getDisplayValues() : [], cc = -1;
+    head.forEach(function (h, j) { if (cc < 0 && /college/i.test(h)) cc = j; });
+    var mine = cc < 0 ? all : all.filter(function (r) { return /JINNAH\s*COLLEGE\s*FOR\s*WOMEN/i.test(r[cc]) && (!/UNIVERSITY|PESHAWAR/i.test(r[cc]) || /PESHAWAR/i.test(r[cc])); });
+    var E = brEnrich_(head, mine);
+    return { ok: true, header: E.head, rows: E.rows, total: E.rows.length, next: 0, matched: E.matched, contactCol: E.contactCol };
+  }
   var rows = last >= start && w ? sh.getRange(start, 1, Math.min(n, last - start + 1), w).getDisplayValues() : [];
   return { ok: true, header: head, rows: rows, total: Math.max(0, last - 1), next: start + rows.length <= last ? start + rows.length : 0 };
+}
+/** adds Section (PCS) and Contact: student matched by Name + Father Name in Transform-ALL-COLLEGE-STRENGTH,
+ *  then in older copies (e.g. "Transform-ALL-COLLEGE-STRENGTH 2025") for students who have passed out */
+function brEnrich_(head, rows) {
+  var nm = function (v) { return String(v || '').toUpperCase().replace(/\u00A0/g, ' ').replace(/[^A-Z ]/g, ' ').replace(/\s+/g, ' ').trim(); };
+  var hk = function (h) { return String(h || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
+  var ni = -1, fi = -1;
+  head.forEach(function (h, j) { var k = hk(h); if (ni < 0 && (k === 'name' || k === 'studentname')) ni = j; if (fi < 0 && (k === 'fathername' || k === 'father')) fi = j; });
+  if (ni < 0) return { head: head, rows: rows, matched: 0, contactCol: -1 };
+  var map = {}, byName = {};
+  try {
+    var book = SpreadsheetApp.openById(USERS_SS_ID);
+    var shs = book.getSheets().filter(function (x) { return /^Transform-ALL-COLLEGE-STRENGTH/i.test(x.getName()); })
+      .sort(function (a, b) { return a.getName().length - b.getName().length || b.getName().localeCompare(a.getName()); });   // the current one first, then the newest copies
+    shs.forEach(function (t) {
+      if (t.getLastRow() < 2) return;
+      var v = t.getDataRange().getDisplayValues(), H = v[0].map(hk), c = function (L) { for (var i = 0; i < L.length; i++) { var j = H.indexOf(L[i]); if (j >= 0) return j; } return -1; };
+      var a = c(['studentname', 'name']), f = c(['fathername']), p = c(['pcs', 'section']), m = c(['studentcontact', 'contact', 'contactno', 'mobile', 'mobileno', 'phone', 'phoneno', 'cellno']);
+      if (a < 0) return;
+      v.slice(1).forEach(function (r) {
+        var key = nm(r[a]) + '|' + (f >= 0 ? nm(r[f]) : ''), val = { pcs: p >= 0 ? r[p] : '', contact: m >= 0 ? r[m] : '' };
+        if (!map[key]) map[key] = val;
+        var nk = nm(r[a]); byName[nk] = byName[nk] === undefined ? val : null;     // name alone only when it is unique
+      });
+    });
+  } catch (e) {}
+  var hit = 0;
+  var out = rows.map(function (r) {
+    var x = map[nm(r[ni]) + '|' + (fi >= 0 ? nm(r[fi]) : '')] || byName[nm(r[ni])] || null;
+    if (x) hit++;
+    return r.concat([x ? x.pcs : '', x ? x.contact : '']);
+  });
+  return { head: head.concat(['Section (PCS)', 'Contact']), rows: out, matched: hit, contactCol: head.length + 1 };
 }
 
 /** { sheet, header:[...], replace } -> empty sheet with the header row */
