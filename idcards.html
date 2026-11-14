@@ -611,6 +611,14 @@ async function boardPhotos(list, onlyTry){
   const o = BP(), px = BP_SIZES[o.size].px;
   S.bpOut = null; S.bpTry = null; S.err = '';
   if(!list.length){ S.err = 'No students: tick some, or choose "Shown by the filters".'; return render(); }
+  // the list kept on this device may be older than the Metric RollNo column: read the sheet again once
+  if(!S.list.some(x => 'matric' in x)){
+    S.busy = 'Reading the strength sheet again (for Metric RollNo)…'; render();
+    const keep = new Set(list.map(x => x.roll)); await load(true); S.busy = '';
+    list = S.list.filter(x => keep.has(x.roll));
+    if(!S.list.some(x => 'matric' in x)){ S.err = 'The server does not send Metric RollNo yet: paste the new IdCards.gs in Apps Script and deploy a New version, then try again.'; return render(); }
+  }
+  if(!list.some(x => bpName(x))){ S.err = 'None of these ' + list.length + ' students has a Metric RollNo in Transform-ALL-COLLEGE-STRENGTH (column "Metric RollNo").'; return render(); }
   S.busy = 'Loading the photo tools…'; render();
   try{ await faceDetector(); await segmenter(); if(!onlyTry && !window.JSZip) await loadScript(JSZIP); }
   catch(e){ S.busy = ''; S.err = 'The photo tools could not load (internet?): ' + (e.message || e); return render(); }
@@ -882,7 +890,7 @@ function render(){
       <label class="f">Students<select id="bpWho"><option value="sel" ${BP().who === 'sel' ? 'selected' : ''}>Ticked (${sel.length})</option><option value="shown" ${BP().who === 'shown' ? 'selected' : ''}>Shown by the filters above (${filtered().length})</option></select></label>
     </div>
     <div class="acts"><button class="btn pri" id="bpGo" ${!S.busy ? '' : 'disabled'}>Make board photos (ZIP)</button><button class="btn" id="bpOne" ${!S.busy ? '' : 'disabled'}>Try on the first student</button></div>
-    ${S.bpOut ? `<div class="note ${S.bpOut.bad.length ? 'mid' : 'ok'}" style="margin-top:8px">${S.bpOut.n} photos in <b>${esc(S.bpOut.name)}</b>.${S.bpOut.bad.length ? ` ${S.bpOut.bad.length} left out (no photo, no Metric RollNo or no face): <button class="btn sm" id="bpBad">Show them</button>` : ''} <button class="btn sm" id="bpAgain">Download the ZIP again</button></div>` : ''}
+    ${S.bpOut ? `<div class="note ${S.bpOut.bad.length ? 'mid' : 'ok'}" style="margin-top:8px">${S.bpOut.n} photos in <b>${esc(S.bpOut.name)}</b>.${S.bpOut.bad.length ? ` ${S.bpOut.bad.length} left out: ${esc(Object.entries(S.bpOut.bad.reduce((a, x) => (a[x[1]] = (a[x[1]] || 0) + 1, a), {})).map(([w, k]) => k + ' ' + w).join(' · '))}. <button class="btn sm" id="bpBad">Show them</button>` : ''} ${S.bpOut.n ? '<button class="btn sm" id="bpAgain">Download the ZIP again</button>' : ''}</div>` : ''}
     ${S.bpTry ? `<div style="display:flex;gap:12px;align-items:center;margin-top:8px"><img src="${S.bpTry.src}" style="width:150px;height:150px;border:1px solid var(--line)"><div class="sub">${esc(S.bpTry.name)}<br>${S.bpTry.px} px · ${S.bpTry.kb} KB</div></div>` : ''}
   </section>
   <section class="card"><h2>Preview</h2>
