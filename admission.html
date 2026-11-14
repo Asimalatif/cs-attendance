@@ -1477,7 +1477,7 @@ function omlStu(r, S, PN){
   if(!v) msg = 'Not clear: check her admission letter';
   else if(v.state === 'wait'){ lvl = t ? 'bad' : 'info'; msg = t ? '⚠ In the strength sheet (' + (t.roll || 'no Enroll#') + ') but NOT selected: ' + v.text : v.text + ': no admission unless a seat falls vacant'; }
   else if(v.state === 'no'){ lvl = 'bad'; msg = v.text + (t ? ' — she is in the strength sheet (' + (t.roll || '') + '): move her to her merit seat or cancel' : ''); }
-  else if(v.state === 'claim'){ lvl = 'warn'; msg = 'Ask for the UoP employee proof (service certificate), then confirm. ' + v.text.replace(/^Applied in UoP Employee Quota[^:]*:\s*/, ''); }
+  else if(v.state === 'claim'){ lvl = 'warn'; msg = 'Ask for the UoP employee proof (service certificate), then confirm. ' + v.text.replace(/^Applied in UoP Employee Quota[^:]*:\s*check her proof[^.]*\.\s*/, ''); }
   else if(v.state === 'check'){ lvl = 'warn'; msg = v.text; }
   else if(t){ lvl = wrong ? 'bad' : fee.lvl === 'bad' ? 'bad' : fee.lvl === 'warn' ? 'warn' : 'ok';
     msg = wrong ? '⚠ Strength sheet says ' + lab(t.key) + ' · ' + (t.quota || '-') + ', but she is selected in ' + where + ': correct her record' : '✓ Admitted: ' + (t.roll || 'no Enroll#') + ' · ' + lab(t.key) + ' · ' + (t.pcs || '') + ' · ' + (t.quota || ''); }
@@ -1536,7 +1536,8 @@ function omlStuHtml(rows, lists, S){
     <div class="acts"><button class="btn" type="button" id="omlOut">Open / print / share this list</button></div>
     <div style="overflow:auto"><table class="ml oms" style="margin-top:6px"><thead><tr><th>S#</th><th>Student</th><th>Official list</th><th>What to do</th><th></th></tr></thead><tbody>
     ${cur.slice(0, omlN).map(x => { const r = x.r; return `<tr><td class="n">${esc(r.sno)}</td>
-      <td><b>${esc(r.name)}</b><div class="sub">d/o ${esc(r.father)} · Form# ${esc(r.form)} · AGG ${esc(r.agg)}${/^y/i.test(r.hq) ? ' · HQ' : ''}</div></td>
+      <td><b>${esc(r.name)}</b><div class="sub">d/o ${esc(r.father)} · Form# ${esc(r.form)} · AGG ${esc(r.agg)}${/^y/i.test(r.hq) ? ' · HQ' : ''}</div>
+        ${x.t ? `<div style="margin-top:3px"><span class="pill info">Enroll# ${esc(x.t.roll || '–')}</span> <span class="pill info">${esc(x.t.pcs || 'no section')}</span><div class="sub">${esc((prog(x.t.key) || {}).label || x.t.key || '')} · ${esc(x.t.quota || '')}</div></div>` : '<div class="sub" style="margin-top:3px">Not in the strength sheet</div>'}</td>
       <td>${esc(r.program)} · <b>${esc(r.quota || 'Open')}</b><div class="sub">${esc(r.pos || '-')}</div></td>
       <td><div class="omm ${x.lvl}">${esc(x.msg)}</div><div class="sub omm ${x.fee.lvl === 'ok' ? '' : x.fee.lvl}" style="font-weight:600">${esc(x.feeT)}</div></td>
       <td class="nw">${x.v && x.v.state === 'claim' ? `<button class="btn primary" data-oc="${esc(r.list)}|${esc(r.form)}|1">Confirm employee</button> <button class="btn" data-oc="${esc(r.list)}|${esc(r.form)}|0">Not employee</button>` : ''}
@@ -1574,8 +1575,8 @@ function wireOml(){
   const oo = $('#omlOut'); if(oo) oo.onclick = () => { if(!window.JCWOUT || !oml) return;
     const { R, is } = omlStuList(oml.rows, omlStrength()), cur = R.filter(is[omlF] || is.all);
     JCWOUT.list({ title:'Official lists · ' + OMF[omlF] + (omlL ? ' · ' + omlL : ''), sub:cur.length + ' students',
-      head:['S#', 'Form#', 'Student Name', 'Father Name', 'AGG', 'Program', 'Quota', 'Official status', 'Enroll#', 'What to do', 'Fee'],
-      rows:cur.map(x => [x.r.sno, x.r.form, x.r.name, x.r.father, x.r.agg, x.r.program, x.r.quota || 'Open', x.r.pos, x.t ? x.t.roll || '' : '', x.msg, x.feeT.replace(/^Fee: /, '')]) }); };
+      head:['S#', 'Form#', 'Student Name', 'Father Name', 'AGG', 'Program', 'Quota', 'Official status', 'Enroll#', 'Section (PCS)', 'Strength sheet program · quota', 'What to do', 'Fee'],
+      rows:cur.map(x => [x.r.sno, x.r.form, x.r.name, x.r.father, x.r.agg, x.r.program, x.r.quota || 'Open', x.r.pos, x.t ? x.t.roll || '' : '', x.t ? x.t.pcs || '' : '', x.t ? ((prog(x.t.key) || {}).label || x.t.key) + ' · ' + (x.t.quota || '') : 'Not in the strength sheet', x.msg, x.feeT.replace(/^Fee: /, '')]) }); };
   const i = $('#omlQ'); let t;
   if(i) i.oninput = () => { clearTimeout(t); t = setTimeout(() => { omlQ = i.value; const pos = i.selectionStart; render(); const j = $('#omlQ'); j.focus(); try{ j.setSelectionRange(pos, pos); }catch(e){} }, 200); };
   const f = $('#omlF'); if(f) f.onchange = async () => {
