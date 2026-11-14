@@ -210,6 +210,7 @@ dialog{border:1.5px solid var(--line);box-shadow:var(--shadow2)}
     <button role="tab" data-tab="find" aria-selected="false">Find &amp; edit</button>
     <button role="tab" data-tab="seats" aria-selected="false">Seats</button>
     <button role="tab" data-tab="merit" aria-selected="false">Merit lists</button>
+    <button role="tab" data-tab="oml" aria-selected="false">Official lists</button>
     <button role="tab" data-tab="wait" aria-selected="false">Waiting<span class="badge hidden" id="qb">0</span></button>
   </nav>
 </div></header>
@@ -377,6 +378,7 @@ function render(){
   else if(tab === 'pnew') m.innerHTML = top + pnHtml() + rfHtml();
   else if(tab === 'seats') m.innerHTML = top + seatsHtml();
   else if(tab === 'merit') m.innerHTML = top + mlHtml();
+  else if(tab === 'oml') m.innerHTML = top + omlHtml();
   else m.innerHTML = top + waitHtml();
   if(tab === 'form') wireForm();
   if(tab === 'find') wireFind();
@@ -384,6 +386,7 @@ function render(){
   if(tab === 'wait') wireWait();
   if(tab === 'seats') wireSeats();
   if(tab === 'merit') wireMl();
+  if(tab === 'oml') wireOml();
 }
 const opt = (v, cur, label) => `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(label == null ? v : label)}</option>`;
 
@@ -678,6 +681,9 @@ function pnEntry(s){
   let e = pnSel[s.id];
   if(!e){
     e = pnSel[s.id] = { on:true, program:s.program || '', year:s.year || '1st Year', section:'', rollNo:'', quota:s.quotaGuess || 'Open Quota', rollManual:false, secManual:false };
+    // v7.8: the official merit list decides program (subsidized / non-subsidized) and quota, not the early portal copy
+    const v = !isMig(e.year) ? omlVerdict(omlFind(s.name, s.father, s.metric, s.total)) : null;
+    if(v){ e.oml = v; if(v.key) e.program = v.key; if(v.quota) e.quota = v.quota; if(v.state !== 'ok') e.on = false; }
   }
   return e;
 }
@@ -798,6 +804,7 @@ function pnHtml(){
         <div class="who"><b>${esc(s.name)}</b><div class="sub">d/o ${esc(s.father || '-')} · portal ID ${esc(s.id)}${s.portalRoll ? ' · ' + esc(s.portalRoll) : ''}</div>
           <div class="sub">Portal: ${esc(s.programName || '-')} · ${esc(s.year)}${s.section ? ' · sec ' + esc(s.section) : ''}${s.quota ? ' · ' + esc(s.quota) : ''}${s.metric ? ' · ' + esc(s.metric) + '/' + esc(s.total) : ''}${s.batch ? ' · batch ' + esc(s.batch) : ''}</div>
           ${!s.progSure ? `<div class="warnp">Check the program: the portal does not say which ${esc((prog(s.program) || {}).classProgram || '')} program.</div>` : ''}
+          ${!mig ? omlBadge(pnEntry(s).oml, s) : ''}
           ${!mig && pnSeatFull(s) ? `<div class="warnp" style="color:var(--bad)">⚠ ${esc(pnSeatFull(s))}</div>` : ''}
           ${!s.quotaSure && !mig ? `<div class="warnp">Portal category "${esc(s.quota)}" is not a known quota: check it.</div>` : ''}
           ${!s.dob && !s.metric ? `<div class="sub">Details (DOB, marks, photo) fill in after the next Full sync.</div>` : ''}</div>
@@ -1321,6 +1328,198 @@ function wireMl(){
   const b = $('#mlBad'); if(b) b.onclick = () => out(true);
 }
 
+/* ---------- v7.8: official merit lists (UoP Directorate of Admissions PDFs) ----------
+   The PDF is read on this device (pdf.js), its rows are kept in the sheet "Official Merit Lists" for every device.
+   Orientation desk: find the student, see what the official list says (selected / waiting, subsidized or not, quota),
+   and admit her with the right program and quota (the New form then gives the Roll No and section). */
+let oml = null, omlBusy = '', omlQ = '', omlMsg = '';
+const OML_COLS = ['program', 'list', 'sno', 'form', 'name', 'father', 'obt', 'total', 'hq', 'agg', 'quota', 'pos', 'uploaded', 'confirmed', 'confirmedBy', 'confirmedOn', 'note'];
+async function omlLoad(force){
+  if(!oml && !force){ const c = await idbGet('oml'); if(c) oml = c; }
+  if(!online() || (oml && !force && Date.now() - (oml.t || 0) < 10 * 60000)) return;
+  try{ const r = await api({ action:'adm_oml_get' }, 120000); if(r.ok){ oml = { rows:r.rows.map(v => Object.fromEntries(OML_COLS.map((c, i) => [c, v[i] || '']))), t:Date.now() }; OMLX = null; idbSet('oml', oml); } }catch(e){}
+}
+let OMLX = null;                                   // name|father -> rows
+const omlK = (n, f) => nrm(n) + '|' + nrm(f);
+function omlIndex(){
+  if(OMLX && OMLX.src === oml) return OMLX;
+  const m = new Map(), byN = new Map();
+  (oml ? oml.rows : []).forEach(r => { const k = omlK(r.name, r.father); (m.get(k) || m.set(k, []).get(k)).push(r); const n = nrm(r.name); (byN.get(n) || byN.set(n, []).get(n)).push(r); });
+  return OMLX = { src:oml, m, byN };
+}
+/** the official rows of one student: name + father; else name + marks (spelling of the father differs) */
+function omlFind(name, father, obt, total){
+  if(!oml || !name) return [];
+  const X = omlIndex(), hit = X.m.get(omlK(name, father));
+  if(hit) return hit;
+  const o = String(obt || '').replace(/\D/g, '');
+  return o ? (X.byN.get(nrm(name)) || []).filter(r => r.obt === o && (!total || r.total === String(total).replace(/\D/g, ''))) : [];
+}
+const omlClass = t => /medical/i.test(t) ? 'Pre-Medical' : /engin/i.test(t) ? 'Pre-Engineering' : /\bF\.?\s?A\b|arts|humanit/i.test(t) ? 'FA' : /FCS|computer|general/i.test(t) ? 'FCS' : '';
+const omlEmp = r => /employ/i.test(r.quota + ' ' + r.list);
+function omlQuota(q, emp){                       // official quota words -> the quota name of Quota Settings
+  const names = (init && init.quotas) || [], k = s => qk(s).replace(/\bquota\b/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  if(emp) return names.find(n => /employ/i.test(n)) || 'UoP Employee Quota';
+  const w = k(q); if(!w) return '';
+  return names.find(n => k(n) === w) || names.find(n => k(n).startsWith(w) || w.startsWith(k(n))) || names.find(n => k(n).includes(w.split(' ')[0])) || (q + ' Quota');
+}
+/** what the official list means for the college: { state:'ok'|'wait'|'claim'|'check'|'no', key, quota, text, row } */
+function omlVerdict(rows){
+  if(!rows || !rows.length || !init) return null;
+  const rank = r => /Selected/i.test(r.pos) ? 0 : omlEmp(r) ? 1 : /IBCC/i.test(r.pos) ? 2 : /Waiting/i.test(r.pos) ? 3 : 4;
+  const r = rows.slice().sort((a, b) => rank(a) - rank(b))[0], cls = omlClass(r.program), P = init.programs.filter(p => p.classProgram === cls);
+  const sub = P.find(p => p.fee === 'sub'), non = P.filter(p => p.fee === 'non'), morning = non.find(p => /morning/i.test(p.label + p.key)) || non[0];
+  const emp = omlEmp(r), quota = omlQuota(r.quota, emp), base = { row:r, quota, cls };
+  if(emp){
+    if(r.confirmed === 'Yes') return Object.assign(base, { state:'ok', key:(sub || P[0] || {}).key, text:'UoP Employee Quota, confirmed by ' + (r.confirmedBy || '') + ': always subsidized' });
+    if(r.confirmed === 'No') return Object.assign(base, { state:'no', key:'', text:'UoP Employee Quota claim NOT confirmed' + (r.note ? ': ' + r.note : '') });
+    return Object.assign(base, { state:'claim', key:(sub || P[0] || {}).key, text:'Applied in UoP Employee Quota: check her proof (employee card / letter) and confirm' });
+  }
+  if(/Waiting/i.test(r.pos)) return Object.assign(base, { state:'wait', key:'', text:'Not selected: ' + r.pos + ' in ' + (r.quota || 'Open') });
+  if(/IBCC/i.test(r.pos)) return Object.assign(base, { state:'check', key:'', text:'O-Level: selected only with the IBCC equivalence certificate; choose subsidized / non-subsidized yourself' });
+  if(/Non-Subsidized/i.test(r.pos)) return Object.assign(base, { state:'ok', key:(morning || {}).key, text:'Selected Non-Subsidized' + (/Evening/i.test(r.pos) ? ' (Evening list: evening shift closed, so Morning non-subsidized)' : ' (Morning)') });
+  if(/Selected/i.test(r.pos)) return Object.assign(base, { state:'ok', key:(sub || P[0] || {}).key, text:'Selected ' + (/Subsidized/i.test(r.pos) ? 'Subsidized' : '') + (P.length > 1 && !/Subsidized/i.test(r.pos) ? ' (list does not say subsidized: check)' : '') });
+  return Object.assign(base, { state:'check', key:'', text:'Merit position not clear: ' + (r.pos || '-') });
+}
+function omlBadge(v, s){
+  if(!oml) return '';
+  if(!v) return `<div class="warnp">Not found in the official merit lists${oml.rows.length ? '' : ' (none uploaded yet)'}: check her name / father name, or her admission letter.</div>`;
+  const col = v.state === 'ok' ? 'var(--good,#0E8A5F)' : v.state === 'wait' || v.state === 'no' ? 'var(--bad)' : '#8A4B00';
+  return `<div class="warnp" style="color:${col}"><b>Official list:</b> ${esc(v.text)} · ${esc(v.row.quota || '')} · AGG ${esc(v.row.agg)} · Form# ${esc(v.row.form)}${v.key ? ' → <b>' + esc((prog(v.key) || {}).label || v.key) + ' · ' + esc(v.quota) + '</b>' : ''}</div>`;
+}
+/* PDF -> rows */
+const PDFJS = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/';
+function omlParse(pages){
+  const out = []; let title = '';
+  for(const items of pages){
+    const T = items.map(i => ({ s:String(i.str).trim(), x:i.x, y:i.y })).filter(i => i.s);
+    const t = T.find(i => /Final Merit List|Merit List/i.test(i.s)); if(t) title = t.s.replace(/.*Merit List\s*-?\s*/i, '').trim() || title;
+    const hx = re => { const h = T.find(i => re.test(i.s)); return h ? h.x : null; };
+    const X = { name:hx(/^Applicant/i), father:hx(/^Father/i), obt:hx(/^Obt/i), quota:hx(/^Applied/i) };
+    if(X.name == null || X.father == null || X.obt == null) continue;
+    if(X.quota == null) X.quota = X.obt + 95;
+    const head = T.filter(i => /^(S\.#|Form #?|Applicant|Father|Obt|Total|Marks|HQ|AGG|Applied|Quota|Merit|Position)/i.test(i.s));
+    const headLow = head.length ? Math.min(...head.map(i => i.y)) : 1e9;
+    const body = T.filter(i => i.y < headLow - 1 && !/Directorate|Jinnah College|Merit List|^\d+ of \d+$/i.test(i.s));
+    const byLine = new Map(); body.forEach(i => { const k = Math.round(i.y / 2.5); (byLine.get(k) || byLine.set(k, []).get(k)).push(i); });
+    const lines = [...byLine.values()].map(l => l.sort((a, b) => a.x - b.x));
+    const anchors = lines.filter(l => l.some(i => /^\d{4,7}$/.test(i.s) && i.x < X.name - 2 && i.x > X.name - 140)).map(l => ({ l, y:l[0].y, extra:[] }));
+    if(!anchors.length) continue;
+    lines.forEach(l => { if(anchors.some(a => a.l === l)) return;
+      l.forEach(i => { if(!(i.x >= X.quota - 8 || (/^\d+$/.test(i.s) && i.x < X.name - 30))) return;
+        let best = null, bd = 1e9; anchors.forEach(a => { const d = Math.abs(a.y - i.y) + (a.y > i.y ? .5 : 0); if(d < bd){ bd = d; best = a; } });
+        best.extra.push(i); }); });
+    anchors.forEach(a => {
+      const ln = a.l, form = ln.find(i => /^\d{4,7}$/.test(i.s) && i.x < X.name - 2);
+      const col = (lo, hi) => ln.filter(i => i.x >= lo - 3 && (hi == null || i.x < hi - 3)).map(i => i.s).join(' ').replace(/\s+/g, ' ').trim();
+      const nums = ln.filter(i => i.x >= X.obt - 25 && i.x < X.quota - 8).map(i => i.s).join(' ');
+      const sno = (a.extra.find(i => /^\d+$/.test(i.s) && i.x < X.name - 30) || {}).s || '';
+      const tail = a.extra.filter(i => i.x >= X.quota - 8).sort((p, q) => q.y - p.y || p.x - q.x).map(i => i.s).concat(ln.filter(i => i.x >= X.quota - 8).map(i => i.s)).join(' ');
+      const pos = (tail.match(/Selected|Waiting|Non-Subsidized|Subsidized|\((Morning|Evening)\)|IBCC Required|\b\d+\b/gi) || []).join(' ').replace(/Non-Subsidized\s+Subsidized/i, 'Non-Subsidized').replace(/\b\d+\b/g, '').replace(/\s+/g, ' ').trim();
+      const quota = tail.replace(/Selected|Waiting|Non-Subsidized|Subsidized|\((Morning|Evening)\)|IBCC Required|\b\d+\b|[^\w\s()-]/gi, ' ').replace(/\s+/g, ' ').trim();
+      const n = nums.match(/(\d+)\s+(\d+)\s+(Yes|No)\s+([\d.]+)/i) || [];
+      out.push({ program:title, sno:(/Waiting/i.test(pos) ? 'W' : '') + sno, form:form.s, name:col(X.name, X.father), father:col(X.father, X.obt - 25), obt:n[1] || '', total:n[2] || '', hq:n[3] || '', agg:n[4] || '', quota, pos:/Waiting/i.test(pos) ? 'Waiting ' + sno : pos });
+    });
+  }
+  return { title, rows:out };
+}
+async function omlRead(file){
+  if(!window.pdfjsLib){ await new Promise((ok, no) => { const x = document.createElement('script'); x.src = PDFJS + 'pdf.min.js'; x.onload = ok; x.onerror = () => no(new Error('Could not load the PDF reader (internet?)')); document.head.appendChild(x); });
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js'; }
+  const doc = await window.pdfjsLib.getDocument({ data:new Uint8Array(await file.arrayBuffer()) }).promise, pages = [];
+  for(let p = 1; p <= doc.numPages; p++){ const tc = await (await doc.getPage(p)).getTextContent(); pages.push(tc.items.map(i => ({ str:i.str, x:i.transform[4], y:i.transform[5] }))); omlBusy = 'Reading ' + file.name + ': page ' + p + ' of ' + doc.numPages; const b = $('#omlBusy'); if(b) b.textContent = omlBusy; }
+  return omlParse(pages);
+}
+/* students of the strength sheet by name|father */
+function omlStrength(){
+  const m = new Map(); if(!idx) return m;
+  idx.rows.forEach(row => { const o = recOf(row); if(isMig(o.year)) return; const k = omlK(o.name, o.father); (m.get(k) || m.set(k, []).get(k)).push(o); });
+  return m;
+}
+function omlHtml(){
+  if(!oml && !omlBusy){ omlBusy = 'Loading the official lists…'; omlLoad(true).then(() => { omlBusy = ''; render(); }); }
+  const rows = oml ? oml.rows : [], lists = [...new Set(rows.map(r => r.list))];
+  const q = nrm(omlQ), qd = omlQ.replace(/\D/g, ''), S = omlStrength();
+  const hits = !omlQ.trim() ? [] : rows.filter(r => (qd.length >= 4 && r.form === qd) || (q && nrm(r.name + ' ' + r.father).includes(q))).slice(0, 25);
+  const card = r => { const v = omlVerdict([r]), T = S.get(omlK(r.name, r.father)) || [], t = T[0];
+    const lab = k => (prog(k) || {}).label || k;
+    const wrong = t && v && v.key && (t.key !== v.key || (v.quota && qk(t.quota) !== qk(v.quota)));
+    return `<div class="oml-c ${v ? v.state : ''}"><div><b>${esc(r.name)}</b> <span class="sub">d/o ${esc(r.father)} · Form# ${esc(r.form)} · ${esc(r.obt)}/${esc(r.total)} · HQ ${esc(r.hq)} · AGG ${esc(r.agg)}</span></div>
+      <div class="sub">${esc(r.program)} list · ${esc(r.list)}</div>
+      <div style="margin-top:4px"><b>${esc(r.quota || '-')}</b> · ${esc(r.pos || '-')}${v ? ` → <b>${esc(v.text)}</b>` : ''}</div>
+      ${v && v.key ? `<div style="margin-top:2px">Admit as: <b>${esc(lab(v.key))} · ${esc(v.quota)}</b></div>` : ''}
+      ${t ? `<div class="${wrong ? 'warnp' : 'sub'}" style="margin-top:4px${wrong ? ';color:var(--bad)' : ''}">${wrong ? '⚠ ' : '✓ '}In the strength sheet: <b>${esc(t.roll || 'no Enroll#')}</b> · ${esc(lab(t.key))} · ${esc(t.pcs || '')} · ${esc(t.quota || '')}${wrong ? ' — the official list says ' + esc(lab(v.key)) + ' · ' + esc(v.quota) : ''}</div>` : '<div class="sub" style="margin-top:4px">Not in the strength sheet yet.</div>'}
+      <div class="acts" style="margin-top:6px">
+        ${v && v.state === 'claim' ? `<button class="btn primary" data-oc="${esc(r.list)}|${esc(r.form)}|1">Proof seen: confirm employee</button><button class="btn" data-oc="${esc(r.list)}|${esc(r.form)}|0">Not an employee</button>` : ''}
+        ${!t && v && (v.state === 'ok' || v.state === 'check') ? `<button class="btn primary" data-oa="${esc(r.list)}|${esc(r.form)}">Admit: Roll No and section…</button>` : ''}
+        ${t && wrong ? `<button class="btn" data-oe="${esc(t.roll || '')}">Open her record to correct</button>` : ''}
+      </div></div>`; };
+  const st = rows.reduce((a, r) => { const v = omlVerdict([r]) || {}; a[v.state || 'x'] = (a[v.state || 'x'] || 0) + 1; return a; }, {});
+  return `<section class="card"><h3>Orientation desk</h3>
+    <div class="sub">Type her name, father name or Form#. The official merit list says if she was selected, in which quota and subsidized or not; the portal copy is often still "Open Quota" in the first days.</div>
+    <input id="omlQ" value="${esc(omlQ)}" placeholder="Name, father name or Form#" style="width:100%;height:46px;margin-top:8px" autocomplete="off">
+    ${omlBusy ? `<div class="sub" id="omlBusy" style="margin-top:6px">${esc(omlBusy)}</div>` : ''}
+    <div style="margin-top:8px">${omlQ.trim() ? (hits.map(card).join('') || '<div class="warnp">Not in the official lists. Check the spelling, the Form# on her admission letter, or whether her program\'s list is uploaded.</div>') : ''}</div></section>
+  <section class="card"><h3>Official merit lists</h3>
+    <div class="sub">Upload the final merit list PDFs of the Directorate of Admissions (Pre-Medical, F.A, FCS, Pre-Engineering, and the UoP Employee Quota list). Read on this device and kept for every device; uploading a list again replaces it (confirmations stay).</div>
+    ${lists.length ? `<table class="ml" style="margin-top:8px"><thead><tr><th>List</th><th>Program</th><th class="n">Rows</th><th class="n">Selected</th><th class="n">Waiting</th><th class="n">Employee to confirm</th></tr></thead><tbody>
+      ${lists.map(l => { const R = rows.filter(r => r.list === l); return `<tr><td>${esc(l)}</td><td>${esc(R[0].program)}</td><td class="n">${R.length}</td><td class="n">${R.filter(r => /Selected/i.test(r.pos)).length}</td><td class="n">${R.filter(r => /Waiting/i.test(r.pos)).length}</td><td class="n">${R.filter(r => omlEmp(r) && !r.confirmed).length}</td></tr>`; }).join('')}</tbody></table>` : '<div class="sub" style="margin-top:6px">No list uploaded yet.</div>'}
+    <div class="acts"><label class="btn primary" style="display:inline-flex;align-items:center;cursor:pointer">Upload PDF lists<input type="file" id="omlF" accept="application/pdf" multiple hidden></label>
+      <button class="btn" type="button" id="omlChk" ${rows.length && idx ? '' : 'disabled'}>Check the strength sheet against the lists</button></div>
+    ${omlMsg ? `<div class="hint" style="margin-top:6px">${omlMsg}</div>` : ''}
+    <div class="sub" style="margin-top:6px">${Object.entries(st).map(([k, n]) => ({ ok:'selected', wait:'waiting', claim:'employee claims to confirm', no:'employee not confirmed', check:'to check (O-Level / unclear)', x:'?' }[k] + ' ' + n)).join(' · ')}</div></section>`;
+}
+function omlAdmit(r){
+  const v = omlVerdict([r]); if(!v) return;
+  form = Object.assign(blankForm({ program:v.key || (init.programs.find(p => p.classProgram === v.cls) || {}).key, year:'1st Year', quota:v.quota || 'Open Quota' }),
+    { name:r.name, father:r.father, metric:r.obt, total:r.total, hq:/^y/i.test(r.hq) ? 'Yes' : 'No' });
+  lastDone = null; setTab('form'); window.scrollTo({ top:0 });
+  toast('Program and quota from the official list. Fill the rest (or use From portal when she is on the portal).');
+}
+function omlCheck(){
+  const S = omlStrength(), lab = k => (prog(k) || {}).label || k, out = [];
+  idx.rows.forEach(row => { const o = recOf(row); if(isMig(o.year) || mlGone(o)) return;
+    const R = omlFind(o.name, o.father, o.metric, o.total), v = omlVerdict(R);
+    let p = '';
+    if(!v) p = 'Not in the official lists';
+    else if(v.state === 'wait') p = 'Official list: waiting, not selected';
+    else if(v.state === 'claim') p = 'UoP Employee claim not confirmed yet';
+    else if(v.state === 'no') p = 'UoP Employee claim not confirmed';
+    else if(v.key && o.key !== v.key) p = 'Program: strength sheet ' + lab(o.key) + ', official ' + lab(v.key);
+    if(v && v.quota && qk(o.quota) !== qk(v.quota)) p = (p ? p + ' · ' : '') + 'Quota: strength sheet ' + (o.quota || '-') + ', official ' + v.quota;
+    if(p) out.push([o.roll || '', o.name, o.father || '', lab(o.key), o.pcs || '', o.quota || '', v ? v.row.quota + ' · ' + v.row.pos : '', v ? v.row.agg : '', p]); });
+  if(!out.length){ omlMsg = 'Every 1st Year student in the strength sheet matches the official lists.'; return render(); }
+  JCWOUT.list({ title:'Strength sheet vs official merit lists (' + out.length + ')', head:['Enroll#', 'Student Name', 'Father Name', 'Program now', 'Section', 'Quota now', 'Official list', 'AGG', 'Problem'], rows:out });
+}
+function wireOml(){
+  const i = $('#omlQ'); let t;
+  if(i) i.oninput = () => { clearTimeout(t); t = setTimeout(() => { omlQ = i.value; const pos = i.selectionStart; render(); const j = $('#omlQ'); j.focus(); try{ j.setSelectionRange(pos, pos); }catch(e){} }, 200); };
+  const f = $('#omlF'); if(f) f.onchange = async () => {
+    const files = [...f.files]; omlMsg = '';
+    for(const file of files){
+      try{ omlBusy = 'Reading ' + file.name + '…'; render();
+        const r = await omlRead(file);
+        if(!r.rows.length) throw new Error('no students found (is it a Directorate of Admissions merit list?)');
+        omlBusy = 'Saving ' + r.rows.length + ' rows of ' + file.name + '…'; render();
+        const s = await api({ action:'adm_oml_save', list:file.name.replace(/\.pdf$/i, ''), rows:r.rows }, 300000);
+        if(!s.ok) throw new Error(s.error === 'UNKNOWN_ACTION' ? 'Paste the new Admissions.gs and deploy a New version first.' : s.error);
+        omlMsg += esc(file.name) + ': ' + r.rows.length + ' students (' + esc(r.title) + ') saved.<br>';
+      }catch(e){ omlMsg += '<b style="color:var(--bad)">' + esc(file.name) + ': ' + esc(e.message || e) + '</b><br>'; }
+    }
+    omlBusy = ''; await omlLoad(true); Object.keys(pnSel).forEach(k => { if(!pnSel[k].rollManual && !pnSel[k].secManual) delete pnSel[k]; }); render();
+  };
+  const c = $('#omlChk'); if(c) c.onclick = omlCheck;
+  document.querySelectorAll('[data-oa]').forEach(b => b.onclick = () => { const [l, fm] = b.dataset.oa.split('|'); const r = oml.rows.find(x => x.list === l && x.form === fm); if(r) omlAdmit(r); });
+  document.querySelectorAll('[data-oe]').forEach(b => b.onclick = () => { searchQ = b.dataset.oe; setTab('find'); });
+  document.querySelectorAll('[data-oc]').forEach(b => b.onclick = async () => {
+    const [l, fm, y] = b.dataset.oc.split('|'), note = y === '1' ? prompt('What did you see? (e.g. father\'s UoP employee card no.)', '') : prompt('Why not? (optional)', '');
+    if(note === null) return;
+    try{ const r = await api({ action:'adm_oml_confirm', list:l, form:fm, yes:y === '1', note });
+      if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'Paste the new Admissions.gs and deploy a New version first.' : r.error);
+      const row = oml.rows.find(x => x.list === l && x.form === fm); if(row){ row.confirmed = r.confirmed; row.confirmedBy = r.by; row.confirmedOn = r.on; row.note = note; idbSet('oml', oml); }
+      Object.keys(pnSel).forEach(k => { if(!pnSel[k].rollManual && !pnSel[k].secManual) delete pnSel[k]; }); toast(y === '1' ? 'Confirmed: UoP Employee Quota (subsidized)' : 'Marked: not an employee'); render(); }catch(e){ toast(e.message); } });
+}
+
 /* ---------- waiting ---------- */
 function waitHtml(){
   if(!queue.length) return `<div class="card"><h2>Nothing waiting</h2><div class="sub">Every admission and change made on this phone has reached the strength sheet.</div></div>`;
@@ -1387,7 +1586,7 @@ if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch
   if(init) form = draft && draft.program ? Object.assign(blankForm(), draft) : blankForm();
   render();
   idx = await idbGet('index');
-  if(online() && user){ await refreshInit(); await loadIndex(false); sync(); if(tab === 'find') render(); pnLoad(false); }
+  if(online() && user){ await refreshInit(); await loadIndex(false); await omlLoad(false); sync(); if(tab === 'find') render(); pnLoad(false); }
 })();
 </script>
 </body>

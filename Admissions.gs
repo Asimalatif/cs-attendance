@@ -141,6 +141,9 @@ function admRoute_(user, req) {
     case 'adm_refresh':   return admRefresh_(user, req.fields || [], req.apply === true, req.accept || {});
     case 'adm_add_new':   return admAddNew_(user, req.items || [], req.override === true);
     case 'adm_fee_receipt': return admFeeReceipt_(user, req);
+    case 'adm_oml_get':   return admOmlGet_();
+    case 'adm_oml_save':  return admOmlSave_(user, req);
+    case 'adm_oml_confirm': return admOmlConfirm_(user, req);
     case 'adm_last_date': {                                  // v7.7: last date of admission (merit lists: later = lost her right to a seat)
       var d = String(req.date || '').trim();
       if (d && !/^\d{4}-\d\d-\d\d$/.test(d)) return { ok: false, error: 'Date as yyyy-mm-dd' };
@@ -795,6 +798,55 @@ function admFeeReceipt_(user, req) {
     sh.getRange(r + 2, cn).setValue(d ? note + ' (' + (user.teacher || user.name || '') + ', ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy') + ')' : '');
     admLog_(user, 'FEE RECEIPT DATE', roll, admS_(T.rows[r][T.cols.studentname]), (d || '(removed)') + (note ? ' · ' + note : ''), '');
     var T2 = admRead_(); return { ok: true, row: r + 2, rec: admPack_(admRec_(T2, T2.rows[r], r, admSettings_().sections)) };
+  } finally { lock.releaseLock(); }
+}
+
+/* ================= v7.8 Official merit lists (Directorate of Admissions PDFs, read on the page) =================
+   The portal shows nearly every student as Open Quota in the first days; the official final merit lists say who was selected,
+   in which quota and whether Subsidized / Non-Subsidized. UoP Employee Quota applicants must be confirmed at the college. */
+var ADM_OML_SHEET = 'Official Merit Lists';
+var ADM_OML_HEAD = ['Program', 'List', 'S.#', 'Form#', 'Name', 'Father Name', 'Obt Marks', 'Total Marks', 'HQ', 'AGG %', 'Applied Quota', 'Merit Position',
+                    'Uploaded', 'Confirmed', 'Confirmed By', 'Confirmed On', 'Note'];
+function admOmlSheet_() {
+  var b = admBook_(), sh = b.getSheetByName(ADM_OML_SHEET);
+  if (!sh) { sh = b.insertSheet(ADM_OML_SHEET); sh.getRange(1, 1, 1, ADM_OML_HEAD.length).setValues([ADM_OML_HEAD]).setFontWeight('bold'); sh.setFrozenRows(1); }
+  return sh;
+}
+function admOmlGet_() {
+  var sh = admOmlSheet_(), n = sh.getLastRow() - 1;
+  var v = n > 0 ? sh.getRange(2, 1, n, ADM_OML_HEAD.length).getDisplayValues() : [];
+  return { ok: true, rows: v };
+}
+function admOmlSave_(user, req) {
+  var list = admS_(req.list).slice(0, 120), rows = req.rows || [];
+  if (!list || !rows.length) return { ok: false, error: 'Nothing to save.' };
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    var sh = admOmlSheet_(), n = sh.getLastRow() - 1, old = n > 0 ? sh.getRange(2, 1, n, ADM_OML_HEAD.length).getValues() : [];
+    var conf = {};                                                       // confirmations already given are kept when the list is read again
+    old.forEach(function (r) { if (r[1] === list && r[13]) conf[r[3]] = [r[13], r[14], r[15], r[16]]; });
+    var keep = old.filter(function (r) { return r[1] !== list; }), now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
+    var add = rows.map(function (r) { var c = conf[admS_(r.form)] || ['', '', '', ''];
+      return [admS_(r.program), list, admS_(r.sno), admS_(r.form), admS_(r.name), admS_(r.father), admS_(r.obt), admS_(r.total), admS_(r.hq), admS_(r.agg), admS_(r.quota), admS_(r.pos), now].concat(c); });
+    var all = keep.concat(add);
+    if (n > 0) sh.getRange(2, 1, n, ADM_OML_HEAD.length).clearContent();
+    if (all.length) { sh.getRange(2, 1, all.length, ADM_OML_HEAD.length).setNumberFormat('@'); sh.getRange(2, 1, all.length, ADM_OML_HEAD.length).setValues(all.map(function (r) { return r.map(String); })); }
+    admLog_(user, 'OFFICIAL MERIT LIST', '', '', list + ': ' + add.length + ' rows', '');
+    return { ok: true, saved: add.length, total: all.length };
+  } finally { lock.releaseLock(); }
+}
+function admOmlConfirm_(user, req) {
+  var list = admS_(req.list), form = admS_(req.form), yes = req.yes === true, note = admS_(req.note).slice(0, 200);
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    var sh = admOmlSheet_(), n = sh.getLastRow() - 1, v = n > 0 ? sh.getRange(2, 1, n, 4).getDisplayValues() : [];
+    for (var i = 0; i < v.length; i++) if (v[i][1] === list && v[i][3] === form) {
+      var by = user.teacher || user.name || '', on = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
+      sh.getRange(i + 2, 14, 1, 4).setValues([[yes ? 'Yes' : 'No', by, on, note]]);
+      admLog_(user, 'EMPLOYEE QUOTA ' + (yes ? 'CONFIRMED' : 'NOT CONFIRMED'), '', '', form + (note ? ' · ' + note : ''), '');
+      return { ok: true, confirmed: yes ? 'Yes' : 'No', by: by, on: on };
+    }
+    return { ok: false, error: 'Form# ' + form + ' is not in ' + list };
   } finally { lock.releaseLock(); }
 }
 
