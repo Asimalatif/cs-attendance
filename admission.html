@@ -1088,7 +1088,8 @@ const mlDob = o => { const m = String(o.dob || '').match(/(\d{1,2})[\/\-.](\d{1,
 const mlSort = (a, b) => Math.round(mlAgg(b) * 100) - Math.round(mlAgg(a) * 100) || mlDob(a).localeCompare(mlDob(b)) || String(a.name).localeCompare(String(b.name));
 const mlPic = u => { u = String(u || ''); const d = u.match(/\/d\/([\w-]{20,})/) || u.match(/[?&]id=([\w-]{20,})/); return d ? 'https://drive.google.com/thumbnail?id=' + d[1] + '&sz=w120' : /^https?:/.test(u) ? u : ''; };
 /** fee of each program = the most common paid challan above Rs 3,000 (worked out once per student list) */
-let ML = null;                                   // cache: { at, fees, lists }
+let ML = null;
+const mlLast = () => (init && init.cfg && init.cfg.lastDate) || '';                                   // cache: { at, fees, lists }
 function mlFees(all){
   const c = {};
   all.forEach(o => feeOf(o.challan).forEach(x => { if(x.amount > REG_FEE_MAX){ const k = c[o.key] = c[o.key] || {}; k[x.amount] = (k[x.amount] || 0) + 1; } }));
@@ -1099,12 +1100,15 @@ function mlFees(all){
  *  red only where it matters: the subsidized seats of a class that also has non-subsidized programs (Pre-Medical Open (S)) */
 function meritLists(){
   if(!idx || !init || !init.seats) return [];
-  const stamp = idx.at + '|' + idx.rows.length + '|' + (init.seats.at || '');
+  const stamp = idx.at + '|' + idx.rows.length + '|' + (init.seats.at || '') + '|' + mlLast();
   if(ML && ML.stamp === stamp) return ML.lists;
   const all = [];
-  for(const row of idx.rows){ const o = recOf(row); if(!isMig(o.year) && o.key && !mlGone(o)){ o._a = Math.round(mlAgg(o) * 100); o._d = mlDob(o); all.push(o); } }
+  // v7.7: last date of admission: a student whose fee was paid after it (or not paid) lost her right; she comes after all on-time students
+  const last = mlLast(), lastK = last ? last.replace(/-/g, '') : '';
+  for(const row of idx.rows){ const o = recOf(row); if(!isMig(o.year) && o.key && !mlGone(o)){ o._a = Math.round(mlAgg(o) * 100); o._d = mlDob(o);
+    const pk = mlDob({ dob:o.feepaid }); o._late = !!lastK && (pk === '99999999' || pk > lastK); all.push(o); } }
   const used = new Set(all.map(o => o.key)), fees = mlFees(all), out = [], s = init.seats;
-  const srt = (a, b) => b._a - a._a || a._d.localeCompare(b._d) || String(a.name).localeCompare(String(b.name));
+  const srt = (a, b) => (a._late ? 1 : 0) - (b._late ? 1 : 0) || b._a - a._a || a._d.localeCompare(b._d) || String(a.name).localeCompare(String(b.name));
   s.programs.forEach(p => {
     if(!used.has(p.key)) return;                                       // e.g. Evening Pre-Medical: no 1st Year this year
     const pr = prog(p.key) || {}, sib = pr.fee === 'sub' ? init.programs.filter(x => x.classProgram === pr.classProgram && x.fee === 'non' && used.has(x.key)).map(x => x.key) : [];
@@ -1126,17 +1130,21 @@ function meritLists(){
       const inHome = L.filter(o => home.includes(o.key)).length;
       const open = emp;                                                  // no seat limit: no surplus, no "no seats set"
       if(emp) seats = L.length;
-      let nextLeft = sib.length ? Math.max(1, seats - L.slice(0, seats).filter(o => home.includes(o.key)).length) : 0;
+      // empty subsidized seats: students of the non-subsidized programs inside the seats fill them first (blue, not wrong)
+      let empty = sib.length ? Math.max(0, seats - inHome) : 0;
+      let nextLeft = sib.length ? Math.max(1, empty - L.slice(0, seats).filter(o => !home.includes(o.key)).length) : 0;
       const rows = L.map((o, i) => {
         const rank = i + 1, here = home.includes(o.key), should = rank <= seats;
         let state = here && should ? 'ok' : '', why = '';
         if(sib.length){
           if(here && !should){ state = 'bad'; why = 'Below the last subsidized seat: should be in ' + sib.map(k => (prog(k) || {}).label).join(' / '); }
+          else if(!here && should && !emp && empty > 0){ state = 'next'; why = 'Next in line: a subsidized seat is empty'; empty--; }
           else if(!here && should){ state = 'bad'; why = emp ? 'UoP Employee Quota is always subsidized: should be in ' + pr.label : 'Inside the ' + seats + ' subsidized seats: should be in ' + (pl ? 'this quota' : pr.label); }
           else if(!here && nextLeft > 0){ state = 'next'; why = 'Next in line for a subsidized seat'; nextLeft--; }
         } else if(open){ /* every employee's daughter has a seat */ }
         else if(!should && !noSeats){ if(surplusOk) why = 'Over the seats (fine in Open Quota)'; else { state = 'surplus'; why = 'Surplus: over the ' + seats + ' seats of ' + q.name; } }
         else if(noSeats){ state = 'surplus'; why = 'No seats set for this quota in Quota Settings'; }
+        if(o._late) why = (why ? why + ' · ' : '') + (o.feepaid ? 'Late: fee paid ' + o.feepaid + ', after the last date' : 'Fee not paid by the last date');
         return { o, rank, state, why };
       });
       out.push({ key:p.key, label:pl ? 'Shared pool: ' + home.map(k => (prog(k) || {}).label || k).join(', ') : pr.label || p.key, fee:fees[p.key] || 0,
@@ -1158,11 +1166,11 @@ function mlHtml(){
   mlKey = cur.key; mlQ = cur.quota;
   const bad = r => r.rows.filter(x => x.state === 'bad').length, sur = r => r.rows.filter(x => x.state === 'surplus').length;
   const left = r => r.noSeats || r.open ? null : r.seats - r.held;
-  const tone = r => bad(r) ? 'bad' : sur(r) ? 'surplus' : left(r) > 0 ? 'less' : 'ok';
+  const tone = r => bad(r) ? 'bad' : sur(r) ? 'surplus' : (r.subs ? r.seats - r.inHome : left(r)) > 0 ? 'less' : 'ok';
   const groups = [...new Set(M.map(x => x.group))];
   const sel = `<div class="ml-grid">${groups.map(g => `<div class="ml-g"><div class="ml-gh">${esc(g)}</div><table class="mlq"><tbody>
     ${M.filter(x => x.group === g).map(x => { const l = left(x); return `<tr class="${tone(x)}${x === cur ? ' on' : ''}" data-ml="${esc(x.key + '|' + x.quota)}"><td>${esc(x.qlabel)}</td><td class="n">${x.held}${x.noSeats || x.open ? '' : ' / ' + x.seats}</td>
-      <td class="n">${x.open ? '<span class="sub">all admitted</span>' : x.noSeats ? '<span class="pill full">no seats set</span>' : bad(x) ? `<span class="pill full">${bad(x)} wrong</span>` : sur(x) ? `<span class="pill sur">+${sur(x)} surplus</span>` : l > 0 ? `<span class="pill lessp">${l} empty</span>` : l < 0 ? `<span class="sub">+${-l}</span>` : '<span class="sub">full</span>'}</td></tr>`; }).join('')}
+      <td class="n">${x.open ? '<span class="sub">all admitted</span>' : x.noSeats ? '<span class="pill full">no seats set</span>' : bad(x) ? `<span class="pill full">${bad(x)} wrong</span>` : sur(x) ? `<span class="pill sur">+${sur(x)} surplus</span>` : x.subs && x.seats - x.inHome > 0 ? `<span class="pill lessp">${x.seats - x.inHome} left</span>` : l > 0 ? `<span class="pill lessp">${l} empty</span>` : l < 0 ? `<span class="sub">+${-l}</span>` : '<span class="sub">full</span>'}</td></tr>`; }).join('')}
     </tbody></table></div>`).join('')}</div>
     <div class="sub" style="margin-top:6px"><span class="mlk less">green</span> = seats still empty · <span class="mlk sur">orange</span> = surplus (more than the seats; fine only in Open Quota of non-subsidized, FCS, F.A, Pre-Engineering) · <span class="mlk bad">red</span> = wrong place for a subsidized seat · <span class="mlk next">blue</span> = next in line.</div>`;
   const th = ['#', 'Photo', 'Enroll#', 'Student', 'Program · Section', 'HQ', 'Obtained', 'Total', 'Aggregate', 'MeritNo', 'Challan', 'DOB', 'Age-wise', 'Fee paid', ''];
@@ -1170,6 +1178,8 @@ function mlHtml(){
   return `${old ? '<div class="note mid">This list has no Aggregate / Age-wise / FEE PAID DATE yet: paste the new <b>Admissions.gs</b> in Apps Script and deploy a New version (reading the list again…).</div>' : ''}
   <section class="card"><h3>Merit lists (1st Year, on seats)</h3>
     <div class="sub">Students by <b>Aggregate</b>, then <b>age</b> (older first); a thick line marks the last seat. For <b>Pre-Medical Open (S)</b> (subsidized) each quota takes its students from all Pre-Medical programs: <span class="mlk bad">red</span> = in the wrong place (should move up to subsidized, or down), <span class="mlk next">blue</span> = next in line when a subsidized seat empties (left, cancelled, migrated students are not counted). </div>
+    <div class="acts" style="align-items:center"><label class="f" style="margin:0">Last date of admission <input type="date" id="mlLast" value="${esc(mlLast())}" style="height:40px"></label>
+      <button class="btn" type="button" id="mlLastSave">Save date</button><span class="sub">${mlLast() ? 'Fee paid after ' + esc(mlLast().split('-').reverse().join('/')) + ' (or not paid) = late: she comes after every on-time student and loses her right to a seat.' : 'No last date set: every student is ranked only by Aggregate and age.'}</span></div>
     ${sel}</section>
   <section class="card"><h3>${esc(cur.label)} · ${esc(cur.quota)}</h3>
     <div class="sub">${cur.open ? '<b>No seat limit</b> (every employee\'s daughter is admitted, on a subsidized seat)' : cur.noSeats ? '<b>No seats set</b>' : `<b>${cur.seats}</b> seats`} · <b>${cur.inHome}</b> students in it now · fee ${cur.fee ? '<b>Rs ' + cur.fee.toLocaleString('en-PK') + '</b>' : 'not known yet'}${cur.sibLabel ? ` · ${esc(cur.sibLabel)} fee ${cur.sibFee ? '<b>Rs ' + cur.sibFee.toLocaleString('en-PK') + '</b>' : '–'}` : ''} (most common paid challan)</div>
@@ -1284,6 +1294,9 @@ function wireMl(){
         r.state === 'surplus' ? 'Surplus' : r.rank <= c.seats ? 'On a seat' : r.state === 'next' ? 'Next in line' : 'Over the seats', r.why]; }) }); };
   const a = $('#mlOut'); if(a) a.onclick = () => out(false);
   const pp = $('#mlPdf'); if(pp) pp.onclick = mlPhotoPdf;
+  const ls2 = $('#mlLastSave'); if(ls2) ls2.onclick = async () => { const d = $('#mlLast').value;
+    try{ const r = await api({ action:'adm_last_date', date:d }); if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'Paste the new Admissions.gs and deploy a New version first.' : r.error);
+      init.cfg = Object.assign(init.cfg || {}, { lastDate:r.date }); ML = null; toast(r.date ? 'Last date saved' : 'Last date removed'); render(); }catch(e){ toast(e.message); } };
   document.querySelectorAll('[data-mlp]').forEach(im => im.onclick = () => { if(!im.src) return; dlgOpen(`<img src="${im.src}" style="display:block;max-width:100%;max-height:70vh;margin:0 auto;border-radius:10px"><div class="acts"><button class="btn primary" id="dOk">Close</button></div>`); $('#dOk').onclick = dlgClose; });
   const b = $('#mlBad'); if(b) b.onclick = () => out(true);
 }

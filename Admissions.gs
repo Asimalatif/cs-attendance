@@ -140,6 +140,13 @@ function admRoute_(user, req) {
     case 'adm_new':       return admNew_();
     case 'adm_refresh':   return admRefresh_(user, req.fields || [], req.apply === true, req.accept || {});
     case 'adm_add_new':   return admAddNew_(user, req.items || [], req.override === true);
+    case 'adm_last_date': {                                  // v7.7: last date of admission (merit lists: later = lost her right to a seat)
+      var d = String(req.date || '').trim();
+      if (d && !/^\d{4}-\d\d-\d\d$/.test(d)) return { ok: false, error: 'Date as yyyy-mm-dd' };
+      PropertiesService.getScriptProperties().setProperty('ADM_LAST_DATE', d);
+      admLog_(user, 'LAST DATE OF ADMISSION', '', '', d || '(none)', '');
+      return { ok: true, date: d };
+    }
   }
   return { ok: false, error: 'UNKNOWN_ACTION' };
 }
@@ -494,7 +501,8 @@ function admInit_() {
     sections: set.sections, quotas: Object.keys(qn).map(function (k) { return qn[k]; }),
     seats: admSeatState_(recs, set), subjects: admSubjects_(recs), rooms: admRoomMap_(recs),
     cfg: { rollPrefix: ADM_CFG.ROLL_PREFIX, entryYear: ADM_CFG.ENTRY_YEAR, session: ADM_CFG.SESSION, mode: ADM_CFG.MODE,
-           threshold: ADM_CFG.THRESHOLD, mig: ADM_CFG.MIGRATION, sheet: ADM_CFG.SHEET },
+           threshold: ADM_CFG.THRESHOLD, mig: ADM_CFG.MIGRATION, sheet: ADM_CFG.SHEET,
+           lastDate: PropertiesService.getScriptProperties().getProperty('ADM_LAST_DATE') || '' },
     note: set.note, at: admNow_()
   };
 }
