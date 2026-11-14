@@ -1339,10 +1339,19 @@ let oml = null, omlBusy = '', omlQ = '', omlMsg = '', omlF = 'act', omlL = '', o
 const OML_COLS = ['program', 'list', 'sno', 'form', 'name', 'father', 'obt', 'total', 'hq', 'agg', 'quota', 'pos', 'uploaded', 'confirmed', 'confirmedBy', 'confirmedOn', 'note'];
 async function omlLoad(force){
   if(!oml && !force){ const c = await idbGet('oml'); if(c) oml = c; }
+  if(!omlPQ){ const c = await idbGet('omlpq'); if(c) omlPQ = c; }
   if(!online() || (oml && !force && Date.now() - (oml.t || 0) < 10 * 60000)) return;
+  try{ const q = await api({ action:'adm_portal_quota' }, 120000); if(q.ok){ omlPQ = q.rows; idbSet('omlpq', omlPQ); OMLPQ = null; } }catch(e){}
   try{ const r = await api({ action:'adm_oml_get' }, 120000); if(r.ok){ oml = { rows:r.rows.map(v => Object.fromEntries(OML_COLS.map((c, i) => [c, v[i] || '']))), t:Date.now() }; OMLX = null; idbSet('oml', oml); } }catch(e){}
 }
-let OMLX = null;                                   // name|father -> rows
+let OMLX = null, omlPQ = null, OMLPQ = null;    // omlPQ: portal [id, name, father, category, enrollment#]
+/** quota on the UoP portal ("Category") of a student: by portal Student ID, else name + father */
+function omlPortalQ(o){
+  if(!omlPQ) return null;
+  if(!OMLPQ || OMLPQ.src !== omlPQ){ const id = new Map(), nf = new Map(); omlPQ.forEach(r => { if(r[0]) id.set(String(r[0]), r); nf.set(omlK(r[1], r[2]), r); }); OMLPQ = { src:omlPQ, id, nf }; }
+  const r = (o.id && OMLPQ.id.get(String(o.id))) || OMLPQ.nf.get(omlK(o.name, o.father));
+  return r ? r[3] || '(empty)' : null;
+}                                   // name|father -> rows
 const omlK = (n, f) => nrm(n) + '|' + nrm(f);
 function omlIndex(){
   if(OMLX && OMLX.src === oml) return OMLX;
@@ -1537,7 +1546,11 @@ function omlStuHtml(rows, lists, S){
     <div style="overflow:auto"><table class="ml oms" style="margin-top:6px"><thead><tr><th>S#</th><th>Student</th><th>Official list</th><th>What to do</th><th></th></tr></thead><tbody>
     ${cur.slice(0, omlN).map(x => { const r = x.r; return `<tr><td class="n">${esc(r.sno)}</td>
       <td><b>${esc(r.name)}</b><div class="sub">d/o ${esc(r.father)} · Form# ${esc(r.form)} · AGG ${esc(r.agg)}${/^y/i.test(r.hq) ? ' · HQ' : ''}</div>
-        ${x.t ? `<div style="margin-top:3px"><span class="pill info">Enroll# ${esc(x.t.roll || '–')}</span> <span class="pill info">${esc(x.t.pcs || 'no section')}</span> <span class="pill solid">${esc((prog(x.t.key) || {}).label || x.t.key || 'no program')}</span> <span class="pill ${/employ/i.test(x.t.quota || '') ? 'near' : 'ok'}">${esc(x.t.quota || 'no quota')}</span></div>` : '<div class="sub" style="margin-top:3px">Not in the strength sheet</div>'}</td>
+        ${x.t ? `<div style="margin-top:3px"><span class="pill info">Enroll# ${esc(x.t.roll || '–')}</span> <span class="pill info">${esc(x.t.pcs || 'no section')}</span> <span class="pill solid">${esc((prog(x.t.key) || {}).label || x.t.key || 'no program')}</span> <span class="pill ${/employ/i.test(x.t.quota || '') ? 'near' : 'ok'}">${esc(x.t.quota || 'no quota')}</span></div>` : ''}
+        ${(() => { if(!omlPQ) return '<div class="sub" style="margin-top:3px">Portal quota: paste the new Admissions.gs and deploy a New version</div>';
+          const pq = omlPortalQ(x.t || x.p || x.r); if(pq == null) return '<div class="sub" style="margin-top:3px">Portal quota: not found on the portal copy</div>';
+          const kk = z => qk(z).replace(/\b(quota|merit|seats?|reserved|employees?)\b/g, '').replace(/[^a-z0-9]/g, ''), same = x.v && x.v.quota && kk(pq) === kk(x.v.quota);
+          return `<div style="margin-top:3px"><span class="sub">Portal quota:</span> <span class="pill ${same ? 'ok' : 'full'}">${esc(pq)}</span>${same || !x.v || !x.v.quota ? '' : ' <span class="sub" style="color:var(--bad)">update the portal to ' + esc(x.v.quota) + '</span>'}</div>`; })()}${x.t ? '' : '<div class="sub" style="margin-top:3px">Not in the strength sheet</div>'}</td>
       <td>${esc(r.program)} · <b>${esc(r.quota || 'Open')}</b><div class="sub">${esc(r.pos || '-')}</div></td>
       <td><div class="omm ${x.lvl}">${esc(x.msg)}</div><div class="sub omm ${x.fee.lvl === 'ok' ? '' : x.fee.lvl}" style="font-weight:600">${esc(x.feeT)}</div></td>
       <td class="nw">${x.v && x.v.state === 'claim' ? `<button class="btn primary" data-oc="${esc(r.list)}|${esc(r.form)}|1">Confirm employee</button> <button class="btn" data-oc="${esc(r.list)}|${esc(r.form)}|0">Not employee</button>` : ''}
@@ -1575,8 +1588,8 @@ function wireOml(){
   const oo = $('#omlOut'); if(oo) oo.onclick = () => { if(!window.JCWOUT || !oml) return;
     const { R, is } = omlStuList(oml.rows, omlStrength()), cur = R.filter(is[omlF] || is.all);
     JCWOUT.list({ title:'Official lists · ' + OMF[omlF] + (omlL ? ' · ' + omlL : ''), sub:cur.length + ' students',
-      head:['S#', 'Form#', 'Student Name', 'Father Name', 'AGG', 'Program', 'Quota', 'Official status', 'Enroll#', 'Section (PCS)', 'Strength sheet program · quota', 'What to do', 'Fee'],
-      rows:cur.map(x => [x.r.sno, x.r.form, x.r.name, x.r.father, x.r.agg, x.r.program, x.r.quota || 'Open', x.r.pos, x.t ? x.t.roll || '' : '', x.t ? x.t.pcs || '' : '', x.t ? ((prog(x.t.key) || {}).label || x.t.key) + ' · ' + (x.t.quota || '') : 'Not in the strength sheet', x.msg, x.feeT.replace(/^Fee: /, '')]) }); };
+      head:['S#', 'Form#', 'Student Name', 'Father Name', 'AGG', 'Program', 'Quota', 'Official status', 'Enroll#', 'Section (PCS)', 'Strength sheet program · quota', 'Portal quota', 'What to do', 'Fee'],
+      rows:cur.map(x => [x.r.sno, x.r.form, x.r.name, x.r.father, x.r.agg, x.r.program, x.r.quota || 'Open', x.r.pos, x.t ? x.t.roll || '' : '', x.t ? x.t.pcs || '' : '', x.t ? ((prog(x.t.key) || {}).label || x.t.key) + ' · ' + (x.t.quota || '') : 'Not in the strength sheet', omlPortalQ(x.t || x.p || x.r) || '', x.msg, x.feeT.replace(/^Fee: /, '')]) }); };
   const i = $('#omlQ'); let t;
   if(i) i.oninput = () => { clearTimeout(t); t = setTimeout(() => { omlQ = i.value; const pos = i.selectionStart; render(); const j = $('#omlQ'); j.focus(); try{ j.setSelectionRange(pos, pos); }catch(e){} }, 200); };
   const f = $('#omlF'); if(f) f.onchange = async () => {
