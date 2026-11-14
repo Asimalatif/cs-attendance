@@ -1455,7 +1455,8 @@ function omlStrength(){
 }
 /* v7.9 fee of one student against the official decision.
    Pre-Medical: the subsidized fee is half of the non-subsidized one (all quotas). Parents may pay in installments (P- paid, U- unpaid). */
-const PM_NON_FEE = SUB_FEE * 2, rs = n => 'Rs ' + Math.round(n).toLocaleString('en-PK');
+const PM_NON_FEE = SUB_FEE * 2, FA_FEE = 50000, rs = n => 'Rs ' + Math.round(n).toLocaleString('en-PK');
+const empFee = cls => cls === 'FA' ? FA_FEE : SUB_FEE;   // UoP Employee fee: F.A Rs 50,000, Pre-Medical (and others) Rs 60,000
 function omlFee(t, v){
   const all = feeOf(t), f = all.filter(x => x.amount > REG_FEE_MAX);
   if(!all.length) return { lvl:'bad', paid:0, text:'no fee challan on the portal yet' };
@@ -1468,13 +1469,17 @@ function omlFee(t, v){
   const twice = Object.keys(n).filter(a => n[a] > 1 && Number(a) >= SUB_FEE * 0.5);
   let text = due ? 'installments: ' + rs(paid) + ' paid, ' + rs(due) + ' still due' : 'fee paid ' + rs(paid);
   let L = due ? 'warn' : 'ok';
-  if(v && v.row && omlEmp(v.row) && v.state === 'ok'){            // confirmed UoP employee: the fee is Rs 60,000 in every program
-    if(tot > SUB_FEE * 1.1){ text += ' — the UoP Employee fee is ' + rs(SUB_FEE) + ': adjust / refund ' + rs(tot - SUB_FEE); L = 'warn'; }
-    else if(tot < SUB_FEE * 0.95){ text += ' — the UoP Employee fee is ' + rs(SUB_FEE) + ': ' + rs(SUB_FEE - tot) + ' more to pay'; L = 'bad'; }
-    else text += ' (UoP Employee fee)';
+  const fixed = v && v.cls === 'FA' ? [FA_FEE, 'F.A fee (same in every quota)'] : v && v.row && omlEmp(v.row) && v.state === 'ok' ? [empFee(v.cls), 'UoP Employee fee'] : null;
+  if(fixed){                                                         // F.A: Rs 50,000 in every quota; confirmed UoP employee: Rs 60,000 (F.A Rs 50,000)
+    const [want, what] = fixed;
+    if(paid >= want * 0.95 && due){ text += ' — the ' + what + ' is ' + rs(want) + ' and she has paid it: the unpaid ' + rs(due) + ' is not needed (cancel that challan)'; L = 'warn'; }
+    else if(tot > want * 1.1){ text += ' — the ' + what + ' is ' + rs(want) + ': adjust / refund ' + rs(tot - want); L = 'warn'; }
+    else if(tot < want * 0.95){ text += ' — the ' + what + ' is ' + rs(want) + ': ' + rs(want - tot) + ' more to pay'; L = 'bad'; }
+    else text += ' (' + what.replace(' (same in every quota)', '') + ')';
     return { lvl:L, paid, due, tot, text };
   }
-  if(pm && pr && pr.fee === 'sub' && lvl === 'non'){ text += ' — this is the NON-subsidized fee, but she is selected Subsidized (half fee): adjust / refund the difference'; L = 'warn'; }
+  if(pm && pr && pr.fee === 'sub' && lvl === 'non' && paid >= SUB_FEE * 0.95 && due){ text += ' — she is selected Subsidized: her fee is ' + rs(SUB_FEE) + ' and she has PAID it. The portal charged the non-subsidized fee because her program there is non-subsidized: the unpaid ' + rs(due) + ' is not needed once she is moved to the subsidized program'; L = 'warn'; }
+  else if(pm && pr && pr.fee === 'sub' && lvl === 'non'){ text += ' — this is the NON-subsidized fee, but she is selected Subsidized (half fee, ' + rs(SUB_FEE) + '): adjust / refund the difference'; L = 'warn'; }
   else if(pm && pr && pr.fee === 'non' && lvl === 'sub'){ text += ' — this is only the subsidized fee, but she is selected Non-Subsidized (double fee): about ' + rs(tot) + ' more to pay'; L = 'bad'; }
   else if(pm && pr) text += lvl === 'sub' ? ' (subsidized fee)' : ' (non-subsidized fee)';
   if(twice.length && L !== 'ok') text += ' · ' + rs(Number(twice[0])) + ' paid twice: check for a double payment';
@@ -1489,8 +1494,8 @@ function omlStu(r, S, PN){
   // Against: full non-subsidized fee, portal quota not employee, record on her other (open) seat. Mostly against -> check against her other seat.
   const alt = v && v.state === 'claim' ? omlVerdict(R.filter(z => !omlEmp(z)), want) : null, ch = t ? t.challan : p ? p.challan : '', f0 = omlFee(ch, null), pq0 = omlPortalQ(t || p || r);
   const isE = z => /employ|\buop\b/i.test(z || ''), tot0 = f0.tot || 0;
-  const pro = !alt && !(v && v.state === 'claim') ? [] : [pq0 && isE(pq0) ? 'the portal has her in ' + pq0 : '', t && isE(t.quota) ? 'her record is in ' + t.quota : '', tot0 && Math.abs(tot0 - SUB_FEE) <= SUB_FEE * 0.05 ? 'her fee (' + rs(tot0) + ') matches the ' + rs(SUB_FEE) + ' UoP Employee fee' : ''].filter(Boolean);
-  const con = !(v && v.state === 'claim') ? [] : [tot0 >= (SUB_FEE + PM_NON_FEE) / 2 ? 'she paid the full non-subsidized fee (' + rs(tot0) + ')' : '', pq0 && pq0 !== '(empty)' && !isE(pq0) ? 'the portal has her in ' + pq0 : '', t && alt && alt.key && t.key === alt.key && !isE(t.quota) ? 'her record already matches her ' + (alt.quota || 'Open') + ' seat' : ''].filter(Boolean);
+  const pro = !alt && !(v && v.state === 'claim') ? [] : [pq0 && isE(pq0) ? 'the portal has her in ' + pq0 : '', t && isE(t.quota) ? 'her record is in ' + t.quota : '', tot0 && Math.abs(tot0 - empFee(v.cls)) <= empFee(v.cls) * 0.05 ? 'her fee (' + rs(tot0) + ') matches the ' + rs(empFee(v.cls)) + ' UoP Employee fee' : ''].filter(Boolean);
+  const con = !(v && v.state === 'claim') ? [] : [v.cls === 'Pre-Medical' && tot0 >= (SUB_FEE + PM_NON_FEE) / 2 ? 'she paid the full non-subsidized fee (' + rs(tot0) + ')' : '', pq0 && pq0 !== '(empty)' && !isE(pq0) ? 'the portal has her in ' + pq0 : '', t && alt && alt.key && t.key === alt.key && !isE(t.quota) ? 'her record already matches her ' + (alt.quota || 'Open') + ' seat' : ''].filter(Boolean);
   const cv = v && v.state === 'claim' ? (alt && con.length > pro.length ? alt : Object.assign({}, v, { state:'ok' })) : v;
   const fee = omlFee(t ? t.challan : p ? p.challan : '', cv), feeT = t || p ? 'Fee: ' + fee.text : 'Fee: not on the portal list yet (refresh From portal)';
   const where = v && v.key ? lab(v.key) + ' · ' + v.quota : '';
