@@ -1485,8 +1485,13 @@ function omlStu(r, S, PN){
   const R = omlFind(r.name, r.father, r.obt, r.total), T = S.get(omlK(r.name, r.father)) || [], t = T[0];
   const p = !t && PN ? PN.get(omlK(r.name, r.father)) : null, want = t ? (prog(t.key) || {}).classProgram : p ? (prog(p.program) || {}).classProgram : '';
   const v = omlVerdict(R.length ? R : [r], want), lab = k => (prog(k) || {}).label || k;
-  // v7.9: an employee claim not confirmed yet is not taken as true: fee and portal are checked against her other merit seat
-  const alt = v && v.state === 'claim' ? omlVerdict(R.filter(z => !omlEmp(z)), want) : null, cv = alt || v;
+  // v7.9: an employee claim not confirmed yet: weigh the signs. For: portal quota employee, record quota employee, fee = Rs 60,000.
+  // Against: full non-subsidized fee, portal quota not employee, record on her other (open) seat. Mostly against -> check against her other seat.
+  const alt = v && v.state === 'claim' ? omlVerdict(R.filter(z => !omlEmp(z)), want) : null, ch = t ? t.challan : p ? p.challan : '', f0 = omlFee(ch, null), pq0 = omlPortalQ(t || p || r);
+  const isE = z => /employ|\buop\b/i.test(z || ''), tot0 = f0.tot || 0;
+  const pro = !alt && !(v && v.state === 'claim') ? [] : [pq0 && isE(pq0) ? 'the portal has her in ' + pq0 : '', t && isE(t.quota) ? 'her record is in ' + t.quota : '', tot0 && Math.abs(tot0 - SUB_FEE) <= SUB_FEE * 0.05 ? 'her fee (' + rs(tot0) + ') matches the ' + rs(SUB_FEE) + ' UoP Employee fee' : ''].filter(Boolean);
+  const con = !(v && v.state === 'claim') ? [] : [tot0 >= (SUB_FEE + PM_NON_FEE) / 2 ? 'she paid the full non-subsidized fee (' + rs(tot0) + ')' : '', pq0 && pq0 !== '(empty)' && !isE(pq0) ? 'the portal has her in ' + pq0 : '', t && alt && alt.key && t.key === alt.key && !isE(t.quota) ? 'her record already matches her ' + (alt.quota || 'Open') + ' seat' : ''].filter(Boolean);
+  const cv = v && v.state === 'claim' ? (alt && con.length > pro.length ? alt : Object.assign({}, v, { state:'ok' })) : v;
   const fee = omlFee(t ? t.challan : p ? p.challan : '', cv), feeT = t || p ? 'Fee: ' + fee.text : 'Fee: not on the portal list yet (refresh From portal)';
   const where = v && v.key ? lab(v.key) + ' · ' + v.quota : '';
   const wrong = t && cv && cv.key && (t.key !== cv.key || (cv.quota && qk(t.quota) !== qk(cv.quota)));
@@ -1494,12 +1499,10 @@ function omlStu(r, S, PN){
   if(!v) msg = 'Not clear: check her admission letter';
   else if(v.state === 'wait'){ lvl = t ? 'bad' : 'info'; msg = t ? '⚠ In the strength sheet (' + (t.roll || 'no Enroll#') + ') but NOT selected: ' + v.text : v.text + ': no admission unless a seat falls vacant'; }
   else if(v.state === 'no'){ lvl = 'bad'; msg = v.text + (t ? ' — she is in the strength sheet (' + (t.roll || '') + '): move her to her merit seat or cancel' : ''); }
-  else if(v.state === 'claim'){ lvl = 'warn'; msg = 'Ask for the UoP employee proof (service certificate), then confirm. ' + v.text.replace(/^Applied in UoP Employee Quota[^:]*:\s*check her proof[^.]*\.\s*/, '');
-    const pq = omlPortalQ(t || p || r), fullFee = cv && cv.cls === 'Pre-Medical' && fee.paid && /non-subsidized fee\)/.test(fee.text);
-    const why = [fullFee ? 'she paid the full non-subsidized fee' : '', pq && !/employ|\buop\b/i.test(pq) && pq !== '(empty)' ? 'the portal has her in ' + pq : '', t && alt && alt.key && t.key === alt.key && !/employ/i.test(t.quota || '') ? 'her record already matches her ' + (alt.quota || 'Open') + ' seat' : ''].filter(Boolean);
-    const empFee = fee.tot && Math.abs(fee.tot - SUB_FEE) <= SUB_FEE * 0.05;
-    if(empFee && why.length < 2) msg += ' Her fee (' + rs(fee.tot) + ') matches the ' + rs(SUB_FEE) + ' UoP Employee fee.';
-    if(why.length >= 2) msg = 'Probably NOT an employee (wrongly on the UoP Employee list): ' + why.join(', ') + '. Press "Not employee" unless she shows the service certificate. ' + (alt ? 'Her seat: ' + alt.text + '.' : ''); }
+  else if(v.state === 'claim'){ lvl = 'warn'; const other = alt ? ' If not an employee: ' + alt.text + '.' : ' If not an employee: not on any other list.';
+    if(con.length > pro.length && con.length >= 2) msg = 'Probably NOT an employee (wrongly on the UoP Employee list): ' + con.join(', ') + '. Press "Not employee" unless she shows the service certificate.' + other;
+    else if(pro.length >= 2 && !con.length) msg = 'Looks like a real UoP employee: ' + pro.join(', ') + '. See her service certificate and press "Confirm employee".' + other;
+    else msg = 'Ask for the UoP employee proof (service certificate), then confirm.' + (pro.length ? ' For: ' + pro.join(', ') + '.' : '') + (con.length ? ' Against: ' + con.join(', ') + '.' : '') + other; }
   else if(v.state === 'check'){ lvl = 'warn'; msg = v.text; }
   else if(t){ lvl = wrong ? 'bad' : fee.lvl === 'bad' ? 'bad' : fee.lvl === 'warn' ? 'warn' : 'ok';
     msg = wrong ? '⚠ Strength sheet says ' + lab(t.key) + ' · ' + (t.quota || '-') + ', but she is selected in ' + where + ': correct her record' : '✓ Admitted: ' + (t.roll || 'no Enroll#') + ' · ' + lab(t.key) + ' · ' + (t.pcs || '') + ' · ' + (t.quota || ''); }
