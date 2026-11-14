@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         JCW Portal Sync
 // @namespace    jcw-attendance
-// @version      1.6
+// @version      1.7
 // @description  Reads Jinnah College students from the UOP portal (read-only) and sends them to the JCW attendance system: fills only the empty cells of Transform-ALL-COLLEGE-STRENGTH, lists cancelled / migrated / disenrolled / transferred students for Left Students (moved only when you press the button) and feeds the health check.
 // @match        https://portal.uop.edu.pk/Student/Students*
 // @match        https://portal.uop.edu.pk/student/students*
@@ -175,14 +175,21 @@
       else v = val(el);
       if (v !== '' && !(key in out)) out[key] = v;
     });
-    // v1.5: Hafiz-e-Quran by its label ("Hafiz-e-Quran" dropdown), whatever the field is called
-    for (const lb of doc.querySelectorAll('label, td, th, span, div')) {
-      if (lb.children.length > 2 || !/hafiz|hifz/i.test(txt(lb))) continue;
-      let el = lb.getAttribute('for') ? doc.getElementById(lb.getAttribute('for')) : null;
-      for (let p = lb, k = 0; !el && p && k < 4; p = p.parentElement, k++) el = p.querySelector('select, input:not([type=hidden]), textarea');
-      if (!el) { let n = lb.nextElementSibling; for (let k = 0; !el && n && k < 3; n = n.nextElementSibling, k++) el = n.matches('select, input, textarea') ? n : n.querySelector('select, input, textarea'); }
-      if (el) { const v = el.tagName.toLowerCase() === 'select' ? sp((el.selectedOptions && el.selectedOptions[0]) ? txt(el.selectedOptions[0]) : '') : (/checkbox|radio/i.test(el.type || '') ? (el.checked ? 'Yes' : 'No') : val(el));
-        if (v && !/^[-* ]*(select|choose)/i.test(v)) { out['__HQ'] = v; break; } }
+    // v1.7: Hafiz-e-Quran = the portal's <select id="cmbHafizQuran" name="HafizQuran"> (No / Yes). Only that field is read:
+    // the option marked selected, nothing else. Not found or nothing selected -> empty (never another field's value).
+    out['__HQ'] = '';
+    let hq = doc.querySelector('#cmbHafizQuran, select[name="HafizQuran"], select[name="Hafiz"], select[name="IsHafiz"]');
+    if (!hq) {                                    // a renamed field: the select in the same form row as the label "Hafiz-e-Quran"
+      const lb = [...doc.querySelectorAll('label')].find(l => /hafiz|hifz/i.test(txt(l)));
+      const row = lb && (lb.closest('.form-group') || lb.parentElement);
+      hq = row ? row.querySelector('select, input[type=checkbox]') : null;
+    }
+    if (hq) {
+      let v = '';
+      if (hq.tagName.toLowerCase() === 'select') { const o = hq.querySelector('option[selected]'); v = o ? (o.getAttribute('value') || txt(o)) : ''; }
+      else v = hq.hasAttribute('checked') ? 'Yes' : 'No';
+      v = sp(v);
+      out['__HQ'] = /^(yes|true|1|y)$/i.test(v) ? 'Yes' : /^(no|false|0|n)$/i.test(v) ? 'No' : '';
     }
     return out;
   }
@@ -259,8 +266,7 @@
         row['EmailAddress'] = first(f, ['EmailAddress', 'emailAddress', 'Email', 'txtEmailAddress']);
         row['PhotoName'] = photo(first(f, ['PhotoName', 'photoName', 'Photo', 'photo']));
         if (!row['Category']) row['Category'] = first(f, ['CategoryId', 'categoryId', 'Category']);
-        const hk = '__HQ' in f ? '__HQ' : Object.keys(f).find(k => /hafiz|hifz|quran|^is_?hq$|^hq$/i.test(k));      // Hafiz-e-Quran (+20 marks in the aggregate)
-        if (hk) { const v = String(f[hk]).trim(); row['HQ'] = /^(yes|true|1|y|hafiz)/i.test(v) ? 'Yes' : /^(no|false|0|n)$/i.test(v) ? 'No' : v; }
+        row['HQ'] = f['__HQ'] || '';               // Hafiz-e-Quran (+20 marks in the aggregate): Yes / No / empty
         // v1.6: every other field of the edit page goes too (the server makes a column for each one, nothing is dropped)
         Object.keys(f).filter(k => !/^__|password|token/i.test(k) && String(f[k]).length <= 500).slice(0, 80)
           .forEach(k => { const c = 'Portal ' + k.replace(/^txt/, ''); if (!(c in row) && String(f[k]).trim() !== '') row[c] = String(f[k]).trim(); });

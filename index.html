@@ -404,6 +404,7 @@ details.fold[open]>#aBody{margin-bottom:12px}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:12px 14px;box-shadow:var(--shadow)}
 .kpi b{display:block;font-size:22px;font-weight:800;letter-spacing:-.02em}
 .kpi small{display:block;font-size:11.5px;color:var(--muted);font-weight:650;margin-top:2px}
+button.kbtn{font:inherit;color:inherit;text-align:left;cursor:pointer;width:100%}button.kbtn:hover{border-color:var(--brown)}
 .kpi.bad b{color:var(--absent)}.kpi.good b{color:var(--present)}.kpi.mid b{color:var(--leave)}
 .seg2{display:flex;gap:4px;padding:3px;border-radius:13px;background:var(--surface2);border:1px solid var(--line);margin:4px 0 10px;overflow-x:auto;scrollbar-width:none}
 .seg2::-webkit-scrollbar{display:none}
@@ -3878,6 +3879,26 @@ function tdPdf(){
   return { doc, title:'Attendance marked today', file:'Marked-Today_' + P.safe(scopeTxt()) + '_' + new Date().toISOString().slice(0, 10) + '.pdf' };
 }
 const ovRows = () => (ov && ov.rows ? ov.rows : []).filter(r => !aF.dept || r.dept === aF.dept);
+/** v7.6.1: the four figures at the top open their lists (PDF / Excel / print / share) */
+async function kpiList(k){
+  if(!window.JCWOUT) return toast('Reload the app once.');
+  const rows = ovRows(), mon = MONTHS[ov.m] + ' ' + ov.y, sc = scopeTxt();
+  if(k === 'att') return JCWOUT.list({ title:'Attendance by section and subject · ' + mon, sub:sc,
+    head:['#', 'Section', 'Subject', 'Teacher', 'Department', 'Students', 'Lectures held', 'Attendance %', 'Below ' + LOW + '%'],
+    rows:rows.slice().sort((a, b) => (pct2(a.att, a.pos) ?? 999) - (pct2(b.att, b.pos) ?? 999)).map((r, i) => [i + 1, r.cls, titleCase(r.sub), r.teacher || '', r.dept || '', r.students, r.held, pct2(r.att, r.pos) == null ? '' : pct2(r.att, r.pos), r.low]) });
+  if(k === 'teach') return JCWOUT.list({ title:'Teachers marking today · ' + ovDate(), sub:sc,
+    head:['#', 'Teacher', 'Department', 'Classes today', 'Marked', 'Status', 'Still to mark'],
+    rows:teachersAgg(rows).sort((a, b) => (a.done === a.rows.length) - (b.done === b.rows.length) || a.name.localeCompare(b.name)).map((t, i) => [i + 1, t.name, t.dept || '', t.rows.length, t.done, t.done === t.rows.length ? 'Fully marked' : 'Pending', t.rows.filter(r => !r.today).map(r => r.cls + ' ' + titleCase(r.sub)).join(', ')]) });
+  if(k === 'sec') return JCWOUT.list({ title:'Sections · ' + mon, sub:sc, head:['#', 'Section', 'Subjects', 'Students', 'Attendance %', 'Below ' + LOW + '%', 'Marked today'],
+    rows:sectionsAgg(rows).sort((a, b) => String(a.cls).localeCompare(String(b.cls), undefined, { numeric:true })).map((g, i) => [i + 1, g.cls, g.rows.length, g.students, pct2(g.att, g.pos) == null ? '' : pct2(g.att, g.pos), g.low, g.today + ' / ' + g.exp]) });
+  if(k === 'low'){
+    if(!ovLow){ toast('Loading the students below ' + LOW + '%…'); await loadLow(); }
+    if(!ovLow) return toast(ovLowErr || 'Could not load the list.');
+    return JCWOUT.list({ title:'Students below ' + LOW + '% · ' + mon, sub:sc + (ovLow.total > ovLow.rows.length ? ' · lowest ' + ovLow.rows.length + ' of ' + ovLow.total : ''),
+      head:['#', 'Enroll#', 'Student', 'Section', 'Subject', 'Teacher', 'Attended', 'Held', '%'],
+      rows:lowRowsF().map((r, i) => [i + 1, r.roll, r.name, r.cls, titleCase(r.sub), r.teacher || '', r.p, r.held, r.pct]) });
+  }
+}
 function teachersAgg(rows){
   const m = {};
   rows.forEach(r => { if(r.sched === false) return;   // not in today's timetable
@@ -3909,10 +3930,10 @@ function renderAdmin(){
       <h2>${sun ? 'Sunday — no classes today' : mk + ' of ' + exp + ' sections marked today'}</h2>
       <p>${sun ? 'Month figures below are up to date.' : pend + ' section' + (pend === 1 ? '' : 's') + ' pending · ' + tPend + ' teacher' + (tPend === 1 ? '' : 's') + ' still to mark'}</p></div>
     <div class="ring" style="--p:${sun ? 0 : pc}"><div><b>${sun ? '–' : pc + '%'}</b><small>today</small></div></div></section>`;
-  h += `<div class="kpis"><div class="kpi ${tone(avg)}"><b>${avg == null ? '–' : avg + '%'}</b><small>${label} attendance (${MONTHS[ov.m].slice(0, 3)})</small></div>
-    <div class="kpi"><b>${tDone}/${T.length}</b><small>Teachers fully marked today</small></div>
-    <div class="kpi ${lowN ? 'bad' : 'good'}"><b>${lowN}</b><small>Students below ${LOW}%</small></div>
-    <div class="kpi"><b>${new Set(rows.map(r => r.cls)).size}</b><small>Sections</small></div></div>`;
+  h += `<div class="kpis"><button type="button" data-xkpi="att" class="kpi kbtn ${tone(avg)}"><b>${avg == null ? '–' : avg + '%'}</b><small>${label} attendance (${MONTHS[ov.m].slice(0, 3)}) · list ›</small></button>
+    <button type="button" data-xkpi="teach" class="kpi kbtn"><b>${tDone}/${T.length}</b><small>Teachers fully marked today · list ›</small></button>
+    <button type="button" data-xkpi="low" class="kpi kbtn ${lowN ? 'bad' : 'good'}"><b>${lowN}</b><small>Students below ${LOW}% · list ›</small></button>
+    <button type="button" data-xkpi="sec" class="kpi kbtn"><b>${new Set(rows.map(r => r.cls)).size}</b><small>Sections · list ›</small></button></div>`;
   const depts = scope === 'all' ? [...new Set(all.map(r => r.dept).filter(Boolean))].sort() : [];
   const nNot = T.length - tDone;
   h += `<details class="card fold" id="aFold" ${store.get('aFold', false) ? 'open' : ''}><summary><span><b>Teachers, sections &amp; free periods</b><small>${sun ? 'Sunday' : nNot + ' teacher' + (nNot === 1 ? '' : 's') + ' still to mark today'} · section %, low attendance, workload</small></span><span class="pill">${store.get('aFold', false) ? 'Close' : 'Open'}</span></summary><div class="seg2" role="tablist"><button type="button" data-xtab="teachers" class="${adminTab === 'teachers' ? 'on' : ''}">Today</button><button type="button" data-xtab="marked" class="${adminTab === 'marked' ? 'on' : ''}">Marked today</button><button type="button" data-xtab="sections" class="${adminTab === 'sections' ? 'on' : ''}">Sections</button><button type="button" data-xtab="low" class="${adminTab === 'low' ? 'on' : ''}">Low %</button><button type="button" data-xtab="work" class="${adminTab === 'work' ? 'on' : ''}">Workload</button></div>
@@ -6934,6 +6955,7 @@ document.addEventListener('click', ev => {
   if(t.closest('#xOvR')) return loadOv();
   if(t.closest('#xLowR')){ ovLowErr = ''; return loadLow(); }
   if(t.closest('#xTdR')){ ovTdErr = ''; return loadTd(); }
+  if((b = t.closest('[data-xkpi]'))) return kpiList(b.dataset.xkpi);
   if(t.closest('#xTdTxt')) return shareText(tdText(), 'Marked today');
   if(t.closest('#xTdPdf')) return P.run(tdPdf, () => shareText(tdText()));
   if((b = t.closest('[data-xtab]'))){ adminTab = b.dataset.xtab; return rerender(); }

@@ -5166,45 +5166,29 @@ function generateJCWStoppingMeritReport() {
       // SUMMARY ROW
       // -------------------------------------------------------------
 
-      output.push([
-
-        group.program,
-
-        group.category,
-
-        group.sections,
-
-        group.records.length,
-
-        jcwSMFormatPercent_(
-          stoppingPercentage
-        ),
-
-        jcwSMFormatNumber_(
-          stopping1200
-        ) + " / 1200",
-
-        stoppingOriginalObtained,
-
-        stoppingHafizBonus,
-
-        stoppingAdjustedObtained,
-
-        stoppingOriginalTotal,
-
-        stoppingDivisions,
-
-        stoppingEnrollment,
-
-        stoppingNames,
-
-        stoppingFatherNames,
-
-        stoppingPortalPercentages,
-
-        stoppingAdjustedPercentages
-
-      ]);
+      // v7.6.1: one row per student at the stopping merit (ties no longer mixed in one cell);
+      // program / category / sections / merit are merged over her rows
+      SM_MERGES_.push([output.length, stoppingStudents.length]);
+      stoppingStudents.forEach(function (record, k) {
+        output.push([
+          k ? '' : group.program,
+          k ? '' : group.category,
+          k ? '' : group.sections,
+          k ? '' : group.records.length,
+          k ? '' : jcwSMFormatPercent_(stoppingPercentage),
+          k ? '' : jcwSMFormatNumber_(stopping1200) + " / 1200",
+          jcwSMFormatOriginalValue_(record.obtained),
+          record.hafizBonus,
+          jcwSMFormatNumber_(record.adjustedObtained),
+          jcwSMFormatOriginalValue_(record.total),
+          record.division,
+          record.enrollment,
+          record.studentName,
+          record.fatherName,
+          record.portalPercentage !== null ? jcwSMFormatPercent_(record.portalPercentage) : "",
+          record.adjustedPercentage !== null ? jcwSMFormatPercent_(record.adjustedPercentage) : ""
+        ]);
+      });
 
     }
   );
@@ -5226,6 +5210,8 @@ function generateJCWStoppingMeritReport() {
       .setValues(output);
 
   }
+  SM_MERGES_.forEach(function (mg) { if (mg[1] > 1) for (var c = 1; c <= 6; c++) reportSheet.getRange(5 + mg[0], c, mg[1], 1).merge(); });
+  SM_MERGES_ = [];
 
 
   // -------------------------------------------------------------------
@@ -6902,3 +6888,4 @@ function normalizeSectionForRoom_(value) {
     .replace(/\s+/g, ' ')
     .toUpperCase();
 }
+var SM_MERGES_ = [];   // v7.6.1 stopping merit: [first output row, number of tied students]

@@ -51,7 +51,7 @@ var REMARK_HEAD   = ['Key', 'Teacher', 'Class', 'Roll No', 'Student', 'Tags', 'L
 var REMARK_MAX_LOG = 50, REMARK_MAX_TAGS = 10;
 
 function doGet() {
-  return json_({ ok: true, service: 'JCW Daily Attendance backend v7.6' });
+  return json_({ ok: true, service: 'JCW Daily Attendance backend v7.6.1' });
 }
 
 function doPost(e) {
@@ -3092,6 +3092,9 @@ function portalFinish_(book, st, mode) {
       PORTAL_DETAIL.concat(['Details synced']).concat(COLS.slice(PORTAL_COLS.length)).forEach(function (c) { var j = oh.indexOf(c); if (j >= 0 && C[c] != null && blank_(r[C[c]])) r[C[c]] = o[j]; });
     });
   } else rows.forEach(function (r) { if (/^OK/.test(String(r[C['Load Status']]))) r[C['Details synced']] = stamp; });   // only students whose details were read
+  // v7.6.1: HQ is only Yes / No (portal script 1.5/1.6 put the college name there by mistake): anything else -> empty
+  if (C['HQ'] != null) rows.forEach(function (r) { var v = String(r[C['HQ']] || '').trim(); r[C['HQ']] = /^(yes|y|true|1)$/i.test(v) ? 'Yes' : /^(no|n|false|0)$/i.test(v) ? 'No' : ''; });
+  try { hqTransformClean_(book); } catch (e) {}
   if (!pd) pd = book.insertSheet(PORTAL_SHEET);
   pd.clearContents();
   if (pd.getMaxColumns() < COLS.length) pd.insertColumnsAfter(pd.getMaxColumns(), COLS.length - pd.getMaxColumns());
@@ -3107,6 +3110,16 @@ function portalFinish_(book, st, mode) {
   return { ok: true, done: true, last: last };
 }
 
+/** v7.6.1: HQ cells of the strength sheet filled with a college name (old portal script) are emptied */
+function hqTransformClean_(book) {
+  var sh = book.getSheetByName(TRANSFORM_SHEET); if (!sh || sh.getLastRow() < 2) return 0;
+  var H = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(function (h) { return String(h).toUpperCase().replace(/[^A-Z]/g, ''); });
+  var c = H.indexOf('HQ'); if (c < 0) c = H.indexOf('HAFIZEQURAN'); if (c < 0) return 0;
+  var rg = sh.getRange(2, c + 1, sh.getLastRow() - 1, 1), v = rg.getValues(), n = 0;
+  v.forEach(function (r) { if (/jinnah|college|women/i.test(String(r[0]))) { r[0] = ''; n++; } });
+  if (n) rg.setValues(v);
+  return n;
+}
 /** Header map of a sheet: normalized header -> column index (0-based). */
 function headIdx_(hdr) { var m = {}; hdr.forEach(function (h, i) { var k = norm_(h); if (k && m[k] == null) m[k] = i; }); return m; }
 function pickCol_(H, list) { for (var i = 0; i < list.length; i++) if (H[list[i]] != null) return H[list[i]]; return -1; }
