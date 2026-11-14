@@ -2972,7 +2972,7 @@ var TRANSFORM_SHEET = 'Transform-ALL-COLLEGE-STRENGTH';
 var PORTAL_SHEET = 'Portal Data', PORTAL_STAGE = 'Portal Data (receiving)';
 var PORTAL_SUBS = (function () { var a = []; ['1st', '2nd'].forEach(function (y) { for (var i = 1; i <= 7; i++) a.push('sub' + i + ' ' + y + ' year'); }); return a; })();
 var PORTAL_DETAIL = ['DOB', 'StudentContact', 'EmailAddress', 'PhotoName', 'Board / University', 'Passing Year', 'Roll.No.', 'Obtain Marks/CGPA',
-                     'Total Marks/CGPA', 'Division', '%age Marks', 'Challan Details', 'HQ'].concat(PORTAL_SUBS);   // v7.5: HQ = Hafiz-e-Quran
+                     'Total Marks/CGPA', 'Division', '%age Marks', 'Challan Details', 'HQ', 'Fee Paid Date'].concat(PORTAL_SUBS);   // v7.5: HQ = Hafiz-e-Quran
 var PORTAL_COLS = ['Student Id', 'Enrollment#', 'Reg#', 'Batch', 'Session', 'Student Name', 'Father Name', 'Category', 'Program', 'Class', 'Section', 'Status']
                   .concat(PORTAL_DETAIL, ['Load Status', 'Details synced']);
 /* portal field -> Transform headers that may already hold it (spaces and case ignored) -> header of a NEW column (null = never add) */
@@ -2997,6 +2997,7 @@ var FILL_MAP = [
   ['%age Marks', ['PERCENTAGE', '%AGE', '%AGEMARKS', '%'], 'PERCENTAGE'],
   ['Challan Details', ['CHALLANDETAILS', 'CHALLAN', 'FEECHALLAN'], 'CHALLAN DETAILS'],
   ['HQ', ['HQ', 'HAFIZ', 'HAFIZEQURAN', 'HAFIZ-E-QURAN', 'HIFZ'], null],
+  ['Fee Paid Date', ['FEEPAIDDATE', 'PAIDDATE', 'FEEPAIDON'], 'FEE PAID DATE'],   // v7.6.6: date the real fee was paid (not the registration fee)
   ['Student Id', ['PORTALID', 'STUDENTID'], 'PORTAL ID']
 ];
 var ENROLL_HEADS = ['ENROLL#', 'ENROLLMENT#', 'ENROLLNO', 'ENROLLMENTNO'];

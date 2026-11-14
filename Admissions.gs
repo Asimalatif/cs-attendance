@@ -526,7 +526,7 @@ function admPortalStu_(P, row, set) {
     pic: g(row, 'photoname'), board: g(row, 'boarduniversity'), passYear: g(row, 'passingyear'), matricRoll: num(g(row, 'rollno')),
     metric: num(g(row, 'obtainmarkscgpa')), total: num(g(row, 'totalmarkscgpa')), challan: g(row, 'challandetails'), batch: g(row, 'batch'),
     subjects: sub, program: admKeyOf_(progName, yr, '', en, set.sections), programName: progName, year: yr,
-    section: g(row, 'section'), status: g(row, 'status'), synced: g(row, 'detailssynced'), hq: g(row, 'hq') };
+    section: g(row, 'section'), status: g(row, 'status'), synced: g(row, 'detailssynced'), hq: g(row, 'hq'), paidOn: g(row, 'feepaiddate') };
 }
 
 function admPortal_(query) {
