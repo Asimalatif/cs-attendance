@@ -77,7 +77,8 @@ function idcList_() {
   };
   var C = { roll: c('ENROLL', 'REG'), name: c('STUDENTNAME'), father: c('FATHERNAME'), program: c('PROGRAM'),
     cls: c('CLASS'), section: c('SECTION'), pcs: c('PCS'), group: c('GROUPONLY'), pic: c('PICURL', 'PHOTO'),
-    pic2: c('PHOTO'), status: c('STATUS'), session: c('SESSION'), dob: c('DOB'), contact: c('STUDENTCONTACT') };
+    pic2: c('PHOTO'), status: c('STATUS'), session: c('SESSION'), dob: c('DOB'), contact: c('STUDENTCONTACT'),
+    matric: c('METRICROLLNO', 'MATRICROLLNO', 'METRICROLL', 'MATRICROLL', 'METRICROLLNUMBER', 'MATRICROLLNUMBER') };
   if (C.roll < 0 || C.name < 0) throw new Error('Enroll# or Student Name column not found in ' + IDC_CFG.STRENGTH + '.');
   var g = function (r, k) { return C[k] >= 0 ? idcS_(r[C[k]]) : ''; };
   var printed = idcPrinted_(book), own = idcOwnPhotos_(book), out = [];
@@ -86,7 +87,7 @@ function idcList_() {
     if (!roll || !g(r, 'name') || !IDC_CFG.FIRST_YEAR.test(g(r, 'cls'))) continue;
     out.push({ roll: roll, name: g(r, 'name'), father: g(r, 'father'), program: g(r, 'program'), cls: g(r, 'cls'),
       section: g(r, 'section'), pcs: g(r, 'pcs'), group: /^null$/i.test(g(r, 'group')) ? '' : g(r, 'group'),
-      pic: g(r, 'pic') || g(r, 'pic2'), status: g(r, 'status'), session: g(r, 'session'),
+      pic: g(r, 'pic') || g(r, 'pic2'), status: g(r, 'status'), session: g(r, 'session'), matric: g(r, 'matric'),
       printed: printed[idcK_(roll)] || '' });
     var o = own[idcK_(roll)];
     if (o) { var st = out[out.length - 1]; st.pic = 'https://drive.google.com/file/d/' + o.id + '/view'; st.own = o.at; }
