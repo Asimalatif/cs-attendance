@@ -930,7 +930,7 @@ function admAgg_(m, t, hq) {
    aggregate - (Obtained + 20 if HQ) x 100 / Total
    merit  - 1st Year, per admission program and per quota: students by Aggregate, highest = 1
    room   - the section's room in the Timetable sheet                                                                    */
-var ADM_REFRESH = { portal: 'Portal', hq: 'HQ', aggregate: 'Aggregate', merit: 'MeritNo', room: 'Room', agewise: 'Age-wise' };
+var ADM_REFRESH = { portal: 'Portal', hq: 'HQ', aggregate: 'Aggregate', merit: 'MeritNo', room: 'Room', agewise: 'Age-wise', feepaid: 'FEE PAID DATE' };
 /* every Transform column that has a matching value on the portal: f = field of the record (admRec_) and of the portal student (admPortalStu_),
    t = Transform column keys written, type = how values are compared, info = shown only (the college decides it, change it in Find & edit) */
 var ADM_CMP = [
@@ -981,15 +981,19 @@ function admRefresh_(user, fields, apply, accept) {
   var lock = LockService.getScriptLock(); lock.waitLock(30000);
   try {
     var set = admSettings_(), T = admRead_(), recs = admAll_(T, set.sections), C = T.cols, sh = T.sh;
-    var colOf = { portal: -1, hq: C.hq, aggregate: C.aggregate, merit: C.meritno, room: C.room, agewise: C.agewise };
+    var colOf = { portal: -1, hq: C.hq, aggregate: C.aggregate, merit: C.meritno, room: C.room, agewise: C.agewise, feepaid: C.feepaiddate };
     var notes = [], skip = {}, newAgeCol = false;
     if (fields.indexOf('merit') >= 0 && fields.indexOf('agewise') < 0) fields.push('agewise');       // v7.6.3: Age-wise goes with MeritNo
     if (fields.indexOf('agewise') >= 0 && colOf.agewise === undefined) { colOf.agewise = T.width; newAgeCol = true; notes.push('A new column "Age-wise" is added at the end of the strength sheet.'); }
+    // v7.6.9: FEE PAID DATE (first real fee paid, from the portal copy) goes with "Every column vs portal"; the column is added when missing
+    var newFeeCol = false;
+    if (fields.indexOf('portal') >= 0 && fields.indexOf('feepaid') < 0) fields.push('feepaid');
+    if (fields.indexOf('feepaid') >= 0 && colOf.feepaid === undefined) { colOf.feepaid = T.width + (newAgeCol ? 1 : 0); newFeeCol = true; notes.push('A new column "FEE PAID DATE" is added at the end of the strength sheet.'); }
     fields.forEach(function (f) { if (colOf[f] === undefined) { skip[f] = true; notes.push('No "' + ADM_REFRESH[f] + '" column in the strength sheet.'); } });
     // columns made by a formula are never overwritten
     var n = T.rows.length;
     if (n) fields.forEach(function (f) {
-      if (skip[f] || colOf[f] < 0 || (f === 'agewise' && newAgeCol)) return;
+      if (skip[f] || colOf[f] < 0 || (f === 'agewise' && newAgeCol) || (f === 'feepaid' && newFeeCol)) return;
       var fm = sh.getRange(2, colOf[f] + 1, n, 1).getFormulas();
       if (fm.some(function (x) { return x[0]; })) { skip[f] = true; notes.push('"' + ADM_REFRESH[f] + '" is made by a formula in the sheet, so it was not changed.'); }
     });
@@ -1012,7 +1016,7 @@ function admRefresh_(user, fields, apply, accept) {
     var covered = {}; ADM_CMP.forEach(function (d) { (d.t || []).forEach(function (k) { covered[k] = 1; }); });
     var pHas = {}; if (P) P.head.forEach(function (h) { var k = admH_(h); if (k) pHas[k.replace(/^portal/, '')] = 1; });
     var CMPS = ADM_CMP.concat(Object.keys(C).filter(function (k) {
-      return !covered[k] && pHas[k] && !/^(s?no|sr|srno|serial|enroll.*|rollno|roll|program.*|class|section|pcs|status|category|session|aggregate|merit.*|room.*|quota|year|group.*|key|id|sub\d.*)$/.test(k);
+      return !covered[k] && pHas[k] && k !== 'feepaiddate' && !/^(s?no|sr|srno|serial|enroll.*|rollno|roll|program.*|class|section|pcs|status|category|session|aggregate|merit.*|room.*|quota|year|group.*|key|id|sub\d.*)$/.test(k);
     }).map(function (k) { return { f: 'x_' + k, label: admS_(T.head[C[k]]), t: [k], type: 'name', raw: true }; }));
     var names = admQuotaNames_(admCounts_(recs)), rooms = admRooms_();
     var nv = {}, changes = [], cnt = {}, unknownCat = {}, ask = [], quotaOk = {}, gw = {}, fcol = {};
@@ -1086,6 +1090,7 @@ function admRefresh_(user, fields, apply, accept) {
           if (d.f === 'metric' || d.f === 'total') r[d.f] = sug;               // the aggregate uses the new marks
         });
       }
+      if (fields.indexOf('feepaid') >= 0 && pr) { var fpd = P.g(pr, 'feepaiddate'); if (fpd) put(r, 'feepaid', fpd); }
       if (fields.indexOf('hq') >= 0 && pr && portalHasHq) { var h = hqOf(pr); if (h) { put(r, 'hq', h); r._hq = h; } }
       if (!r._hq && C.hq !== undefined) r._hq = r.hq;
       if (fields.indexOf('aggregate') >= 0) put(r, 'aggregate', admAgg_(r.metric, r.total, r._hq));
@@ -1127,6 +1132,11 @@ function admRefresh_(user, fields, apply, accept) {
         Object.keys(gw[j]).forEach(function (row) { cur[Number(row) - 2][0] = gw[j][row]; });
         rng.setValues(cur);
       });
+      if (newFeeCol && nv.feepaid) {
+        if (sh.getMaxColumns() < colOf.feepaid + 1) sh.insertColumnsAfter(sh.getMaxColumns(), colOf.feepaid + 1 - sh.getMaxColumns());
+        sh.getRange(1, colOf.feepaid + 1).setValue('FEE PAID DATE').setFontWeight('bold');
+        sh.getRange(2, colOf.feepaid + 1, Math.max(1, n), 1).setNumberFormat('@');
+      }
       if (newAgeCol && nv.agewise) {
         if (sh.getMaxColumns() < colOf.agewise + 1) sh.insertColumnsAfter(sh.getMaxColumns(), colOf.agewise + 1 - sh.getMaxColumns());
         sh.getRange(1, colOf.agewise + 1).setValue('Age-wise').setFontWeight('bold');
