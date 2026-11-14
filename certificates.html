@@ -307,7 +307,7 @@ function certVals(r){
 }
 function certHtml(v){
   const A = S.assets || {}, cfg = A.cfg || { title:'PROVISIONAL CUM CHARACTER CERTIFICATE', college:'JINNAH COLLEGE FOR WOMEN', university:'UNIVERSITY OF PESHAWAR', gazette:'has been declared successful according to the Result Gazette, of Board of Intermediate and Secondary Education, Peshawar.', sign:['Principal,', 'Jinnah College for Women,', 'University of Peshawar.'] };
-  const row = parts => `<table><tr>${parts.map(p => `<td class="l">${esc(p[0])}</td><td class="v" style="width:${p[2]}%">${esc(p[1]) || '&nbsp;'}</td>`).join('<td style="width:10px"></td>')}</tr></table>`;
+  const row = parts => `<table><tr>${parts.map(p => `<td class="l"${p[2] ? '' : ' style="width:1%"'}>${esc(p[0])}</td><td class="v"${p[2] ? ` style="width:${p[2]}%"` : ''}>${esc(p[1]) || '&nbsp;'}</td>`).join('<td style="width:10px"></td>')}</tr></table>`;
   const fail = PASS.indexOf(String(v.grade).toUpperCase()) < 0;
   return `<div class="cert ${fail ? 'fail' : ''}">
     <div class="t">${A.logo ? `<img src="${A.logo}" style="width:470px;max-width:100%">` : `<div style="font-size:30px;font-weight:bold;color:#1F4E8C">${esc(cfg.college)}</div>`}</div>
@@ -316,7 +316,7 @@ function certHtml(v){
     ${row([['This is to certify that Miss.', v.name, 70]])}${row([['Daughter of Mr.', v.father, 70]])}${row([['Appeared in the', v.group, 30], ['Examination held in', v.session, 25]])}
     <div style="margin-top:18px;line-height:1.5">${esc(cfg.gazette)}</div><div style="margin-top:14px">Other Particulars are: -</div>
     ${row([['Roll No.', v.roll, 30], ['Registration No.', v.reg, 40]])}${row([['Marks obtained', v.marks, 15], ['out of', v.total, 15], ['Grade/Division', v.grade, 15]])}
-    ${row([['Date of Birth', v.dob, 70]])}${row([['Distinctions Won', v.dist, 70]])}${row([['Conduct and Moral Character', v.conduct, 55]])}
+    ${row([['Date of Birth', v.dob, 70]])}${row([['Distinctions Won', v.dist, 70]])}${row([['Conduct and Moral Character', v.conduct, 0]])}
     <div style="margin-top:40px;text-align:right"><div style="display:inline-block;width:230px;text-align:center"><div style="height:60px">${A.sign ? `<img src="${A.sign}" style="height:55px">` : ''}</div>${cfg.sign.map(esc).join('<br>')}</div></div>
   </div>`;
 }
