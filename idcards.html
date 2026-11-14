@@ -592,8 +592,13 @@ const BP_SIZES = [
 const BP = () => Object.assign({ size:0, kb:0, who:'sel' }, ls.get('idc_bp', {}));
 function bpName(st){ return String(st.matric || '').replace(/\.0+$/, '').replace(/[^0-9A-Za-z-]/g, ''); }
 async function boardPhoto(st, px, kb){
-  const r = await DB.get('raw', st.roll).catch(() => null); if(!r || !r.data) throw new Error('no photo on this device');
-  const im = await loadImg(r.data), fd = await faceDetector();
+  const ps = photoState(st);
+  if(ps === 'none') throw new Error('no photo link in the sheet');
+  if(ps === 'failed') throw new Error('photo link is broken (gives no picture)');
+  const r = await DB.get('raw', st.roll).catch(() => null); if(!r || !r.data) throw new Error('photo not read yet');
+  // the photo as it is now: fixes saved in "Photo check" / "Fix by hand" are in it; a white version made before is used again
+  const wk = picKey(st) + '|' + r.data.length, wc = await DB.get('raw', st.roll + '#white').catch(() => null), useW = !!(wc && wc.data && wc.key === wk);
+  const im = await loadImg(useW ? wc.data : r.data), fd = await faceDetector();
   let best = null;
   for(const rot of [0, 90, 270, 180]){
     const c = turned(im, rot, 640), D = (fd.detect(c).detections || []).filter(d => d.categories[0].score >= .5);
@@ -605,7 +610,7 @@ async function boardPhoto(st, px, kb){
   }
   if(!best) throw new Error('no face found');
   const full = turned(im, best.rot, 1200), k = full.width / best.w;   // 1200: the same size the background step works at
-  const white = await loadImg(await bgData(await loadImg(full.toDataURL('image/jpeg', .95)), '#FFFFFF'));
+  const white = useW ? full : await loadImg(await bgData(await loadImg(full.toDataURL('image/jpeg', .95)), '#FFFFFF'));
   // square round the head and shoulders: face about 45% of the height, a little space above the head
   const fx = best.b.originX * k, fy = best.b.originY * k, fw = best.b.width * k, fh = best.b.height * k;
   const side = Math.max(fh / .45, fw * 1.9), x0 = fx + fw / 2 - side / 2, y0 = fy - fh * .55;
