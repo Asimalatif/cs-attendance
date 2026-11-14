@@ -1479,20 +1479,25 @@ function omlStu(r, S, PN){
   const R = omlFind(r.name, r.father, r.obt, r.total), T = S.get(omlK(r.name, r.father)) || [], t = T[0];
   const p = !t && PN ? PN.get(omlK(r.name, r.father)) : null, want = t ? (prog(t.key) || {}).classProgram : p ? (prog(p.program) || {}).classProgram : '';
   const v = omlVerdict(R.length ? R : [r], want), lab = k => (prog(k) || {}).label || k;
-  const fee = omlFee(t ? t.challan : p ? p.challan : '', v), feeT = t || p ? 'Fee: ' + fee.text : 'Fee: not on the portal list yet (refresh From portal)';
+  // v7.9: an employee claim not confirmed yet is not taken as true: fee and portal are checked against her other merit seat
+  const alt = v && v.state === 'claim' ? omlVerdict(R.filter(z => !omlEmp(z)), want) : null, cv = alt || v;
+  const fee = omlFee(t ? t.challan : p ? p.challan : '', cv), feeT = t || p ? 'Fee: ' + fee.text : 'Fee: not on the portal list yet (refresh From portal)';
   const where = v && v.key ? lab(v.key) + ' · ' + v.quota : '';
-  const wrong = t && v && v.key && (t.key !== v.key || (v.quota && qk(t.quota) !== qk(v.quota)));
+  const wrong = t && cv && cv.key && (t.key !== cv.key || (cv.quota && qk(t.quota) !== qk(cv.quota)));
   let lvl = 'info', msg = '';
   if(!v) msg = 'Not clear: check her admission letter';
   else if(v.state === 'wait'){ lvl = t ? 'bad' : 'info'; msg = t ? '⚠ In the strength sheet (' + (t.roll || 'no Enroll#') + ') but NOT selected: ' + v.text : v.text + ': no admission unless a seat falls vacant'; }
   else if(v.state === 'no'){ lvl = 'bad'; msg = v.text + (t ? ' — she is in the strength sheet (' + (t.roll || '') + '): move her to her merit seat or cancel' : ''); }
-  else if(v.state === 'claim'){ lvl = 'warn'; msg = 'Ask for the UoP employee proof (service certificate), then confirm. ' + v.text.replace(/^Applied in UoP Employee Quota[^:]*:\s*check her proof[^.]*\.\s*/, ''); }
+  else if(v.state === 'claim'){ lvl = 'warn'; msg = 'Ask for the UoP employee proof (service certificate), then confirm. ' + v.text.replace(/^Applied in UoP Employee Quota[^:]*:\s*check her proof[^.]*\.\s*/, '');
+    const pq = omlPortalQ(t || p || r), fullFee = cv && cv.cls === 'Pre-Medical' && fee.paid && /non-subsidized fee\)/.test(fee.text);
+    const why = [fullFee ? 'she paid the full non-subsidized fee' : '', pq && !/employ|\buop\b/i.test(pq) && pq !== '(empty)' ? 'the portal has her in ' + pq : '', t && alt && alt.key && t.key === alt.key && !/employ/i.test(t.quota || '') ? 'her record already matches her ' + (alt.quota || 'Open') + ' seat' : ''].filter(Boolean);
+    if(why.length >= 2) msg = 'Probably NOT an employee (wrongly on the UoP Employee list): ' + why.join(', ') + '. Press "Not employee" unless she shows the service certificate. ' + (alt ? 'Her seat: ' + alt.text + '.' : ''); }
   else if(v.state === 'check'){ lvl = 'warn'; msg = v.text; }
   else if(t){ lvl = wrong ? 'bad' : fee.lvl === 'bad' ? 'bad' : fee.lvl === 'warn' ? 'warn' : 'ok';
     msg = wrong ? '⚠ Strength sheet says ' + lab(t.key) + ' · ' + (t.quota || '-') + ', but she is selected in ' + where + ': correct her record' : '✓ Admitted: ' + (t.roll || 'no Enroll#') + ' · ' + lab(t.key) + ' · ' + (t.pcs || '') + ' · ' + (t.quota || ''); }
   else if(fee.lvl === 'bad'){ lvl = 'bad'; msg = 'Selected in ' + where + ', but admission is confirmed only when the fee is paid'; }
   else { lvl = 'warn'; msg = 'Selected in ' + where + ' and fee paid: give her Enroll# and section'; }
-  return { r, v, t, p, fee, feeT, lvl, msg, where, wrong };
+  return { r, v, cv, t, p, fee, feeT, lvl, msg, where, wrong };
 }
 function omlHtml(){
   if(!oml && !omlBusy){ omlBusy = 'Loading the official lists…'; omlLoad(true).then(() => { omlBusy = ''; render(); }); }
@@ -1549,8 +1554,8 @@ function omlStuHtml(rows, lists, S){
         ${x.t ? `<div style="margin-top:3px"><span class="pill info">Enroll# ${esc(x.t.roll || '–')}</span> <span class="pill info">${esc(x.t.pcs || 'no section')}</span> <span class="pill solid">${esc((prog(x.t.key) || {}).label || x.t.key || 'no program')}</span> <span class="pill ${/employ/i.test(x.t.quota || '') ? 'near' : 'ok'}">${esc(x.t.quota || 'no quota')}</span></div>` : ''}
         ${(() => { if(!omlPQ) return '<div class="sub" style="margin-top:3px">Portal quota: paste the new Admissions.gs and deploy a New version</div>';
           const pq = omlPortalQ(x.t || x.p || x.r); if(pq == null) return '<div class="sub" style="margin-top:3px">Portal quota: not found on the portal copy</div>';
-          const kk = z => qk(z).replace(/\b(quota|merit|seats?|reserved|employees?)\b/g, '').replace(/[^a-z0-9]/g, ''), same = x.v && x.v.quota && kk(pq) === kk(x.v.quota);
-          return `<div style="margin-top:3px"><span class="sub">Portal quota:</span> <span class="pill ${same ? 'ok' : 'full'}">${esc(pq)}</span>${same || !x.v || !x.v.quota ? '' : ' <span class="sub" style="color:var(--bad)">update the portal to ' + esc(x.v.quota) + '</span>'}</div>`; })()}${x.t ? '' : '<div class="sub" style="margin-top:3px">Not in the strength sheet</div>'}</td>
+          const kk = z => qk(z).replace(/\b(quota|merit|seats?|reserved|employees?)\b/g, '').replace(/[^a-z0-9]/g, ''), same = x.cv && x.cv.quota && kk(pq) === kk(x.cv.quota);
+          return `<div style="margin-top:3px"><span class="sub">Portal quota:</span> <span class="pill ${same || !x.cv || !x.cv.quota ? 'ok' : 'full'}">${esc(pq)}</span>${same || !x.cv || !x.cv.quota ? '' : ' <span class="sub" style="color:var(--bad)">update the portal to ' + esc(x.cv.quota) + '</span>'}</div>`; })()}${x.t ? '' : '<div class="sub" style="margin-top:3px">Not in the strength sheet</div>'}</td>
       <td>${esc(r.program)} · <b>${esc(r.quota || 'Open')}</b><div class="sub">${esc(r.pos || '-')}</div></td>
       <td><div class="omm ${x.lvl}">${esc(x.msg)}</div><div class="sub omm ${x.fee.lvl === 'ok' ? '' : x.fee.lvl}" style="font-weight:600">${esc(x.feeT)}</div></td>
       <td class="nw">${x.v && x.v.state === 'claim' ? `<button class="btn primary" data-oc="${esc(r.list)}|${esc(r.form)}|1">Confirm employee</button> <button class="btn" data-oc="${esc(r.list)}|${esc(r.form)}|0">Not employee</button>` : ''}
