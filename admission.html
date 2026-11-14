@@ -186,6 +186,9 @@ background:var(--surface);background-image:linear-gradient(180deg,var(--t) 0,var
 .li:hover{background:var(--tea3)}
 .pill{background:var(--tea3);color:var(--brown)}
 .pill.solid{background:var(--brown);color:#fff}
+.oml-c{border:1px solid var(--line);border-radius:12px;padding:10px;margin-top:8px}.oml-c.ok{border-left:5px solid var(--good)}.oml-c.wait,.oml-c.no{border-left:5px solid var(--bad)}.oml-c.claim,.oml-c.check{border-left:5px solid var(--mid)}
+table.oms td{vertical-align:top}.omm{font-weight:800}.omm.ok{color:var(--good)}.omm.warn{color:var(--mid)}.omm.bad{color:var(--bad)}.omm.info{color:var(--info)}
+.omf{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.omf button.on{background:var(--brown,#6B3423);color:#fff}
 .av{background:var(--tea2)!important;color:var(--brown)!important}
 .more{color:var(--brown)!important;border-color:var(--tea)!important}
 .stick,.stick2{background:var(--glass);box-shadow:0 1px 0 var(--line),0 8px 18px -16px rgba(107,52,35,.6)}
@@ -1332,7 +1335,7 @@ function wireMl(){
    The PDF is read on this device (pdf.js), its rows are kept in the sheet "Official Merit Lists" for every device.
    Orientation desk: find the student, see what the official list says (selected / waiting, subsidized or not, quota),
    and admit her with the right program and quota (the New form then gives the Roll No and section). */
-let oml = null, omlBusy = '', omlQ = '', omlMsg = '';
+let oml = null, omlBusy = '', omlQ = '', omlMsg = '', omlF = 'act', omlL = '', omlN = 60;
 const OML_COLS = ['program', 'list', 'sno', 'form', 'name', 'father', 'obt', 'total', 'hq', 'agg', 'quota', 'pos', 'uploaded', 'confirmed', 'confirmedBy', 'confirmedOn', 'note'];
 async function omlLoad(force){
   if(!oml && !force){ const c = await idbGet('oml'); if(c) oml = c; }
@@ -1441,6 +1444,47 @@ function omlStrength(){
   idx.rows.forEach(row => { const o = recOf(row); if(isMig(o.year)) return; const k = omlK(o.name, o.father); (m.get(k) || m.set(k, []).get(k)).push(o); });
   return m;
 }
+/* v7.9 fee of one student against the official decision.
+   Pre-Medical: the subsidized fee is half of the non-subsidized one (all quotas). Parents may pay in installments (P- paid, U- unpaid). */
+const PM_NON_FEE = SUB_FEE * 2, rs = n => 'Rs ' + Math.round(n).toLocaleString('en-PK');
+function omlFee(t, v){
+  const all = feeOf(t), f = all.filter(x => x.amount > REG_FEE_MAX);
+  if(!all.length) return { lvl:'bad', paid:0, text:'no fee challan on the portal yet' };
+  const paid = f.filter(x => x.paid).reduce((a, x) => a + x.amount, 0), due = f.filter(x => !x.paid).reduce((a, x) => a + x.amount, 0), tot = paid + due;
+  if(!f.length) return { lvl:'bad', paid:0, text:'fee not paid (only the registration fee)' };
+  if(!paid) return { lvl:'bad', paid:0, text:'fee challan of ' + rs(due) + ' NOT paid yet' };
+  const pr = v && v.key ? prog(v.key) : null, pm = v && v.cls === 'Pre-Medical';
+  const lvl = tot < (SUB_FEE + PM_NON_FEE) / 2 ? 'sub' : 'non';   // which fee she was charged
+  const n = {}; f.filter(x => x.paid).forEach(x => n[x.amount] = (n[x.amount] || 0) + 1);
+  const twice = Object.keys(n).filter(a => n[a] > 1 && Number(a) >= SUB_FEE * 0.5);
+  let text = due ? 'installments: ' + rs(paid) + ' paid, ' + rs(due) + ' still due' : 'fee paid ' + rs(paid);
+  let L = due ? 'warn' : 'ok';
+  if(pm && pr && pr.fee === 'sub' && lvl === 'non'){ text += ' — this is the NON-subsidized fee, but she is selected Subsidized (half fee): adjust / refund the difference'; L = 'warn'; }
+  else if(pm && pr && pr.fee === 'non' && lvl === 'sub'){ text += ' — this is only the subsidized fee, but she is selected Non-Subsidized (double fee): about ' + rs(tot) + ' more to pay'; L = 'bad'; }
+  else if(pm && pr) text += lvl === 'sub' ? ' (subsidized fee)' : ' (non-subsidized fee)';
+  if(twice.length && L !== 'ok') text += ' · ' + rs(Number(twice[0])) + ' paid twice: check for a double payment';
+  return { lvl:L, paid, due, text };
+}
+/** one clear message per student of the official lists: official decision + fee + strength sheet */
+function omlStu(r, S, PN){
+  const R = omlFind(r.name, r.father, r.obt, r.total), T = S.get(omlK(r.name, r.father)) || [], t = T[0];
+  const p = !t && PN ? PN.get(omlK(r.name, r.father)) : null, want = t ? (prog(t.key) || {}).classProgram : p ? (prog(p.program) || {}).classProgram : '';
+  const v = omlVerdict(R.length ? R : [r], want), lab = k => (prog(k) || {}).label || k;
+  const fee = omlFee(t ? t.challan : p ? p.challan : '', v), feeT = t || p ? 'Fee: ' + fee.text : 'Fee: not on the portal list yet (refresh From portal)';
+  const where = v && v.key ? lab(v.key) + ' · ' + v.quota : '';
+  const wrong = t && v && v.key && (t.key !== v.key || (v.quota && qk(t.quota) !== qk(v.quota)));
+  let lvl = 'info', msg = '';
+  if(!v) msg = 'Not clear: check her admission letter';
+  else if(v.state === 'wait'){ lvl = t ? 'bad' : 'info'; msg = t ? '⚠ In the strength sheet (' + (t.roll || 'no Enroll#') + ') but NOT selected: ' + v.text : v.text + ': no admission unless a seat falls vacant'; }
+  else if(v.state === 'no'){ lvl = 'bad'; msg = v.text + (t ? ' — she is in the strength sheet (' + (t.roll || '') + '): move her to her merit seat or cancel' : ''); }
+  else if(v.state === 'claim'){ lvl = 'warn'; msg = 'Ask for the UoP employee proof (service certificate), then confirm. ' + v.text.replace(/^Applied in UoP Employee Quota[^:]*:\s*/, ''); }
+  else if(v.state === 'check'){ lvl = 'warn'; msg = v.text; }
+  else if(t){ lvl = wrong ? 'bad' : fee.lvl === 'bad' ? 'bad' : fee.lvl === 'warn' ? 'warn' : 'ok';
+    msg = wrong ? '⚠ Strength sheet says ' + lab(t.key) + ' · ' + (t.quota || '-') + ', but she is selected in ' + where + ': correct her record' : '✓ Admitted: ' + (t.roll || 'no Enroll#') + ' · ' + lab(t.key) + ' · ' + (t.pcs || '') + ' · ' + (t.quota || ''); }
+  else if(fee.lvl === 'bad'){ lvl = 'bad'; msg = 'Selected in ' + where + ', but admission is confirmed only when the fee is paid'; }
+  else { lvl = 'warn'; msg = 'Selected in ' + where + ' and fee paid: give her Enroll# and section'; }
+  return { r, v, t, p, fee, feeT, lvl, msg, where, wrong };
+}
 function omlHtml(){
   if(!oml && !omlBusy){ omlBusy = 'Loading the official lists…'; omlLoad(true).then(() => { omlBusy = ''; render(); }); }
   const rows = oml ? oml.rows : [], lists = [...new Set(rows.map(r => r.list))];
@@ -1453,6 +1497,7 @@ function omlHtml(){
       <div class="sub">${esc(r.program)} list · ${esc(r.list)}</div>
       <div style="margin-top:4px"><b>${esc(r.quota || '-')}</b> · ${esc(r.pos || '-')}${v ? ` → <b>${esc(v.text)}</b>` : ''}</div>
       ${v && v.key ? `<div style="margin-top:2px">Admit as: <b>${esc(lab(v.key))} · ${esc(v.quota)}</b></div>` : ''}
+      ${(() => { const x = omlStu(r, S, new Map((pnew && pnew.list || []).map(z => [omlK(z.name, z.father), z]))); return `<div class="omm ${x.lvl}" style="margin-top:4px">${esc(x.msg)}</div><div class="sub omm ${x.fee.lvl === 'ok' ? '' : x.fee.lvl}" style="font-weight:600">${esc(x.feeT)}</div>`; })()}
       ${t ? `<div class="${wrong ? 'warnp' : 'sub'}" style="margin-top:4px${wrong ? ';color:var(--bad)' : ''}">${wrong ? '⚠ ' : '✓ '}In the strength sheet: <b>${esc(t.roll || 'no Enroll#')}</b> · ${esc(lab(t.key))} · ${esc(t.pcs || '')} · ${esc(t.quota || '')}${wrong ? ' — the official list says ' + esc(lab(v.key)) + ' · ' + esc(v.quota) : ''}</div>` : '<div class="sub" style="margin-top:4px">Not in the strength sheet yet.</div>'}
       <div class="acts" style="margin-top:6px">
         ${v && v.state === 'claim' ? `<button class="btn primary" data-oc="${esc(r.list)}|${esc(r.form)}|1">Proof seen: confirm employee</button><button class="btn" data-oc="${esc(r.list)}|${esc(r.form)}|0">Not an employee</button>` : ''}
@@ -1468,11 +1513,37 @@ function omlHtml(){
   <section class="card"><h3>Official merit lists</h3>
     <div class="sub">Upload the final merit list PDFs of the Directorate of Admissions (Pre-Medical, F.A, FCS, Pre-Engineering, and the UoP Employee Quota list). Read on this device and kept for every device; uploading a list again replaces it (confirmations stay).</div>
     ${lists.length ? `<table class="ml" style="margin-top:8px"><thead><tr><th>List</th><th>Program</th><th class="n">Rows</th><th class="n">Selected</th><th class="n">Waiting</th><th class="n">Employee to confirm</th></tr></thead><tbody>
-      ${lists.map(l => { const R = rows.filter(r => r.list === l); return `<tr><td>${esc(l)}</td><td>${esc(R[0].program)}</td><td class="n">${R.length}</td><td class="n">${R.filter(r => /Selected/i.test(r.pos)).length}</td><td class="n">${R.filter(r => /Waiting/i.test(r.pos)).length}</td><td class="n">${R.filter(r => omlEmp(r) && !r.confirmed).length}</td></tr>`; }).join('')}</tbody></table>` : '<div class="sub" style="margin-top:6px">No list uploaded yet.</div>'}
+      ${lists.map(l => { const R = rows.filter(r => r.list === l); return `<tr><td>${esc(l)}</td><td>${esc([...new Set(R.map(r => r.program))].join(', '))}</td><td class="n">${R.length}</td><td class="n">${R.filter(r => /Selected/i.test(r.pos)).length}</td><td class="n">${R.filter(r => /Waiting/i.test(r.pos)).length}</td><td class="n">${R.filter(r => omlEmp(r) && !r.confirmed).length}</td></tr>`; }).join('')}</tbody></table>` : '<div class="sub" style="margin-top:6px">No list uploaded yet.</div>'}
     <div class="acts"><label class="btn primary" style="display:inline-flex;align-items:center;cursor:pointer">Upload PDF lists<input type="file" id="omlF" accept="application/pdf" multiple hidden></label>
       <button class="btn" type="button" id="omlChk" ${rows.length && idx ? '' : 'disabled'}>Check the strength sheet against the lists</button></div>
     ${omlMsg ? `<div class="hint" style="margin-top:6px">${omlMsg}</div>` : ''}
-    <div class="sub" style="margin-top:6px">${Object.entries(st).map(([k, n]) => ({ ok:'selected', wait:'waiting', claim:'employee claims to confirm', no:'employee not confirmed', check:'to check (O-Level / unclear)', x:'?' }[k] + ' ' + n)).join(' · ')}</div></section>`;
+    <div class="sub" style="margin-top:6px">${Object.entries(st).map(([k, n]) => ({ ok:'selected', wait:'waiting', claim:'employee claims to confirm', no:'employee not confirmed', check:'to check (O-Level / unclear)', x:'?' }[k] + ' ' + n)).join(' · ')}</div></section>
+  ${rows.length ? omlStuHtml(rows, lists, S) : ''}`;
+}
+const OMF = { act:'Need action', ok:'Admitted ✓', sel:'Selected, not admitted', fee:'Fee not paid / due', emp:'Employee claims', wait:'Waiting list', all:'All' };
+function omlStuList(rows, S){
+  const PN = new Map(); (pnew && pnew.list || []).forEach(s => PN.set(omlK(s.name, s.father), s));
+  const R = rows.filter(r => !omlL || r.list === omlL).map(r => omlStu(r, S, PN));
+  const is = { act:x => x.lvl === 'bad' || x.lvl === 'warn', ok:x => x.lvl === 'ok', sel:x => x.v && x.v.state === 'ok' && !x.t, fee:x => x.v && x.v.state !== 'wait' && x.fee.lvl !== 'ok', emp:x => x.v && (x.v.state === 'claim' || x.v.state === 'no'), wait:x => x.v && x.v.state === 'wait', all:() => true };
+  return { R, is };
+}
+function omlStuHtml(rows, lists, S){
+  const { R, is } = omlStuList(rows, S), cur = R.filter(is[omlF] || is.all);
+  return `<section class="card"><h3>Students of the official lists</h3>
+    <div class="sub">One line per student: what the official list decided, her fee from the portal challans, and her record in the strength sheet. <b>Selected</b> = she gets admission in that quota once her fee is paid. Pre-Medical subsidized fee (every quota) is half of the non-subsidized fee.</div>
+    <div class="omf"><select id="omlL"><option value="">All lists</option>${lists.map(l => `<option ${l === omlL ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
+      ${Object.entries(OMF).map(([k, t]) => `<button class="btn ${k === omlF ? 'on' : ''}" type="button" data-omf="${k}">${t} (${R.filter(is[k]).length})</button>`).join('')}</div>
+    <div class="acts"><button class="btn" type="button" id="omlOut">Open / print / share this list</button></div>
+    <div style="overflow:auto"><table class="ml oms" style="margin-top:6px"><thead><tr><th>S#</th><th>Student</th><th>Official list</th><th>What to do</th><th></th></tr></thead><tbody>
+    ${cur.slice(0, omlN).map(x => { const r = x.r; return `<tr><td class="n">${esc(r.sno)}</td>
+      <td><b>${esc(r.name)}</b><div class="sub">d/o ${esc(r.father)} · Form# ${esc(r.form)} · AGG ${esc(r.agg)}${/^y/i.test(r.hq) ? ' · HQ' : ''}</div></td>
+      <td>${esc(r.program)} · <b>${esc(r.quota || 'Open')}</b><div class="sub">${esc(r.pos || '-')}</div></td>
+      <td><div class="omm ${x.lvl}">${esc(x.msg)}</div><div class="sub omm ${x.fee.lvl === 'ok' ? '' : x.fee.lvl}" style="font-weight:600">${esc(x.feeT)}</div></td>
+      <td class="nw">${x.v && x.v.state === 'claim' ? `<button class="btn primary" data-oc="${esc(r.list)}|${esc(r.form)}|1">Confirm employee</button> <button class="btn" data-oc="${esc(r.list)}|${esc(r.form)}|0">Not employee</button>` : ''}
+        ${!x.t && x.v && (x.v.state === 'ok' || x.v.state === 'check') ? `<button class="btn primary" data-oa="${esc(r.list)}|${esc(r.form)}">Admit…</button>` : ''}
+        ${x.t && (x.wrong || x.lvl === 'bad') ? `<button class="btn" data-oe="${esc(x.t.roll || '')}">Open record</button>` : ''}</td></tr>`; }).join('') || '<tr><td colspan="5" class="sub">Nobody here.</td></tr>'}
+    </tbody></table></div>
+    ${cur.length > omlN ? `<div class="acts"><button class="btn" type="button" id="omlMore">Show more (${cur.length - omlN} left)</button></div>` : ''}</section>`;
 }
 function omlAdmit(r){
   const v = omlVerdict([r]); if(!v) return;
@@ -1497,6 +1568,14 @@ function omlCheck(){
   JCWOUT.list({ title:'Strength sheet vs official merit lists (' + out.length + ')', head:['Enroll#', 'Student Name', 'Father Name', 'Program now', 'Section', 'Quota now', 'Official list', 'AGG', 'Problem'], rows:out });
 }
 function wireOml(){
+  document.querySelectorAll('[data-omf]').forEach(b => b.onclick = () => { omlF = b.dataset.omf; omlN = 60; render(); });
+  const ll = $('#omlL'); if(ll) ll.onchange = () => { omlL = ll.value; omlN = 60; render(); };
+  const mo = $('#omlMore'); if(mo) mo.onclick = () => { omlN += 200; render(); };
+  const oo = $('#omlOut'); if(oo) oo.onclick = () => { if(!window.JCWOUT || !oml) return;
+    const { R, is } = omlStuList(oml.rows, omlStrength()), cur = R.filter(is[omlF] || is.all);
+    JCWOUT.list({ title:'Official lists · ' + OMF[omlF] + (omlL ? ' · ' + omlL : ''), sub:cur.length + ' students',
+      head:['S#', 'Form#', 'Student Name', 'Father Name', 'AGG', 'Program', 'Quota', 'Official status', 'Enroll#', 'What to do', 'Fee'],
+      rows:cur.map(x => [x.r.sno, x.r.form, x.r.name, x.r.father, x.r.agg, x.r.program, x.r.quota || 'Open', x.r.pos, x.t ? x.t.roll || '' : '', x.msg, x.feeT.replace(/^Fee: /, '')]) }); };
   const i = $('#omlQ'); let t;
   if(i) i.oninput = () => { clearTimeout(t); t = setTimeout(() => { omlQ = i.value; const pos = i.selectionStart; render(); const j = $('#omlQ'); j.focus(); try{ j.setSelectionRange(pos, pos); }catch(e){} }, 200); };
   const f = $('#omlF'); if(f) f.onchange = async () => {
