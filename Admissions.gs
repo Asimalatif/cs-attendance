@@ -1094,7 +1094,7 @@ function admRefresh_(user, fields, apply, accept) {
     });
     if (fields.indexOf('merit') >= 0) {
       var groups = {};
-      // v7.6.3: equal Aggregate = the same MeritNo (1, 2, 2, 4 …); among them Age-wise 1st, 2nd … (older first, from DOB)
+      // v7.6.3: equal Aggregate = the same MeritNo (1, 2, 2, 2, 3 … nothing skipped); among them Age-wise 1st, 2nd … (older first, from DOB)
       // v7.6.2: merit inside every program AND every quota separately (Pre-Medical Open (S) · UET Quota, Self Morning · Open Quota …),
       // by Aggregate, highest = 1. Students with no Aggregate or no quota get no merit number.
       recs.forEach(function (r) {
@@ -1111,7 +1111,7 @@ function admRefresh_(user, fields, apply, accept) {
         });
         var rank = 0, tie = 0;
         L.forEach(function (r, i) {
-          if (i === 0 || aggOf(r) !== aggOf(L[i - 1])) { rank = i + 1; tie = 0; }
+          if (i === 0 || aggOf(r) !== aggOf(L[i - 1])) { rank++; tie = 0; }      // dense: 1, 2, 2, 2, 3 (no number skipped)
           tie++;
           put(r, 'merit', rank);
           put(r, 'agewise', ordinal(tie));
