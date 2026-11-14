@@ -133,7 +133,12 @@ dialog::backdrop{background:rgba(10,15,25,.55)}
 .ml-pick{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.ml-b{border:1.5px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 10px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;text-align:left}.ml-b.on{background:var(--brown,#6B3423);color:#fff;border-color:var(--brown,#6B3423)}.ml-b small{font-weight:600;opacity:.85}
 table.ml{font-size:12.5px;border-collapse:collapse;width:100%}table.ml th,table.ml td{border-bottom:1px solid var(--line);padding:5px 6px;vertical-align:middle;text-align:left}table.ml th{position:sticky;top:0;background:var(--surface);z-index:1}
 table.ml img{width:72px;height:96px;cursor:zoom-in;object-fit:cover;border-radius:6px;border:1px solid var(--line);display:block}
-table.ml tr.next td{background:#DCEBFF}table.ml tr.bad td{background:#FDE0DD}table.ml tr.cut td{border-bottom:3px solid var(--brown,#6B3423)}
+table.ml tr.next td{background:#DCEBFF}table.ml tr.bad td{background:#FDE0DD}table.ml tr.surplus td{background:#FFE9CC}
+.ml-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px;margin-top:10px}.ml-g{border:1.5px solid var(--line);border-radius:12px;overflow:hidden}
+.ml-gh{background:var(--surface2,#FBEDEA);font-weight:800;padding:6px 10px;font-size:13px}table.mlq{width:100%;border-collapse:collapse;font-size:12.5px}
+table.mlq td{padding:5px 8px;border-top:1px solid var(--line);cursor:pointer}table.mlq tr:hover td{background:#f6efe9}table.mlq tr.on td{outline:2px solid var(--brown,#6B3423);outline-offset:-2px;font-weight:800}
+table.mlq tr.less td{background:#E3F4EC}table.mlq tr.surplus td{background:#FFE9CC}table.mlq tr.bad td{background:#FDE0DD}
+.pill.sur{background:#FFD8A8;color:#8A4B00}.pill.lessp{background:#C8EBD8;color:#0E6B47}.mlk.sur{background:#FFE9CC}.mlk.less{background:#E3F4EC}table.ml tr.cut td{border-bottom:3px solid var(--brown,#6B3423)}
 .mlk{padding:0 6px;border-radius:6px}.mlk.next{background:#DCEBFF}.mlk.bad{background:#FDE0DD}
 .seatlink{background:none;border:0;padding:0;font:inherit;color:inherit;text-decoration:underline;cursor:pointer;font-weight:800}
 .bigpic{width:100%;max-height:60vh;object-fit:contain;border-radius:14px;background:var(--surface2)}
@@ -1103,12 +1108,18 @@ function meritLists(){
   s.programs.forEach(p => {
     if(!used.has(p.key)) return;                                       // e.g. Evening Pre-Medical: no 1st Year this year
     const pr = prog(p.key) || {}, sib = pr.fee === 'sub' ? init.programs.filter(x => x.classProgram === pr.classProgram && x.fee === 'non' && used.has(x.key)).map(x => x.key) : [];
-    p.quotas.forEach(q => {
-      if(q.seats === '' || q.seats == null) return;
+    // quotas in the settings, plus quotas her students have that the settings do not know (seats not set)
+    const Q = p.quotas.slice(), known = new Set(Q.map(q => qk(q.name)));
+    all.forEach(o => { if(o.key === p.key && o.quota && !known.has(qk(o.quota))){ known.add(qk(o.quota)); Q.push({ name:o.quota, seats:'', extra:true }); } });
+    Q.forEach(q => {
+      const noSeats = q.seats === '' || q.seats == null;
       const pl = q.pooled ? s.pools.find(x => qk(x.quota) === qk(q.name)) : null;
       const home = pl ? pl.members.map(m => m.key).filter(k => used.has(k)) : [p.key];
       if(pl && home[0] !== p.key) return;
-      const keys = home.concat(sib), seats = Number(pl ? pl.seats : q.seats) || 0, qq = qk(q.name);
+      const keys = home.concat(sib), seats = noSeats ? 0 : Number(pl ? pl.seats : q.seats) || 0, qq = qk(q.name);
+      if(noSeats && !all.some(o => home.includes(o.key) && qk(o.quota) === qq)) return;
+      // surplus is fine only in Open Quota of a program without subsidized/non-subsidized split (non-subsidized, FCS, F.A, Pre-Engineering)
+      const surplusOk = qq === qk((init.cfg && init.cfg.openQuota) || 'Open Quota');
       const L = all.filter(o => keys.includes(o.key) && qk(o.quota) === qq).sort(srt);
       const inHome = L.filter(o => home.includes(o.key)).length;
       let nextLeft = sib.length ? Math.max(1, seats - L.slice(0, seats).filter(o => home.includes(o.key)).length) : 0;
@@ -1119,11 +1130,13 @@ function meritLists(){
           if(here && !should){ state = 'bad'; why = 'Below the last subsidized seat: should be in ' + sib.map(k => (prog(k) || {}).label).join(' / '); }
           else if(!here && should){ state = 'bad'; why = 'Inside the ' + seats + ' subsidized seats: should be in ' + (pl ? 'this quota' : pr.label); }
           else if(!here && nextLeft > 0){ state = 'next'; why = 'Next in line for a subsidized seat'; nextLeft--; }
-        } else if(!should) why = 'Over the seats (more admissions)';
+        } else if(!should && !noSeats){ if(surplusOk) why = 'Over the seats (fine in Open Quota)'; else { state = 'surplus'; why = 'Surplus: over the ' + seats + ' seats of ' + q.name; } }
+        else if(noSeats){ state = 'surplus'; why = 'No seats set for this quota in Quota Settings'; }
         return { o, rank, state, why };
       });
       out.push({ key:p.key, label:pl ? 'Shared pool: ' + home.map(k => (prog(k) || {}).label || k).join(', ') : pr.label || p.key, fee:fees[p.key] || 0,
-        sibFee:sib.length ? fees[sib[0]] || 0 : 0, sibLabel:sib.map(k => (prog(k) || {}).label).join(', '), quota:q.name, seats, inHome, rows, subs:!!sib.length });
+        sibFee:sib.length ? fees[sib[0]] || 0 : 0, sibLabel:sib.map(k => (prog(k) || {}).label).join(', '), quota:q.name, seats, inHome, rows, subs:!!sib.length, noSeats,
+        held:sib.length ? L.slice(0, seats).filter(o => home.includes(o.key)).length : inHome, group:pl ? 'Shared pools' : pr.label || p.key, qlabel:q.name });
     });
   });
   ML = { stamp, lists:out };
@@ -1138,13 +1151,20 @@ function mlHtml(){
   if(!M.length) return '<section class="card"><div class="sub">No seats set in Quota Settings yet.</div></section>';
   const cur = M.find(x => x.key + '|' + x.quota === mlKey + '|' + mlQ) || M[0];
   mlKey = cur.key; mlQ = cur.quota;
-  const bad = r => r.rows.filter(x => x.state === 'bad').length;
-  const sel = `<div class="ml-pick">${M.map(x => `<button type="button" class="ml-b ${x === cur ? 'on' : ''}" data-ml="${esc(x.key + '|' + x.quota)}">${esc(x.label)} · ${esc(x.quota)} <small>${x.inHome}/${x.seats}${bad(x) ? ' · <b style="color:var(--bad)">' + bad(x) + ' wrong</b>' : ''}</small></button>`).join('')}</div>`;
+  const bad = r => r.rows.filter(x => x.state === 'bad').length, sur = r => r.rows.filter(x => x.state === 'surplus').length;
+  const left = r => r.noSeats ? null : r.seats - r.held;
+  const tone = r => bad(r) ? 'bad' : sur(r) ? 'surplus' : left(r) > 0 ? 'less' : 'ok';
+  const groups = [...new Set(M.map(x => x.group))];
+  const sel = `<div class="ml-grid">${groups.map(g => `<div class="ml-g"><div class="ml-gh">${esc(g)}</div><table class="mlq"><tbody>
+    ${M.filter(x => x.group === g).map(x => { const l = left(x); return `<tr class="${tone(x)}${x === cur ? ' on' : ''}" data-ml="${esc(x.key + '|' + x.quota)}"><td>${esc(x.qlabel)}</td><td class="n">${x.held}${x.noSeats ? '' : ' / ' + x.seats}</td>
+      <td class="n">${x.noSeats ? '<span class="pill full">no seats set</span>' : bad(x) ? `<span class="pill full">${bad(x)} wrong</span>` : sur(x) ? `<span class="pill sur">+${sur(x)} surplus</span>` : l > 0 ? `<span class="pill lessp">${l} empty</span>` : l < 0 ? `<span class="sub">+${-l}</span>` : '<span class="sub">full</span>'}</td></tr>`; }).join('')}
+    </tbody></table></div>`).join('')}</div>
+    <div class="sub" style="margin-top:6px"><span class="mlk less">green</span> = seats still empty · <span class="mlk sur">orange</span> = surplus (more than the seats; fine only in Open Quota of non-subsidized, FCS, F.A, Pre-Engineering) · <span class="mlk bad">red</span> = wrong place for a subsidized seat · <span class="mlk next">blue</span> = next in line.</div>`;
   const th = ['#', 'Photo', 'Enroll#', 'Student', 'Program · Section', 'HQ', 'Obtained', 'Total', 'Aggregate', 'MeritNo', 'Challan', 'DOB', 'Age-wise', 'Fee paid', ''];
   const lim = mlAll ? cur.rows.length : Math.min(cur.rows.length, Math.max(cur.seats + 25, 60));
   return `${old ? '<div class="note mid">This list has no Aggregate / Age-wise / FEE PAID DATE yet: paste the new <b>Admissions.gs</b> in Apps Script and deploy a New version (reading the list again…).</div>' : ''}
   <section class="card"><h3>Merit lists (1st Year, on seats)</h3>
-    <div class="sub">Students by <b>Aggregate</b>, then <b>age</b> (older first); a thick line marks the last seat. For <b>Pre-Medical Open (S)</b> (subsidized) each quota takes its students from all Pre-Medical programs: <span class="mlk bad">red</span> = in the wrong place (should move up to subsidized, or down), <span class="mlk next">blue</span> = next in line when a subsidized seat empties (left, cancelled, migrated students are not counted). Non-subsidized, FCS, F.A and Pre-Engineering may take more students than seats: no red there.</div>
+    <div class="sub">Students by <b>Aggregate</b>, then <b>age</b> (older first); a thick line marks the last seat. For <b>Pre-Medical Open (S)</b> (subsidized) each quota takes its students from all Pre-Medical programs: <span class="mlk bad">red</span> = in the wrong place (should move up to subsidized, or down), <span class="mlk next">blue</span> = next in line when a subsidized seat empties (left, cancelled, migrated students are not counted). </div>
     ${sel}</section>
   <section class="card"><h3>${esc(cur.label)} · ${esc(cur.quota)}</h3>
     <div class="sub"><b>${cur.seats}</b> seats · <b>${cur.inHome}</b> students in it now · fee ${cur.fee ? '<b>Rs ' + cur.fee.toLocaleString('en-PK') + '</b>' : 'not known yet'}${cur.sibLabel ? ` · ${esc(cur.sibLabel)} fee ${cur.sibFee ? '<b>Rs ' + cur.sibFee.toLocaleString('en-PK') + '</b>' : '–'}` : ''} (most common paid challan)</div>
@@ -1219,11 +1239,11 @@ async function mlPhotoPdf(){
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
     doc.text(c.seats + ' seats · ' + c.inHome + ' students in it now' + (c.fee ? ' · fee Rs ' + c.fee.toLocaleString('en-PK') : '') + (c.sibLabel && c.sibFee ? ' · ' + c.sibLabel + ' fee Rs ' + c.sibFee.toLocaleString('en-PK') : '') + ' · by Aggregate, then age (older first) · ' + new Date().toLocaleDateString('en-GB'), W / 2, 22, { align:'center' });
     const body = c.rows.map(r => { const o = r.o; return [r.rank, '', o.roll || '', (o.name || '') + '\nd/o ' + (o.father || '-'), ((prog(o.key) || {}).label || o.key) + '\n' + (o.pcs || ''), o.hq || '', o.metric || '', o.total || '', o._a ? o._a / 100 : '', o.meritNo || '', o.dob || '', o.agewise || '', o.feepaid || '',
-      (r.rank <= c.seats ? 'On a seat' : r.state === 'next' ? 'NEXT IN LINE' : 'Waiting') + (r.state === 'bad' ? '\nWRONG: ' + r.why : r.state === 'next' ? '' : r.why ? '\n' + r.why : '')]; });
+      (r.state === 'surplus' ? 'SURPLUS' : r.rank <= c.seats ? 'On a seat' : r.state === 'next' ? 'NEXT IN LINE' : 'Waiting') + (r.state === 'bad' ? '\nWRONG: ' + r.why : r.state === 'next' ? '' : r.why ? '\n' + r.why : '')]; });
     doc.autoTable({ startY:25, head:[['#', 'Photo', 'Enroll#', 'Student', 'Program · Section', 'HQ', 'Obtained', 'Total', 'Aggregate', 'MeritNo', 'DOB', 'Age-wise', 'Fee paid', 'Seat']], body,
       theme:'grid', margin:{ left:7, right:7, bottom:10 }, styles:{ fontSize:8, cellPadding:1, textColor:0, lineColor:120, lineWidth:.1, valign:'middle', minCellHeight:27 },
       headStyles:{ fillColor:235, textColor:0, fontStyle:'bold', minCellHeight:6 }, columnStyles:{ 0:{ cellWidth:8, halign:'center' }, 1:{ cellWidth:21 }, 13:{ cellWidth:40 } },
-      didParseCell:h => { if(h.section !== 'body') return; const r = c.rows[h.row.index]; if(r.state === 'bad'){ h.cell.styles.fontStyle = 'bold'; h.cell.styles.fillColor = [253, 224, 221]; } else if(r.state === 'next') h.cell.styles.fillColor = [220, 235, 255];
+      didParseCell:h => { if(h.section !== 'body') return; const r = c.rows[h.row.index]; if(r.state === 'bad'){ h.cell.styles.fontStyle = 'bold'; h.cell.styles.fillColor = [253, 224, 221]; } else if(r.state === 'next') h.cell.styles.fillColor = [220, 235, 255]; else if(r.state === 'surplus') h.cell.styles.fillColor = [255, 233, 204];
         if(h.row.index === c.seats - 1) h.cell.styles.lineWidth = { bottom:.8, top:.1, left:.1, right:.1 }; },
       didDrawCell:h => { if(h.section !== 'body' || h.column.index !== 1) return; const d = pics[h.row.index]; if(!d) return;
         try{ doc.addImage(d, 'JPEG', h.cell.x + 1.5, h.cell.y + 1, 18, 24); }catch(e){} } });
@@ -1256,7 +1276,7 @@ function wireMl(){
     JCWOUT.list({ title:'Merit list · ' + c.label + ' · ' + c.quota + (only ? ' · wrong places' : ''), sub:c.seats + ' seats · ' + c.inHome + ' in it now',
       head:['Rank', 'Enroll#', 'Student Name', 'Father Name', 'Program', 'Section', 'HQ', 'Obtained Marks', 'Total Marks', 'Aggregate', 'MeritNo', 'Challan Details', 'DOB', 'Age-wise', 'Fee Paid Date', 'Seat', 'Note'],
       rows:R.map(r => { const o = r.o; return [r.rank, o.roll || '', o.name, o.father || '', (prog(o.key) || {}).label || o.key, o.pcs || '', o.hq || '', o.metric || '', o.total || '', o._a ? o._a / 100 : '', o.meritNo || '', o.challan || '', o.dob || '', o.agewise || '', o.feepaid || '',
-        r.rank <= c.seats ? 'On a seat' : r.state === 'next' ? 'Next in line' : 'Over the seats', r.why]; }) }); };
+        r.state === 'surplus' ? 'Surplus' : r.rank <= c.seats ? 'On a seat' : r.state === 'next' ? 'Next in line' : 'Over the seats', r.why]; }) }); };
   const a = $('#mlOut'); if(a) a.onclick = () => out(false);
   const pp = $('#mlPdf'); if(pp) pp.onclick = mlPhotoPdf;
   document.querySelectorAll('[data-mlp]').forEach(im => im.onclick = () => { if(!im.src) return; dlgOpen(`<img src="${im.src}" style="display:block;max-width:100%;max-height:70vh;margin:0 auto;border-radius:10px"><div class="acts"><button class="btn primary" id="dOk">Close</button></div>`); $('#dOk').onclick = dlgClose; });
