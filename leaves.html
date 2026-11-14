@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<script src="inksaver.js"></script>
+<script src="inksaver.js"></script><script src="jcwout.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0d2540">
 <title>Approved Leaves · JCW Attendance</title>
@@ -2460,6 +2460,7 @@ function sharePdf(doc, filename, title){
   finishDoc(doc);
   if(lastPdf && lastPdf.url) URL.revokeObjectURL(lastPdf.url);
   const blob = doc.output('blob');
+  if(window.JCWOUT){ JCWOUT.offer({ blob, name: filename, title }); return; }
   lastPdf = {blob, url: URL.createObjectURL(blob), filename, title};
   let canShareFile = false;
   try{ canShareFile = !!(navigator.canShare && navigator.canShare({files: [new File([blob], filename, {type: 'application/pdf'})]})); }catch(e){}

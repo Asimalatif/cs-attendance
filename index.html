@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<script src="inksaver.js"></script>
+<script src="inksaver.js"></script><script src="jcwout.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#6B3423">
 <meta name="color-scheme" content="light dark">
@@ -3105,6 +3105,7 @@ function offerFile(blob, name, title, preferOpen, csvSrc){
     toXlsx(blob, name, title).then(x => offerFile(x.blob, x.name, title, preferOpen, blob)).catch(() => offerFile(blob, name, title, preferOpen, null));
     return;
   }
+  if(window.JCWOUT) return JCWOUT.offer({ blob, name, title });      // v7.6: Open · Print · Download · Share for PDF and Excel (each made from the other)
   const d = fileDlg(), isPdf = /\.pdf$/i.test(name), file = new File([blob], name, { type:blob.type || (isPdf ? 'application/pdf' : 'text/csv') });
   const canShare = !!(navigator.canShare && navigator.canShare({ files:[file] })), kb = Math.max(1, Math.round(blob.size / 1024));
   const big = (id, label, sub, primary) => `<button type="button" class="fbtn ${primary ? 'primary' : ''}" id="${id}"><b>${label}</b><small>${sub}</small></button>`;
@@ -6109,7 +6110,9 @@ function adminExtraCards(){
       <div class="sub">The college timetable: edit subject, teacher, days and room of every period, add or remove teachers, rooms, sections and slots, free slots and rooms, clash checks, settings (evening sections, credit hours, timings), change log and backups, print and Excel. Opens with your app login; the tt_admin column decides what you may change.</div>
       <div class="acts2"><a class="btn primary" href="timetable.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Timetable</a></div></section><section class="card"><h3>${I.doc} Admin tools</h3>
       <div class="sub">Auto timetable sheet, teacher workload (permanent, morning visiting, evening visiting + Drive Excel), stopping merit, admission slips (4 per page), orientation lists (all programs or chosen sections) and filling rooms from the timetable. Every PDF and Excel in the app's own style.</div>
-      <div class="acts2"><a class="btn primary" href="admintools.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Admin tools</a></div></section><section class="card"><h3>${I.check} System health check</h3>
+      <div class="acts2"><a class="btn primary" href="admintools.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Admin tools</a></div></section><section class="card"><h3>${I.doc} Backups &amp; new session</h3>
+      <div class="sub">One-tap backup of every workbook of the software into a dated Drive folder (<i>JCW session 2026-27 complete backup …</i>), open or restore earlier backups (password + typed confirmation), and get everything ready for a new session: backup, 2nd Year out, 1st Year becomes 2nd Year, sheets emptied.</div>
+      <div class="acts2"><a class="btn primary" href="system.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Backups &amp; new session</a></div></section><section class="card"><h3>${I.check} System health check</h3>
       <div class="sub">Finds problems before they stop the work: duplicate roll numbers, students without subjects or class, timetable teachers without a login, classes with no students, sections with no attendance this month, missing sheets and automatic jobs that are off.</div>
       <div class="acts2"><button class="btn primary" type="button" id="xHc">${I.check}Run health check</button></div></section>
     <section class="card"><h3>${I.doc} Student result page</h3>
@@ -6666,13 +6669,14 @@ let leftT = 0;
 async function loadLeft(){ if(scope !== 'all' || !navigator.onLine) return; try{ left = await srv({ action:'left_list' }, 60000); }catch(e){ left = { list:[], err:e.message }; } refreshLeft();
   clearTimeout(leftT); if(left && left.job && left.job.running && appView === 'admin') leftT = setTimeout(loadLeft, 15000); }
 /** 1st or 2nd Year of a student who left: from her section (FCS-1 D2, F.A-2 A, A1, I2…), else from her Enroll# (newest intake = 1st Year) */
+/** Enroll# JCW-F26-…: F = Fall, 26 = admitted in 2026. The session starts in August, so in session 2026-27
+ *  F26 = 1st Year, F25 = 2nd Year, F24 and older = ex-students (works for every coming year). */
+const sessYY = () => { const d = new Date(), m = d.getMonth(); return (m > 7 || (m === 7 && d.getDate() >= 15) ? d.getFullYear() : d.getFullYear() - 1) % 100; };
 function leftYear(x){
-  const p = String(x.pcs || '').toUpperCase().trim();
-  let m = p.match(/-\s*([12])\b/) || p.match(/^[A-Z]+\s*([12])$/);
-  if(m) return m[1] === '1' ? '1st Year' : '2nd Year';
-  const L = (left && left.list) || [], yy = s => { const k = String(s || '').match(/-F(\d\d)-/i); return k ? Number(k[1]) : 0; };
-  const top = Math.max(0, ...L.map(z => yy(z.roll))), mine = yy(x.roll);
-  return !mine || !top ? 'Year not known' : mine >= top ? '1st Year' : '2nd Year';
+  const k = String(x.roll || '').match(/-F(\d\d)-/i);
+  if(k){ const f = Number(k[1]), S = sessYY(); return f >= S ? '1st Year' : f === S - 1 ? '2nd Year' : 'Ex-students'; }
+  const p = String(x.pcs || '').toUpperCase().trim(), m = p.match(/-\s*([12])\b/) || p.match(/^[A-Z]+\s*([12])$/);
+  return m ? (m[1] === '1' ? '1st Year' : '2nd Year') : 'Year not known';
 }
 let leftF = 'all';
 function leftCard(){
@@ -6680,7 +6684,7 @@ function leftCard(){
   const J = left && left.job, by = {}, yr = {}; (left && left.list || []).forEach(x => { by[x.status] = (by[x.status] || 0) + 1; const y = leftYear(x); yr[y] = (yr[y] || 0) + 1; });
   return `<section class="card" id="leftCard"><h3>${I.flag} Students who left <span class="ct">${left ? left.list.length : ''}</span></h3>
     <div class="sub">Migrated, cancelled, disenrolled and transferred students moved out of the strength sheet. Their rows are kept in the sheet <b>Left Students</b>.</div>
-    ${left ? `<div class="chips" style="margin:6px 0">${['1st Year', '2nd Year', 'Year not known'].filter(y => yr[y]).map(y => `<button class="chip" type="button" data-xlyr="${y}" style="font-weight:800">${y} · ${yr[y]}</button>`).join('')}${Object.keys(by).map(k => `<button class="chip" type="button" data-xlyr="st:${esc(k)}">${esc(k)} · ${by[k]}</button>`).join('') || '<span class="sub">Nobody moved yet.</span>'}</div>` : '<div class="sk"></div>'}
+    ${left ? `<div class="chips" style="margin:6px 0">${['1st Year', '2nd Year', 'Ex-students', 'Year not known'].filter(y => yr[y]).map(y => `<button class="chip" type="button" data-xlyr="${y}" style="font-weight:800">${y} · ${yr[y]}</button>`).join('')}${Object.keys(by).map(k => `<button class="chip" type="button" data-xlyr="st:${esc(k)}">${esc(k)} · ${by[k]}</button>`).join('') || '<span class="sub">Nobody moved yet.</span>'}</div>` : '<div class="sk"></div>'}
     ${J && J.running ? '<div class="sub" style="color:var(--leave);font-weight:700">Updating the attendance sheets in the background…</div>' : J && J.finished ? `<div class="sub">Attendance sheets updated ${esc(J.finished)}: ${J.struck || 0} row(s) struck through, ${J.removed || 0} removed from later months.</div>` : ''}
     <div class="acts2"><button class="btn" type="button" id="xLeftList">List / restore</button><button class="btn primary" type="button" id="xLeftMove">Move students who left</button></div></section>`;
 }
@@ -6689,7 +6693,7 @@ const leftPick = () => ((left && left.list) || []).filter(x => leftF === 'all' ?
 function openLeftList(f){
   if(typeof f === 'string') leftF = f;
   const A = (left && left.list) || [], L = leftPick(), cnt = y => A.filter(x => leftYear(x) === y).length;
-  const tabs = [['all', 'All · ' + A.length], ['1st Year', '1st Year · ' + cnt('1st Year')], ['2nd Year', '2nd Year · ' + cnt('2nd Year')]].concat(cnt('Year not known') ? [['Year not known', 'Year not known · ' + cnt('Year not known')]] : []);
+  const tabs = [['all', 'All · ' + A.length], ['1st Year', '1st Year · ' + cnt('1st Year')], ['2nd Year', '2nd Year · ' + cnt('2nd Year')]].concat(cnt('Ex-students') ? [['Ex-students', 'Ex-students (F' + String(sessYY() - 2).padStart(2, '0') + ' and older) · ' + cnt('Ex-students')]] : []).concat(cnt('Year not known') ? [['Year not known', 'Year not known · ' + cnt('Year not known')]] : []);
   const st = {}; L.forEach(x => { st[x.status] = (st[x.status] || 0) + 1; });
   dlgOpen(`<h2>Students who left <span class="ct">${L.length}</span></h2>
     <div class="chips" style="margin:4px 0 6px">${tabs.map(t => `<button class="chip" type="button" data-xlf="${t[0]}" style="${leftF === t[0] ? 'background:var(--brown);color:#fff;font-weight:800' : 'font-weight:700'}">${t[1]}</button>`).join('')}</div>

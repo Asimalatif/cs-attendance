@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <script src="inksaver.js"></script>
+  <script src="inksaver.js"></script><script src="jcwout.js"></script>
 <meta name="theme-color" content="#312e81">
   <meta name="robots" content="noindex">
   <link rel="manifest" href="manifest.json">
@@ -1298,6 +1298,7 @@
   }
   function downloadDefCsv() {
     if (!DEF.length) return toast("Nothing to download");
+    if (window.JCWOUT) { const R = []; DEF.forEach(t => t.items.forEach(it => R.push([t.name, it.sec, it.sub, it.cols.map(colName).join(" / "), t.miss]))); return JCWOUT.list({ title: "Teachers not marking " + new Date().toISOString().slice(0, 10), head: ["Teacher", "Section", "Subject", "Not marked", "Teacher total pending"], rows: R }); }
     const q = v => `"${String(v).replace(/"/g, '""')}"`;
     const lines = [["Teacher", "Section", "Subject", "Not marked", "Teacher total pending"].map(q).join(",")];
     DEF.forEach(t => t.items.forEach(it => lines.push([t.name, it.sec, it.sub, it.cols.map(colName).join(" / "), t.miss].map(q).join(","))));

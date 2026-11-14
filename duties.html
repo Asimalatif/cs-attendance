@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<script src="inksaver.js"></script>
+<script src="inksaver.js"></script><script src="jcwout.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#6B3423">
 <meta name="robots" content="noindex">
@@ -2643,6 +2643,7 @@ const buildRoomTags = () => buildPages('roomtags');
 const isPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 let URLS = [];
 function deliver(files){
+  if(files.length === 1 && window.JCWOUT) return JCWOUT.offer({ blob:files[0].blob, name:files[0].name, title:EX.title || files[0].name });
   URLS.forEach(u => URL.revokeObjectURL(u)); URLS = [];
   const F = files.map(f => new File([f.blob], f.name, { type:f.blob.type })), U = F.map(f => { const u = URL.createObjectURL(f); URLS.push(u); return u; });
   const shareOk = list => !!(navigator.canShare && navigator.share && (() => { try{ return navigator.canShare({ files:list }); }catch(e){ return false; } })());
@@ -2658,7 +2659,7 @@ function deliver(files){
   };
   const share = list => navigator.share({ files:list, title:EX.title }).catch(e => { if(e && e.name !== 'AbortError') alert('Sharing did not work here: ' + e.message + '. Use Download.'); });
   const row = (f, i) => `<div class="li" style="flex-wrap:wrap"><div style="flex:1;min-width:180px;font-weight:700;font-size:13.5px;word-break:break-all">${isPdf(i) ? '📄' : '📊'} ${esc(f.name)}<div class="sub">${Math.max(1, Math.round(f.size / 1024))} KB</div></div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap">${isPdf(i) ? `<button class="btn sm" data-fo="${i}">Open</button><button class="btn sm" data-fp="${i}">Print</button>` : ''}${shareOk([f]) ? `<button class="btn sm good" data-fs="${i}">Share</button>` : ''}<button class="btn sm" data-fd="${i}">Download</button></div></div>`;
+    <div style="display:flex;gap:6px;flex-wrap:wrap">${isPdf(i) ? `<button class="btn sm" data-fo="${i}">Open</button><button class="btn sm" data-fp="${i}">Print</button>` : ''}${shareOk([f]) ? `<button class="btn sm good" data-fs="${i}">Share</button>` : ''}<button class="btn sm" data-fd="${i}">Download</button>${window.JCWOUT ? `<button class="btn sm" data-fm="${i}">Excel / more</button>` : ''}</div></div>`;
   $('#dlgIn').innerHTML = `<h2 style="margin:0 0 6px">${F.length === 1 ? 'File ready' : F.length + ' files ready'}</h2>
     <div>${F.map(row).join('')}</div>
     <div class="acts">${F.length > 1 && shareOk(F) ? '<button class="btn good" id="dShAll">Share all</button>' : ''}${F.length > 1 ? '<button class="btn pri" id="dDn">Download all</button>' : `<button class="btn pri" id="dDn">Download</button>`}<button class="btn" id="dClose">Close</button></div>
@@ -2673,6 +2674,7 @@ function deliver(files){
     if(b.dataset.fp !== undefined) print(+b.dataset.fp);
     if(b.dataset.fs !== undefined) share([F[+b.dataset.fs]]);
     if(b.dataset.fd !== undefined) down(+b.dataset.fd);
+    if(b.dataset.fm !== undefined){ const k = +b.dataset.fm; JCWOUT.offer({ blob:files[k].blob, name:files[k].name, title:files[k].name }); }
   };
 }
 async function onePdf(kind, btn){

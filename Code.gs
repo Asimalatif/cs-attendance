@@ -51,7 +51,7 @@ var REMARK_HEAD   = ['Key', 'Teacher', 'Class', 'Roll No', 'Student', 'Tags', 'L
 var REMARK_MAX_LOG = 50, REMARK_MAX_TAGS = 10;
 
 function doGet() {
-  return json_({ ok: true, service: 'JCW Daily Attendance backend v7.5' });
+  return json_({ ok: true, service: 'JCW Daily Attendance backend v7.6' });
 }
 
 function doPost(e) {
@@ -96,6 +96,7 @@ function doPost(e) {
                  if (/^dut_/.test(String(req.action || ''))) return json_(dutRoute_(user, req));
                   if (/^rpt_/.test(String(req.action || ''))) return json_(rptRoute_(user, req));
                     if (/^bnk_/.test(String(req.action || ''))) return json_(bnkRoute_(user, req));
+    if (/^sys_/.test(String(req.action || ''))) return json_(typeof sysRoute_ === 'function' ? sysRoute_(user, req) : { ok: false, error: 'UNKNOWN_ACTION' });   // v7.6: System.gs (backups, new session)
                       if (/^lv_/.test(String(req.action || ''))) return json_(lvRoute_(user, req));
                        if (/^shr_/.test(String(req.action || ''))) return json_(shrRoute_(user, req));
                         if (/^rsm_/.test(String(req.action || ''))) return json_(rsmRoute_(user, req));
@@ -3045,17 +3046,22 @@ function portalImport_(req) {
     if (part === 1) {
       if (!st) { st = book.insertSheet(PORTAL_STAGE); st.hideSheet(); }
       st.clearContents();
-      st.getRange(1, 1, 1, PORTAL_COLS.length).setValues([PORTAL_COLS]);
+      st.getRange(1, 1, 1, PORTAL_COLS.length + 1).setValues([PORTAL_COLS.concat(['__extra'])]);
       p.setProperty('portalRun', JSON.stringify({ run: run, got: 0, parts: parts, mode: req.mode === 'quick' ? 'quick' : 'full' }));
     }
     var R = JSON.parse(p.getProperty('portalRun') || '{}');
     if (R.run !== run || !st) return { ok: false, error: 'This sync was replaced by a newer one. Start again.' };
     if (part !== R.got + 1) return part <= R.got ? { ok: true, part: part, dup: true } : { ok: false, error: 'Part ' + (R.got + 1) + ' is missing. Start again.' };
     if (rows.length) {
-      var vals = rows.map(function (o) { return PORTAL_COLS.map(function (c) { var v = o[c]; return v == null ? '' : String(v).slice(0, 2000); }); });
+      // v7.6: nothing the portal script sends is dropped: fields without a column go to __extra (JSON) and get their own column at the end
+      var KNOWN = {}; PORTAL_COLS.forEach(function (c) { KNOWN[c] = 1; });
+      var vals = rows.map(function (o) {
+        var ex = {}; Object.keys(o || {}).forEach(function (k) { if (!KNOWN[k] && o[k] != null && String(o[k]).trim() !== '' && !/^__/.test(k)) ex[String(k).slice(0, 80)] = String(o[k]).slice(0, 2000); });
+        return PORTAL_COLS.map(function (c) { var v = o[c]; return v == null ? '' : String(v).slice(0, 2000); }).concat([Object.keys(ex).length ? JSON.stringify(ex).slice(0, 45000) : '']);
+      });
       var at = st.getLastRow() + 1;
-      st.getRange(at, 1, vals.length, PORTAL_COLS.length).setNumberFormat('@');
-      st.getRange(at, 1, vals.length, PORTAL_COLS.length).setValues(vals);
+      st.getRange(at, 1, vals.length, PORTAL_COLS.length + 1).setNumberFormat('@');
+      st.getRange(at, 1, vals.length, PORTAL_COLS.length + 1).setValues(vals);
     }
     R.got = part; p.setProperty('portalRun', JSON.stringify(R));
     if (part < parts) return { ok: true, part: part };
@@ -3068,24 +3074,30 @@ function portalImport_(req) {
 }
 /** Last part received: Portal Data is replaced (a quick sync keeps the details of the last full sync), then Transform blanks are filled. */
 function portalFinish_(book, st, mode) {
-  var n = st.getLastRow() - 1, rows = n > 0 ? st.getRange(2, 1, n, PORTAL_COLS.length).getValues() : [];
-  var C = {}; PORTAL_COLS.forEach(function (c, i) { C[c] = i; });
+  var n = st.getLastRow() - 1, raw = n > 0 ? st.getRange(2, 1, n, PORTAL_COLS.length + 1).getValues() : [];
+  var pd0 = book.getSheetByName(PORTAL_SHEET), oldHead = pd0 && pd0.getLastColumn() ? pd0.getRange(1, 1, 1, pd0.getLastColumn()).getValues()[0].map(String) : [];
+  var COLS = PORTAL_COLS.slice(), seen = {}; COLS.forEach(function (c) { seen[c] = 1; });
+  oldHead.forEach(function (h) { if (h && !seen[h]) { seen[h] = 1; COLS.push(h); } });        // v7.6: columns of earlier syncs are kept
+  var exs = raw.map(function (r) { var e = {}; try { e = r[PORTAL_COLS.length] ? JSON.parse(r[PORTAL_COLS.length]) : {}; } catch (x) {} Object.keys(e).forEach(function (k) { if (!seen[k]) { seen[k] = 1; COLS.push(k); } }); return e; });
+  var C = {}; COLS.forEach(function (c, i) { C[c] = i; });
+  var rows = raw.map(function (r, i) { var o = r.slice(0, PORTAL_COLS.length); for (var j = PORTAL_COLS.length; j < COLS.length; j++) o.push(exs[i][COLS[j]] != null ? exs[i][COLS[j]] : ''); return o; });
   var stamp = Utilities.formatDate(new Date(), TZ_(), 'd MMM yyyy HH:mm');
   rows.forEach(function (r) { portalClean_(r, C); });                   // v7.1: 1090.00 -> 1090, roll no 0 -> empty, Reg# = Enrollment# when empty
   var pd = book.getSheetByName(PORTAL_SHEET);
   if (mode === 'quick' && pd && pd.getLastRow() > 1) {                 // keep the details of the last full sync
-    var w = Math.min(pd.getLastColumn(), PORTAL_COLS.length), old = {}, oh = pd.getRange(1, 1, 1, w).getValues()[0];
+    var w = pd.getLastColumn(), old = {}, oh = pd.getRange(1, 1, 1, w).getValues()[0];
     pd.getRange(2, 1, pd.getLastRow() - 1, w).getValues().forEach(function (r) { var k = enr_(r[oh.indexOf('Enrollment#')]) || ('ID' + r[oh.indexOf('Student Id')]); if (k) old[k] = r; });
     rows.forEach(function (r) {
       var o = old[enr_(r[C['Enrollment#']])] || old['ID' + r[C['Student Id']]]; if (!o) return;
-      PORTAL_DETAIL.concat(['Details synced']).forEach(function (c) { var j = oh.indexOf(c); if (j >= 0 && blank_(r[C[c]])) r[C[c]] = o[j]; });
+      PORTAL_DETAIL.concat(['Details synced']).concat(COLS.slice(PORTAL_COLS.length)).forEach(function (c) { var j = oh.indexOf(c); if (j >= 0 && C[c] != null && blank_(r[C[c]])) r[C[c]] = o[j]; });
     });
   } else rows.forEach(function (r) { if (/^OK/.test(String(r[C['Load Status']]))) r[C['Details synced']] = stamp; });   // only students whose details were read
   if (!pd) pd = book.insertSheet(PORTAL_SHEET);
   pd.clearContents();
-  pd.getRange(1, 1, 1, PORTAL_COLS.length).setValues([PORTAL_COLS]).setFontWeight('bold').setBackground('#D9D9D9');
+  if (pd.getMaxColumns() < COLS.length) pd.insertColumnsAfter(pd.getMaxColumns(), COLS.length - pd.getMaxColumns());
+  pd.getRange(1, 1, 1, COLS.length).setValues([COLS]).setFontWeight('bold').setBackground('#D9D9D9');
   pd.setFrozenRows(1);
-  if (rows.length) { pd.getRange(2, 1, rows.length, PORTAL_COLS.length).setNumberFormat('@'); pd.getRange(2, 1, rows.length, PORTAL_COLS.length).setValues(rows); }
+  if (rows.length) { pd.getRange(2, 1, rows.length, COLS.length).setNumberFormat('@'); pd.getRange(2, 1, rows.length, COLS.length).setValues(rows); }
   st.clearContents();
   var fill = { skipped: 'Transform sheet not found' };
   try { fill = fillTransform_(rows, C); } catch (e) { fill = { error: String(e.message || e) }; }

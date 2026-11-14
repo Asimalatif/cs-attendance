@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<script src="inksaver.js"></script>
+<script src="inksaver.js"></script><script src="jcwout.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0F1B2D">
 <meta name="color-scheme" content="light dark">
@@ -882,7 +882,7 @@ function rfHtml(){
   const list = rf ? rf.changes.filter(c => !rfShow || c.field === RFN[rfShow]) : [];
   return `<section class="card"><h3>Update all students from the portal</h3>
     <div class="sub">The portal sync only fills <b>empty</b> cells. This rewrites these columns of Transform-ALL-COLLEGE-STRENGTH for every student:
-    <b>Every column vs portal</b> = name, father name, quota, DOB, contact, email, picture, board, passing year, matric roll no, marks, challans, batch, subjects, portal ID (plus Enroll#, program, class, section, status shown for information): <b>only what you Accept</b> is written · <b>HQ</b> = portal Hafiz-e-Quran · <b>Aggregate</b> = (Obtained Marks + 20 if HQ is Yes) × 100 / Total Marks ·
+    <b>Every column vs portal</b> = name, father name, quota, DOB, contact, email, picture, board, passing year, matric roll no, marks, challans, batch, subjects, portal ID and <b>every other column the portal copy also has</b> (HQ, …) (plus Enroll#, program, class, section, status shown for information): <b>only what you Accept</b> is written · <b>HQ</b> = portal Hafiz-e-Quran · <b>Aggregate</b> = (Obtained Marks + 20 if HQ is Yes) × 100 / Total Marks ·
     <b>MeritNo</b> = 1st Year, Open Quota of each program, highest Aggregate = 1 (other quotas keep theirs) · <b>Room</b> = the section's room in the Timetable.</div>
     <div style="display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:10px">${Object.keys(RF).map(f => `<label style="display:flex;gap:6px;align-items:center;margin:0;font-weight:700"><input type="checkbox" data-rf="${f}" ${rfFields.includes(f) ? 'checked' : ''} style="width:20px;height:20px;min-height:0">${RF[f]}</label>`).join('')}</div>
     <div class="acts"><button class="btn" type="button" id="rfPre" ${online() && !rfBusy && rfFields.length ? '' : 'disabled'}>${rfBusy ? 'Working…' : 'Preview changes'}</button>
@@ -991,7 +991,8 @@ function wireFind(){
 function seatsHtml(){
   const s = init.seats;
   const row = q => { const left = q.seats === '' ? '' : q.seats - q.filled;
-    return `<tr><td>${esc(q.name)}${q.pooled ? ' <span class="pill info">pool</span>' : ''}</td><td class="n"><button type="button" class="seatlink" data-seat="${esc(q._k)}" data-q="${esc(q.name)}" title="Show who took these seats">${q.filled}</button>${q.pooled && q.own !== q.filled ? ' <small class="sub">(' + q.own + ' here)</small>' : ''}</td><td class="n">${q.seats === '' ? '–' : q.seats}</td><td class="n">${left === '' ? '' : `<span class="pill ${esc(q.status)}">${left < 0 ? (-left) + ' over' : left === 0 ? 'full' : left + ' left'}</span>`}</td></tr>`; };
+    const pl = q.pooled ? s.pools.find(x => qk(x.quota) === qk(q.name)) : null, lab = k => (prog(k) || {}).label || k;
+    return `<tr><td>${esc(q.name)}${q.pooled ? ' <span class="pill info">pool</span>' : ''}${pl ? `<div class="sub" style="font-size:11.5px">Pooled with: ${esc(pl.members.map(m => lab(m.key)).join(', '))}${pl.members.some(m => m.filled) ? '<br>Taken by: ' + esc(pl.members.filter(m => m.filled).map(m => lab(m.key) + ' ' + m.filled).join(', ')) : ''}</div>` : ''}</td><td class="n"><button type="button" class="seatlink" data-seat="${esc(q._k)}" data-q="${esc(q.name)}" title="Show who took these seats">${q.filled}</button>${q.pooled && q.own !== q.filled ? ' <small class="sub">(' + q.own + ' here)</small>' : ''}</td><td class="n">${q.seats === '' ? '–' : q.seats}</td><td class="n">${left === '' ? '' : `<span class="pill ${esc(q.status)}">${left < 0 ? (-left) + ' over' : left === 0 ? 'full' : left + ' left'}</span>`}</td></tr>`; };
   const wf = wrongFee();
   return `${wf.length ? `<section class="card" style="border:2px solid var(--bad)"><h3>⚠ ${wf.length} Pre-Medical student${wf.length === 1 ? '' : 's'} with a Rs ${SUB_FEE.toLocaleString('en-PK')} challan in a non-subsidized program</h3><div class="sub">Rs ${SUB_FEE.toLocaleString('en-PK')} is the subsidized fee: they should probably be in <b>Pre-Medical Open (S)</b>.</div><div class="acts"><button class="btn primary" type="button" id="wfList">Show the list</button></div></section>` : `<div class="sub" style="margin-bottom:6px">Fee check: no Pre-Medical student with a Rs ${SUB_FEE.toLocaleString('en-PK')} challan in a non-subsidized program.</div>`}
   <div class="sub" style="margin-bottom:10px">Tap a <u>Taken</u> number to see who took those seats. 1st Year only, counted from Transform-ALL-COLLEGE-STRENGTH · ${esc(s.at)}${queue.length ? ' · ' + queue.length + ' save(s) still waiting on this phone are not counted yet' : ''}. Seat limits come from "Quota Settings" in the admissions workbook.</div>
@@ -999,9 +1000,27 @@ function seatsHtml(){
     return `<section class="card"><h3>${esc(pr ? pr.label : p.key)} <span class="pill ${pr && pr.fee === 'non' ? 'near' : 'ok'}">${pr && pr.fee === 'non' ? 'non-subsidized' : 'subsidized'}</span></h3>
       <div class="sub">${p.filled} admitted${p.total !== '' ? ' of ' + p.total : ''}${p.noQuota ? ' · ' + p.noQuota + ' without quota' : ''}</div>
       <table><thead><tr><th>Quota</th><th class="n">Taken</th><th class="n">Seats</th><th class="n">Left</th></tr></thead><tbody>${p.quotas.map(row).join('')}</tbody></table></section>`; }).join('')}
-  <section class="card"><h3>Shared seat pools</h3><table><thead><tr><th>Quota</th><th>Used by</th><th class="n">Taken</th><th class="n">Seats</th></tr></thead><tbody>
-    ${s.pools.map(pl => `<tr><td>${esc(pl.quota)}</td><td class="sub">${pl.members.filter(m => m.filled).map(m => esc((prog(m.key) || {}).label || m.key) + ' ' + m.filled).join(', ') || '–'}</td><td class="n"><button type="button" class="seatlink" data-seat="${esc('pool:' + pl.members.map(m => m.key).join('|'))}" data-q="${esc(pl.quota)}">${pl.filled}</button></td><td class="n"><span class="pill ${esc(pl.status)}">${pl.seats === '' ? '–' : pl.seats}</span></td></tr>`).join('')}</tbody></table></section>
+  <section class="card"><h3>Shared seat pools</h3><div class="sub">One set of seats shared by several programs. <b>Pooled for</b> = the programs that may use it; <b>Taken by</b> = who has used it so far.</div><table><thead><tr><th>Quota</th><th>Pooled for</th><th>Taken by</th><th class="n">Taken</th><th class="n">Seats</th></tr></thead><tbody>
+    ${s.pools.map(pl => `<tr><td>${esc(pl.quota)}</td><td class="sub">${esc(pl.members.map(m => (prog(m.key) || {}).label || m.key).join(', '))}</td><td class="sub">${pl.members.filter(m => m.filled).map(m => esc((prog(m.key) || {}).label || m.key) + ' ' + m.filled).join(', ') || '–'}</td><td class="n"><button type="button" class="seatlink" data-seat="${esc('pool:' + pl.members.map(m => m.key).join('|'))}" data-q="${esc(pl.quota)}">${pl.filled}</button></td><td class="n"><span class="pill ${esc(pl.status)}">${pl.seats === '' ? '–' : pl.seats}</span></td></tr>`).join('')}</tbody></table></section>
+  ${quotaWiseHtml()}
   <div class="acts"><button class="btn" type="button" onclick="refreshInit(true)" ${online() ? '' : 'disabled'}>Refresh seats</button></div>`;
+}
+/** v7.6: every quota across all programs: where its seats went (with lists) */
+function quotaWise(){
+  const Q = new Map();
+  (idx ? idx.rows.map(recOf) : []).filter(o => !isMig(o.year) && String(o.quota || '').trim()).forEach(o => {
+    const k = qk(o.quota); if(!Q.has(k)) Q.set(k, { name:o.quota, by:new Map(), n:0 });
+    const q = Q.get(k), lab = (prog(o.key) || {}).label || o.key || 'No program'; q.n++;
+    if(!q.by.has(lab)) q.by.set(lab, []); q.by.get(lab).push(o);
+  });
+  return [...Q.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+function quotaWiseHtml(){
+  const Q = quotaWise(); if(!Q.length) return '';
+  return `<section class="card"><h3>Quota-wise (all programs)</h3><div class="sub">Each quota with the programs its seats went to (1st Year). Tap a number for the students; tap the quota for all of them.</div>
+    <table><thead><tr><th>Quota</th><th>Where the seats went</th><th class="n">Total</th></tr></thead><tbody>
+    ${Q.map((q, i) => `<tr><td><button type="button" class="seatlink" data-qw="${i}">${esc(q.name)}</button></td><td class="sub">${[...q.by.entries()].map(([l, L]) => `${esc(l)} <button type="button" class="seatlink" data-qw="${i}" data-qp="${esc(l)}">${L.length}</button>`).join(' · ')}</td><td class="n"><button type="button" class="seatlink" data-qw="${i}">${q.n}</button></td></tr>`).join('')}</tbody></table>
+    <div class="acts"><button class="btn" type="button" id="qwAll">All quotas: PDF / Excel / share</button></div></section>`;
 }
 
 const SUB_FEE = 60000;
@@ -1018,8 +1037,11 @@ function stuTable(list, extra){
 function listText(title, list){ return title + '\n\n' + list.map((o, i) => (i + 1) + '. ' + (o.roll || '-') + ' ' + o.name + ' d/o ' + (o.father || '-') + ' (' + o.pcs + ')').join('\n'); }
 function listDlg(title, sub, list, extra){
   dlgOpen(`<h2>${esc(title)}</h2><div class="sub">${sub}</div>${stuTable(list, extra)}
-    <div class="acts"><button class="btn" id="dCopy">Copy / share list</button><button class="btn primary" id="dOk">Close</button></div>`);
+    <div class="acts"><button class="btn" id="dOut">PDF / Excel / print / share</button><button class="btn" id="dCopy">Copy as text</button><button class="btn primary" id="dOk">Close</button></div>`);
   $('#dOk').onclick = dlgClose;
+  $('#dOut').onclick = () => { if(!window.JCWOUT) return toast('Reload the page once.');
+    JCWOUT.list({ title, sub:String(sub).replace(/<[^>]+>/g, ''), head:['#', 'Enroll#', 'Student Name', 'Father Name', 'Section', 'Quota'].concat(extra ? [extra.h] : []).concat(['Contact', 'Fee']),
+      rows:list.map((o, i) => [i + 1, o.roll || '', o.name, o.father || '', o.pcs, o.quota || ''].concat(extra ? [extra.v(o)] : []).concat([o.contact || '', feeOf(o.challan).map(x => (x.paid ? 'Paid ' : 'Unpaid ') + x.amount).join(', ')])) }); };
   $('#dCopy').onclick = async () => { const t = listText(title, list);
     try{ if(navigator.share){ await navigator.share({ title, text:t }); return; } }catch(e){ if(e && e.name === 'AbortError') return; }
     try{ await navigator.clipboard.writeText(t); toast('List copied'); }catch(e){ toast('Could not copy'); } };
@@ -1031,6 +1053,12 @@ function seatList(keyStr, quota){
   listDlg(quota + ' · ' + lbl, list.length + ' student' + (list.length === 1 ? '' : 's') + ' (1st Year) from this phone\'s copy of the strength sheet' + (keys.length > 1 ? ' · shared pool' : '') + '.', list, keys.length > 1 ? { h:'Program', v:o => (prog(o.key) || {}).label || o.key } : null);
 }
 function wireSeats(){
+  const Q = quotaWise(), sortR = L => L.slice().sort((a, b) => String(a.roll).localeCompare(String(b.roll), undefined, { numeric:true }));
+  document.querySelectorAll('[data-qw]').forEach(b => b.onclick = () => { const q = Q[+b.dataset.qw], p = b.dataset.qp;
+    const L = p ? sortR(q.by.get(p)) : [...q.by.entries()].flatMap(([l, X]) => sortR(X));
+    listDlg(q.name + (p ? ' · ' + p : ' · all programs'), L.length + ' student' + (L.length === 1 ? '' : 's') + ' (1st Year)' + (p ? '' : ': ' + [...q.by.entries()].map(([l, X]) => esc(l) + ' ' + X.length).join(', ')) + '.', L, p ? null : { h:'Program', v:o => (prog(o.key) || {}).label || o.key }); });
+  const qa = $('#qwAll'); if(qa) qa.onclick = () => window.JCWOUT ? JCWOUT.list({ title:'Quota-wise students (1st Year, all programs)', head:['Quota', 'Program', '#', 'Enroll#', 'Student Name', 'Father Name', 'Section', 'Contact'],
+    rows:Q.flatMap(q => [...q.by.entries()].flatMap(([l, X]) => sortR(X).map((o, i) => [q.name, l, i + 1, o.roll || '', o.name, o.father || '', o.pcs, o.contact || '']))) }) : toast('Reload the page once.');
   document.querySelectorAll('[data-seat]').forEach(b => b.onclick = () => seatList(b.dataset.seat, b.dataset.q));
   const w = $('#wfList'); if(w) w.onclick = () => { const L = wrongFee(); listDlg('Rs ' + SUB_FEE.toLocaleString('en-PK') + ' fee in a non-subsidized Pre-Medical program', 'These students have a Rs ' + SUB_FEE.toLocaleString('en-PK') + ' (subsidized) challan but are in a non-subsidized program. Move them to <b>Pre-Medical Open (S)</b> with Find &amp; edit if that is right.', L, { h:'Program now', v:o => (prog(o.key) || {}).label || o.key }); };
 }
