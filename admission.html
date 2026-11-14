@@ -130,6 +130,11 @@ dialog::backdrop{background:rgba(10,15,25,.55)}
 .fee{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;align-items:center}
 .fee .pill{font-variant-numeric:tabular-nums}
 .feew{margin-top:6px;padding:8px 10px;border:2px solid var(--bad);border-radius:10px;color:var(--bad);font-weight:800;font-size:13px}
+.ml-pick{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.ml-b{border:1.5px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 10px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;text-align:left}.ml-b.on{background:var(--brown,#6B3423);color:#fff;border-color:var(--brown,#6B3423)}.ml-b small{font-weight:600;opacity:.85}
+table.ml{font-size:12.5px;border-collapse:collapse;width:100%}table.ml th,table.ml td{border-bottom:1px solid var(--line);padding:5px 6px;vertical-align:middle;text-align:left}table.ml th{position:sticky;top:0;background:var(--surface);z-index:1}
+table.ml img{width:44px;height:58px;object-fit:cover;border-radius:6px;border:1px solid var(--line);display:block}
+table.ml tr.next td{background:#DCEBFF}table.ml tr.bad td{background:#FDE0DD}table.ml tr.cut td{border-bottom:3px solid var(--brown,#6B3423)}
+.mlk{padding:0 6px;border-radius:6px}.mlk.next{background:#DCEBFF}.mlk.bad{background:#FDE0DD}
 .seatlink{background:none;border:0;padding:0;font:inherit;color:inherit;text-decoration:underline;cursor:pointer;font-weight:800}
 .bigpic{width:100%;max-height:60vh;object-fit:contain;border-radius:14px;background:var(--surface2)}
 .dtab td:first-child{color:var(--muted);font-weight:700;width:40%}
@@ -199,6 +204,7 @@ dialog{border:1.5px solid var(--line);box-shadow:var(--shadow2)}
     <button role="tab" data-tab="pnew" aria-selected="false">From portal<span class="badge hidden" id="pb">0</span></button>
     <button role="tab" data-tab="find" aria-selected="false">Find &amp; edit</button>
     <button role="tab" data-tab="seats" aria-selected="false">Seats</button>
+    <button role="tab" data-tab="merit" aria-selected="false">Merit lists</button>
     <button role="tab" data-tab="wait" aria-selected="false">Waiting<span class="badge hidden" id="qb">0</span></button>
   </nav>
 </div></header>
@@ -365,12 +371,14 @@ function render(){
   else if(tab === 'find') m.innerHTML = top + findHtml();
   else if(tab === 'pnew') m.innerHTML = top + pnHtml() + rfHtml();
   else if(tab === 'seats') m.innerHTML = top + seatsHtml();
+  else if(tab === 'merit') m.innerHTML = top + mlHtml();
   else m.innerHTML = top + waitHtml();
   if(tab === 'form') wireForm();
   if(tab === 'find') wireFind();
   if(tab === 'pnew'){ wirePn(); wireRf(); }
   if(tab === 'wait') wireWait();
   if(tab === 'seats') wireSeats();
+  if(tab === 'merit') wireMl();
 }
 const opt = (v, cur, label) => `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(label == null ? v : label)}</option>`;
 
@@ -1061,6 +1069,90 @@ function wireSeats(){
     rows:Q.flatMap(q => [...q.by.entries()].flatMap(([l, X]) => sortR(X).map((o, i) => [q.name, l, i + 1, o.roll || '', o.name, o.father || '', o.pcs, o.contact || '']))) }) : toast('Reload the page once.');
   document.querySelectorAll('[data-seat]').forEach(b => b.onclick = () => seatList(b.dataset.seat, b.dataset.q));
   const w = $('#wfList'); if(w) w.onclick = () => { const L = wrongFee(); listDlg('Rs ' + SUB_FEE.toLocaleString('en-PK') + ' fee in a non-subsidized Pre-Medical program', 'These students have a Rs ' + SUB_FEE.toLocaleString('en-PK') + ' (subsidized) challan but are in a non-subsidized program. Move them to <b>Pre-Medical Open (S)</b> with Find &amp; edit if that is right.', L, { h:'Program now', v:o => (prog(o.key) || {}).label || o.key }); };
+}
+
+/* ---------- v7.7: merit lists, 1st Year, every quota of every program, on the seats ----------
+   A subsidized program (fee 'sub', e.g. Pre-Medical Open (S)) takes the top students of a quota from ALL its class's programs
+   (Open (S) + Self Morning + Evening): Aggregate, then age (older first). The rest belong in the non-subsidized programs.
+   Blue = next in line when a seat empties (left / cancelled / migrated). Red = a wrong place in the strength sheet. */
+let mlKey = '', mlQ = '';
+const mlGone = o => /left|cancel|migrat|struck|disenrol|drop|expel|withdraw/i.test(o.status || '');
+const mlAgg = o => { const a = Number(String(o.aggregate || '').replace(/[^0-9.]/g, '')); if(a) return a;
+  const m = Number(String(o.metric || '').replace(/,/g, '')), t = Number(String(o.total || '').replace(/,/g, '')); return m && t ? Math.round((m + (/^y/i.test(o.hq || '') ? 20 : 0)) * 10000 / t) / 100 : 0; };
+const mlDob = o => { const m = String(o.dob || '').match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/); return m ? m[3] + m[2].padStart(2, '0') + m[1].padStart(2, '0') : '99999999'; };
+const mlSort = (a, b) => Math.round(mlAgg(b) * 100) - Math.round(mlAgg(a) * 100) || mlDob(a).localeCompare(mlDob(b)) || String(a.name).localeCompare(String(b.name));
+const mlPic = u => { u = String(u || ''); const d = u.match(/\/d\/([\w-]{20,})/) || u.match(/[?&]id=([\w-]{20,})/); return d ? 'https://drive.google.com/thumbnail?id=' + d[1] + '&sz=w120' : /^https?:/.test(u) ? u : ''; };
+/** the usual tuition fee of a program = the most common paid challan above Rs 3,000 */
+function mlFee(key){
+  const c = {};
+  idx.rows.map(recOf).filter(o => o.key === key && !isMig(o.year)).forEach(o => feeOf(o.challan).filter(x => x.amount > REG_FEE_MAX).forEach(x => { c[x.amount] = (c[x.amount] || 0) + 1; }));
+  const top = Object.entries(c).sort((a, b) => b[1] - a[1])[0];
+  return top ? Number(top[0]) : 0;
+}
+/** all merit lists: [{ key, label, fee, quota, seats, pool:[keys], rows:[{ o, rank, state, why }] }] */
+function meritLists(){
+  if(!idx || !init || !init.seats) return [];
+  const all = idx.rows.map(recOf).filter(o => !isMig(o.year) && o.key && !mlGone(o));
+  const out = [], s = init.seats;
+  s.programs.forEach(p => {
+    const pr = prog(p.key) || {}, sib = pr.fee === 'sub' ? init.programs.filter(x => x.classProgram === pr.classProgram && x.fee === 'non').map(x => x.key) : [];
+    p.quotas.forEach(q => {
+      if(q.seats === '' || q.seats == null) return;
+      const pl = q.pooled ? s.pools.find(x => qk(x.quota) === qk(q.name)) : null;
+      const home = pl ? pl.members.map(m => m.key) : [p.key];
+      if(pl && home[0] !== p.key) return;                               // a shared pool is listed once
+      const keys = home.concat(sib), seats = Number(pl ? pl.seats : q.seats) || 0;
+      const L = all.filter(o => keys.includes(o.key) && qk(o.quota) === qk(q.name)).sort(mlSort);
+      let inHome = L.filter(o => home.includes(o.key)).length, nextLeft = Math.max(1, seats - L.slice(0, seats).filter(o => home.includes(o.key)).length);
+      const rows = L.map((o, i) => {
+        const rank = i + 1, here = home.includes(o.key), should = rank <= seats;
+        let state = '', why = '';
+        if(here && should) state = 'ok';
+        else if(here && !should){ state = 'bad'; why = sib.length ? 'Below the last seat: should be in ' + (prog(sib[0]) || {}).label : 'More students than seats'; }
+        else if(!here && should){ state = 'bad'; why = 'Inside the ' + seats + ' seats: should be in ' + (pl ? 'this quota' : pr.label); }
+        else if(nextLeft > 0){ state = 'next'; why = 'Next in line'; nextLeft--; }
+        return { o, rank, state, why };
+      });
+      out.push({ key:p.key, label:pl ? 'Shared pool: ' + home.map(k => (prog(k) || {}).label || k).join(', ') : pr.label || p.key, fee:mlFee(p.key), sibFee:sib.length ? mlFee(sib[0]) : 0, sibLabel:sib.length ? sib.map(k => (prog(k) || {}).label).join(', ') : '',
+        quota:q.name, seats, inHome, rows });
+    });
+  });
+  return out;
+}
+function mlHtml(){
+  if(!idx) return '<section class="card"><div class="sub">Loading the student list…</div></section>';
+  const M = meritLists();
+  if(!M.length) return '<section class="card"><div class="sub">No seats set in Quota Settings yet.</div></section>';
+  const cur = M.find(x => x.key + '|' + x.quota === mlKey + '|' + mlQ) || M[0];
+  mlKey = cur.key; mlQ = cur.quota;
+  const bad = r => r.rows.filter(x => x.state === 'bad').length;
+  const sel = `<div class="ml-pick">${M.map(x => `<button type="button" class="ml-b ${x === cur ? 'on' : ''}" data-ml="${esc(x.key + '|' + x.quota)}">${esc(x.label)} · ${esc(x.quota)} <small>${x.inHome}/${x.seats}${bad(x) ? ' · <b style="color:var(--bad)">' + bad(x) + ' wrong</b>' : ''}</small></button>`).join('')}</div>`;
+  const th = ['#', 'Photo', 'Enroll#', 'Student', 'Program · Section', 'HQ', 'Obtained', 'Total', 'Aggregate', 'MeritNo', 'Challan', 'DOB', 'Age-wise', 'Fee paid', ''];
+  return `<section class="card"><h3>Merit lists (1st Year, on seats)</h3>
+    <div class="sub">Each quota: students by <b>Aggregate</b>, then <b>age</b> (older first). The first <b>seats</b> students get the seats. For a subsidized program (e.g. Pre-Medical Open (S)) the list takes the quota's students of <b>all</b> its class's programs, so a student in Self Morning with a higher Aggregate than the last subsidized seat is shown <span class="mlk bad">red</span> (should move up), a student in Open (S) below the last seat is red too (should move down), and the <span class="mlk next">blue</span> student is next in line when a seat empties (left, cancelled, migrated: those are not counted).</div>
+    ${sel}</section>
+  <section class="card"><h3>${esc(cur.label)} · ${esc(cur.quota)}</h3>
+    <div class="sub"><b>${cur.seats}</b> seats · <b>${cur.inHome}</b> students in it now · fee ${cur.fee ? '<b>Rs ' + cur.fee.toLocaleString('en-PK') + '</b>' : 'not known yet'}${cur.sibLabel ? ` · ${esc(cur.sibLabel)} fee ${cur.sibFee ? '<b>Rs ' + cur.sibFee.toLocaleString('en-PK') + '</b>' : '–'}` : ''} (most common paid challan)</div>
+    <div class="acts"><button class="btn" type="button" id="mlOut">PDF / Excel / print / share</button>${bad(cur) ? `<button class="btn" type="button" id="mlBad">Only the ${bad(cur)} wrong</button>` : ''}</div>
+    <div style="overflow:auto;max-height:70vh;margin-top:8px"><table class="ml"><thead><tr>${th.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>
+    ${cur.rows.map((r, i) => { const o = r.o, f = feeOf(o.challan), cut = i === cur.seats - 1 && cur.rows.length > cur.seats;
+      return `<tr class="${r.state}${cut ? ' cut' : ''}"><td class="n">${r.rank}</td><td>${mlPic(o.pic) ? `<img loading="lazy" src="${esc(mlPic(o.pic))}" alt="" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode('–'))">` : '–'}</td>
+        <td class="nw">${esc(o.roll || '–')}</td><td><b>${esc(o.name)}</b><div class="sub">d/o ${esc(o.father || '-')}</div></td><td class="sub">${esc((prog(o.key) || {}).label || o.key)}<br>${esc(o.pcs || '')}</td>
+        <td>${esc(o.hq || '')}</td><td class="n">${esc(o.metric || '')}</td><td class="n">${esc(o.total || '')}</td><td class="n"><b>${mlAgg(o) || ''}</b></td><td class="n">${esc(o.meritNo || '')}</td>
+        <td class="sub" style="min-width:120px">${f.length ? f.map(x => (x.paid ? 'P ' : 'U ') + x.amount.toLocaleString('en-PK')).join(', ') : '–'}</td><td class="nw">${esc(o.dob || '')}</td><td>${esc(o.agewise || '')}</td><td class="nw">${esc(o.feepaid || '')}</td>
+        <td class="sub" style="min-width:130px">${r.why ? `<b>${esc(r.why)}</b>` : ''}</td></tr>`; }).join('') || `<tr><td colspan="${th.length}" class="sub">Nobody in this quota.</td></tr>`}</tbody></table></div></section>`;
+}
+function wireMl(){
+  document.querySelectorAll('[data-ml]').forEach(b => b.onclick = () => { [mlKey, mlQ] = b.dataset.ml.split('|'); render(); });
+  const cur = () => meritLists().find(x => x.key === mlKey && x.quota === mlQ);
+  const out = only => { const c = cur(); if(!c || !window.JCWOUT) return;
+    const R = c.rows.filter(r => !only || r.state === 'bad');
+    JCWOUT.list({ title:'Merit list · ' + c.label + ' · ' + c.quota + (only ? ' · wrong places' : ''), sub:c.seats + ' seats · ' + c.inHome + ' in it now',
+      head:['Rank', 'Enroll#', 'Student Name', 'Father Name', 'Program', 'Section', 'HQ', 'Obtained Marks', 'Total Marks', 'Aggregate', 'MeritNo', 'Challan Details', 'DOB', 'Age-wise', 'Fee Paid Date', 'Seat', 'Note'],
+      rows:R.map(r => { const o = r.o; return [r.rank, o.roll || '', o.name, o.father || '', (prog(o.key) || {}).label || o.key, o.pcs || '', o.hq || '', o.metric || '', o.total || '', mlAgg(o) || '', o.meritNo || '', o.challan || '', o.dob || '', o.agewise || '', o.feepaid || '',
+        r.rank <= c.seats ? 'On a seat' : r.state === 'next' ? 'Next in line' : 'Waiting', r.why]; }) }); };
+  const a = $('#mlOut'); if(a) a.onclick = () => out(false);
+  const b = $('#mlBad'); if(b) b.onclick = () => out(true);
 }
 
 /* ---------- waiting ---------- */
