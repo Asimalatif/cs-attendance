@@ -549,7 +549,7 @@ async function checkPhotos(L){
   S.busy = false; S.msg = n + ' photos checked: ' + fix.length + ' can be fixed, ' + bad.length + ' need a look.'; render();
   reviewPhotos(fix, bad);
 }
-function reviewPhotos(fix, bad){
+function reviewPhotos(fix, bad, keep){
   const th = src => `<img src="${src}" style="width:74px;height:100px;object-fit:cover;border:1px solid var(--line);border-radius:6px">`;
   $('#dlgIn').innerHTML = `<h2 style="margin:0 0 4px;color:var(--brown);font-size:17px">Photo check</h2>
     <div class="sub">${fix.length} photo${fix.length === 1 ? '' : 's'} can be fixed (old → new). Nothing is changed until you accept: an accepted photo is saved in Drive for every device.</div>
@@ -563,13 +563,22 @@ function reviewPhotos(fix, bad){
     <div id="fxMsg" class="sub" style="min-height:18px;margin-top:6px"></div>
     <div class="acts">${fix.length ? '<button class="btn pri" id="fxAll">Accept all</button>' : ''}${bad.length ? '<button class="btn" id="fxList">List to check: PDF / Excel / share</button>' : ''}<button class="btn" id="fxClose">Close</button></div>`;
   const dlg = $('#dlg'); if(!dlg.open) dlg.showModal();
-  const done = new Set(), msg = t => { $('#fxMsg').textContent = t; };
+  const K = keep || { done:new Map(), scroll:0 }, done = { has:i => K.done.has(i), add:(i, how) => K.done.set(i, how || 'saved') }, msg = t => { $('#fxMsg').textContent = t; };
+  const box = $('#dlgIn').querySelector('div[style*="max-height:56vh"]');
+  const mark = i => { const row = document.querySelector(`[data-fx="${i}"]`), how = K.done.get(i); if(!row || !how) return; row.style.opacity = .45;
+    row.querySelector('.acts').innerHTML = how === 'skipped' ? '<span class="sub">skipped</span>' : `<b style="color:var(--good, green)">✓ ${esc(how)}</b>`; };
+  K.done.forEach((v, i) => mark(i)); if(box) box.scrollTop = K.scroll;
+  const reopen = () => { reviewPhotos(fix, bad, K); };
   const accept = async i => { if(done.has(i)) return; const f = fix[i], row = document.querySelector(`[data-fx="${i}"]`);
-    msg('Saving ' + f.st.name + '…'); await savePhoto(f.st, f.data); done.add(i); CARDPIC.clear(); if(row) row.style.opacity = .45, row.querySelector('.acts').innerHTML = '<b style="color:var(--good, green)">✓ saved</b>'; msg(''); };
+    msg('Saving ' + f.st.name + '…'); await savePhoto(f.st, f.data); done.add(i); CARDPIC.clear(); mark(i); msg(''); };
   document.querySelectorAll('[data-fa]').forEach(b => b.onclick = () => accept(+b.dataset.fa).catch(e => msg('Not saved: ' + e.message)));
-  document.querySelectorAll('[data-fs]').forEach(b => b.onclick = () => { const i = +b.dataset.fs; done.add(i); const row = document.querySelector(`[data-fx="${i}"]`); if(row){ row.style.opacity = .45; row.querySelector('.acts').innerHTML = '<span class="sub">skipped</span>'; } });
-  document.querySelectorAll('[data-fo]').forEach(b => b.onclick = () => { dlg.close(); openPhoto(fix[+b.dataset.fo].st.roll); });
-  document.querySelectorAll('[data-bo]').forEach(b => b.onclick = () => { dlg.close(); openPhoto(bad[+b.dataset.bo].st.roll); });
+  document.querySelectorAll('[data-fs]').forEach(b => b.onclick = () => { const i = +b.dataset.fs; done.add(i, 'skipped'); mark(i); });
+  // fix by hand: the photo window opens; after Save or Close you come back here, at the same place
+  document.querySelectorAll('[data-fo]').forEach(b => b.onclick = () => { const i = +b.dataset.fo; K.scroll = box ? box.scrollTop : 0; dlg.close();
+    openPhoto(fix[i].st.roll, saved => { if(saved){ done.add(i, 'fixed by hand'); CARDPIC.clear(); } reopen(); }); });
+  document.querySelectorAll('[data-bo]').forEach(b => b.onclick = () => { const i = +b.dataset.bo; K.scroll = box ? box.scrollTop : 0; dlg.close();
+    openPhoto(bad[i].st.roll, saved => { if(saved) (K.badDone = K.badDone || new Set()).add(i); reopen(); }); });
+  (K.badDone || new Set()).forEach(i => { const b = document.querySelector(`[data-bo="${i}"]`); if(b) b.outerHTML = '<b style="color:var(--good, green)">✓ fixed</b>'; });
   const fa = $('#fxAll'); if(fa) fa.onclick = async () => { fa.disabled = true; let k = 0;
     for(let i = 0; i < fix.length; i++){ if(done.has(i)) continue; try{ await accept(i); k++; }catch(e){ msg('Stopped at ' + fix[i].st.name + ': ' + e.message); fa.disabled = false; return; } }
     msg(k + ' photos saved.'); };
@@ -650,7 +659,7 @@ async function boardPhotos(list, onlyTry){
   S.busy = ''; S.prog = 0; render();
 }
 function bpSave(){ const a = document.createElement('a'), u = URL.createObjectURL(S.bpBlob); a.href = u; a.download = S.bpOut.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 120000); }
-async function openPhoto(roll){
+async function openPhoto(roll, back){            // back(saved): called after Save / Close (used by the photo check list)
   const st = S.list.find(x => x.roll === roll); if(!st) return;
   const dlg = $('#dlg'), ps = photoState(st);
   $('#dlgIn').innerHTML = `<h2 style="margin:0 0 4px;color:var(--brown);font-size:17px">Photo · ${esc(st.roll)} · ${esc(st.name)}</h2>
@@ -697,7 +706,7 @@ async function openPhoto(roll){
     catch(e){ $('#pMsg').textContent = 'Background not changed: ' + (e.message || e) + ' (needs internet the first time).'; }
   });
   $('#pF').onchange = ev => { const f = ev.target.files[0]; if(!f) return; const rd = new FileReader(); rd.onload = async () => use(await toRaw(rd.result).catch(() => rd.result), true); rd.readAsDataURL(f); };
-  $('#pClose').onclick = () => dlg.close();
+  $('#pClose').onclick = () => { dlg.close(); if(back) back(false); };
   $('#pSave').onclick = async () => {
     const data = cv.toDataURL('image/jpeg', .9);
     $('#pSave').disabled = true; $('#pMsg').textContent = 'Saving to Drive…';
@@ -709,7 +718,7 @@ async function openPhoto(roll){
       await DB.put('raw', { roll, data }); await DB.put('meta', m); META[roll] = m;
       if(EDIT[roll] && EDIT[roll].photo){ delete EDIT[roll].photo; ls.set('idc_edit', EDIT); }
       ls.set('idc_cache', Object.assign(ls.get('idc_cache', {}), { list: S.list }));
-      dlg.close(); S.msg = 'Photo of ' + st.name + ' saved.'; render();
+      dlg.close(); S.msg = 'Photo of ' + st.name + ' saved.'; render(); if(back) back(true);
     }catch(e){ $('#pMsg').textContent = 'Not saved: ' + e.message; $('#pSave').disabled = false; }
   };
 }
