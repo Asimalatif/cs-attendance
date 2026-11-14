@@ -1114,7 +1114,8 @@ function admRefresh_(user, fields, apply, accept) {
           if (i === 0 || aggOf(r) !== aggOf(L[i - 1])) { rank++; tie = 0; }      // dense: 1, 2, 2, 2, 3 (no number skipped)
           tie++;
           put(r, 'merit', rank);
-          put(r, 'agewise', ordinal(tie));
+          var same = L.filter(function (o) { return aggOf(o) === aggOf(r); }).length;   // v7.6.5: Age-wise only where students share an Aggregate
+          put(r, 'agewise', same > 1 ? ordinal(tie) : '');
         });
       });
     }
