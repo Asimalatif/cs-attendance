@@ -526,7 +526,7 @@ function admPortalStu_(P, row, set) {
     pic: g(row, 'photoname'), board: g(row, 'boarduniversity'), passYear: g(row, 'passingyear'), matricRoll: num(g(row, 'rollno')),
     metric: num(g(row, 'obtainmarkscgpa')), total: num(g(row, 'totalmarkscgpa')), challan: g(row, 'challandetails'), batch: g(row, 'batch'),
     subjects: sub, program: admKeyOf_(progName, yr, '', en, set.sections), programName: progName, year: yr,
-    section: g(row, 'section'), status: g(row, 'status'), synced: g(row, 'detailssynced') };
+    section: g(row, 'section'), status: g(row, 'status'), synced: g(row, 'detailssynced'), hq: g(row, 'hq') };
 }
 
 function admPortal_(query) {
@@ -706,7 +706,7 @@ function admAddNew_(user, items, override) {
       var d = { program: p.key, year: admYear_(it.year || s.year), section: admS_(it.section), quota: admS_(it.quota) || admGuessQuota_(s.quota, p.key, admQuotaNames_(admCounts_(recs))).quota,
         rollNo: admS_(it.rollNo).toUpperCase(), name: s.name, father: s.father, id: s.id, dob: s.dob, contact: s.contact, email: s.email, pic: s.pic,
         board: s.board, passYear: s.passYear, matricRoll: s.matricRoll, metric: s.metric, total: s.total, challan: s.challan, batch: s.batch,
-        hq: 'No', groupOnly: '', meritNo: '', room: '' };
+        hq: /^y/i.test(s.hq || '') ? 'Yes' : 'No', groupOnly: '', meritNo: '', room: '' };
       if (admIsMig_(d.year)) d.quota = ADM_CFG.MIGRATION.QUOTA;
       var subs = (it.subjects && it.subjects.filter(Boolean).length >= 4) ? it.subjects : s.subjects;
       if (subs.filter(Boolean).length < 4) {     // nothing from the portal yet: compulsory + the program's only group
@@ -719,8 +719,9 @@ function admAddNew_(user, items, override) {
       d.room = rooms[d.section] || '';
       var v = admValidate_(d, null, null, recs, set);
       res.roll = d.rollNo; res.section = d.section; res.issues = v.issues; res.errors = v.errors;
+      var fi = admFeeIssue_(s.challan); if (fi) { v.issues.push(fi); res.issues = v.issues; res.fee = fi.text; }
       if (v.errors.length) return;
-      if (v.blocking) { res.blocked = true; return; }
+      if (v.blocking && !override && !it.force) { res.blocked = true; res.needsConfirm = true; return; }   // v7.5: seats full = warn, admit anyway after a confirm
       if (!override && !it.force && v.issues.some(function (i) { return i.level === 'danger'; })) { res.needsConfirm = true; return; }
       var vals = admValues_(d, p);
       vals.sno = ++mx; vals.session = ADM_CFG.SESSION; vals.status = ADM_CFG.STATUS;
@@ -749,6 +750,17 @@ function admAddNew_(user, items, override) {
     return { ok: true, added: lines.length, results: results, seats: admSeatState_(recs2, set),
              recs: recs2.filter(function (r) { return added[r.row]; }).map(admPack_) };
   } finally { lock.releaseLock(); }
+}
+
+/** v7.5: only the registration fee (Rs 2,600 or less) paid on the portal -> a warning before she gets her Enroll# and section */
+var ADM_REG_FEE_MAX = 3000;
+function admFeeIssue_(challan) {
+  var f = String(challan || '').split(',').map(function (x) { var m = x.trim().match(/^([PU])-?([\d.]+)/i); return m ? { paid: /p/i.test(m[1]), amt: Number(m[2]) } : null; }).filter(Boolean);
+  if (!f.length) return { level: 'danger', text: 'FEE: no fee challan on the portal copy. Ask her for the paid fee slip before giving her Enroll# and section.' };
+  var paidFee = f.filter(function (x) { return x.paid && x.amt > ADM_REG_FEE_MAX; }), due = f.filter(function (x) { return !x.paid; }).reduce(function (a, x) { return a + x.amt; }, 0);
+  if (paidFee.length) return null;
+  var reg = f.filter(function (x) { return x.paid; }).reduce(function (a, x) { return a + x.amt; }, 0);
+  return { level: 'danger', text: 'FEE NOT PAID: ' + (reg ? 'only the registration fee (Rs ' + reg + ') is paid' : 'nothing is paid') + (due ? '; Rs ' + due + ' unpaid' : '') + '. Ask her to show the paid fee slip before giving her Enroll# and section.' };
 }
 
 /* ================= Validation ================= */
@@ -1158,7 +1170,7 @@ function admSave_(user, d, ctx, override, cid) {
     if (seen) return { ok: true, duplicate: true, roll: seen.roll, message: seen.name + ' was already saved (' + seen.roll + ').' };
     var T = admRead_(), x = admPrepare_(d, ctx, T);
     if (x.v.errors.length) return { ok: false, errors: x.v.errors, issues: x.v.issues };
-    if (x.v.blocking) return { ok: false, blocked: true, issues: x.v.issues };
+    if (x.v.blocking && !override) return { ok: false, blocked: true, issues: x.v.issues };
     if (!override && x.v.issues.some(function (i) { return i.level === 'danger'; })) return { ok: false, needsConfirm: true, issues: x.v.issues, rollNo: d.rollNo };
     var vals = admValues_(d, x.p), C = T.cols, sh = T.sh, row, action, details;
 

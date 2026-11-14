@@ -50,7 +50,10 @@ tr:nth-child(even) td{background:var(--surface2)}
 .note{border-radius:12px;padding:10px 12px;font-size:13.5px;margin-top:10px}
 .note.ok{background:var(--good-bg);color:var(--good)}.note.bad{background:var(--bad-bg);color:var(--bad)}.note.mid{background:var(--mid-bg);color:var(--mid)}
 .list{list-style:none;padding:0;margin:8px 0 0}
-.list li{display:flex;justify-content:space-between;gap:10px;padding:7px 10px;border-radius:10px;background:var(--surface2);margin-bottom:5px;font-size:13.5px}
+.list li{display:flex;justify-content:space-between;gap:10px;padding:7px 10px;border-radius:10px;background:var(--surface2);margin-bottom:5px;font-size:13.5px;flex-wrap:wrap;align-items:center}
+.list .ra{display:flex;flex-wrap:wrap;gap:5px;width:100%}
+.list .ra button,.list .ra a{height:32px;padding:0 10px;border-radius:9px;border:1.5px solid var(--line);background:var(--surface);color:inherit;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}
+.list .ra button:disabled{opacity:.5}
 .steps{margin:8px 0 0;padding-left:20px;font-size:13.5px;color:var(--muted)}
 .hidden{display:none!important}
 </style>
@@ -123,7 +126,12 @@ function render(){
     ${S.saved ? `<div class="note ok">Saved ${S.saved.rows.toLocaleString()} rows in “${esc(S.saved.sheet)}”${S.saved.top ? ' and ' + S.saved.top.rows + ' in “' + esc(S.saved.top.sheet) + '”' : ''}. <a href="${esc(S.saved.url)}" target="_blank" rel="noopener">Open the sheet</a></div>` : ''}
   </section>` : ''}
   <section class="card" style="--c:#B4740E"><h2>Result sheets in the workbook</h2>
-    ${S.list ? `<ul class="list">${S.list.sheets.map(x => `<li><span>${esc(x.name)}</span><b>${x.rows.toLocaleString()}</b></li>`).join('')}</ul><div class="acts"><a class="btn" href="${esc(S.list.url)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Open the workbook</a></div>` : `<div class="sub">${navigator.onLine ? 'Loading…' : 'Needs internet.'}</div>`}
+    ${S.list ? `<div class="sub">Open a sheet in Google Sheets, or make it as an Excel or PDF file on this device to save or send (big sheets take a while: a 60,000-row PDF is about 1,500 pages).</div><ul class="list">${S.list.sheets.map((x, i) => `<li><span>${esc(x.name)}</span><b>${x.rows.toLocaleString()}</b>
+      <span class="ra"><a href="${esc(S.list.url + (x.gid != null ? '#gid=' + x.gid : ''))}" target="_blank" rel="noopener">Open</a>
+        <button type="button" data-rs="${i}" data-k="xlsx" ${S.rsBusy ? 'disabled' : ''}>Excel</button><button type="button" data-rs="${i}" data-k="pdf" ${S.rsBusy ? 'disabled' : ''}>PDF</button>
+        <button type="button" data-rs="${i}" data-k="sxlsx" ${S.rsBusy ? 'disabled' : ''}>Share Excel</button><button type="button" data-rs="${i}" data-k="spdf" ${S.rsBusy ? 'disabled' : ''}>Share PDF</button></span>
+      ${S.rsBusy && S.rsBusy.i === i ? `<span class="sub" id="rsProg" style="width:100%">${esc(S.rsBusy.t)}</span>` : ''}</li>`).join('')}</ul>
+      ${S.rsErr ? `<div class="note bad">${esc(S.rsErr)}</div>` : ''}<div class="acts"><a class="btn" href="${esc(S.list.url)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Open the workbook</a></div>` : `<div class="sub">${navigator.onLine ? 'Loading…' : 'Needs internet.'}</div>`}
   </section>`;
 }
 function paintProg(){
@@ -200,6 +208,57 @@ async function xlsx(){
     X.writeFile(wb, S.name + '.xlsx');
   }catch(e){ alert(e.message || e); }
 }
+/* ---------- v7.5: a saved result sheet as Excel / PDF (download or share) ---------- */
+const rsProg = t => { if(S.rsBusy) S.rsBusy.t = t; const p = $('#rsProg'); if(p) p.textContent = t; };
+async function rsData(name){
+  let start = 2, head = [], rows = [], total = 0;
+  for(;;){
+    const r = await api({ action:'br_get', sheet:name, start, n:10000 }, 300000);
+    if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'Paste the new BoardResults.gs and deploy a new version first.' : r.error || 'Could not read the sheet');
+    head = r.header; total = r.total; rows = rows.concat(r.rows);
+    rsProg('Reading the sheet: ' + rows.length.toLocaleString() + ' of ' + total.toLocaleString() + ' rows…');
+    if(!r.next || !r.rows.length) break; start = r.next;
+  }
+  return { head, rows };
+}
+async function rsXlsx(name, D){
+  if(!window.XLSX) await loadScript(XLSX_LIB);
+  const X = window.XLSX, wb = X.utils.book_new(), ws = X.utils.aoa_to_sheet([D.head].concat(D.rows));
+  D.head.forEach((h, c) => { const a = X.utils.encode_cell({ r:0, c }); if(ws[a]) ws[a].s = { font:{ bold:true } }; });
+  ws['!cols'] = D.head.map((h, c) => ({ wch:Math.min(50, Math.max(String(h).length, ...D.rows.slice(0, 300).map(r => String(r[c] == null ? '' : r[c]).length)) + 2) }));
+  if(D.rows.length) ws['!autofilter'] = { ref:X.utils.encode_range({ s:{ r:0, c:0 }, e:{ r:D.rows.length, c:D.head.length - 1 } }) };
+  X.utils.book_append_sheet(wb, ws, name.replace(/[\[\]*?\/\\:]/g, ' ').slice(0, 31));
+  return new Blob([X.write(wb, { bookType:'xlsx', type:'array' })], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+async function rsPdf(name, D){
+  if(!window.jspdf) await loadScript('jspdf.umd.min.js');
+  if(!(window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API.autoTable)) await loadScript('jspdf.plugin.autotable.min.js');
+  const doc = new window.jspdf.jsPDF({ orientation:D.head.length > 6 ? 'landscape' : 'portrait', unit:'mm', format:'a4' }), W = doc.internal.pageSize.getWidth();
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text('Jinnah College for Women, Peshawar', W / 2, 12, { align:'center' });
+  doc.setFontSize(11); doc.text(name + ' (' + D.rows.length.toLocaleString() + ' rows)', W / 2, 18, { align:'center' });
+  doc.autoTable({ startY:22, head:[D.head], body:D.rows, theme:'grid', margin:{ left:8, right:8, top:10, bottom:12 },
+    styles:{ fontSize:D.rows.length > 2000 ? 6.5 : 8, cellPadding:.8, textColor:0, lineColor:120, lineWidth:.1, overflow:'linebreak' },
+    headStyles:{ fillColor:230, textColor:0, fontStyle:'bold' },
+    didDrawPage:() => { doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.text(name + ' · page ' + doc.internal.getNumberOfPages(), W / 2, doc.internal.pageSize.getHeight() - 5, { align:'center' }); } });
+  return doc.output('blob');
+}
+function rsSave(blob, file){ const a = document.createElement('a'), url = URL.createObjectURL(blob); a.href = url; a.download = file; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000); }
+async function rsDo(i, k){
+  const x = S.list && S.list.sheets[i]; if(!x || S.rsBusy) return;
+  const pdf = /pdf/.test(k), share = /^s/.test(k);
+  if(pdf && x.rows > 5000 && !confirm(x.name + ' has ' + x.rows.toLocaleString() + ' rows: the PDF is about ' + Math.ceil(x.rows / 45).toLocaleString() + ' pages and can take several minutes. Excel is much smaller. Make the PDF anyway?')) return;
+  S.rsErr = ''; S.rsBusy = { i, t:'Reading the sheet…' }; render();
+  try{
+    const D = await rsData(x.name);
+    rsProg(pdf ? 'Making the PDF… (a big sheet takes a few minutes)' : 'Making the Excel file…'); await new Promise(z => setTimeout(z, 50));
+    const blob = pdf ? await rsPdf(x.name, D) : await rsXlsx(x.name, D), file = x.name.replace(/[\\/:*?"<>|]+/g, ' ').trim() + (pdf ? '.pdf' : '.xlsx');
+    const f = new File([blob], file, { type:blob.type });
+    if(share && navigator.canShare && navigator.canShare({ files:[f] })){
+      try{ await navigator.share({ files:[f], title:x.name }); }catch(e){ if(e && e.name !== 'AbortError') rsSave(blob, file); }
+    } else { rsSave(blob, file); if(share) S.rsErr = 'This browser cannot share files: the file was downloaded instead. Send it from your Downloads.'; }
+  }catch(e){ S.rsErr = e.message || String(e); }
+  S.rsBusy = null; render();
+}
 async function loadList(){ if(!navigator.onLine) return; try{ const r = await api({ action:'br_list' }, 60000); if(r.ok){ S.list = r; render(); } else { S.err = r.error; render(); } }catch(e){ S.err = e.message; render(); } }
 
 document.addEventListener('change', e => {
@@ -221,6 +280,7 @@ document.addEventListener('click', e => {
   if(t.id === 'bStop') S.stop = true;
   if(t.id === 'bSave') save();
   if(t.id === 'bXlsx') xlsx();
+  const rb = t.closest && t.closest('[data-rs]'); if(rb) rsDo(Number(rb.dataset.rs), rb.dataset.k);
 });
 window.addEventListener('beforeunload', e => { if(S.busy){ e.preventDefault(); e.returnValue = ''; } });
 render(); loadList();

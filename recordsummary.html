@@ -8,7 +8,7 @@
   <link rel="icon" href="icon-192.png">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>JCW Record Summary</title>
+  <title>JCW Marked-Missed Entries</title>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&family=Fraunces:wght@600;700&display=swap" rel="stylesheet">
   <style>
     :root { --bg:#15132e; --bg-2:#262060; --paper:#fff; --wash:#f4f4fb; --ink:#1c1a3a; --muted:#625f80; --line:#c9c9de;
@@ -104,7 +104,7 @@
     .err { color:var(--alert); cursor:help; margin-left:3px; }
     .legend { display:flex; flex-wrap:wrap; gap:4px 14px; padding:8px 12px; font-size:12px; color:var(--muted); border-top:1px solid var(--line); }
     .empty { padding:26px; text-align:center; color:var(--muted); }
-    .short { display:none; }
+    span.short { display:none; }
 
     /* ---------- hint / selection summary ---------- */
     .hint { background:var(--paper); border-radius:12px; padding:8px 12px; margin-bottom:12px; box-shadow:0 6px 18px rgba(0,0,0,.25);
@@ -242,8 +242,8 @@
       td.c { width:28px; padding:2px 1px; font-size:13px; }
       tfoot td { font-size:9.5px; }
       .legend { font-size:10.5px; padding:6px 8px; }
-      .full { display:none; }
-      .short { display:inline; }
+      span.full { display:none; }      /* label only: td.c.full is a tick and must stay visible on phones */
+      span.short { display:inline; }
       .kpis { grid-template-columns:repeat(2,1fr); }
       .cgrid { grid-template-columns:1fr; }
       .cbody { max-height:340px; }
@@ -437,11 +437,12 @@
     getRecordSummaryMeta: () => ({ action:'rsm_meta' }),
     getRecordFileList:    a => ({ action:'rsm_files', force:!!a[0] }),
     getRecordFile:        a => ({ action:'rsm_file', id:a[0], cached:a[1] || null, mod:a[2] || 0 }),
-    getRecordTeachers:    () => ({ action:'rsm_teachers' })
+    getRecordTeachers:    () => ({ action:'rsm_teachers' }),
+    getRecordLive:        () => ({ action:'rsm_live' })
   };
   async function call(payload){
     const user = ls('user'), pass = ls('pass');
-    if(!user || !pass) throw new Error('Sign in to the attendance app first, then open the Record summary again.');
+    if(!user || !pass) throw new Error('Sign in to the attendance app first, then open Marked-Missed Entries again.');
     let r;
     try{ r = await fetch(API, { method:'POST', body:JSON.stringify(Object.assign({ username:user, password:pass }, payload)), redirect:'follow' }); }
     catch(e){ throw new Error(navigator.onLine ? 'The Apps Script server did not answer. Try again in a minute.' : 'No internet.'); }
@@ -467,7 +468,7 @@
 
   let META = null, DATA = {}, NAMES = {}, STATE = {}, PENDING = {}, TEACHERS = {}, PRACT = {}, RUN = 0;
   let totalTasks = 0, doneTasks = 0, renderTimer = null, TAB = "table";
-  let filesStarted = false, teachersDone = false;
+  let filesStarted = false, teachersDone = false, LIVE = {};   // LIVE[colKey][SEC][SUBJECT]: marked in the attendance app (instant)
 
   /* ---------------- collapsible filter bar (compact screens) ---------------- */
   function toggleBar(btn) { btn.closest(".bar").classList.toggle("collapsed"); }
@@ -635,7 +636,15 @@
       .withSuccessHandler(t => { if (run === RUN) { TEACHERS = (t && t.teachers) || t || {}; PRACT = (t && t.practical) || {}; teachersDone = true; updateBusy(); fillFilters(); scheduleRender(); } })
       .withFailureHandler(() => { teachersDone = true; updateBusy(); })
       .getRecordTeachers();
+    loadLive();
   }
+
+  /* v7.5: ticks straight from the attendance app's index, so a teacher is ticked as soon as she saves */
+  function loadLive() {
+    google.script.run.withSuccessHandler(l => { LIVE = l || {}; scheduleRender(); }).withFailureHandler(() => {}).getRecordLive();
+  }
+  setInterval(() => { if (document.visibilityState === "visible" && META) loadLive(); }, 60000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && META) loadLive(); });
 
   function setProgress(txt) { $("progress").textContent = txt; $("progress2").textContent = txt; $("progress3").textContent = txt; $("progress4").textContent = txt; }
 
@@ -726,6 +735,7 @@
       if (e) { f += e[0]; t += e[1]; }
     });
     if (f > 0) return { st: "full", tip: `${f} of ${t} entries filled` };
+    if (sec.keys.some(k => LIVE[col.key] && LIVE[col.key][k] && LIVE[col.key][k][sub.key])) return { st: "full", tip: "Marked in the attendance app" };
     return { st: STATE[col.key] === "load" ? "load" : "none" };
   }
 
@@ -1020,7 +1030,7 @@
 
   function defMsg(t) {
     const s = stamp(), p = t.due ? Math.round((t.due - t.miss) * 100 / t.due) : 0;
-    return `*JCW RECORD SUMMARY – PENDING RECORDS*\n📅 Date: ${s.date}\n🕒 Time: ${s.time}\n\n` +
+    return `*JCW MARKED-MISSED ENTRIES – PENDING RECORDS*\n📅 Date: ${s.date}\n🕒 Time: ${s.time}\n\n` +
       `Respected ${t.name},\nThe following records are still *NOT marked*:\n\n` +
       t.items.map((it, i) => `${i + 1}. *${it.sec} – ${it.sub}*\n` +
         typeGroups(it.cols).map(g => `    • ${g.type}: ${g.months}`).join("\n")).join("\n") +
@@ -1056,7 +1066,7 @@
     g.fillStyle = "#312e81"; g.fillRect(0, 0, W, 66);
     g.fillStyle = "#f2b84b"; g.fillRect(0, 66, W, 4);
     g.fillStyle = "#fff"; g.font = F(700, 22, "Fraunces, Georgia, serif");
-    g.fillText("JCW RECORD SUMMARY — PENDING RECORDS", 24, 42);
+    g.fillText("JCW MARKED-MISSED ENTRIES — PENDING RECORDS", 24, 42);
 
     g.fillStyle = "#1c1a3a"; g.font = F(700, 21); g.fillText(fit(t.name, W - 300), 24, 104);
     g.fillStyle = "#625f80"; g.font = F(600, 14);

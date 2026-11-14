@@ -62,6 +62,7 @@ function pcRoute_(user, req) {
       case 'pc_strikes': return pcStrikes_(req);
       case 'pc_assets':  return pcAssets_();
       case 'pc_pdf':     return pcPdf_(req);
+      case 'pc_pdf_get': return pcPdfGet_(req);
     }
     return { ok: false, error: 'UNKNOWN_ACTION' };
   } catch (e) {
@@ -494,6 +495,13 @@ function pcPage_(v, logo, sign, first) {
     (sign ? '<img height="55" src="' + sign + '">' : '') + '</div>' + PC_CFG.SIGN.map(pcEsc_).join('<br>') + '</div></div></div>';
 }
 /** { sheet, rows:[row numbers] (empty = every ready student) } -> one PDF in Drive */
+/** v7.5: the bytes of a certificates PDF made by pcPdf_ (to download or share it as a file on the phone) */
+function pcPdfGet_(req) {
+  var f = DriveApp.getFileById(String(req.id || ''));
+  if (f.getMimeType() !== 'application/pdf') return { ok: false, error: 'Not a PDF.' };
+  if (f.getSize() > 40 * 1024 * 1024) return { ok: false, error: 'The PDF is too big to send (' + Math.round(f.getSize() / 1048576) + ' MB). Open it in Drive instead.' };
+  return { ok: true, name: f.getName(), b64: Utilities.base64Encode(f.getBlob().getBytes()) };
+}
 function pcPdf_(req) {
   var X = pcCtx_(req.sheet), d = { sheet: X.sh.getName(), total: pcTotal_(X.sh.getName()), rows: X.jcw.map(function (i) { return pcRowOf_(X, i); }) }, want = (req.rows || []).map(Number), A = pcAssets_();
   var list = d.rows.filter(function (r) {

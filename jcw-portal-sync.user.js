@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         JCW Portal Sync
 // @namespace    jcw-attendance
-// @version      1.4
+// @version      1.5
 // @description  Reads Jinnah College students from the UOP portal (read-only) and sends them to the JCW attendance system: fills only the empty cells of Transform-ALL-COLLEGE-STRENGTH, lists cancelled / migrated / disenrolled / transferred students for Left Students (moved only when you press the button) and feeds the health check.
 // @match        https://portal.uop.edu.pk/Student/Students*
 // @match        https://portal.uop.edu.pk/student/students*
@@ -175,6 +175,15 @@
       else v = val(el);
       if (v !== '' && !(key in out)) out[key] = v;
     });
+    // v1.5: Hafiz-e-Quran by its label ("Hafiz-e-Quran" dropdown), whatever the field is called
+    for (const lb of doc.querySelectorAll('label, td, th, span, div')) {
+      if (lb.children.length > 2 || !/hafiz|hifz/i.test(txt(lb))) continue;
+      let el = lb.getAttribute('for') ? doc.getElementById(lb.getAttribute('for')) : null;
+      for (let p = lb, k = 0; !el && p && k < 4; p = p.parentElement, k++) el = p.querySelector('select, input:not([type=hidden]), textarea');
+      if (!el) { let n = lb.nextElementSibling; for (let k = 0; !el && n && k < 3; n = n.nextElementSibling, k++) el = n.matches('select, input, textarea') ? n : n.querySelector('select, input, textarea'); }
+      if (el) { const v = el.tagName.toLowerCase() === 'select' ? sp((el.selectedOptions && el.selectedOptions[0]) ? txt(el.selectedOptions[0]) : '') : (/checkbox|radio/i.test(el.type || '') ? (el.checked ? 'Yes' : 'No') : val(el));
+        if (v && !/^[-* ]*(select|choose)/i.test(v)) { out['__HQ'] = v; break; } }
+    }
     return out;
   }
   const dmy = raw => { const s = sp(raw), m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ].*)?$/); return m && Number(m[1]) >= 1000 ? `${m[3]}/${m[2]}/${m[1]}` : s; };
@@ -250,7 +259,7 @@
         row['EmailAddress'] = first(f, ['EmailAddress', 'emailAddress', 'Email', 'txtEmailAddress']);
         row['PhotoName'] = photo(first(f, ['PhotoName', 'photoName', 'Photo', 'photo']));
         if (!row['Category']) row['Category'] = first(f, ['CategoryId', 'categoryId', 'Category']);
-        const hk = Object.keys(f).find(k => /hafiz|hifz|quran/i.test(k));      // Hafiz-e-Quran (+20 marks in the aggregate)
+        const hk = '__HQ' in f ? '__HQ' : Object.keys(f).find(k => /hafiz|hifz|quran|^is_?hq$|^hq$/i.test(k));      // Hafiz-e-Quran (+20 marks in the aggregate)
         if (hk) { const v = String(f[hk]).trim(); row['HQ'] = /^(yes|true|1|y|hafiz)/i.test(v) ? 'Yes' : /^(no|false|0|n)$/i.test(v) ? 'No' : v; }
       } catch (e) { if (e.message === 'LOGIN') throw e; warn.push('edit page'); }
     } else warn.push('no edit link');

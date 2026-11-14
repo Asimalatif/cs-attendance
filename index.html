@@ -3244,7 +3244,7 @@ const P = window.JCWPDF;
 let appView = 'home', prevView = 'home', lastView = '', lastSheet = '', forceNext = false, heldRender = false;
 let prof = null, lastReps = [], lowMode = 'week';
 let scopeUser = store.get('scopeUser', ''), scope = store.get('scope', ''), scopeAt = 0;
-let ov = store.get('ov', null), ovBusy = false, ovErr = '', ovLow = null, ovLowBusy = false, ovLowErr = '';
+let ov = store.get('ov', null), ovBusy = false, ovErr = '', ovLow = null, ovLowBusy = false, ovLowErr = '', ovTd = null, ovTdBusy = false, ovTdErr = '';
 let adminTab = 'teachers', aF = { q:'', pend:true, dept:'', sort:'low' }, openSec = {};
 
 /* ---------- icons ---------- */
@@ -3811,7 +3811,7 @@ async function loadOv(){
     const r = await api({ action:'overview' }, 90000);
     if(r.error === 'BAD_LOGIN') return signOut('Your username or password was changed. Sign in again.');
     if(!r.ok) throw new Error(r.error === 'NOT_ALLOWED' ? 'Your account does not have an overview (Role must be ADMIN, PRINCIPAL or HOD in the Users sheet).' : serverOld(r.error || 'Could not load the overview'));
-    ov = r; ov.at = Date.now(); ovLow = null; ovLowErr = '';
+    ov = r; ov.at = Date.now(); ovLow = null; ovLowErr = ''; ovTd = null; ovTdErr = '';
     try{ store.set('ov', ov); }catch(e){}
   }catch(e){ ovErr = errText(e); }
   finally{ ovBusy = false; if(appView === 'admin') rerender(); else if(appView === 'home' || appView === 'reports') renderMain(); }
@@ -3826,6 +3826,55 @@ async function loadLow(){
     ovLow = r;
   }catch(e){ ovLowErr = errText(e); }
   finally{ ovLowBusy = false; refreshABody(); }
+}
+async function loadTd(){
+  if(ovTdBusy || !authed()) return;
+  if(!navigator.onLine){ ovTdErr = 'The marked-today list needs internet.'; refreshABody(); return; }
+  ovTdBusy = true; ovTdErr = '';
+  try{
+    const r = await api({ action:'overview_today' }, 90000);
+    if(!r.ok) throw new Error(serverOld(r.error || 'Could not load the list'));
+    ovTd = r; ovTd.at = Date.now();
+  }catch(e){ ovTdErr = errText(e); }
+  finally{ ovTdBusy = false; refreshABody(); }
+}
+const tdRowsF = () => { const q = aF.q.trim().toLowerCase(); return (ovTd ? ovTd.rows : []).filter(r => (!aF.dept || r.dept === aF.dept) && qOk(q, r.teacher, r.cls, r.sub, r.dept)); };
+const tdPer = r => r.per.length ? r.per.map(c => 'P' + c.p).join(', ') : 'whole day';
+const tdCnt = r => r.per.length ? r.P + ' present · ' + r.A + ' absent' + (r.L ? ' · ' + r.L + ' leave' : '') : r.students + ' students';
+function tdGroups(){
+  const G = new Map();
+  tdRowsF().forEach(r => { const k = r.teacher || '-'; if(!G.has(k)) G.set(k, { name:k, dept:r.dept, rows:[] }); G.get(k).rows.push(r); });
+  return [...G.values()];
+}
+function tdBody(){
+  if(!ovTd){
+    if(!ovTdBusy && !ovTdErr) setTimeout(loadTd, 0);
+    return ovTdErr ? `<div class="err2">${esc(ovTdErr)}</div><button class="more" type="button" id="xTdR">Try again</button>` : '<section class="card"><div class="sk"></div><div class="sk" style="width:75%"></div><div class="sk" style="width:55%"></div></section>';
+  }
+  const G = tdGroups(), n = G.reduce((a, g) => a + g.rows.length, 0);
+  return `<div class="sub" style="margin:0 2px 8px;color:var(--muted);font-size:12.5px">${ovDate()} · ${G.length} teacher${G.length === 1 ? '' : 's'} marked ${n} class${n === 1 ? '' : 'es'} so far (checked ${ago(ovTd.at)}). Tap refresh for the latest.</div>
+    <section class="card">${G.map(g => `<div class="li"><span class="av">${esc(initials(g.name))}</span><span class="tx"><b>${esc(g.name)}</b><small>${esc(g.dept || 'No department')} · ${g.rows.length} class${g.rows.length === 1 ? '' : 'es'} marked today</small>
+      ${g.rows.map(r => `<span style="display:block;margin-top:4px;font-size:12.5px">✓ <b>${esc(r.cls)}</b> · ${esc(titleCase(r.sub))} · ${esc(tdPer(r))} · ${esc(tdCnt(r))}${r.at ? ' · saved ' + esc(r.at) : ''}</span>`).join('')}</span>
+      <span class="pill good">${g.rows.length}</span></div>`).join('') || '<div class="empty">No attendance has been marked today yet.</div>'}</section>
+    <div class="acts2"><button class="btn" type="button" id="xTdTxt">Share as text</button><button class="btn primary" type="button" id="xTdPdf">${I.share}Marked-today PDF</button></div>`;
+}
+function tdText(){
+  const R = tdRowsF();
+  return 'ATTENDANCE MARKED TODAY - ' + ovDate() + '\n' + scopeTxt() + '\n\n' + (R.map((r, i) => (i + 1) + '. ' + (r.teacher || '-') + ' - ' + r.cls + ' ' + titleCase(r.sub) + ' (' + tdPer(r) + '; ' + tdCnt(r) + ')').join('\n') || 'Nothing marked yet.');
+}
+function tdPdf(){
+  const R = tdRowsF(), G = tdGroups(), doc = P.newDoc(); let Y = P.TOP;
+  Y = P.heading(doc, Y, 'Attendance Marked Today', scopeTxt() + ' · ' + ovDate());
+  Y = P.statBoxes(doc, Y, [{ l:'Teachers who marked', v:G.length }, { l:'Classes marked', v:R.length },
+    { l:'Present (period-wise)', v:R.reduce((a, r) => a + r.P, 0) }, { l:'Absent (period-wise)', v:R.reduce((a, r) => a + r.A, 0) }]) + 5;
+  if(R.length){
+    P.table(doc, { startY:Y, head:[['#', 'Teacher', 'Department', 'Section', 'Subject', 'Periods', 'P', 'A', 'L', 'Saved']],
+      body:R.map((r, i) => [i + 1, r.teacher || '-', r.dept || '-', r.cls, titleCase(r.sub), tdPer(r), r.per.length ? r.P : '-', r.per.length ? r.A : '-', r.per.length ? r.L : '-', r.at || '']),
+      columnStyles:{ 0:{ halign:'center', cellWidth:8 }, 6:{ halign:'center' }, 7:{ halign:'center' }, 8:{ halign:'center' } } });
+    Y = doc.lastAutoTable.finalY + 4;
+  } else Y = P.notice(doc, Y, 'No attendance has been marked today yet.', 'warn');
+  P.signatures(doc, Y, ['Prepared by', 'Principal']); P.finalize(doc);
+  return { doc, title:'Attendance marked today', file:'Marked-Today_' + P.safe(scopeTxt()) + '_' + new Date().toISOString().slice(0, 10) + '.pdf' };
 }
 const ovRows = () => (ov && ov.rows ? ov.rows : []).filter(r => !aF.dept || r.dept === aF.dept);
 function teachersAgg(rows){
@@ -3865,7 +3914,7 @@ function renderAdmin(){
     <div class="kpi"><b>${new Set(rows.map(r => r.cls)).size}</b><small>Sections</small></div></div>`;
   const depts = scope === 'all' ? [...new Set(all.map(r => r.dept).filter(Boolean))].sort() : [];
   const nNot = T.length - tDone;
-  h += `<details class="card fold" id="aFold" ${store.get('aFold', false) ? 'open' : ''}><summary><span><b>Teachers, sections &amp; free periods</b><small>${sun ? 'Sunday' : nNot + ' teacher' + (nNot === 1 ? '' : 's') + ' still to mark today'} · section %, low attendance, workload</small></span><span class="pill">${store.get('aFold', false) ? 'Close' : 'Open'}</span></summary><div class="seg2" role="tablist"><button type="button" data-xtab="teachers" class="${adminTab === 'teachers' ? 'on' : ''}">Today</button><button type="button" data-xtab="sections" class="${adminTab === 'sections' ? 'on' : ''}">Sections</button><button type="button" data-xtab="low" class="${adminTab === 'low' ? 'on' : ''}">Low %</button><button type="button" data-xtab="work" class="${adminTab === 'work' ? 'on' : ''}">Workload</button></div>
+  h += `<details class="card fold" id="aFold" ${store.get('aFold', false) ? 'open' : ''}><summary><span><b>Teachers, sections &amp; free periods</b><small>${sun ? 'Sunday' : nNot + ' teacher' + (nNot === 1 ? '' : 's') + ' still to mark today'} · section %, low attendance, workload</small></span><span class="pill">${store.get('aFold', false) ? 'Close' : 'Open'}</span></summary><div class="seg2" role="tablist"><button type="button" data-xtab="teachers" class="${adminTab === 'teachers' ? 'on' : ''}">Today</button><button type="button" data-xtab="marked" class="${adminTab === 'marked' ? 'on' : ''}">Marked today</button><button type="button" data-xtab="sections" class="${adminTab === 'sections' ? 'on' : ''}">Sections</button><button type="button" data-xtab="low" class="${adminTab === 'low' ? 'on' : ''}">Low %</button><button type="button" data-xtab="work" class="${adminTab === 'work' ? 'on' : ''}">Workload</button></div>
     <div class="tools"><input id="aq" class="sq" type="search" value="${esc(aF.q)}" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="${adminTab === 'teachers' || adminTab === 'work' ? 'Search teacher or section' : adminTab === 'sections' ? 'Search section' : 'Search student, section or teacher'}">
       ${depts.length ? `<select id="adept" aria-label="Department"><option value="">All departments</option>${depts.map(d => `<option ${d === aF.dept ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select>` : ''}
       <button class="btn small" type="button" id="xOvR" title="Refresh" aria-label="Refresh">${I.refresh}</button></div>
@@ -3900,6 +3949,7 @@ function adminBody(){
       <div class="acts2"><button class="btn" type="button" id="xScTxt">Share as text</button><button class="btn primary" type="button" id="xScPdf">${I.share}Section-wise PDF</button></div>`;
   }
   if(adminTab === 'work') return workBody(q);
+  if(adminTab === 'marked') return tdBody();
   if(!ovLow){
     if(!ovLowBusy && !ovLowErr) setTimeout(loadLow, 0);
     return ovLowErr ? `<div class="err2">${esc(ovLowErr)}</div><button class="more" type="button" id="xLowR">Try again</button>` : '<section class="card"><div class="sk"></div><div class="sk" style="width:75%"></div><div class="sk" style="width:55%"></div></section>';
@@ -6053,9 +6103,9 @@ function adminExtraCards(){
       <div class="sub">Students who were present in one lecture but absent (or B) in another on the same day: who, which lectures, which teacher, left early / came late, and repeat bunkers of the month. WhatsApp, CSV and print.</div>
       <div class="acts2"><a class="btn primary" id="xBunkA" href="bunkers.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Bunkers</a></div></section><section class="card"><h3>${I.alert} Attendance shortage</h3>
       <div class="sub">Shortage cases of any month or the whole session, with approved leaves added: program, year, section and subject filters, your own threshold, final list, section and subject counts. PDF, Excel, WhatsApp, save to the month workbook. Admin sets the session and default threshold here.</div>
-      <div class="acts2"><a class="btn primary" href="shortage.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Shortage report</a></div></section>${leaveCard()}` : ''}<section class="card"><h3>${I.check} Record summary</h3>
+      <div class="acts2"><a class="btn primary" href="shortage.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Shortage report</a></div></section>${leaveCard()}` : ''}<section class="card"><h3>${I.check} Marked-Missed Entries</h3>
       <div class="sub">Which section and subject has its attendance, monthly tests, grand test and detention marked: record table with ticks, efficiency charts (program, section, subject, teacher), teachers not marking with a WhatsApp image, and a month-wise list.</div>
-      <div class="acts2"><a class="btn primary" href="recordsummary.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Record summary</a></div></section><section class="card"><h3>${I.cal} Timetable editor</h3>
+      <div class="acts2"><a class="btn primary" href="recordsummary.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Marked-Missed Entries</a></div></section><section class="card"><h3>${I.cal} Timetable editor</h3>
       <div class="sub">The college timetable: edit subject, teacher, days and room of every period, add or remove teachers, rooms, sections and slots, free slots and rooms, clash checks, settings (evening sections, credit hours, timings), change log and backups, print and Excel. Opens with your app login; the tt_admin column decides what you may change.</div>
       <div class="acts2"><a class="btn primary" href="timetable.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Timetable</a></div></section><section class="card"><h3>${I.doc} Admin tools</h3>
       <div class="sub">Auto timetable sheet, teacher workload (permanent, morning visiting, evening visiting + Drive Excel), stopping merit, admission slips (4 per page), orientation lists (all programs or chosen sections) and filling rooms from the timetable. Every PDF and Excel in the app's own style.</div>
@@ -6411,8 +6461,9 @@ function evCard(){
   const total = done.reduce((a, t) => a + evCount(evs.res[t.key]), 0);
   return `<section class="card" id="evCard"><h3>${I.check} Check everything</h3>
     <div class="sub">Compares the workbooks with Transform-ALL-COLLEGE-STRENGTH. <b>Daily attendance</b> = the workbooks this app marks in (one sheet per class and subject). The others have one sheet per section. Tick, press <b>Check selected</b>, then <b>Fix all</b> on a line or <b>Fix everything</b>: missing students are added, extra students removed (struck through if they already have marks or attendance).</div>
-    ${groups.map(g => `<div class="sub" style="margin-top:10px"><b>${esc(g)}</b></div><div class="chips" style="margin:4px 0">${T.filter(t => t.group === g).map(t => { const r = evs.res[t.key], n = evCount(r);
-      return `<label class="chip ${evSelected(t) ? 'on' : ''}" style="cursor:pointer"><input type="checkbox" data-xevs="${esc(t.key)}" ${evSelected(t) ? 'checked' : ''} ${evs.busy ? 'disabled' : ''} style="margin:0 6px 0 0">${esc(t.label)}${r ? (r.err ? ' ⚠' : n ? ` · <b style="color:var(--absent)">${n}</b>` : ' · ✓') : ''}</label>`; }).join('')}</div>`).join('')}
+    <div class="acts2" style="margin-top:8px"><button class="btn small" type="button" data-xevall="1" ${evs.busy ? 'disabled' : ''}>Tick all</button><button class="btn small" type="button" data-xevall="0" ${evs.busy ? 'disabled' : ''}>Untick all</button></div>
+    ${groups.map(g => { const gt = T.filter(t => t.group === g), gOn = gt.every(evSelected); return `<div class="sub" style="margin-top:10px"><b>${esc(g)}</b> · <a href="#" data-xevg="${esc(g)}" data-on="${gOn ? 0 : 1}">${gOn ? 'untick' : 'tick'} all ${gt.length}</a></div><div class="chips" style="margin:4px 0">${T.filter(t => t.group === g).map(t => { const r = evs.res[t.key], n = evCount(r);
+      return `<label class="chip ${evSelected(t) ? 'on' : ''}" style="cursor:pointer"><input type="checkbox" data-xevs="${esc(t.key)}" ${evSelected(t) ? 'checked' : ''} ${evs.busy ? 'disabled' : ''} style="margin:0 6px 0 0">${esc(t.label)}${r ? (r.err ? ' ⚠' : n ? ` · <b style="color:var(--absent)">${n}</b>` : ' · ✓') : ''}</label>`; }).join('')}</div>`; }).join('')}
     ${!bk.list ? '<div class="sub">Looking for the other workbooks…</div>' : ''}
     <div class="acts2"><button class="btn primary" type="button" id="xEvCheck" ${evs.busy ? 'disabled' : ''}>Check selected</button>${total ? `<button class="btn" type="button" id="xEvFixAll" ${evs.busy ? 'disabled' : ''}>Fix everything (${total})</button>` : ''}</div>
     ${evs.msg ? `<div class="sub" style="margin-top:8px">${evs.msg}</div>` : ''}
@@ -6614,25 +6665,41 @@ let left = null;
 let leftT = 0;
 async function loadLeft(){ if(scope !== 'all' || !navigator.onLine) return; try{ left = await srv({ action:'left_list' }, 60000); }catch(e){ left = { list:[], err:e.message }; } refreshLeft();
   clearTimeout(leftT); if(left && left.job && left.job.running && appView === 'admin') leftT = setTimeout(loadLeft, 15000); }
+/** 1st or 2nd Year of a student who left: from her section (FCS-1 D2, F.A-2 A, A1, I2…), else from her Enroll# (newest intake = 1st Year) */
+function leftYear(x){
+  const p = String(x.pcs || '').toUpperCase().trim();
+  let m = p.match(/-\s*([12])\b/) || p.match(/^[A-Z]+\s*([12])$/);
+  if(m) return m[1] === '1' ? '1st Year' : '2nd Year';
+  const L = (left && left.list) || [], yy = s => { const k = String(s || '').match(/-F(\d\d)-/i); return k ? Number(k[1]) : 0; };
+  const top = Math.max(0, ...L.map(z => yy(z.roll))), mine = yy(x.roll);
+  return !mine || !top ? 'Year not known' : mine >= top ? '1st Year' : '2nd Year';
+}
+let leftF = 'all';
 function leftCard(){
   if(scope !== 'all') return '';
-  const J = left && left.job, by = {}; (left && left.list || []).forEach(x => { by[x.status] = (by[x.status] || 0) + 1; });
+  const J = left && left.job, by = {}, yr = {}; (left && left.list || []).forEach(x => { by[x.status] = (by[x.status] || 0) + 1; const y = leftYear(x); yr[y] = (yr[y] || 0) + 1; });
   return `<section class="card" id="leftCard"><h3>${I.flag} Students who left <span class="ct">${left ? left.list.length : ''}</span></h3>
     <div class="sub">Migrated, cancelled, disenrolled and transferred students moved out of the strength sheet. Their rows are kept in the sheet <b>Left Students</b>.</div>
-    ${left ? `<div class="chips" style="margin:6px 0">${Object.keys(by).map(k => `<span class="chip">${esc(k)} · ${by[k]}</span>`).join('') || '<span class="sub">Nobody moved yet.</span>'}</div>` : '<div class="sk"></div>'}
+    ${left ? `<div class="chips" style="margin:6px 0">${['1st Year', '2nd Year', 'Year not known'].filter(y => yr[y]).map(y => `<button class="chip" type="button" data-xlyr="${y}" style="font-weight:800">${y} · ${yr[y]}</button>`).join('')}${Object.keys(by).map(k => `<button class="chip" type="button" data-xlyr="st:${esc(k)}">${esc(k)} · ${by[k]}</button>`).join('') || '<span class="sub">Nobody moved yet.</span>'}</div>` : '<div class="sk"></div>'}
     ${J && J.running ? '<div class="sub" style="color:var(--leave);font-weight:700">Updating the attendance sheets in the background…</div>' : J && J.finished ? `<div class="sub">Attendance sheets updated ${esc(J.finished)}: ${J.struck || 0} row(s) struck through, ${J.removed || 0} removed from later months.</div>` : ''}
     <div class="acts2"><button class="btn" type="button" id="xLeftList">List / restore</button><button class="btn primary" type="button" id="xLeftMove">Move students who left</button></div></section>`;
 }
 function refreshLeft(){ const c = $q('#leftCard'); if(c){ const t = document.createElement('div'); t.innerHTML = leftCard(); c.replaceWith(t.firstElementChild); } }
-function openLeftList(){
-  const L = (left && left.list) || [];
-  dlgOpen(`<h2>Students who left <span class="ct">${L.length}</span></h2><div class="meta">Newest first. <b>Restore</b> = moved by mistake: she goes back to the strength sheet and is counted again from this month.</div>
-    <div style="max-height:52vh;overflow:auto">${L.map(x => `<div class="li"><span class="tx"><b>${esc(x.name)}</b><small>${esc(x.roll)} · D/O ${esc(x.father || '–')} · ${esc(x.pcs)}</small><small>${esc(x.status)} · moved ${esc(x.on)} by ${esc(x.by)}</small></span>
+const leftPick = () => ((left && left.list) || []).filter(x => leftF === 'all' ? true : leftF.indexOf('st:') === 0 ? x.status === leftF.slice(3) : leftYear(x) === leftF);
+function openLeftList(f){
+  if(typeof f === 'string') leftF = f;
+  const A = (left && left.list) || [], L = leftPick(), cnt = y => A.filter(x => leftYear(x) === y).length;
+  const tabs = [['all', 'All · ' + A.length], ['1st Year', '1st Year · ' + cnt('1st Year')], ['2nd Year', '2nd Year · ' + cnt('2nd Year')]].concat(cnt('Year not known') ? [['Year not known', 'Year not known · ' + cnt('Year not known')]] : []);
+  const st = {}; L.forEach(x => { st[x.status] = (st[x.status] || 0) + 1; });
+  dlgOpen(`<h2>Students who left <span class="ct">${L.length}</span></h2>
+    <div class="chips" style="margin:4px 0 6px">${tabs.map(t => `<button class="chip" type="button" data-xlf="${t[0]}" style="${leftF === t[0] ? 'background:var(--brown);color:#fff;font-weight:800' : 'font-weight:700'}">${t[1]}</button>`).join('')}</div>
+    <div class="meta">${leftF.indexOf('st:') === 0 ? esc(leftF.slice(3)) + ' · ' : ''}${Object.keys(st).map(k => esc(k) + ' ' + st[k]).join(' · ')}. Newest first. <b>Restore</b> = moved by mistake: she goes back to the strength sheet and is counted again from this month.</div>
+    <div style="max-height:52vh;overflow:auto">${L.map(x => `<div class="li"><span class="tx"><b>${esc(x.name)}</b><small>${esc(x.roll)} · D/O ${esc(x.father || '–')} · ${esc(x.pcs)} · ${leftYear(x)}</small><small>${esc(x.status)} · moved ${esc(x.on)} by ${esc(x.by)}</small></span>
       <button class="pill" type="button" data-xlrest="${esc(x.roll)}">Restore</button></div>`).join('') || '<div class="empty">Nobody moved yet.</div>'}</div>
     <div class="acts"><button class="btn small primary grow" type="button" id="xLeftCsv">Excel</button><button class="btn small grow" id="closeDlg">Close</button></div>`);
 }
-const leftCsv = () => P.offerFile(csvBlob([['Roll No', 'Student Name', 'Father Name', 'PCS', 'Portal Status', 'Moved On', 'Moved By', 'Left In Month']]
-  .concat(((left && left.list) || []).map(x => [x.roll, x.name, x.father, x.pcs, x.status, x.on, x.by, x.month]))), 'Left-students.csv', 'Students who left');
+const leftCsv = () => P.offerFile(csvBlob([['Roll No', 'Student Name', 'Father Name', 'PCS', 'Year', 'Portal Status', 'Moved On', 'Moved By', 'Left In Month']]
+  .concat(leftPick().map(x => [x.roll, x.name, x.father, x.pcs, leftYear(x), x.status, x.on, x.by, x.month]))), 'Left-students' + (leftF === 'all' ? '' : '-' + leftF.replace(/^st:/, '').replace(/\s+/g, '-')) + '.csv', 'Students who left' + (leftF === 'all' ? '' : ' · ' + leftF.replace(/^st:/, '')));
 const leftMoveCsv = () => P.offerFile(csvBlob([['Roll No', 'Student Name', 'Father Name', 'PCS', 'Portal Status']].concat(leftSel.list.map(x => [x.roll, x.name, x.father, x.pcs, x.status]))), 'Not-enrolled-students.csv', 'Not enrolled on the portal');
 
 const hcText = () => 'JCW ATTENDANCE - HEALTH CHECK ' + hc.at + '\n\n' + hc.checks.map(c => (c.level === 'ok' ? '✓ ' : '! ') + c.title + (c.level === 'ok' ? '' : ' (' + c.n + ')\n' + c.items.slice(0, 15).map(x => '  - ' + x).join('\n'))).join('\n');
@@ -6798,6 +6865,10 @@ document.addEventListener('click', ev => {
   if((b = t.closest('[data-xros]'))) return rosCheck(b.dataset.xros);
   if((b = t.closest('[data-xbk]'))) return bkCheck(b.dataset.xbk);
   if((b = t.closest('#aFold>summary'))){ setTimeout(() => { const d = $q('#aFold'); if(!d) return; store.set('aFold', d.open); const pl = d.querySelector('summary .pill'); if(pl) pl.textContent = d.open ? 'Close' : 'Open'; }, 0); return; }
+  if((b = t.closest('[data-xevall]')) || (b = t.closest('[data-xevg]'))){       // tick / untick all (or one group)
+    ev.preventDefault(); const on = b.dataset.xevall ? b.dataset.xevall === '1' : b.dataset.on === '1';
+    evs.sel = Object.assign({}, evs.sel || {}); evTargets().filter(x => !b.dataset.xevg || x.group === b.dataset.xevg).forEach(x => { evs.sel[x.key] = on; });
+    store.set('evsel', evs.sel); return refreshEv(); }
   if((b = t.closest('[data-xevs]'))){ evs.sel = Object.assign({}, evs.sel || {}); evs.sel[b.dataset.xevs] = b.checked; store.set('evsel', evs.sel); const l = b.closest('.chip'); if(l) l.classList.toggle('on', b.checked); return; }
   if(t.closest('#xEvCheck')) return evCheck();
   if(t.closest('#xEvFixAll')) return evFix(Object.keys(evs.res));
@@ -6815,7 +6886,9 @@ document.addEventListener('click', ev => {
   if(t.closest('#xLeftMove') || t.closest('#xLeftMove2')) return openLeftMove();
   if(t.closest('#xLmGo')) return leftMoveGo();
   if(t.closest('#xLmCsv')) return leftMoveCsv();
-  if(t.closest('#xLeftList')) return left ? openLeftList() : loadLeft().then(openLeftList);
+  if(t.closest('#xLeftList')) return left ? openLeftList('all') : loadLeft().then(() => openLeftList('all'));
+  if((b = t.closest('[data-xlyr]'))) return left ? openLeftList(b.dataset.xlyr) : loadLeft().then(() => openLeftList(b.dataset.xlyr));
+  if((b = t.closest('[data-xlf]'))) return openLeftList(b.dataset.xlf);
   if(t.closest('#xLeftCsv')) return leftCsv();
   if((b = t.closest('[data-xlrest]'))){ const roll = b.dataset.xlrest; if(!confirm('Put ' + roll + ' back into the strength sheet and count her again from this month?')) return;
     srv({ action:'left_restore', roll }).then(() => { toast(roll + ' restored. The attendance sheets update in a few minutes.'); left = null; loadLeft().then(openLeftList); }).catch(e => toast('Not restored: ' + e.message)); return; }
@@ -6856,6 +6929,9 @@ document.addEventListener('click', ev => {
   /* overview */
   if(t.closest('#xOvR')) return loadOv();
   if(t.closest('#xLowR')){ ovLowErr = ''; return loadLow(); }
+  if(t.closest('#xTdR')){ ovTdErr = ''; return loadTd(); }
+  if(t.closest('#xTdTxt')) return shareText(tdText(), 'Marked today');
+  if(t.closest('#xTdPdf')) return P.run(tdPdf, () => shareText(tdText()));
   if((b = t.closest('[data-xtab]'))){ adminTab = b.dataset.xtab; return rerender(); }
   if((b = t.closest('[data-xpend]'))){ aF.pend = b.dataset.xpend === '1'; return refreshABody(); }
   if((b = t.closest('[data-xsort]'))){ aF.sort = b.dataset.xsort; return refreshABody(); }
@@ -8178,7 +8254,7 @@ const CFG = {
     ['Students', 2, /Low attendance|Early warning|Student profile|Toppers|Bunkers/i] ] },
   admin:{ pin:/^Teachers, sections/i, groups:[
     ['Students & admissions', 1, /Admissions|ID cards|Students who left|Student result page/i],
-    ['Attendance & records', 2, /Month sheets|Check everything|Approved leaves|shortage|Bunkers|Record summary/i],
+    ['Attendance & records', 2, /Month sheets|Check everything|Approved leaves|shortage|Bunkers|Record summary|Marked-Missed/i],
     ['Exams & results', 4, /Board results|certificates|duty lists/i],
     ['Timetable & reports', 3, /Timetable|Admin tools|College reports/i],
     ['System', 5, /health check|portal sync/i] ] }

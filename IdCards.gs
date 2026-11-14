@@ -93,6 +93,21 @@ function idcList_() {
   }
   var chk = idcReqLatest_(book);
   out.forEach(function (st) { var q = chk[idcK_(st.roll)]; if (q) { st.chk = q.status; st.chkAt = q.when; } });
+  // v7.5: left / migrated / cancelled students still in Transform get a warning on the card
+  var gone = {};
+  try {
+    var ls = book.getSheetByName('Left Students');
+    if (ls && ls.getLastRow() > 1) {
+      var lv = ls.getRange(1, 1, ls.getLastRow(), ls.getLastColumn()).getDisplayValues(), lh = lv[0].map(idcK_), le = -1;
+      for (var j = 0; j < lh.length; j++) if (/^ENROLL/.test(lh[j])) { le = j; break; }
+      if (le >= 0) for (var k = 1; k < lv.length; k++) if (lv[k][le]) gone[idcK_(lv[k][le])] = idcS_(lv[k][2]) || 'Left';
+    }
+  } catch (e) {}
+  out.forEach(function (st) {
+    var s = String(st.status || '').trim();
+    if (s && !/^(enrolled|active|regular|admitted)$/i.test(s)) st.gone = s;
+    else if (gone[idcK_(st.roll)]) st.gone = gone[idcK_(st.roll)];
+  });
   var cfg = idcSettings_(), signs = idcSigns_();
   return { ok: true, list: out, at: new Date().toISOString(), cfg: cfg, signs: signs, check: idcCheck_() };
 }

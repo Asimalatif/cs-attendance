@@ -51,7 +51,7 @@ var REMARK_HEAD   = ['Key', 'Teacher', 'Class', 'Roll No', 'Student', 'Tags', 'L
 var REMARK_MAX_LOG = 50, REMARK_MAX_TAGS = 10;
 
 function doGet() {
-  return json_({ ok: true, service: 'JCW Daily Attendance backend v7.4.2' });
+  return json_({ ok: true, service: 'JCW Daily Attendance backend v7.5' });
 }
 
 function doPost(e) {
@@ -111,6 +111,7 @@ function doPost(e) {
     if (req.action === 'whoami')       return json_(whoami_(user));
     if (req.action === 'overview')     return json_(overview_(user));
     if (req.action === 'overview_low') return json_(overviewLow_(user));
+    if (req.action === 'overview_today') return json_(overviewToday_(user));
     if (req.action === 'report_data')  return json_(reportData_(user, req));
     if (req.action === 'reg_opts')     return json_(regOpts_(user));
     if (req.action === 'reg_find')     return json_(regFind_(user, req.q));
@@ -2193,6 +2194,38 @@ function overview_(user) {
   return res;
 }
 
+/** v7.5: "Marked today" list for admin / HOD: which teacher marked which section and subject today,
+ *  with periods and present / absent / leave counts (from the Period Data sheet, read once). */
+function overviewToday_(user) {
+  var S = scopedSections_(user);
+  if (!S) return { ok: false, error: 'NOT_ALLOWED' };
+  var now = new Date(), day = now.getDate(), out = [];
+  if (!S.tok) return { ok: true, day: day, rows: out };
+  var pd = {};
+  try {
+    var sh = bookFor_(S.tok).getSheetByName(PD_SHEET);
+    if (sh && sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues().forEach(function (r) { if (r[0]) pd[String(r[0])] = r[1]; });
+  } catch (e) {}
+  S.list.forEach(function (s) {
+    var x = s.x; if (!x) return;
+    var days = String(x[11]).split(',').map(Number);
+    if (days.indexOf(day) === -1) return;
+    var per = [], P = 0, A = 0, L = 0, raw = null;
+    try { raw = pd[s.name] ? JSON.parse(pd[s.name]) : null; } catch (e) {}
+    var dd = raw && raw.d ? raw.d[day] || raw.d[String(day)] : null;
+    if (dd) Object.keys(dd).sort(function (a, b) { return Number(a) - Number(b); }).forEach(function (p) {
+      var t = String(dd[p]), c = { p: p, P: 0, A: 0, L: 0 };
+      for (var i = 0; i < t.length; i++) { var ch = t.charAt(i); if (ch === 'P' || ch === 'A' || ch === 'L') c[ch]++; }
+      P += c.P; A += c.A; L += c.L; per.push(c);
+    });
+    var at = x[13] instanceof Date ? Utilities.formatDate(x[13], Session.getScriptTimeZone(), 'h:mm a') : String(x[13] || '');
+    out.push({ teacher: s.a.teacher, dept: s.dept, cls: s.a.cls, sub: s.a.subject, name: s.name,
+               students: Number(x[5]) || 0, per: per, P: P, A: A, L: L, at: at });
+  });
+  out.sort(function (a, b) { return String(a.teacher).localeCompare(String(b.teacher)) || String(a.cls).localeCompare(String(b.cls)); });
+  return { ok: true, day: day, rows: out };
+}
+
 /** Students below 73% this month in every section this admin / HOD may see. */
 function overviewLow_(user) {
   var S = scopedSections_(user);
@@ -2938,7 +2971,7 @@ var TRANSFORM_SHEET = 'Transform-ALL-COLLEGE-STRENGTH';
 var PORTAL_SHEET = 'Portal Data', PORTAL_STAGE = 'Portal Data (receiving)';
 var PORTAL_SUBS = (function () { var a = []; ['1st', '2nd'].forEach(function (y) { for (var i = 1; i <= 7; i++) a.push('sub' + i + ' ' + y + ' year'); }); return a; })();
 var PORTAL_DETAIL = ['DOB', 'StudentContact', 'EmailAddress', 'PhotoName', 'Board / University', 'Passing Year', 'Roll.No.', 'Obtain Marks/CGPA',
-                     'Total Marks/CGPA', 'Division', '%age Marks', 'Challan Details'].concat(PORTAL_SUBS);
+                     'Total Marks/CGPA', 'Division', '%age Marks', 'Challan Details', 'HQ'].concat(PORTAL_SUBS);   // v7.5: HQ = Hafiz-e-Quran
 var PORTAL_COLS = ['Student Id', 'Enrollment#', 'Reg#', 'Batch', 'Session', 'Student Name', 'Father Name', 'Category', 'Program', 'Class', 'Section', 'Status']
                   .concat(PORTAL_DETAIL, ['Load Status', 'Details synced']);
 /* portal field -> Transform headers that may already hold it (spaces and case ignored) -> header of a NEW column (null = never add) */
@@ -2962,6 +2995,7 @@ var FILL_MAP = [
   ['Total Marks/CGPA', ['TOTALMARKS', 'TOTALMARKS/CGPA'], 'TOTAL MARKS'],
   ['%age Marks', ['PERCENTAGE', '%AGE', '%AGEMARKS', '%'], 'PERCENTAGE'],
   ['Challan Details', ['CHALLANDETAILS', 'CHALLAN', 'FEECHALLAN'], 'CHALLAN DETAILS'],
+  ['HQ', ['HQ', 'HAFIZ', 'HAFIZEQURAN', 'HAFIZ-E-QURAN', 'HIFZ'], null],
   ['Student Id', ['PORTALID', 'STUDENTID'], 'PORTAL ID']
 ];
 var ENROLL_HEADS = ['ENROLL#', 'ENROLLMENT#', 'ENROLLNO', 'ENROLLMENTNO'];

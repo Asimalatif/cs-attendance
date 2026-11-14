@@ -57,6 +57,8 @@ textarea{width:100%;min-height:70px;border:1.5px solid var(--line);border-radius
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .chip{border:1.5px solid var(--line);border-radius:14px;padding:8px 12px;background:var(--surface2);font-size:13px;font-weight:700;min-width:110px}
 .chip b{display:block;font-size:20px}
+button.chip{font:inherit;font-size:13px;font-weight:700;color:inherit;text-align:left;cursor:pointer}
+button.chip:hover{border-color:var(--brown)}
 .chip.bad b{color:var(--bad)}.chip.good b{color:var(--good)}.chip.mid b{color:var(--mid)}
 .ed{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
 .ed canvas{width:240px;height:348px;border-radius:10px;border:2px solid #231F20;touch-action:none;cursor:grab;background:#eee}
@@ -202,7 +204,8 @@ function cardData(st, photo){
     roll: st.roll, name: (e.name || st.name || '').toUpperCase(), father: (e.father || st.father || '').toUpperCase(),
     cls: e.cls || mp.cls || progKey(st.program), section: e.section || secOf(st),
     group: e.group || mp.group || (st.group && !/^null$/i.test(st.group) ? st.group : progKey(st.program)),
-    photo: photo || '', session: ses.label, valid: ses.valid, sign: signOf(year())
+    photo: photo || '', session: ses.label, valid: ses.valid, sign: signOf(year()),
+    gone: st.gone ? 'NOT VALID: ' + String(st.gone).toUpperCase() : ''
   };
 }
 
@@ -234,6 +237,10 @@ function slot(k, d){
     o += `<rect x="${x - .3}" y="${b[1] - .2}" width="${b[2] - x + .55}" height="${b[3] - b[1] + .4}" fill="#fff"/>` +
       `<text transform="translate(${x} ${y}) scale(.9594 1)" font-family="${FONT_B}" font-weight="700" font-size="8.268" fill="#000">${esc(d.valid)}</text>`;
   }
+  if(d.gone) [FRONT_X, BACK_X].forEach(x => {          // v7.5: left / migrated / cancelled: warning band across the card
+    const y = ROW_Y[k] + CARD_H * .42;
+    o += `<rect x="${x}" y="${y}" width="${CARD_W}" height="22" fill="#D92D20" fill-opacity=".9"/><text x="${x + CARD_W / 2}" y="${y + 15}" text-anchor="middle" font-family="${FONT_B}" font-weight="700" font-size="11" fill="#fff">${esc(d.gone)}</text>`;
+  });
   return o;
 }
 function originalView(d, backSide){
@@ -365,6 +372,15 @@ async function buildPdf(sts, step){
         page.pushOperators(pushGraphicsState(), concatTransformationMatrix(.9594, 0, 0, 1, x, Y(g.valid[1])));
         say(page, clean(d.valid), 8.268, BLACK);
         page.pushOperators(popGraphicsState());
+      }
+      if(d.gone){                                       // v7.5: left / migrated / cancelled: warning band on both sides
+        const t = clean(d.gone), w = widthOf(t, 11), sx = w > CARD_W - 10 ? (CARD_W - 10) / w : 1, yb = Y(ROW_Y[k] + CARD_H * .42 + 22);
+        [FRONT_X, BACK_X].forEach(x => {
+          page.drawRectangle({ x, y: yb, width: CARD_W, height: 22, color: cmyk(0, .9, .9, .1), opacity: .9 });
+          page.pushOperators(pushGraphicsState(), concatTransformationMatrix(sx, 0, 0, 1, x + (CARD_W - w * sx) / 2, yb + 7));
+          say(page, t, 11, WHITE);
+          page.pushOperators(popGraphicsState());
+        });
       }
     }
     step(part.length);
@@ -510,6 +526,18 @@ function openFind(){
     render(); if(!r.miss.length) setTimeout(() => dlg.close(), 700);
   };
 }
+/** v7.5: the students behind a counter, with CSV and "tick these" */
+function stuList(title, list, extra){
+  list = list.slice().sort((a, b) => (a.pcs || a.section || '').localeCompare(b.pcs || b.section || '', undefined, { numeric: true }) || a.roll.localeCompare(b.roll, undefined, { numeric: true }));
+  $('#dlgIn').innerHTML = `<h2 style="margin:0 0 4px;color:var(--brown);font-size:17px">${esc(title)} · ${list.length}</h2>
+    <div class="tw" style="max-height:55vh;overflow:auto"><table><thead><tr><th>#</th><th>Enroll#</th><th>Student</th><th>Section</th>${extra ? '<th></th>' : ''}</tr></thead><tbody>
+    ${list.map((st, i) => `<tr><td>${i + 1}</td><td>${esc(st.roll)}</td><td>${esc(st.name)}<div class="sub">d/o ${esc(st.father || '-')}</div></td><td>${esc(st.pcs || st.section || '-')}</td>${extra ? `<td class="sub">${esc(extra(st))}</td>` : ''}</tr>`).join('') || '<tr><td colspan="5" class="sub">Nobody.</td></tr>'}</tbody></table></div>
+    <div class="acts"><button class="btn sm" id="slCsv" ${list.length ? '' : 'disabled'}>Download (CSV)</button><button class="btn sm" id="slTick" ${list.length ? '' : 'disabled'}>Tick these for cards</button><button class="btn sm pri" id="slOk">Close</button></div>`;
+  const dlg = $('#dlg'); dlg.showModal();
+  $('#slOk').onclick = () => dlg.close();
+  $('#slCsv').onclick = () => csvDownload([['Enroll#', 'Student Name', 'Father Name', 'Section', 'Program'].concat(extra ? ['Note'] : [])].concat(list.map(st => [st.roll, st.name, st.father, st.pcs || st.section, progKey(st.program)].concat(extra ? [extra(st)] : []))), fileSafe(title) + '.csv');
+  $('#slTick').onclick = () => { list.forEach(st => S.sel.add(st.roll)); dlg.close(); S.msg = list.length + ' ticked.'; render(); };
+}
 function csvDownload(rows, name){
   const csv = rows.map(r => r.map(v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : v).join(',')).join('\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' })); a.download = name; a.click();
@@ -536,7 +564,7 @@ function render(){
   const opt = (arr, v, none) => `<option value="">${none}</option>` + arr.map(x => `<option ${x === v ? 'selected' : ''}>${esc(x)}</option>`).join('');
   const prevList = (sel.length ? sel : list).slice(0, S.show), Y = year(), ses = sessionOf(), sign = signOf(Y);
   const cnt = { none: 0, failed: 0, pending: 0, ready: 0 }; all.forEach(st => cnt[photoState(st)]++);
-  const own = all.filter(st => st.own).length;
+  const own = all.filter(st => st.own).length, gone = all.filter(st => st.gone);
   const chkN = { Confirmed: 0, Pending: 0, Approved: 0, Rejected: 0, none: 0 }, bySec = {};
   all.forEach(st => { const k = chkN[st.chk] != null ? st.chk : 'none'; chkN[k]++; const sc = st.pcs || st.section || '-'; const b = bySec[sc] = bySec[sc] || { n: 0, Confirmed: 0, Pending: 0, Approved: 0, Rejected: 0, none: 0 }; b.n++; b[k]++; });
   const sectionsSel = {}; sel.forEach(st => { const sc = st.pcs || st.section || 'No section'; sectionsSel[sc] = (sectionsSel[sc] || 0) + 1; });
@@ -560,12 +588,13 @@ function render(){
     <div class="acts"><label class="c"><input type="checkbox" id="ckOpen" ${chk.open ? 'checked' : ''}> Open for students</label><button class="btn sm pri" id="ckSave">Save</button>
       <button class="btn sm" id="ckCopy">Copy WhatsApp message</button></div>
     <div class="chips">
-      <div class="chip good"><b>${chkN.Confirmed}</b>confirmed correct</div>
-      <div class="chip mid"><b>${chkN.Pending}</b>waiting for you</div>
-      <div class="chip"><b>${chkN.Approved}</b>approved</div>
-      <div class="chip"><b>${chkN.Rejected}</b>rejected</div>
-      <div class="chip bad"><b>${chkN.none}</b>not checked yet</div>
+      <button type="button" class="chip good" data-lck="Confirmed" title="Show the list"><b>${chkN.Confirmed}</b>confirmed correct</button>
+      <button type="button" class="chip mid" data-lck="Pending" title="Show the list"><b>${chkN.Pending}</b>waiting for you</button>
+      <button type="button" class="chip" data-lck="Approved" title="Show the list"><b>${chkN.Approved}</b>approved</button>
+      <button type="button" class="chip" data-lck="Rejected" title="Show the list"><b>${chkN.Rejected}</b>rejected</button>
+      <button type="button" class="chip bad" data-lck="none" title="Show the list"><b>${chkN.none}</b>not checked yet</button>
     </div>
+    ${gone.length ? `<div class="note bad" style="margin-top:10px">${gone.length} student${gone.length === 1 ? ' is' : 's are'} still in Transform-ALL-COLLEGE-STRENGTH but marked left / migrated / cancelled. If you print their cards, each card carries a red “NOT VALID” band. <button type="button" class="btn sm" data-lph="gone">Show them</button></div>` : ''}
     <details style="margin-top:10px"><summary style="font-weight:700;cursor:pointer">Section-wise</summary>
       <div class="tw"><table><thead><tr><th>Section</th><th>Students</th><th>Confirmed</th><th>Waiting</th><th>Approved</th><th>Not checked</th></tr></thead><tbody>
       ${Object.keys(bySec).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map(k => { const b = bySec[k]; return `<tr><td>${esc(k)}</td><td>${b.n}</td><td>${b.Confirmed}</td><td>${b.Pending}</td><td>${b.Approved}</td><td>${b.none ? `<span class="bad">${b.none}</span>` : 0}</td></tr>`; }).join('')}
@@ -587,11 +616,11 @@ function render(){
   <section class="card"><h2>Photos</h2>
     <div class="sub">Photos are read from Drive once and then kept on this device, so the next PDFs are fast and the server is not called again.</div>
     <div class="chips">
-      <div class="chip good"><b>${cnt.ready}</b>ready on this device</div>
-      <div class="chip mid"><b>${cnt.pending}</b>not read yet</div>
-      <div class="chip bad"><b>${cnt.none}</b>no photo link in the sheet</div>
-      <div class="chip bad"><b>${cnt.failed}</b>link gives no picture</div>
-      <div class="chip"><b>${own}</b>given / fixed in this app</div>
+      <button type="button" class="chip good" data-lph="ready" title="Show the list"><b>${cnt.ready}</b>ready on this device</button>
+      <button type="button" class="chip mid" data-lph="pending" title="Show the list"><b>${cnt.pending}</b>not read yet</button>
+      <button type="button" class="chip bad" data-lph="none" title="Show the list"><b>${cnt.none}</b>no photo link in the sheet</button>
+      <button type="button" class="chip bad" data-lph="failed" title="Show the list"><b>${cnt.failed}</b>link gives no picture</button>
+      <button type="button" class="chip" data-lph="own" title="Show the list"><b>${own}</b>given / fixed in this app</button>
     </div>
     <div class="acts">
       <button class="btn sm" id="phMiss" ${cnt.none + cnt.failed ? '' : 'disabled'}>Show students without photo (${cnt.none + cnt.failed})</button>
@@ -684,6 +713,11 @@ function render(){
   if($('#mark')) $('#mark').onclick = markPrinted;
   if($('#more')) $('#more').onclick = () => { S.show += 12; render(); };
   const missing = () => all.filter(st => ['none', 'failed'].includes(photoState(st)));
+  const CKN = { Confirmed: 'Confirmed their card', Pending: 'Waiting for you', Approved: 'Approved', Rejected: 'Rejected', none: 'Not checked yet' };
+  const PHN = { ready: 'Photo ready on this device', pending: 'Photo not read yet', none: 'No photo link in the sheet', failed: 'Photo link gives no picture', own: 'Photo given / fixed in this app', gone: 'Left / migrated / cancelled (still in Transform)' };
+  m.querySelectorAll('[data-lck]').forEach(b => b.onclick = () => { const k = b.dataset.lck; stuList(CKN[k], all.filter(st => (chkN[st.chk] != null ? st.chk : 'none') === k), st => st.chkAt || ''); });
+  m.querySelectorAll('[data-lph]').forEach(b => b.onclick = () => { const k = b.dataset.lph;
+    stuList(PHN[k], all.filter(st => k === 'own' ? st.own : k === 'gone' ? st.gone : photoState(st) === k), k === 'gone' ? st => st.gone : k === 'own' ? st => st.own || '' : null); });
   $('#phMiss').onclick = () => { S.f.photo = 'missing'; S.f.ticked = false; ls.set('idc_f', S.f); render(); };
   $('#phCsv').onclick = () => csvDownload([['Enroll#', 'Student Name', 'Father Name', 'Section', 'Program', 'Problem']].concat(missing().sort((a, b) => (a.pcs || '').localeCompare(b.pcs || '') || a.roll.localeCompare(b.roll, undefined, { numeric: true })).map(st => [st.roll, st.name, st.father, st.pcs || st.section, progKey(st.program), photoState(st) === 'none' ? 'No photo link' : 'Link gives no picture'])), 'Students without photo.csv');
   $('#phAll').onclick = async () => { S.err = ''; await fetchPhotos(all); render(); };
