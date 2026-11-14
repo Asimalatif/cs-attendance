@@ -479,6 +479,103 @@ async function bgData(img, color){
   if(res.close) res.close();
   return c.toDataURL('image/jpeg', .95);
 }
+/* ---------- v7.6.7: photo checker: sideways / upside-down photos turned upright, far-away photos cut round the face,
+   photos with no face or several faces listed. Nothing is changed until you accept it (then saved in Drive like "Save photo"). */
+let FD = null;
+async function faceDetector(){
+  if(FD) return FD;
+  const V = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+  const m = await import(V + '/vision_bundle.mjs'), fs = await m.FilesetResolver.forVisionTasks(V + '/wasm');
+  FD = await m.FaceDetector.createFromOptions(fs, { baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite' },
+    runningMode:'IMAGE', minDetectionConfidence:.5 });
+  return FD;
+}
+function turned(im, rot, max){                                   // image turned by rot (0/90/180/270) on a canvas
+  const k = Math.min(1, (max || 99999) / Math.max(im.naturalWidth, im.naturalHeight)), w = Math.round(im.naturalWidth * k), h = Math.round(im.naturalHeight * k);
+  const c = document.createElement('canvas'), sw = rot % 180 !== 0; c.width = sw ? h : w; c.height = sw ? w : h;
+  const x = c.getContext('2d'); x.translate(c.width / 2, c.height / 2); x.rotate(rot * Math.PI / 180); x.drawImage(im, -w / 2, -h / 2, w, h);
+  return c;
+}
+async function photoCheck(st){
+  const r = await DB.get('raw', st.roll).catch(() => null); if(!r || !r.data) return null;
+  const im = await loadImg(r.data), fd = await faceDetector();
+  let best = null;
+  for(const rot of [0, 90, 270, 180]){
+    const c = turned(im, rot, 640), res = fd.detect(c), F = (res.detections || []).filter(d => d.categories[0].score >= .55);
+    const top = F.slice().sort((a, b) => b.categories[0].score - a.categories[0].score)[0];
+    const sc = top ? top.categories[0].score : 0, kp = top && top.keypoints || [];
+    // upright = both eyes above the mouth and the eye line level (keypoints: right eye, left eye, nose, mouth, …)
+    const up = kp.length >= 4 && kp[0].y < kp[3].y && kp[1].y < kp[3].y && Math.abs(kp[0].y - kp[1].y) < Math.abs(kp[0].x - kp[1].x);
+    const val = sc ? (up ? 1 : 0) + sc : 0;
+    if(!best || val > best.val + (best.rot === 0 ? .05 : 0)) best = { rot, sc, val, faces:F.length, box:top && top.boundingBox, w:c.width, h:c.height };
+    if(rot === 0 && up && sc > .8) break;                          // clearly upright: no need to try the other ways
+  }
+  const issues = [];
+  if(!best.sc){ return { st, issues:['No face found: not a photo of the student?'], bad:true }; }
+  if(best.faces > 1) issues.push(best.faces + ' faces in the photo');
+  if(best.rot) issues.push(best.rot === 180 ? 'Upside down' : 'Sideways (turned ' + (best.rot === 90 ? 'right' : 'left') + ')');
+  const b = best.box, fH = b.height / best.h;
+  let crop = null;
+  if(fH < .28 || b.width / best.w < .3){                            // face small in the picture: taken from far / big margins
+    let H = Math.min(best.h, b.height * 2.6), W = H * FRAME_AR;
+    if(W > best.w){ W = best.w; H = W / FRAME_AR; }
+    let x0 = b.originX + b.width / 2 - W / 2, y0 = b.originY - b.height * .6;
+    x0 = Math.max(0, Math.min(best.w - W, x0)); y0 = Math.max(0, Math.min(best.h - H, y0));
+    crop = { x:x0 / best.w, y:y0 / best.h, w:W / best.w, h:H / best.h };
+    issues.push('Taken from far: cut round the face');
+  }
+  if(!best.rot && !crop) return issues.length ? { st, issues, bad:true } : null;
+  const full = turned(im, best.rot, 1400), c = document.createElement('canvas');
+  const cw = crop ? full.width * crop.w : full.width, ch = crop ? full.height * crop.h : full.height;
+  c.width = Math.round(cw); c.height = Math.round(ch);
+  c.getContext('2d').drawImage(full, crop ? full.width * crop.x : 0, crop ? full.height * crop.y : 0, cw, ch, 0, 0, c.width, c.height);
+  return { st, issues, bad:best.faces > 1, old:r.data, data:c.toDataURL('image/jpeg', .9) };
+}
+async function savePhoto(st, data){
+  const j = await api({ action:'idc_photo_save', roll:st.roll, data });
+  st.pic = 'https://drive.google.com/file/d/' + j.id + '/view'; st.own = j.at;
+  const m = { roll:st.roll, key:picKey(st), ok:true };
+  await DB.put('raw', { roll:st.roll, data }); await DB.put('meta', m); META[st.roll] = m;
+  ls.set('idc_cache', Object.assign(ls.get('idc_cache', {}), { list:S.list }));
+}
+async function checkPhotos(L){
+  S.busy = true; S.cancel = false; S.err = ''; const fix = [], bad = []; let n = 0;
+  try{ await faceDetector(); }catch(e){ S.busy = false; S.err = 'The photo checker could not load (internet?): ' + (e.message || e); return render(); }
+  for(const st of L){
+    if(S.cancel) break;
+    try{ const r = await photoCheck(st); if(r){ if(r.data) fix.push(r); else bad.push(r); } }catch(e){}
+    n++; if(n % 10 === 0 || n === L.length){ S.msg = 'Checking photos: ' + n + ' of ' + L.length + ' · ' + fix.length + ' to fix · ' + bad.length + ' to look at…'; render(); }
+  }
+  S.busy = false; S.msg = n + ' photos checked: ' + fix.length + ' can be fixed, ' + bad.length + ' need a look.'; render();
+  reviewPhotos(fix, bad);
+}
+function reviewPhotos(fix, bad){
+  const th = src => `<img src="${src}" style="width:74px;height:100px;object-fit:cover;border:1px solid var(--line);border-radius:6px">`;
+  $('#dlgIn').innerHTML = `<h2 style="margin:0 0 4px;color:var(--brown);font-size:17px">Photo check</h2>
+    <div class="sub">${fix.length} photo${fix.length === 1 ? '' : 's'} can be fixed (old → new). Nothing is changed until you accept: an accepted photo is saved in Drive for every device.</div>
+    <div style="max-height:56vh;overflow:auto;margin-top:8px">
+    ${fix.map((f, i) => `<div style="display:flex;gap:10px;align-items:center;border-bottom:1px solid var(--line);padding:6px 0" data-fx="${i}">${th(f.old)}<b>→</b>${th(f.data)}
+      <div style="flex:1"><b>${esc(f.st.name)}</b> <span class="sub">${esc(f.st.roll)} · ${esc(f.st.pcs || f.st.section || '')}</span><div class="sub">${esc(f.issues.join(' · '))}</div>
+      <div class="acts" style="margin-top:4px"><button class="btn sm pri" data-fa="${i}">Accept</button><button class="btn sm" data-fs="${i}">Skip</button><button class="btn sm" data-fo="${i}">Fix by hand…</button></div></div></div>`).join('') || '<div class="sub">Nothing to fix.</div>'}
+    ${bad.length ? `<h3 style="margin:12px 0 4px;font-size:15px">Look at these yourself (${bad.length})</h3>
+      ${bad.map((b, i) => `<div style="display:flex;gap:10px;align-items:center;border-bottom:1px solid var(--line);padding:6px 0"><span class="sub" style="width:74px">${esc(b.st.roll)}</span><div style="flex:1"><b>${esc(b.st.name)}</b> <span class="sub">${esc(b.st.pcs || b.st.section || '')}</span><div class="sub" style="color:var(--bad)">${esc(b.issues.join(' · '))}</div></div><button class="btn sm" data-bo="${i}">Open photo…</button></div>`).join('')}` : ''}
+    </div>
+    <div id="fxMsg" class="sub" style="min-height:18px;margin-top:6px"></div>
+    <div class="acts">${fix.length ? '<button class="btn pri" id="fxAll">Accept all</button>' : ''}${bad.length ? '<button class="btn" id="fxList">List to check: PDF / Excel / share</button>' : ''}<button class="btn" id="fxClose">Close</button></div>`;
+  const dlg = $('#dlg'); if(!dlg.open) dlg.showModal();
+  const done = new Set(), msg = t => { $('#fxMsg').textContent = t; };
+  const accept = async i => { if(done.has(i)) return; const f = fix[i], row = document.querySelector(`[data-fx="${i}"]`);
+    msg('Saving ' + f.st.name + '…'); await savePhoto(f.st, f.data); done.add(i); CARDPIC.clear(); if(row) row.style.opacity = .45, row.querySelector('.acts').innerHTML = '<b style="color:var(--good, green)">✓ saved</b>'; msg(''); };
+  document.querySelectorAll('[data-fa]').forEach(b => b.onclick = () => accept(+b.dataset.fa).catch(e => msg('Not saved: ' + e.message)));
+  document.querySelectorAll('[data-fs]').forEach(b => b.onclick = () => { const i = +b.dataset.fs; done.add(i); const row = document.querySelector(`[data-fx="${i}"]`); if(row){ row.style.opacity = .45; row.querySelector('.acts').innerHTML = '<span class="sub">skipped</span>'; } });
+  document.querySelectorAll('[data-fo]').forEach(b => b.onclick = () => { dlg.close(); openPhoto(fix[+b.dataset.fo].st.roll); });
+  document.querySelectorAll('[data-bo]').forEach(b => b.onclick = () => { dlg.close(); openPhoto(bad[+b.dataset.bo].st.roll); });
+  const fa = $('#fxAll'); if(fa) fa.onclick = async () => { fa.disabled = true; let k = 0;
+    for(let i = 0; i < fix.length; i++){ if(done.has(i)) continue; try{ await accept(i); k++; }catch(e){ msg('Stopped at ' + fix[i].st.name + ': ' + e.message); fa.disabled = false; return; } }
+    msg(k + ' photos saved.'); };
+  const fl = $('#fxList'); if(fl) fl.onclick = () => window.JCWOUT ? JCWOUT.list({ title:'Photos to check', head:['#', 'Enroll#', 'Student', 'Father', 'Section', 'Problem'], rows:bad.map((b, i) => [i + 1, b.st.roll, b.st.name, b.st.father || '', b.st.pcs || b.st.section || '', b.issues.join('; ')]) }) : null;
+  $('#fxClose').onclick = () => { dlg.close(); render(); };
+}
 async function openPhoto(roll){
   const st = S.list.find(x => x.roll === roll); if(!st) return;
   const dlg = $('#dlg'), ps = photoState(st);
@@ -680,6 +777,7 @@ function render(){
     <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-weight:700"><input type="checkbox" id="phWhite" ${WHITE() ? 'checked' : ''} style="width:20px;height:20px;accent-color:var(--brown)"> White background on every card photo</label>
     <div class="sub">The student stays, the rest of each photo becomes white (done on this device, the first time needs internet; about 1–3 photos a second). Photos are not changed in Drive.</div>
     <div class="acts">
+      <button class="btn sm pri" id="phCheck" ${cnt.ready && !S.busy ? '' : 'disabled'}>Check all ${cnt.ready} photos (sideways, far away, no face)</button>
       <button class="btn sm" id="phWhiteAll" ${WHITE() && cnt.ready && !S.busy ? '' : 'disabled'}>Make all ${cnt.ready} photos white now</button>
       <button class="btn sm" id="phMiss" ${cnt.none + cnt.failed ? '' : 'disabled'}>Show students without photo (${cnt.none + cnt.failed})</button>
       <button class="btn sm" id="phCsv" ${cnt.none + cnt.failed ? '' : 'disabled'}>Download that list (CSV)</button>
@@ -780,6 +878,7 @@ function render(){
     stuList(PHN[k], all.filter(st => k === 'own' ? st.own : k === 'gone' ? st.gone : photoState(st) === k), k === 'gone' ? st => st.gone : k === 'own' ? st => st.own || '' : null); });
   $('#phMiss').onclick = () => { S.f.photo = 'missing'; S.f.ticked = false; ls.set('idc_f', S.f); render(); };
   $('#phCsv').onclick = () => csvDownload([['Enroll#', 'Student Name', 'Father Name', 'Section', 'Program', 'Problem']].concat(missing().sort((a, b) => (a.pcs || '').localeCompare(b.pcs || '') || a.roll.localeCompare(b.roll, undefined, { numeric: true })).map(st => [st.roll, st.name, st.father, st.pcs || st.section, progKey(st.program), photoState(st) === 'none' ? 'No photo link' : 'Link gives no picture'])), 'Students without photo.csv');
+  $('#phCheck').onclick = () => checkPhotos(all.filter(st => photoState(st) === 'ready'));
   $('#phWhite').onchange = e => { ls.set('idc_white', e.target.checked); CARDPIC.clear(); render(); };
   $('#phWhiteAll').onclick = async () => {
     const L = all.filter(st => photoState(st) === 'ready'); S.busy = true; S.cancel = false; let n = 0, bad = 0;
