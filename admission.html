@@ -742,13 +742,13 @@ function pnFacts(s){
     ['Matric marks', s.metric ? s.metric + (s.total ? ' / ' + s.total : '') : ''], ['Percentage', s.pct || (s.metric && s.total ? (Math.round(s.metric / s.total * 10000) / 100) + '%' : '')], ['Division', s.division],
     ['Hafiz-e-Quran', s.hq], ['Portal section', s.section], ['Portal status', s.status]].filter(x => x[1]);
   return `<div class="facts">${F.map(x => `<div><small>${esc(x[0])}</small><b>${esc(x[1])}</b></div>`).join('')}</div>
-    ${subs1.length ? `<div class="sub" style="margin-top:6px"><b>Subjects on the portal:</b> ${esc(subs1.join(', '))}</div>` : ''}${feeHtml(s.challan)}`;
+    ${subs1.length ? `<div class="sub" style="margin-top:6px"><b>Subjects on the portal:</b> ${esc(subs1.join(', '))}</div>` : ''}${feeHtml(s.challan)}${s.paidOn ? `<div class="sub" style="margin-top:4px"><b>Fee paid on:</b> ${esc(s.paidOn)}</div>` : ''}`;
 }
 function pnDetails(id){
   const s = pnew && pnew.list.find(x => x.id === id); if(!s) return;
   dlgOpen(`<h2>${esc(s.name)}</h2><div class="sub">d/o ${esc(s.father || '-')} · portal ID ${esc(s.id)}</div>
     ${s.pic ? `<img class="bigpic" src="${esc(s.pic)}" alt="Photo of ${esc(s.name)}" style="margin-top:10px" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'seat',textContent:'Photo could not be loaded from the portal.'}))">` : '<div class="seat">No photo on the portal copy yet (it comes with the Full sync).</div>'}
-    ${feeHtml(s.challan)}
+    ${feeHtml(s.challan)}${s.paidOn ? `<div class="sub" style="margin-top:4px"><b>Fee paid on:</b> ${esc(s.paidOn)}</div>` : ''}
     <div style="max-height:45vh;overflow:auto;margin-top:10px"><table class="dtab"><tbody>${(s.all && s.all.length ? s.all : [['Name', s.name]]).map(x => `<tr><td>${esc(x[0])}</td><td>${/^https?:\/\//.test(x[1]) ? `<a href="${esc(x[1])}" target="_blank" rel="noopener">open</a>` : esc(x[1])}</td></tr>`).join('')}</tbody></table></div>
     <div class="acts"><button class="btn primary" id="dOk">Close</button></div>`);
   $('#dOk').onclick = dlgClose;

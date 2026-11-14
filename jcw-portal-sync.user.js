@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         JCW Portal Sync
 // @namespace    jcw-attendance
-// @version      1.7
+// @version      1.8
 // @description  Reads Jinnah College students from the UOP portal (read-only) and sends them to the JCW attendance system: fills only the empty cells of Transform-ALL-COLLEGE-STRENGTH, lists cancelled / migrated / disenrolled / transferred students for Left Students (moved only when you press the button) and feeds the health check.
 // @match        https://portal.uop.edu.pk/Student/Students*
 // @match        https://portal.uop.edu.pk/student/students*
@@ -226,8 +226,18 @@
         const off = v.length - H.length; if (off < 0 || off > 3) return; const o = {}; H.forEach((h, i) => { o[h] = v[i + off] || ''; }); recs.push(o);
       });
     }
-    return recs.map(r => { const ks = Object.keys(r), ak = ks.find(k => /amount|fee|total/i.test(k)), amt = num(ak ? r[ak] : ''); if (!amt) return '';
-      const sk = ks.find(k => /status/i.test(k)), st = sk ? String(r[sk] || '').trim() : ''; return ((/^p(aid)?/i.test(st) || /1/.test(st) || /^true$/i.test(st)) ? 'P' : 'U') + '-' + amt.toFixed(2); }).filter(Boolean).join(', ');
+    // v1.8: also the date the real fee was paid (not the Rs 2,600 registration): latest Paid Date of a paid challan above Rs 3,000
+    let paidOn = '', paidKey = '';
+    const txtOut = recs.map(r => { const ks = Object.keys(r), ak = ks.find(k => /amount|fee|total/i.test(k)), amt = num(ak ? r[ak] : ''); if (!amt) return '';
+      const sk = ks.find(k => /status/i.test(k)), st = sk ? String(r[sk] || '').trim() : '', paid = /^p(aid)?/i.test(st) || /1/.test(st) || /^true$/i.test(st);
+      const dk = ks.find(k => /paid\s*_?date|paiddate|paid_on|paidon/i.test(k)), d = dk ? clean(String(r[dk] || '')) : '';
+      if (paid && amt > 3000 && d) { const m = d.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/) || d.match(/(\d{4})-(\d\d)-(\d\d)/);
+        const key = m ? (m[3].length === 4 ? m[3] + m[2].padStart(2, '0') + m[1].padStart(2, '0') : m[1] + m[2] + m[3]) : d;
+        const show = m ? (m[3].length === 4 ? m[1].padStart(2, '0') + '/' + m[2].padStart(2, '0') + '/' + m[3] : m[3] + '/' + m[2] + '/' + m[1]) : d;
+        if (key > paidKey) { paidKey = key; paidOn = show; } }
+      return (paid ? 'P' : 'U') + '-' + amt.toFixed(2); }).filter(Boolean).join(', ');
+    challans.paidOn = paidOn;
+    return txtOut;
   }
   function courses(html) {
     const doc = parseHTML(html), t = doc.querySelector('table.tblcurrentcourses') || doc.querySelector('table'), out = {}; if (!t) return out;
@@ -274,7 +284,7 @@
     } else warn.push('no edit link');
     if (it.id) {
       try { Object.assign(row, qualification(await post('/Student/StudentQualificationPartail', { Id: it.id, ProgramId: programId(eh) || '0' }))); } catch (e) { if (e.message === 'LOGIN') throw e; warn.push('qualification'); }
-      try { row['Challan Details'] = challans(await post('/Student/GetStudentFeeChallans', { PageNumber: '1', SearchName: '', SortOrder: '1', PageSize: '500', StudentId: it.id })); } catch (e) { if (e.message === 'LOGIN') throw e; warn.push('challans'); }
+      try { row['Challan Details'] = challans(await post('/Student/GetStudentFeeChallans', { PageNumber: '1', SearchName: '', SortOrder: '1', PageSize: '500', StudentId: it.id })); row['Fee Paid Date'] = challans.paidOn || ''; } catch (e) { if (e.message === 'LOGIN') throw e; warn.push('challans'); }
     }
     const cu = it.links.find(l => /^courses$/i.test(l.text)) || it.links.find(l => /courses/i.test(l.text)) || it.links.find(l => /courses/i.test(l.href));
     if (cu) { try { Object.assign(row, courses(await getText(cu.href))); } catch (e) { if (e.message === 'LOGIN') throw e; warn.push('courses'); } }
