@@ -142,6 +142,7 @@ function admRoute_(user, req) {
     case 'adm_add_new':   return admAddNew_(user, req.items || [], req.override === true);
     case 'adm_fee_receipt': return admFeeReceipt_(user, req);
     case 'adm_oml_get':   return admOmlGet_();
+    case 'adm_portal_quota': return admPortalQuota_();
     case 'adm_oml_save':  return admOmlSave_(user, req);
     case 'adm_oml_confirm': return admOmlConfirm_(user, req);
     case 'adm_last_date': {                                  // v7.7: last date of admission (merit lists: later = lost her right to a seat)
@@ -816,6 +817,13 @@ function admOmlGet_() {
   var sh = admOmlSheet_(), n = sh.getLastRow() - 1;
   var v = n > 0 ? sh.getRange(2, 1, n, ADM_OML_HEAD.length).getDisplayValues() : [];
   return { ok: true, rows: v };
+}
+/** v7.9: quota ("Category") of every student on the portal copy: [studentId, name, father, category, enrollment#] */
+function admPortalQuota_() {
+  var P = admPortalSheet_(); if (!P) return { ok: true, rows: [] };
+  var g = P.g, out = [];
+  P.v.slice(1).forEach(function (r) { if (g(r, 'studentname')) out.push([g(r, 'studentid'), g(r, 'studentname'), g(r, 'fathername'), g(r, 'category'), g(r, 'enrollment')]); });
+  return { ok: true, rows: out };
 }
 function admOmlSave_(user, req) {
   var list = admS_(req.list).slice(0, 120), rows = req.rows || [];
