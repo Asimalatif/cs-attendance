@@ -1116,27 +1116,32 @@ function meritLists(){
       const pl = q.pooled ? s.pools.find(x => qk(x.quota) === qk(q.name)) : null;
       const home = pl ? pl.members.map(m => m.key).filter(k => used.has(k)) : [p.key];
       if(pl && home[0] !== p.key) return;
-      const keys = home.concat(sib), seats = noSeats ? 0 : Number(pl ? pl.seats : q.seats) || 0, qq = qk(q.name);
+      const qq = qk(q.name), emp = /\bu\.?\s*o\.?\s*p\b.*employ|universit\w*\s*employ/i.test(q.name);   // UoP Employee Quota: every employee's daughter is admitted, always on a subsidized seat
+      const keys = home.concat(sib);
+      let seats = noSeats ? 0 : Number(pl ? pl.seats : q.seats) || 0;
       if(noSeats && !all.some(o => home.includes(o.key) && qk(o.quota) === qq)) return;
       // surplus is fine only in Open Quota of a program without subsidized/non-subsidized split (non-subsidized, FCS, F.A, Pre-Engineering)
       const surplusOk = qq === qk((init.cfg && init.cfg.openQuota) || 'Open Quota');
       const L = all.filter(o => keys.includes(o.key) && qk(o.quota) === qq).sort(srt);
       const inHome = L.filter(o => home.includes(o.key)).length;
+      const open = emp;                                                  // no seat limit: no surplus, no "no seats set"
+      if(emp) seats = L.length;
       let nextLeft = sib.length ? Math.max(1, seats - L.slice(0, seats).filter(o => home.includes(o.key)).length) : 0;
       const rows = L.map((o, i) => {
         const rank = i + 1, here = home.includes(o.key), should = rank <= seats;
         let state = here && should ? 'ok' : '', why = '';
         if(sib.length){
           if(here && !should){ state = 'bad'; why = 'Below the last subsidized seat: should be in ' + sib.map(k => (prog(k) || {}).label).join(' / '); }
-          else if(!here && should){ state = 'bad'; why = 'Inside the ' + seats + ' subsidized seats: should be in ' + (pl ? 'this quota' : pr.label); }
+          else if(!here && should){ state = 'bad'; why = emp ? 'UoP Employee Quota is always subsidized: should be in ' + pr.label : 'Inside the ' + seats + ' subsidized seats: should be in ' + (pl ? 'this quota' : pr.label); }
           else if(!here && nextLeft > 0){ state = 'next'; why = 'Next in line for a subsidized seat'; nextLeft--; }
-        } else if(!should && !noSeats){ if(surplusOk) why = 'Over the seats (fine in Open Quota)'; else { state = 'surplus'; why = 'Surplus: over the ' + seats + ' seats of ' + q.name; } }
+        } else if(open){ /* every employee's daughter has a seat */ }
+        else if(!should && !noSeats){ if(surplusOk) why = 'Over the seats (fine in Open Quota)'; else { state = 'surplus'; why = 'Surplus: over the ' + seats + ' seats of ' + q.name; } }
         else if(noSeats){ state = 'surplus'; why = 'No seats set for this quota in Quota Settings'; }
         return { o, rank, state, why };
       });
       out.push({ key:p.key, label:pl ? 'Shared pool: ' + home.map(k => (prog(k) || {}).label || k).join(', ') : pr.label || p.key, fee:fees[p.key] || 0,
         sibFee:sib.length ? fees[sib[0]] || 0 : 0, sibLabel:sib.map(k => (prog(k) || {}).label).join(', '), quota:q.name, seats, inHome, rows, subs:!!sib.length, noSeats,
-        held:sib.length ? L.slice(0, seats).filter(o => home.includes(o.key)).length : inHome, group:pl ? 'Shared pools' : pr.label || p.key, qlabel:q.name });
+        held:sib.length ? L.slice(0, seats).filter(o => home.includes(o.key)).length : inHome, open, group:pl ? 'Shared pools' : pr.label || p.key, qlabel:q.name });
     });
   });
   ML = { stamp, lists:out };
@@ -1152,12 +1157,12 @@ function mlHtml(){
   const cur = M.find(x => x.key + '|' + x.quota === mlKey + '|' + mlQ) || M[0];
   mlKey = cur.key; mlQ = cur.quota;
   const bad = r => r.rows.filter(x => x.state === 'bad').length, sur = r => r.rows.filter(x => x.state === 'surplus').length;
-  const left = r => r.noSeats ? null : r.seats - r.held;
+  const left = r => r.noSeats || r.open ? null : r.seats - r.held;
   const tone = r => bad(r) ? 'bad' : sur(r) ? 'surplus' : left(r) > 0 ? 'less' : 'ok';
   const groups = [...new Set(M.map(x => x.group))];
   const sel = `<div class="ml-grid">${groups.map(g => `<div class="ml-g"><div class="ml-gh">${esc(g)}</div><table class="mlq"><tbody>
-    ${M.filter(x => x.group === g).map(x => { const l = left(x); return `<tr class="${tone(x)}${x === cur ? ' on' : ''}" data-ml="${esc(x.key + '|' + x.quota)}"><td>${esc(x.qlabel)}</td><td class="n">${x.held}${x.noSeats ? '' : ' / ' + x.seats}</td>
-      <td class="n">${x.noSeats ? '<span class="pill full">no seats set</span>' : bad(x) ? `<span class="pill full">${bad(x)} wrong</span>` : sur(x) ? `<span class="pill sur">+${sur(x)} surplus</span>` : l > 0 ? `<span class="pill lessp">${l} empty</span>` : l < 0 ? `<span class="sub">+${-l}</span>` : '<span class="sub">full</span>'}</td></tr>`; }).join('')}
+    ${M.filter(x => x.group === g).map(x => { const l = left(x); return `<tr class="${tone(x)}${x === cur ? ' on' : ''}" data-ml="${esc(x.key + '|' + x.quota)}"><td>${esc(x.qlabel)}</td><td class="n">${x.held}${x.noSeats || x.open ? '' : ' / ' + x.seats}</td>
+      <td class="n">${x.open ? '<span class="sub">all admitted</span>' : x.noSeats ? '<span class="pill full">no seats set</span>' : bad(x) ? `<span class="pill full">${bad(x)} wrong</span>` : sur(x) ? `<span class="pill sur">+${sur(x)} surplus</span>` : l > 0 ? `<span class="pill lessp">${l} empty</span>` : l < 0 ? `<span class="sub">+${-l}</span>` : '<span class="sub">full</span>'}</td></tr>`; }).join('')}
     </tbody></table></div>`).join('')}</div>
     <div class="sub" style="margin-top:6px"><span class="mlk less">green</span> = seats still empty · <span class="mlk sur">orange</span> = surplus (more than the seats; fine only in Open Quota of non-subsidized, FCS, F.A, Pre-Engineering) · <span class="mlk bad">red</span> = wrong place for a subsidized seat · <span class="mlk next">blue</span> = next in line.</div>`;
   const th = ['#', 'Photo', 'Enroll#', 'Student', 'Program · Section', 'HQ', 'Obtained', 'Total', 'Aggregate', 'MeritNo', 'Challan', 'DOB', 'Age-wise', 'Fee paid', ''];
@@ -1167,7 +1172,7 @@ function mlHtml(){
     <div class="sub">Students by <b>Aggregate</b>, then <b>age</b> (older first); a thick line marks the last seat. For <b>Pre-Medical Open (S)</b> (subsidized) each quota takes its students from all Pre-Medical programs: <span class="mlk bad">red</span> = in the wrong place (should move up to subsidized, or down), <span class="mlk next">blue</span> = next in line when a subsidized seat empties (left, cancelled, migrated students are not counted). </div>
     ${sel}</section>
   <section class="card"><h3>${esc(cur.label)} · ${esc(cur.quota)}</h3>
-    <div class="sub"><b>${cur.seats}</b> seats · <b>${cur.inHome}</b> students in it now · fee ${cur.fee ? '<b>Rs ' + cur.fee.toLocaleString('en-PK') + '</b>' : 'not known yet'}${cur.sibLabel ? ` · ${esc(cur.sibLabel)} fee ${cur.sibFee ? '<b>Rs ' + cur.sibFee.toLocaleString('en-PK') + '</b>' : '–'}` : ''} (most common paid challan)</div>
+    <div class="sub">${cur.open ? '<b>No seat limit</b> (every employee\'s daughter is admitted, on a subsidized seat)' : cur.noSeats ? '<b>No seats set</b>' : `<b>${cur.seats}</b> seats`} · <b>${cur.inHome}</b> students in it now · fee ${cur.fee ? '<b>Rs ' + cur.fee.toLocaleString('en-PK') + '</b>' : 'not known yet'}${cur.sibLabel ? ` · ${esc(cur.sibLabel)} fee ${cur.sibFee ? '<b>Rs ' + cur.sibFee.toLocaleString('en-PK') + '</b>' : '–'}` : ''} (most common paid challan)</div>
     <div class="acts"><button class="btn primary" type="button" id="mlPdf">PDF with photos (white background)</button><button class="btn" type="button" id="mlOut">List without photos: PDF / Excel / share</button>${bad(cur) ? `<button class="btn" type="button" id="mlBad">Only the ${bad(cur)} wrong</button>` : ''}</div>
     <div style="overflow:auto;max-height:70vh;margin-top:8px" id="mlBox"><table class="ml"><thead><tr>${th.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>
     ${cur.rows.slice(0, lim).map((r, i) => { const o = r.o, f = feeOf(o.challan), cut = i === cur.seats - 1 && cur.rows.length > cur.seats;
