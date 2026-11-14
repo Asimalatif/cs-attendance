@@ -79,6 +79,14 @@ function idcList_() {
     cls: c('CLASS'), section: c('SECTION'), pcs: c('PCS'), group: c('GROUPONLY'), pic: c('PICURL', 'PHOTO'),
     pic2: c('PHOTO'), status: c('STATUS'), session: c('SESSION'), dob: c('DOB'), contact: c('STUDENTCONTACT'),
     matric: c('METRICROLLNO', 'MATRICROLLNO', 'METRICROLL', 'MATRICROLL', 'METRICROLLNUMBER', 'MATRICROLLNUMBER') };
+  // v7.6.9: Matric roll no: of all such columns (MATRIC ROLL NO, Metric RollNo, Matric Roll …) the one with the most values
+  var mBest = -1, mN = -1;
+  head.forEach(function (h, j) {
+    if (!/^(MATRIC|METRIC)(ROLL)(NO|NUMBER)?$/.test(h) && !/^(MATRIC|METRIC)ROLLNO/.test(h)) return;
+    var k = 0; for (var i = 1; i < v.length; i++) if (String(v[i][j]).trim() && String(v[i][j]).trim() !== '0') k++;
+    if (k > mN) { mN = k; mBest = j; }
+  });
+  C.matric = mBest;
   if (C.roll < 0 || C.name < 0) throw new Error('Enroll# or Student Name column not found in ' + IDC_CFG.STRENGTH + '.');
   var g = function (r, k) { return C[k] >= 0 ? idcS_(r[C[k]]) : ''; };
   var printed = idcPrinted_(book), own = idcOwnPhotos_(book), out = [];
