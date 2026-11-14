@@ -153,13 +153,24 @@ async function coverJpeg(src, W = 376, H = Math.round(376 / FRAME_AR)){
   return c.toDataURL('image/jpeg', .9);
 }
 const CARDPIC = new Map();            // small cache of finished card photos for the preview
+const WHITE = () => !!ls.get('idc_white', false);
+/** v7.6.2: the photo with a white background, kept on this device ("<roll>#white" in the photo store) */
+async function whitePhoto(st){
+  const r = await DB.get('raw', st.roll).catch(() => null); if(!r || !r.data) return '';
+  const key = picKey(st) + '|' + r.data.length, w = await DB.get('raw', st.roll + '#white').catch(() => null);
+  if(w && w.data && w.key === key) return w.data;
+  const data = await bgData(await loadImg(r.data), '#FFFFFF');
+  await DB.put('raw', { roll: st.roll + '#white', key, data }).catch(() => {});
+  return data;
+}
 async function cardPhoto(st){
   const e = EDIT[st.roll] || {};
-  if(e.photo) return e.photo;
+  if(e.photo) return WHITE() ? await bgData(await loadImg(e.photo), '#FFFFFF').then(d => coverJpeg(d)).catch(() => e.photo) : e.photo;
   if(photoState(st) !== 'ready') return '';
-  const k = st.roll + '|' + picKey(st); if(CARDPIC.has(k)) return CARDPIC.get(k);
+  const k = st.roll + '|' + picKey(st) + (WHITE() ? '|w' : ''); if(CARDPIC.has(k)) return CARDPIC.get(k);
   const r = await DB.get('raw', st.roll).catch(() => null); if(!r || !r.data) return '';
-  const p = await coverJpeg(r.data).catch(() => '');
+  const src = WHITE() ? await whitePhoto(st).catch(() => r.data) || r.data : r.data;
+  const p = await coverJpeg(src).catch(() => '');
   if(CARDPIC.size > 80) CARDPIC.delete(CARDPIC.keys().next().value);
   CARDPIC.set(k, p); return p;
 }
@@ -447,7 +458,8 @@ async function segmenter(){
     runningMode: 'IMAGE', outputConfidenceMasks: true, outputCategoryMask: false });
   return SEG;
 }
-async function bgReplace(img, color){
+async function bgReplace(img, color){ return loadImg(await bgData(img, color)); }
+async function bgData(img, color){
   const seg = await segmenter(), W0 = img.naturalWidth, H0 = img.naturalHeight, k = Math.min(1, 1200 / Math.max(W0, H0));
   const c = document.createElement('canvas'); c.width = Math.round(W0 * k); c.height = Math.round(H0 * k);
   const g = c.getContext('2d'); g.drawImage(img, 0, 0, c.width, c.height);
@@ -465,7 +477,7 @@ async function bgReplace(img, color){
   }
   g.putImageData(D, 0, 0);
   if(res.close) res.close();
-  return loadImg(c.toDataURL('image/jpeg', .95));
+  return c.toDataURL('image/jpeg', .95);
 }
 async function openPhoto(roll){
   const st = S.list.find(x => x.roll === roll); if(!st) return;
@@ -665,7 +677,10 @@ function render(){
       <button type="button" class="chip bad" data-lph="failed" title="Show the list"><b>${cnt.failed}</b>link gives no picture</button>
       <button type="button" class="chip" data-lph="own" title="Show the list"><b>${own}</b>given / fixed in this app</button>
     </div>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-weight:700"><input type="checkbox" id="phWhite" ${WHITE() ? 'checked' : ''} style="width:20px;height:20px;accent-color:var(--brown)"> White background on every card photo</label>
+    <div class="sub">The student stays, the rest of each photo becomes white (done on this device, the first time needs internet; about 1–3 photos a second). Photos are not changed in Drive.</div>
     <div class="acts">
+      <button class="btn sm" id="phWhiteAll" ${WHITE() && cnt.ready && !S.busy ? '' : 'disabled'}>Make all ${cnt.ready} photos white now</button>
       <button class="btn sm" id="phMiss" ${cnt.none + cnt.failed ? '' : 'disabled'}>Show students without photo (${cnt.none + cnt.failed})</button>
       <button class="btn sm" id="phCsv" ${cnt.none + cnt.failed ? '' : 'disabled'}>Download that list (CSV)</button>
       <button class="btn sm" id="phAll" ${cnt.pending && !S.busy ? '' : 'disabled'}>Read all ${cnt.pending} photos now</button>
@@ -765,6 +780,11 @@ function render(){
     stuList(PHN[k], all.filter(st => k === 'own' ? st.own : k === 'gone' ? st.gone : photoState(st) === k), k === 'gone' ? st => st.gone : k === 'own' ? st => st.own || '' : null); });
   $('#phMiss').onclick = () => { S.f.photo = 'missing'; S.f.ticked = false; ls.set('idc_f', S.f); render(); };
   $('#phCsv').onclick = () => csvDownload([['Enroll#', 'Student Name', 'Father Name', 'Section', 'Program', 'Problem']].concat(missing().sort((a, b) => (a.pcs || '').localeCompare(b.pcs || '') || a.roll.localeCompare(b.roll, undefined, { numeric: true })).map(st => [st.roll, st.name, st.father, st.pcs || st.section, progKey(st.program), photoState(st) === 'none' ? 'No photo link' : 'Link gives no picture'])), 'Students without photo.csv');
+  $('#phWhite').onchange = e => { ls.set('idc_white', e.target.checked); CARDPIC.clear(); render(); };
+  $('#phWhiteAll').onclick = async () => {
+    const L = all.filter(st => photoState(st) === 'ready'); S.busy = true; S.cancel = false; let n = 0, bad = 0;
+    for(const st of L){ if(S.cancel) break; try{ await whitePhoto(st); }catch(e){ bad++; } n++; if(n % 5 === 0 || n === L.length){ S.msg = 'White backgrounds: ' + n + ' of ' + L.length + (bad ? ' (' + bad + ' could not be done)' : '') + '…'; render(); } }
+    S.busy = false; S.msg = 'White background ready for ' + (n - bad) + ' photos' + (bad ? '; ' + bad + ' kept as they are' : '') + '.'; render(); };
   $('#phAll').onclick = async () => { S.err = ''; await fetchPhotos(all); render(); };
   $('#phRetry').onclick = async () => { S.err = ''; await fetchPhotos(all.filter(st => photoState(st) === 'failed'), true); render(); };
   $('#yV').onchange = e => { S.dV = e.target.value.trim(); };

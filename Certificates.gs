@@ -477,7 +477,8 @@ function pcAssets_() {
 function pcEsc_(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function pcRowHtml_(parts) {
   return '<table style="width:100%;border-collapse:collapse;margin-top:16px;"><tr>' + parts.map(function (p) {
-    return '<td style="white-space:nowrap;padding:0 6px 0 0;">' + pcEsc_(p[0]) + '</td><td style="width:' + p[2] + '%;border-bottom:1px solid #000;text-align:center;font-weight:bold;">' + (pcEsc_(p[1]) || '&nbsp;') + '</td>';
+    // p[2] = 0: the line starts straight after the label and runs to the right edge (Conduct and Moral Character)
+    return '<td style="white-space:nowrap;padding:0 6px 0 0;' + (p[2] ? '' : 'width:1%;') + '">' + pcEsc_(p[0]) + '</td><td style="' + (p[2] ? 'width:' + p[2] + '%;' : '') + 'border-bottom:1px solid #000;text-align:center;font-weight:bold;">' + (pcEsc_(p[1]) || '&nbsp;') + '</td>';
   }).join('<td style="width:10px"></td>') + '</tr></table>';
 }
 function pcPage_(v, logo, sign, first) {
@@ -490,7 +491,7 @@ function pcPage_(v, logo, sign, first) {
     '<div style="margin-top:18px;line-height:1.5;">' + PC_CFG.GAZETTE + '</div><div style="margin-top:14px;">Other Particulars are: -</div>' +
     pcRowHtml_([['Roll No.', v.roll, 30], ['Registration No.', v.reg, 40]]) +
     pcRowHtml_([['Marks obtained', v.marks, 15], ['out of', v.total, 15], ['Grade/Division', v.grade, 15]]) +
-    pcRowHtml_([['Date of Birth', v.dob, 70]]) + pcRowHtml_([['Distinctions Won', v.dist, 70]]) + pcRowHtml_([['Conduct and Moral Character', v.conduct, 55]]) +
+    pcRowHtml_([['Date of Birth', v.dob, 70]]) + pcRowHtml_([['Distinctions Won', v.dist, 70]]) + pcRowHtml_([['Conduct and Moral Character', v.conduct, 0]]) +
     '<div style="margin-top:40px;text-align:right;"><div style="display:inline-block;width:230px;text-align:center;"><div style="height:60px;">' +
     (sign ? '<img height="55" src="' + sign + '">' : '') + '</div>' + PC_CFG.SIGN.map(pcEsc_).join('<br>') + '</div></div></div>';
 }

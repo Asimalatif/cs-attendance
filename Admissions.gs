@@ -928,7 +928,7 @@ function admAgg_(m, t, hq) {
    quota  - portal Category (when it clearly names one of the quotas; 2nd Year migration stays Open Quota)
    hq     - portal "HQ" (Hafiz-e-Quran) when the portal copy has it
    aggregate - (Obtained + 20 if HQ) x 100 / Total
-   merit  - 1st Year, per admission program: Open Quota students by Aggregate, highest = 1 (other quotas are not touched)
+   merit  - 1st Year, per admission program and per quota: students by Aggregate, highest = 1
    room   - the section's room in the Timetable sheet                                                                    */
 var ADM_REFRESH = { portal: 'Portal', hq: 'HQ', aggregate: 'Aggregate', merit: 'MeritNo', room: 'Room' };
 /* every Transform column that has a matching value on the portal: f = field of the record (admRec_) and of the portal student (admPortalStu_),
@@ -1092,14 +1092,16 @@ function admRefresh_(user, fields, apply, accept) {
     });
     if (fields.indexOf('merit') >= 0) {
       var groups = {};
-      recs.forEach(function (r) { if (r._leftOpen && r.meritNo) put(r, 'merit', ''); });   // moved out of Open Quota now: her Open merit number goes
+      // v7.6.2: merit inside every program AND every quota separately (Pre-Medical Open (S) · UET Quota, Self Morning · Open Quota …),
+      // by Aggregate, highest = 1. Students with no Aggregate or no quota get no merit number.
       recs.forEach(function (r) {
-        if (admIsMig_(r.year) || !r.key || admQ_(r.quota) !== admQ_(ADM_CFG.OPEN_QUOTA) || r._agg === '') return;
-        (groups[r.key] = groups[r.key] || []).push(r);
+        if (admIsMig_(r.year) || !r.key || !admS_(r.quota) || r._agg === '' || isNaN(Number(r._agg))) { if (r.meritNo && !admIsMig_(r.year)) put(r, 'merit', ''); return; }
+        var g = r.key + '|' + admQ_(r.quota);
+        (groups[g] = groups[g] || []).push(r);
       });
       Object.keys(groups).forEach(function (k) {
         groups[k].sort(function (a, b) {
-          return b._agg - a._agg || (admNum_(b.metric) || 0) - (admNum_(a.metric) || 0) || String(a.name).localeCompare(String(b.name));
+          return Number(b._agg) - Number(a._agg) || (admNum_(b.metric) || 0) - (admNum_(a.metric) || 0) || String(a.name).localeCompare(String(b.name));
         }).forEach(function (r, i) { put(r, 'merit', i + 1); });
       });
     }

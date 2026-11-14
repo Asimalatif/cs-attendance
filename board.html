@@ -220,7 +220,11 @@ async function rsData(name){
   }
   return { head, rows, cc:S.rsCc != null ? S.rsCc : -1 };
 }
+/** keep only the columns wanted; drop(h, j) -> true = column left out */
+const rsCols = (D, drop) => { const keep = D.head.map((h, j) => !drop(String(h).trim(), j)); return { head:D.head.filter((h, j) => keep[j]), rows:D.rows.map(r => r.filter((v, j) => keep[j])), cc:-1 }; };
+const RS_NEVER = h => /college/i.test(h) || /^position$/i.test(h);          // all JCW anyway; board position not wanted
 async function rsXlsx(name, D){
+  D = rsCols(D, RS_NEVER);
   if(!window.XLSX) await loadScript(XLSX_LIB);
   const X = window.XLSX, wb = X.utils.book_new(), ws = X.utils.aoa_to_sheet([D.head].concat(D.rows));
   D.head.forEach((h, c) => { const a = X.utils.encode_cell({ r:0, c }); if(ws[a]) ws[a].s = { font:{ bold:true } }; });
@@ -230,14 +234,19 @@ async function rsXlsx(name, D){
   return new Blob([X.write(wb, { bookType:'xlsx', type:'array' })], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
 async function rsPdf(name, D){
-  if(D.cc >= 0) D = { head:D.head.filter((h, j) => j !== D.cc), rows:D.rows.map(r => r.filter((v, j) => j !== D.cc)) };     // no contact numbers in the PDF
+  // PDF: the columns a printed list needs (no contact, no college name, no board position, no repeated name / class / section columns)
+  const hasPcs = D.head.some(h => /^pcs$/i.test(String(h).trim()));
+  D = rsCols(D, (h, j) => j === D.cc || RS_NEVER(h) || /^(sname|sfname|matched ?by|program|class|section|session|s\.? ?no)$/i.test(h) || (hasPcs && /^section \(pcs\)$/i.test(h)));
+  D.head = ['#'].concat(D.head); D.rows = D.rows.map((r, i) => [i + 1].concat(r));
   if(!window.jspdf) await loadScript('jspdf.umd.min.js');
   if(!(window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API.autoTable)) await loadScript('jspdf.plugin.autotable.min.js');
   const doc = new window.jspdf.jsPDF({ orientation:D.head.length > 6 ? 'landscape' : 'portrait', unit:'mm', format:'a4' }), W = doc.internal.pageSize.getWidth();
   doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text('Jinnah College for Women, Peshawar', W / 2, 12, { align:'center' });
-  doc.setFontSize(11); doc.text(name + ' (' + D.rows.length.toLocaleString() + ' rows)', W / 2, 18, { align:'center' });
-  doc.autoTable({ startY:22, head:[D.head], body:D.rows, theme:'grid', margin:{ left:8, right:8, top:10, bottom:12 },
-    styles:{ fontSize:D.rows.length > 2000 ? 6.5 : 8, cellPadding:.8, textColor:0, lineColor:120, lineWidth:.1, overflow:'linebreak' },
+  doc.setFontSize(11); doc.text(name + ' (' + D.rows.length.toLocaleString() + ' students)', W / 2, 18, { align:'center' });
+  const wide = j => /^(name|father ?name|remarks|group|grade|distinction.*)$/i.test(String(D.head[j]).trim());
+  const colStyles = {}; D.head.forEach((h, j) => { colStyles[j] = wide(j) ? { cellWidth:'auto' } : { cellWidth:'wrap' }; });
+  doc.autoTable({ startY:22, head:[D.head], body:D.rows, theme:'grid', margin:{ left:8, right:8, top:10, bottom:12 }, columnStyles:colStyles, rowPageBreak:'avoid',
+    styles:{ fontSize:8, cellPadding:.9, textColor:0, lineColor:120, lineWidth:.1, overflow:'linebreak', valign:'middle' },
     headStyles:{ fillColor:230, textColor:0, fontStyle:'bold' },
     didDrawPage:() => { doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.text(name + ' · page ' + doc.internal.getNumberOfPages(), W / 2, doc.internal.pageSize.getHeight() - 5, { align:'center' }); } });
   return doc.output('blob');
