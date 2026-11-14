@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         JCW Portal Sync
 // @namespace    jcw-attendance
-// @version      1.8
+// @version      1.9
 // @description  Reads Jinnah College students from the UOP portal (read-only) and sends them to the JCW attendance system: fills only the empty cells of Transform-ALL-COLLEGE-STRENGTH, lists cancelled / migrated / disenrolled / transferred students for Left Students (moved only when you press the button) and feeds the health check.
 // @match        https://portal.uop.edu.pk/Student/Students*
 // @match        https://portal.uop.edu.pk/student/students*
@@ -226,7 +226,7 @@
         const off = v.length - H.length; if (off < 0 || off > 3) return; const o = {}; H.forEach((h, i) => { o[h] = v[i + off] || ''; }); recs.push(o);
       });
     }
-    // v1.8: also the date the real fee was paid (not the Rs 2,600 registration): latest Paid Date of a paid challan above Rs 3,000
+    // v1.8: also the date the real fee was paid (not the Rs 2,600 registration): FIRST Paid Date of a paid challan above Rs 3,000 (later installments are ignored)
     let paidOn = '', paidKey = '';
     const txtOut = recs.map(r => { const ks = Object.keys(r), ak = ks.find(k => /amount|fee|total/i.test(k)), amt = num(ak ? r[ak] : ''); if (!amt) return '';
       const sk = ks.find(k => /status/i.test(k)), st = sk ? String(r[sk] || '').trim() : '', paid = /^p(aid)?/i.test(st) || /1/.test(st) || /^true$/i.test(st);
@@ -234,7 +234,7 @@
       if (paid && amt > 3000 && d) { const m = d.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/) || d.match(/(\d{4})-(\d\d)-(\d\d)/);
         const key = m ? (m[3].length === 4 ? m[3] + m[2].padStart(2, '0') + m[1].padStart(2, '0') : m[1] + m[2] + m[3]) : d;
         const show = m ? (m[3].length === 4 ? m[1].padStart(2, '0') + '/' + m[2].padStart(2, '0') + '/' + m[3] : m[3] + '/' + m[2] + '/' + m[1]) : d;
-        if (key > paidKey) { paidKey = key; paidOn = show; } }
+        if (!paidKey || key < paidKey) { paidKey = key; paidOn = show; } }
       return (paid ? 'P' : 'U') + '-' + amt.toFixed(2); }).filter(Boolean).join(', ');
     challans.paidOn = paidOn;
     return txtOut;
