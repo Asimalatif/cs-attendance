@@ -682,7 +682,7 @@ function pnEntry(s){
   if(!e){
     e = pnSel[s.id] = { on:true, program:s.program || '', year:s.year || '1st Year', section:'', rollNo:'', quota:s.quotaGuess || 'Open Quota', rollManual:false, secManual:false };
     // v7.8: the official merit list decides program (subsidized / non-subsidized) and quota, not the early portal copy
-    const v = !isMig(e.year) ? omlVerdict(omlFind(s.name, s.father, s.metric, s.total)) : null;
+    const v = !isMig(e.year) ? omlVerdict(omlFind(s.name, s.father, s.metric, s.total), (prog(s.program) || {}).classProgram) : null;
     if(v){ e.oml = v; if(v.key) e.program = v.key; if(v.quota) e.quota = v.quota; if(v.state !== 'ok') e.on = false; }
   }
   return e;
@@ -1356,7 +1356,7 @@ function omlFind(name, father, obt, total){
   return o ? (X.byN.get(nrm(name)) || []).filter(r => r.obt === o && (!total || r.total === String(total).replace(/\D/g, ''))) : [];
 }
 const omlClass = t => /medical/i.test(t) ? 'Pre-Medical' : /engin/i.test(t) ? 'Pre-Engineering' : /\bF\.?\s?A\b|arts|humanit/i.test(t) ? 'FA' : /FCS|computer|general/i.test(t) ? 'FCS' : '';
-const omlEmp = r => /employ/i.test(r.quota + ' ' + r.list);
+const omlEmp = r => /employ/i.test(r.quota + ' ' + r.list) || /^uop\b/i.test(r.quota);
 function omlQuota(q, emp){                       // official quota words -> the quota name of Quota Settings
   const names = (init && init.quotas) || [], k = s => qk(s).replace(/\bquota\b/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
   if(emp) return names.find(n => /employ/i.test(n)) || 'UoP Employee Quota';
@@ -1364,16 +1364,19 @@ function omlQuota(q, emp){                       // official quota words -> the 
   return names.find(n => k(n) === w) || names.find(n => k(n).startsWith(w) || w.startsWith(k(n))) || names.find(n => k(n).includes(w.split(' ')[0])) || (q + ' Quota');
 }
 /** what the official list means for the college: { state:'ok'|'wait'|'claim'|'check'|'no', key, quota, text, row } */
-function omlVerdict(rows){
+function omlVerdict(rows, want){
   if(!rows || !rows.length || !init) return null;
-  const rank = r => /Selected/i.test(r.pos) ? 0 : omlEmp(r) ? 1 : /IBCC/i.test(r.pos) ? 2 : /Waiting/i.test(r.pos) ? 3 : 4;
-  const r = rows.slice().sort((a, b) => rank(a) - rank(b))[0], cls = omlClass(r.program), P = init.programs.filter(p => p.classProgram === cls);
+  // confirmed UoP employee first (always subsidized), then Selected Subsidized, an unconfirmed employee claim, other Selected, IBCC, Waiting; a refused claim last
+  const rank = r => omlEmp(r) ? (r.confirmed === 'Yes' ? 0 : r.confirmed === 'No' ? 6 : 2) : /Selected/i.test(r.pos) && !/Non-Sub/i.test(r.pos) && /Subsidized/i.test(r.pos) ? 1 : /Selected/i.test(r.pos) ? 3 : /IBCC/i.test(r.pos) ? 4 : /Waiting/i.test(r.pos) ? 5 : 7;
+  const fit = r => want && omlClass(r.program) === want ? 0 : 0.5;   // same rank: the row of the program she applied for (employee list can have her in 2 programs)
+  const r = rows.slice().sort((a, b) => rank(a) + fit(a) - rank(b) - fit(b))[0], cls = omlClass(r.program), P = init.programs.filter(p => p.classProgram === cls);
   const sub = P.find(p => p.fee === 'sub'), non = P.filter(p => p.fee === 'non'), morning = non.find(p => /morning/i.test(p.label + p.key)) || non[0];
   const emp = omlEmp(r), quota = omlQuota(r.quota, emp), base = { row:r, quota, cls };
   if(emp){
     if(r.confirmed === 'Yes') return Object.assign(base, { state:'ok', key:(sub || P[0] || {}).key, text:'UoP Employee Quota, confirmed by ' + (r.confirmedBy || '') + ': always subsidized' });
     if(r.confirmed === 'No') return Object.assign(base, { state:'no', key:'', text:'UoP Employee Quota claim NOT confirmed' + (r.note ? ': ' + r.note : '') });
-    return Object.assign(base, { state:'claim', key:(sub || P[0] || {}).key, text:'Applied in UoP Employee Quota: check her proof (employee card / letter) and confirm' });
+    const alt = rows.filter(x => !omlEmp(x)).sort((a, b) => rank(a) - rank(b))[0], also = rows.filter(x => omlEmp(x) && x !== r).map(x => x.program);
+    return Object.assign(base, { state:'claim', key:(sub || P[0] || {}).key, text:'Applied in UoP Employee Quota (' + r.program + (also.length ? '; also on the employee list for ' + also.join(', ') : '') + '): check her proof (employee card / letter) and confirm' + (alt ? '. If not an employee: ' + (alt.pos || '-') + ' in ' + (alt.quota || 'Open') + ' ' + alt.program : '. If not an employee: not on any other list') });
   }
   if(/Waiting/i.test(r.pos)) return Object.assign(base, { state:'wait', key:'', text:'Not selected: ' + r.pos + ' in ' + (r.quota || 'Open') });
   if(/IBCC/i.test(r.pos)) return Object.assign(base, { state:'check', key:'', text:'O-Level: selected only with the IBCC equivalence certificate; choose subsidized / non-subsidized yourself' });
@@ -1395,7 +1398,7 @@ function omlParse(pages){
     const T = items.map(i => ({ s:String(i.str).trim(), x:i.x, y:i.y })).filter(i => i.s);
     const t = T.find(i => /Final Merit List|Merit List/i.test(i.s)); if(t) title = t.s.replace(/.*Merit List\s*-?\s*/i, '').trim() || title;
     const hx = re => { const h = T.find(i => re.test(i.s)); return h ? h.x : null; };
-    const X = { name:hx(/^Applicant/i), father:hx(/^Father/i), obt:hx(/^Obt/i), quota:hx(/^Applied/i) };
+    const X = { name:hx(/^Applicant/i), father:hx(/^Father/i), obt:hx(/^Obt/i), quota:hx(/^Applied/i), prog:hx(/^Program/i) };   // prog: the UoP (employee) quota list has a Programme column
     if(X.name == null || X.father == null || X.obt == null) continue;
     if(X.quota == null) X.quota = X.obt + 95;
     const head = T.filter(i => /^(S\.#|Form #?|Applicant|Father|Obt|Total|Marks|HQ|AGG|Applied|Quota|Merit|Position)/i.test(i.s));
@@ -1414,11 +1417,13 @@ function omlParse(pages){
       const col = (lo, hi) => ln.filter(i => i.x >= lo - 3 && (hi == null || i.x < hi - 3)).map(i => i.s).join(' ').replace(/\s+/g, ' ').trim();
       const nums = ln.filter(i => i.x >= X.obt - 25 && i.x < X.quota - 8).map(i => i.s).join(' ');
       const sno = (a.extra.find(i => /^\d+$/.test(i.s) && i.x < X.name - 30) || {}).s || '';
-      const tail = a.extra.filter(i => i.x >= X.quota - 8).sort((p, q) => q.y - p.y || p.x - q.x).map(i => i.s).concat(ln.filter(i => i.x >= X.quota - 8).map(i => i.s)).join(' ');
+      const pg = X.prog == null ? '' : a.extra.concat(ln).filter(i => i.x >= X.prog - 20).map(i => i.s).join(' ').replace(/\s+/g, ' ').trim();
+      const tail = a.extra.filter(i => i.x >= X.quota - 8 && (X.prog == null || i.x < X.prog - 20)).sort((p, q) => q.y - p.y || p.x - q.x).map(i => i.s).concat(ln.filter(i => i.x >= X.quota - 8 && (X.prog == null || i.x < X.prog - 20)).map(i => i.s)).join(' ');
       const pos = (tail.match(/Selected|Waiting|Non-Subsidized|Subsidized|\((Morning|Evening)\)|IBCC Required|\b\d+\b/gi) || []).join(' ').replace(/Non-Subsidized\s+Subsidized/i, 'Non-Subsidized').replace(/\b\d+\b/g, '').replace(/\s+/g, ' ').trim();
       const quota = tail.replace(/Selected|Waiting|Non-Subsidized|Subsidized|\((Morning|Evening)\)|IBCC Required|\b\d+\b|[^\w\s()-]/gi, ' ').replace(/\s+/g, ' ').trim();
       const n = nums.match(/(\d+)\s+(\d+)\s+(Yes|No)\s+([\d.]+)/i) || [];
-      out.push({ program:title, sno:(/Waiting/i.test(pos) ? 'W' : '') + sno, form:form.s, name:col(X.name, X.father), father:col(X.father, X.obt - 25), obt:n[1] || '', total:n[2] || '', hq:n[3] || '', agg:n[4] || '', quota, pos:/Waiting/i.test(pos) ? 'Waiting ' + sno : pos });
+      const uop = /University of Peshawar Quota|Employee/i.test(title) && /^(UoP|University)/i.test(quota);
+      out.push({ program:pg || title, sno:(/Waiting/i.test(pos) ? 'W' : '') + sno, form:form.s, name:col(X.name, X.father), father:col(X.father, X.obt - 25), obt:n[1] || '', total:n[2] || '', hq:n[3] || '', agg:n[4] || '', quota:uop ? 'UoP Employee' : quota, pos:uop ? 'Applied (UoP Employee Quota list)' : /Waiting/i.test(pos) ? 'Waiting ' + sno : pos });
     });
   }
   return { title, rows:out };
@@ -1479,7 +1484,7 @@ function omlAdmit(r){
 function omlCheck(){
   const S = omlStrength(), lab = k => (prog(k) || {}).label || k, out = [];
   idx.rows.forEach(row => { const o = recOf(row); if(isMig(o.year) || mlGone(o)) return;
-    const R = omlFind(o.name, o.father, o.metric, o.total), v = omlVerdict(R);
+    const R = omlFind(o.name, o.father, o.metric, o.total), v = omlVerdict(R, (prog(o.key) || {}).classProgram);
     let p = '';
     if(!v) p = 'Not in the official lists';
     else if(v.state === 'wait') p = 'Official list: waiting, not selected';
@@ -1514,9 +1519,12 @@ function wireOml(){
   document.querySelectorAll('[data-oc]').forEach(b => b.onclick = async () => {
     const [l, fm, y] = b.dataset.oc.split('|'), note = y === '1' ? prompt('What did you see? (e.g. father\'s UoP employee card no.)', '') : prompt('Why not? (optional)', '');
     if(note === null) return;
-    try{ const r = await api({ action:'adm_oml_confirm', list:l, form:fm, yes:y === '1', note });
-      if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'Paste the new Admissions.gs and deploy a New version first.' : r.error);
-      const row = oml.rows.find(x => x.list === l && x.form === fm); if(row){ row.confirmed = r.confirmed; row.confirmedBy = r.by; row.confirmedOn = r.on; row.note = note; idbSet('oml', oml); }
+    try{ const me = oml.rows.find(x => x.list === l && x.form === fm);   // v7.9: same girl on the employee list for 2 programs (2 Form#s): one proof answers both
+      const both = me ? oml.rows.filter(x => omlEmp(x) && omlK(x.name, x.father) === omlK(me.name, me.father)) : [{ list:l, form:fm }];
+      for(const row of both){ const r = await api({ action:'adm_oml_confirm', list:row.list, form:row.form, yes:y === '1', note });
+        if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'Paste the new Admissions.gs and deploy a New version first.' : r.error);
+        if(row.name){ row.confirmed = r.confirmed; row.confirmedBy = r.by; row.confirmedOn = r.on; row.note = note; } }
+      idbSet('oml', oml);
       Object.keys(pnSel).forEach(k => { if(!pnSel[k].rollManual && !pnSel[k].secManual) delete pnSel[k]; }); toast(y === '1' ? 'Confirmed: UoP Employee Quota (subsidized)' : 'Marked: not an employee'); render(); }catch(e){ toast(e.message); } });
 }
 
