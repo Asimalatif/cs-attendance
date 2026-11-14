@@ -1106,7 +1106,8 @@ function meritLists(){
   // v7.7: last date of admission: a student whose fee was paid after it (or not paid) lost her right; she comes after all on-time students
   const last = mlLast(), lastK = last ? last.replace(/-/g, '') : '';
   for(const row of idx.rows){ const o = recOf(row); if(!isMig(o.year) && o.key && !mlGone(o)){ o._a = Math.round(mlAgg(o) * 100); o._d = mlDob(o);
-    const pk = mlDob({ dob:o.feepaid }); o._late = !!lastK && (pk === '99999999' || pk > lastK); all.push(o); } }
+    o._paid = o.receipt || o.feepaid || '';                           // a receipt date you entered wins over the portal date
+    const pk = mlDob({ dob:o._paid }); o._late = !!lastK && (pk === '99999999' || pk > lastK); all.push(o); } }
   const used = new Set(all.map(o => o.key)), fees = mlFees(all), out = [], s = init.seats;
   const srt = (a, b) => (a._late ? 1 : 0) - (b._late ? 1 : 0) || b._a - a._a || a._d.localeCompare(b._d) || String(a.name).localeCompare(String(b.name));
   s.programs.forEach(p => {
@@ -1144,7 +1145,8 @@ function meritLists(){
         } else if(open){ /* every employee's daughter has a seat */ }
         else if(!should && !noSeats){ if(surplusOk) why = 'Over the seats (fine in Open Quota)'; else { state = 'surplus'; why = 'Surplus: over the ' + seats + ' seats of ' + q.name; } }
         else if(noSeats){ state = 'surplus'; why = 'No seats set for this quota in Quota Settings'; }
-        if(o._late) why = (why ? why + ' · ' : '') + (o.feepaid ? 'Late: fee paid ' + o.feepaid + ', after the last date' : 'Fee not paid by the last date');
+        if(o._late) why = (why ? why + ' · ' : '') + (o._paid ? 'Late: fee paid ' + o._paid + ', after the last date' : 'Fee not paid by the last date');
+        if(o.receipt) why = (why ? why + ' · ' : '') + 'Fee date from receipt ' + o.receipt + (o.feepaid ? ' (portal ' + o.feepaid + ')' : '') + (o.receiptNote ? ': ' + o.receiptNote : '');
         return { o, rank, state, why };
       });
       out.push({ key:p.key, label:pl ? 'Shared pool: ' + home.map(k => (prog(k) || {}).label || k).join(', ') : pr.label || p.key, fee:fees[p.key] || 0,
@@ -1158,7 +1160,7 @@ function meritLists(){
 let mlAll = false;
 function mlHtml(){
   if(!idx) return '<section class="card"><div class="sub">Loading the student list…</div></section>';
-  const old = !idx.cols.includes('feepaid');
+  const old = !idx.cols.includes('receipt');
   if(old && !mlAsked){ mlAsked = true; loadIndex(true).then(() => { ML = null; render(); }); }
   const M = meritLists();
   if(!M.length) return '<section class="card"><div class="sub">No seats set in Quota Settings yet.</div></section>';
@@ -1189,11 +1191,28 @@ function mlHtml(){
       return `<tr class="${r.state}${cut ? ' cut' : ''}"><td class="n">${r.rank}</td><td><img alt="" data-mlp="${esc(o.roll || '')}" data-mlu="${esc(mlPic(o.pic))}"></td>
         <td class="nw">${esc(o.roll || '–')}</td><td><b>${esc(o.name)}</b><div class="sub">d/o ${esc(o.father || '-')}</div></td><td class="sub">${esc((prog(o.key) || {}).label || o.key)}<br>${esc(o.pcs || '')}</td>
         <td>${esc(o.hq || '')}</td><td class="n">${esc(o.metric || '')}</td><td class="n">${esc(o.total || '')}</td><td class="n"><b>${o._a ? o._a / 100 : ''}</b></td><td class="n">${esc(o.meritNo || '')}</td>
-        <td class="sub" style="min-width:120px">${f.length ? f.map(x => (x.paid ? 'P ' : 'U ') + x.amount.toLocaleString('en-PK')).join(', ') : '–'}</td><td class="nw">${esc(o.dob || '')}</td><td>${esc(o.agewise || '')}</td><td class="nw">${esc(o.feepaid || '')}</td>
+        <td class="sub" style="min-width:120px">${f.length ? f.map(x => (x.paid ? 'P ' : 'U ') + x.amount.toLocaleString('en-PK')).join(', ') : '–'}</td><td class="nw">${esc(o.dob || '')}</td><td>${esc(o.agewise || '')}</td><td class="nw">${o.receipt ? `<b>${esc(o.receipt)}</b><div class="sub">receipt · portal ${esc(o.feepaid || '–')}</div>` : esc(o.feepaid || '')} <button type="button" class="seatlink" data-mlr="${esc(o.roll || '')}" title="The date on her fee receipt (when the bank sent it late)">✎</button></td>
         <td class="sub" style="min-width:130px">${r.why ? `<b>${esc(r.why)}</b>` : ''}</td></tr>`; }).join('') || `<tr><td colspan="${th.length}" class="sub">Nobody in this quota.</td></tr>`}</tbody></table>
     ${lim < cur.rows.length ? `<div class="acts"><button class="btn" type="button" id="mlMore">Show all ${cur.rows.length} (now ${lim})</button></div>` : ''}</div></section>`;
 }
 let mlAsked = false;
+/** the date on the student's own fee receipt, when the portal shows a later date (bank forwarded it late) */
+function mlReceipt(roll){
+  const o = idx.rows.map(recOf).find(x => x.roll === roll); if(!o) return;
+  const iso = d => { const m = String(d || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m ? m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0') : ''; };
+  dlgOpen(`<h2>Fee date from the receipt</h2><div class="sub"><b>${esc(o.name)}</b> ${esc(o.roll)} · portal FEE PAID DATE <b>${esc(o.feepaid || '–')}</b></div>
+    <div class="sub" style="margin-top:6px">When she paid in time but the bank sent it to the portal late: enter the date on her paid fee receipt. It is kept in the strength sheet (FEE RECEIPT DATE, FEE DATE NOTE), portal syncs never change it, and the merit lists use it instead of the portal date.</div>
+    <label class="f">Date on the receipt<input type="date" id="rcD" value="${esc(iso(o.receipt))}"></label>
+    <label class="f">Why (shown on the merit list)<input id="rcN" value="${esc(String(o.receiptNote || '').replace(/ \([^)]*\)$/, ''))}" placeholder="Receipt seen, bank forwarded late"></label>
+    <div class="acts"><button class="btn primary" id="rcS">Save</button>${o.receipt ? '<button class="btn" id="rcX">Remove (use the portal date)</button>' : ''}<button class="btn" id="rcC">Cancel</button></div>`);
+  $('#rcC').onclick = dlgClose;
+  const save = async (d, n) => { try{
+    const r = await api({ action:'adm_fee_receipt', roll, date:d ? d.split('-').reverse().join('/') : '', note:n });
+    if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'Paste the new Admissions.gs and deploy a New version first.' : r.error);
+    putRec(r.rec); idbSet('index', idx); ML = null; dlgClose(); toast('Saved'); render(); }catch(e){ toast(e.message); } };
+  $('#rcS').onclick = () => { const d = $('#rcD').value, n = $('#rcN').value.trim(); if(!d) return toast('Choose the date'); if(!n) return toast('Write why'); save(d, n); };
+  const x = $('#rcX'); if(x) x.onclick = () => save('', '');
+}
 /* ---------- photos with a white background (same tools as the ID cards page; the white copy made there is used first) ---------- */
 const mlLoadJs = src => new Promise((ok, no) => { const x = document.createElement('script'); x.src = src; x.onload = ok; x.onerror = () => no(new Error('Could not load ' + src)); document.head.appendChild(x); });
 const mlImg = src => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error('picture')); i.src = src; });
@@ -1253,7 +1272,7 @@ async function mlPhotoPdf(){
     doc.setFontSize(11); doc.text('Merit list 1st Year · ' + c.label + ' · ' + c.quota, W / 2, 17, { align:'center' });
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
     doc.text(c.seats + ' seats · ' + c.inHome + ' students in it now' + (c.fee ? ' · fee Rs ' + c.fee.toLocaleString('en-PK') : '') + (c.sibLabel && c.sibFee ? ' · ' + c.sibLabel + ' fee Rs ' + c.sibFee.toLocaleString('en-PK') : '') + ' · by Aggregate, then age (older first) · ' + new Date().toLocaleDateString('en-GB'), W / 2, 22, { align:'center' });
-    const body = c.rows.map(r => { const o = r.o; return [r.rank, '', o.roll || '', (o.name || '') + '\nd/o ' + (o.father || '-'), ((prog(o.key) || {}).label || o.key) + '\n' + (o.pcs || ''), o.hq || '', o.metric || '', o.total || '', o._a ? o._a / 100 : '', o.meritNo || '', o.dob || '', o.agewise || '', o.feepaid || '',
+    const body = c.rows.map(r => { const o = r.o; return [r.rank, '', o.roll || '', (o.name || '') + '\nd/o ' + (o.father || '-'), ((prog(o.key) || {}).label || o.key) + '\n' + (o.pcs || ''), o.hq || '', o.metric || '', o.total || '', o._a ? o._a / 100 : '', o.meritNo || '', o.dob || '', o.agewise || '', o.receipt ? o.receipt + '\n(receipt)' : o.feepaid || '',
       (r.state === 'surplus' ? 'SURPLUS' : r.rank <= c.seats ? 'On a seat' : r.state === 'next' ? 'NEXT IN LINE' : 'Waiting') + (r.state === 'bad' ? '\nWRONG: ' + r.why : r.state === 'next' ? '' : r.why ? '\n' + r.why : '')]; });
     doc.autoTable({ startY:25, head:[['#', 'Photo', 'Enroll#', 'Student', 'Program · Section', 'HQ', 'Obtained', 'Total', 'Aggregate', 'MeritNo', 'DOB', 'Age-wise', 'Fee paid', 'Seat']], body,
       theme:'grid', margin:{ left:7, right:7, bottom:10 }, styles:{ fontSize:8, cellPadding:1, textColor:0, lineColor:120, lineWidth:.1, valign:'middle', minCellHeight:27 },
@@ -1290,10 +1309,11 @@ function wireMl(){
     const R = c.rows.filter(r => !only || r.state === 'bad');
     JCWOUT.list({ title:'Merit list · ' + c.label + ' · ' + c.quota + (only ? ' · wrong places' : ''), sub:c.seats + ' seats · ' + c.inHome + ' in it now',
       head:['Rank', 'Enroll#', 'Student Name', 'Father Name', 'Program', 'Section', 'HQ', 'Obtained Marks', 'Total Marks', 'Aggregate', 'MeritNo', 'Challan Details', 'DOB', 'Age-wise', 'Fee Paid Date', 'Seat', 'Note'],
-      rows:R.map(r => { const o = r.o; return [r.rank, o.roll || '', o.name, o.father || '', (prog(o.key) || {}).label || o.key, o.pcs || '', o.hq || '', o.metric || '', o.total || '', o._a ? o._a / 100 : '', o.meritNo || '', o.challan || '', o.dob || '', o.agewise || '', o.feepaid || '',
+      rows:R.map(r => { const o = r.o; return [r.rank, o.roll || '', o.name, o.father || '', (prog(o.key) || {}).label || o.key, o.pcs || '', o.hq || '', o.metric || '', o.total || '', o._a ? o._a / 100 : '', o.meritNo || '', o.challan || '', o.dob || '', o.agewise || '', o.receipt ? o.receipt + ' (receipt; portal ' + (o.feepaid || '-') + ')' : o.feepaid || '',
         r.state === 'surplus' ? 'Surplus' : r.rank <= c.seats ? 'On a seat' : r.state === 'next' ? 'Next in line' : 'Over the seats', r.why]; }) }); };
   const a = $('#mlOut'); if(a) a.onclick = () => out(false);
   const pp = $('#mlPdf'); if(pp) pp.onclick = mlPhotoPdf;
+  document.querySelectorAll('[data-mlr]').forEach(b => b.onclick = () => mlReceipt(b.dataset.mlr));
   const ls2 = $('#mlLastSave'); if(ls2) ls2.onclick = async () => { const d = $('#mlLast').value;
     try{ const r = await api({ action:'adm_last_date', date:d }); if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'Paste the new Admissions.gs and deploy a New version first.' : r.error);
       init.cfg = Object.assign(init.cfg || {}, { lastDate:r.date }); ML = null; toast(r.date ? 'Last date saved' : 'Last date removed'); render(); }catch(e){ toast(e.message); } };

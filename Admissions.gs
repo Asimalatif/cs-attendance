@@ -125,7 +125,7 @@ var ADM_FIELDS = {
 /* Fields sent to the phone for every student (offline search / edit) */
 var ADM_INDEX = ['sno', 'roll', 'name', 'father', 'id', 'key', 'year', 'pcs', 'quota', 's1', 's2', 's3', 's4', 's5', 's6', 's7',
   'dob', 'metric', 'total', 'hq', 'room', 'pic', 'contact', 'email', 'board', 'passYear', 'matricRoll', 'challan',
-  'groupOnly', 'meritNo', 'batch', 'session', 'status', 'aggregate', 'agewise', 'feepaid'];   // v7.7: + merit lists
+  'groupOnly', 'meritNo', 'batch', 'session', 'status', 'aggregate', 'agewise', 'feepaid', 'receipt', 'receiptNote'];   // v7.7: + merit lists
 
 /* ================= Router (called from doPost) ================= */
 function admRoute_(user, req) {
@@ -140,6 +140,7 @@ function admRoute_(user, req) {
     case 'adm_new':       return admNew_();
     case 'adm_refresh':   return admRefresh_(user, req.fields || [], req.apply === true, req.accept || {});
     case 'adm_add_new':   return admAddNew_(user, req.items || [], req.override === true);
+    case 'adm_fee_receipt': return admFeeReceipt_(user, req);
     case 'adm_last_date': {                                  // v7.7: last date of admission (merit lists: later = lost her right to a seat)
       var d = String(req.date || '').trim();
       if (d && !/^\d{4}-\d\d-\d\d$/.test(d)) return { ok: false, error: 'Date as yyyy-mm-dd' };
@@ -274,7 +275,7 @@ function admRec_(T, r, i, sections) {
     contact: g('studentcontact'), email: g('email'), board: g('board'), passYear: g('passingyear'),
     matricRoll: g('matricrollno') || g('metricrollno'), challan: g('challandetails'),
     groupOnly: g('grouponly'), meritNo: g('meritno'), batch: g('batch'), session: g('session'), status: g('status'),
-    aggregate: g('aggregate'), agewise: g('agewise'), feepaid: g('feepaiddate') };
+    aggregate: g('aggregate'), agewise: g('agewise'), feepaid: g('feepaiddate'), receipt: g('feereceiptdate'), receiptNote: g('feedatenote') };
   if (/^null$/i.test(rec.groupOnly)) rec.groupOnly = '';
   for (var s = 1; s <= 7; s++) rec['s' + s] = g('sub' + s);
   if (!rec.pcs && rec.section) rec.pcs = rec.section;
@@ -770,6 +771,31 @@ function admFeeIssue_(challan) {
   if (paidFee.length) return null;
   var reg = f.filter(function (x) { return x.paid; }).reduce(function (a, x) { return a + x.amt; }, 0);
   return { level: 'danger', text: 'FEE NOT PAID: ' + (reg ? 'only the registration fee (Rs ' + reg + ') is paid' : 'nothing is paid') + (due ? '; Rs ' + due + ' unpaid' : '') + '. Ask her to show the paid fee slip before giving her Enroll# and section.' };
+}
+
+/** v7.7: the date on the student's own fee receipt when the portal date is later (bank sent it late).
+ *  Kept in FEE RECEIPT DATE + FEE DATE NOTE (portal syncs never touch them); the merit lists use it instead of FEE PAID DATE. */
+function admFeeReceipt_(user, req) {
+  var roll = admS_(req.roll), d = admS_(req.date), note = admS_(req.note).slice(0, 300);
+  if (!roll) return { ok: false, error: 'No Enroll#' };
+  if (d && !/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(d)) return { ok: false, error: 'Date as dd/mm/yyyy' };
+  if (d && !note) return { ok: false, error: 'Write why (e.g. "receipt seen, bank late")' };
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    var T = admRead_(), sh = T.sh, want = admNormRoll_(roll), r = -1;
+    for (var i = 0; i < T.rows.length; i++) if (admNormRoll_(T.rows[i][T.cols.enroll]) === want) { r = i; break; }
+    if (r < 0) return { ok: false, error: roll + ' is not in the strength sheet.' };
+    var col = function (key, head) {
+      if (T.cols[key] !== undefined) return T.cols[key] + 1;
+      var c = sh.getLastColumn() + 1; if (sh.getMaxColumns() < c) sh.insertColumnsAfter(sh.getMaxColumns(), 1);
+      sh.getRange(1, c).setValue(head).setFontWeight('bold'); T.cols[key] = c - 1; return c;
+    };
+    var cd = col('feereceiptdate', 'FEE RECEIPT DATE'), cn = col('feedatenote', 'FEE DATE NOTE');
+    sh.getRange(r + 2, cd).setNumberFormat('@').setValue(d);
+    sh.getRange(r + 2, cn).setValue(d ? note + ' (' + (user.teacher || user.name || '') + ', ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy') + ')' : '');
+    admLog_(user, 'FEE RECEIPT DATE', roll, admS_(T.rows[r][T.cols.studentname]), (d || '(removed)') + (note ? ' · ' + note : ''), '');
+    var T2 = admRead_(); return { ok: true, row: r + 2, rec: admPack_(admRec_(T2, T2.rows[r], r, admSettings_().sections)) };
+  } finally { lock.releaseLock(); }
 }
 
 /* ================= Validation ================= */
