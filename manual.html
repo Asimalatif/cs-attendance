@@ -369,6 +369,7 @@ section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
 <p><b>Teachers, sections &amp; free periods</b> is folded into one line; tap it to open the lists:</p></div></div>
 <div class="row rev"><figure><img src="manual-img/32-college-teachers.jpg" alt="Teachers"><figcaption>Teachers, sections &amp; free periods (opened)</figcaption></figure>
 <div><ul><li><b>Today</b>: who has marked and who has not, with a <b>Remind</b> button (WhatsApp).</li>
+<li><b>Marked today</b>: every teacher who has marked today, with each class-section, subject, periods and present / absent counts and the time she saved. Search, filter by department, <b>Share as text</b> or <b>Marked-today PDF</b>. Tap refresh for the latest.</li>
 <li><b>Sections</b>: every section-subject with its %.</li><li><b>Low %</b>: students below 73%.</li><li><b>Workload</b>: periods per teacher and free periods.</li></ul>
 <p>Below: <b>Month sheets</b> (every teacher's sheet of this and next month exists), <b>Check everything</b>, <b>Health check</b>, <b>Left students</b> and <b>Admissions</b>.</p></div></div>
 </section>
@@ -376,7 +377,7 @@ section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
 <section id="check"><h2><span class="n">18</span>Check everything <span class="who">Admin</span></h2>
 <div class="row"><figure><img src="manual-img/33-check-everything.jpg" alt="Check everything"><figcaption>Check everything</figcaption></figure>
 <div><p>Compares every workbook with the strength sheet (Transform-ALL-COLLEGE-STRENGTH): daily attendance (Sep–Jan), monthly attendance, monthly test, grand test and detention.</p>
-<ol class="steps"><li>Tick the workbooks (months) to check.</li><li><b>Check selected</b>: five workbooks are checked at a time. A running clock (⏳ <i>Working… 1:25</i>) and a line per workbook (<i>reading sheets 40%</i>, <i>checking names…</i>) show that it is busy. Keep the page open: a whole month can take a few minutes.</li>
+<ol class="steps"><li>Tick the workbooks (months) to check. <b>Tick all</b> / <b>Untick all</b> at the top, or <i>tick all</i> / <i>untick all</i> next to each group.</li><li><b>Check selected</b>: five workbooks are checked at a time. A running clock (⏳ <i>Working… 1:25</i>) and a line per workbook (<i>reading sheets 40%</i>, <i>checking names…</i>) show that it is busy. Keep the page open: a whole month can take a few minutes.</li>
 <li>Each line shows the differences. <b>Show</b> lists them with a button per student; <b>Fix all</b> fixes one workbook; <b>Fix everything</b> fixes all.</li></ol>
 <table><tr><th>Difference</th><th>Button</th><th>What it does</th></tr>
 <tr><td>In the strength sheet, <b>missing</b> in the sheet</td><td>Add</td><td>Adds her row with the sheet's format and formulas</td></tr>
@@ -403,13 +404,14 @@ section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
 <ol class="steps"><li>Each student shows a <b>big photo</b> (tap it, or <b>Full details</b>, for the full-size photo and every detail the portal has), DOB, contact, email, board, matric roll no, marks, percentage, batch, portal subjects and her <b>fee challans</b> (green = paid, red = unpaid, with the amount still due).</li>
 <li><b>Suggested Roll No</b>: the next free numbers of her program's range, in the order the portal admitted them (an Enrollment# already on the portal is kept). <b>Suggested section</b>: the section of her program with the fewest students (Optional Subjects is never suggested). The section list shows how many each section has, e.g. <i>FCS-1 D3 · 29 +2</i>.</li>
 <li>Change program, year, section, Roll No or quota if needed: the others re-arrange. <i>Check the program</i> means the portal does not say which Pre-Medical program (Open, Self, Evening). Untick or <b>Hide</b> anyone you do not want to add.</li>
-<li><b>Add N to strength sheet</b> → check the list → <b>Add</b>. The server checks seats and duplicates again; anything with a warning is listed with <b>Add anyway</b>.</li>
+<li><b>Fee check</b>: if she has paid only the registration fee (Rs 2,600) or nothing, a red box says <b>Fee not paid</b>: ask her to show the paid fee slip before giving her Enroll# and section. <b>Seats full</b>: if her quota is full a red line warns you; you can still add her.</li>
+<li><b>Add N to strength sheet</b> → check the list (fee-not-paid and seats-full students are marked) → <b>Add</b>. The server checks seats, fee and duplicates again; anything with a warning is listed with <b>Add anyway</b>.</li>
 <li>Then run <b>Check everything</b> (so they appear in the sheets) and send the new Enroll# and sections to the portal with the Enrollment Manager.</li></ol>
 <h3>Update all students from the portal</h3>
 <p>At the bottom of the From portal tab. The portal sync only fills <b>empty</b> cells; this card compares <b>every column</b> of the strength sheet with the portal and also works out four columns:</p>
 <table><tr><th>Tick</th><th>What happens</th></tr>
 <tr><td>Every column vs portal (ask me)</td><td>Name, father name, quota, DOB, contact, email, picture, board, passing year, matric roll no, marks, challans, batch, subjects, portal ID. Differences are listed per column (tap a column button, e.g. <i>Quota 12</i>) with <b>Accept</b> / <b>Keep</b> per student, or <b>Accept all</b> / <b>Keep all</b> for the column. For quota you can also <b>choose</b> another quota. <b>Nothing is taken from the portal unless you Accept.</b> Enroll#, program, class, section and status are shown for information only (change them in Find &amp; edit).</td></tr>
-<tr><td>HQ (Hafiz-e-Quran)</td><td>From the portal (needs portal script 1.3 or later and a Full sync).</td></tr>
+<tr><td>HQ (Hafiz-e-Quran)</td><td>From the portal's Hafiz-e-Quran field (needs portal script <b>1.5</b>, the new Code.gs and one <b>Full sync</b>).</td></tr>
 <tr><td>Aggregate</td><td>(Obtained Marks + 20 if HQ is Yes) × 100 / Total Marks, 2 decimals.</td></tr>
 <tr><td>MeritNo</td><td>1st Year, Open Quota of each program: highest aggregate = 1. Other quotas keep theirs; a student you move out of Open Quota loses her Open merit number.</td></tr>
 <tr><td>Room (timetable)</td><td>The section's (theory) room from the Timetable.</td></tr></table>
@@ -418,7 +420,7 @@ section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
 <div class="row rev"><figure><img src="manual-img/36-admission-find.jpg" alt="Find and edit"><figcaption>Find &amp; edit</figcaption></figure>
 <div><p><b>Find &amp; edit</b>: search any student by name, father name or roll no., change any column and save (only changed cells are written; every change goes to the Admission Log).</p></div></div>
 <div class="row"><figure><img src="manual-img/37-admission-seats.jpg" alt="Seats"><figcaption>Seats</figcaption></figure>
-<div><p><b>Seats</b>: seats, filled and left for every program and quota. Afterwards run <b>Check everything</b> so the new students appear in the attendance and test sheets.</p></div></div>
+<div><p><b>Seats</b>: seats, filled and left for every program and quota. <b>Tap a Taken number</b> to see the students who took those seats (copy / share the list). A red card at the top lists <b>Pre-Medical students with a Rs 60,000 challan in a non-subsidized program</b> (Self Morning / Evening): Rs 60,000 is the subsidized fee, so they probably belong in Pre-Medical Open (S); move them with Find &amp; edit. In <b>New</b>, a full quota is a warning: <b>Seats full: admit anyway</b> saves her. Afterwards run <b>Check everything</b> so the new students appear in the attendance and test sheets.</p></div></div>
 </section>
 
 <section id="gtadmin"><h2><span class="n">21</span>Grand test / detention settings <span class="who">Admin</span></h2>
@@ -434,6 +436,8 @@ section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
 <li><b>Read the PDF</b>: every page is read on this device (a laptop is best for 2,000 pages; it takes a few minutes). Nothing is sent yet.</li>
 <li><b>Check</b>: number of students and colleges, the Jinnah College top 20, the first rows, and a search box to look up any roll number or name.</li>
 <li><b>Save to the sheet</b>: the sheet <i>HSSC 1st year 2026</i> (Roll No, Name, Father Name, Registration #, Marks, Remarks, College Name, Position) and <i>HSSC 1st year 2026 - JCW Top 20</i>. If the sheet already exists the app asks before replacing it. Other sheets are never changed. <b>Download Excel</b> keeps a copy.</li></ol>
+<p><b>Result sheets in the workbook</b>: every saved sheet (e.g. HSSC 2nd year 2026, its JCW Top 20, Certificate) has <b>Open</b> (in Google Sheets), <b>Excel</b>, <b>PDF</b> (download) and <b>Share Excel</b> / <b>Share PDF</b> (WhatsApp, email…). A 60,000-row PDF is about 1,500 pages and takes minutes: use Excel for the full gazette, PDF for the top 20.</p>
+<p><b>Certificates</b>: <b>Print</b> prints all ready certificates from the browser; <b>Open PDF</b>, <b>Download PDF</b> and <b>Share PDF</b> make one PDF of all of them in Drive first, then open it, save it on the device or send it.</p>
 <p>Position = rank by marks over all colleges (highest = 1; equal marks get the same position); private candidates get no position. Each new gazette gets its own sheet, so 1st year and 2nd year results of every year stay side by side.</p>
 </section>
 
@@ -472,6 +476,9 @@ section.reading{outline:3px solid #E7B7AE;outline-offset:4px}
 <tr><td>"N to sync" does not go away</td><td>Status chip → Sync now. If it says the login changed, sign in again (the waiting marks are kept).</td></tr>
 <tr><td>Check everything seems to do nothing</td><td>Look at the clock in the card: it is working. A whole month takes a few minutes; keep the page open. If a workbook fails, its reason pops up.</td></tr>
 <tr><td>Duty lists page: "Page Unresponsive"</td><td>Fixed (the page is 10–25 times faster). Close it and open it again; press Wait once if the old version is still loading.</td></tr>
+<tr><td>How many students left from 1st year / 2nd year?</td><td>College screen → <b>Left students</b> card: tap <b>1st Year</b> or <b>2nd Year</b> for a separate list (tabs All / 1st Year / 2nd Year), each with its own CSV.</td></tr>
+<tr><td>Marked-Missed Entries (was "Record summary")</td><td>A teacher is ticked as soon as she saves attendance in the app (the page checks every minute and when you come back to it). Ticks now show on phones too.</td></tr>
+<tr><td>Student ID cards: who rejected, who has no photo?</td><td>Tap any number (confirmed, waiting, approved, rejected, not checked, photo ready, no photo link…) to see the students, download them as CSV or <b>tick them for cards</b>. Students still in the strength sheet but marked left / migrated / cancelled get a red <b>NOT VALID</b> band across their card.</td></tr>
 <tr><td>Why are the PDFs black and white?</td><td>The college prints on a black &amp; white printer, so every PDF and printout uses black text, white or light-grey backgrounds and grey lines to save toner. (ID cards keep their colours.)</td></tr>
 <tr><td>A student is missing from my list</td><td>She may have left the subject (grey row) or the strength sheet has another section/subject. Tell the admin; Check everything adds her.</td></tr>
 <tr><td>"Could not reach the server"</td><td>No internet or the internet is blocked. Try again; your work is kept.</td></tr>

@@ -29,6 +29,7 @@ function brRoute_(user, req) {
       case 'br_begin':  return brBegin_(req);
       case 'br_rows':   return brRows_(req);
       case 'br_finish': return brFinish_(req);
+      case 'br_get':    return brGet_(req);
     }
     return { ok: false, error: 'UNKNOWN_ACTION' };
   } catch (e) {
@@ -44,7 +45,17 @@ function brName_(n) {
 
 /** the result sheets already in the workbook */
 function brList_() {
-  return { ok: true, url: brBook_().getUrl(), sheets: brBook_().getSheets().map(function (sh) { return { name: sh.getName(), rows: Math.max(0, sh.getLastRow() - 1) }; }) };
+  return { ok: true, url: brBook_().getUrl(), sheets: brBook_().getSheets().map(function (sh) { return { name: sh.getName(), rows: Math.max(0, sh.getLastRow() - 1), gid: sh.getSheetId() }; }) };
+}
+
+/** v7.5: { sheet, start, n } -> rows of a result sheet (for Excel / PDF made on the phone or laptop) */
+function brGet_(req) {
+  var sh = brBook_().getSheetByName(String(req.sheet || ''));
+  if (!sh) return { ok: false, error: 'Sheet not found: ' + req.sheet };
+  var last = sh.getLastRow(), w = sh.getLastColumn(), start = Math.max(2, Number(req.start) || 2), n = Math.min(Number(req.n) || 10000, 15000);
+  var head = w ? sh.getRange(1, 1, 1, w).getDisplayValues()[0] : [];
+  var rows = last >= start && w ? sh.getRange(start, 1, Math.min(n, last - start + 1), w).getDisplayValues() : [];
+  return { ok: true, header: head, rows: rows, total: Math.max(0, last - 1), next: start + rows.length <= last ? start + rows.length : 0 };
 }
 
 /** { sheet, header:[...], replace } -> empty sheet with the header row */

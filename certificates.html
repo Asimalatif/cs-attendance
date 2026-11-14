@@ -245,11 +245,14 @@ function render(){
     ${c.open ? `<div class="note mid">${c.open} students were not matched 100% (${(S.auto || []).length} of them 96%+). Nothing is saved until you tick them. <button class="btn sm ok" id="cAuto" ${S.busy ? 'disabled' : ''}>Check and fill ${c.open}</button></div>` : ''}
     ${c.hint ? `<div class="note mid">${c.hint} students look like Left Students with a slightly different spelling. They are NOT struck yet. <button class="btn sm" id="cLeftRev" ${S.busy ? 'disabled' : ''}>Review ${c.hint} possible left</button></div>` : ''}
     <div class="acts">
-      <button class="btn pri" id="cPrintAll" ${!c.print ? 'disabled' : ''}>Print / save PDF — all ${c.print} ready</button>
-      <button class="btn" id="cDrive" ${S.busy || !c.print ? 'disabled' : ''}>${S.busy === 'pdf' ? 'Making PDF…' : 'One PDF to Google Drive'}</button>
+      <button class="btn pri" id="cPrintAll" ${!c.print ? 'disabled' : ''}>Print — all ${c.print} ready</button>
+      <button class="btn" id="cPdfOpen" ${S.busy || !c.print ? 'disabled' : ''}>${S.busy === 'pdf' ? 'Making PDF…' : 'Open PDF'}</button>
+      <button class="btn" id="cPdfDl" ${S.busy || !c.print ? 'disabled' : ''}>Download PDF</button>
+      <button class="btn" id="cPdfSh" ${S.busy || !c.print ? 'disabled' : ''}>Share PDF</button>
       <button class="btn" id="cNew">+ Student not in gazette</button>
     </div>
     ${S.pdf ? `<div class="note ok">PDF with ${S.pdf.n} certificate${S.pdf.n > 1 ? 's' : ''} saved in Drive “Certificates (all)”. <a href="${esc(S.pdf.url)}" target="_blank" rel="noopener">Open PDF</a></div>` : ''}
+    <div class="sub" style="margin-top:6px"><b>Print</b> prints from this browser (choose “Save as PDF” as the printer to keep a copy). <b>Open / Download / Share PDF</b> make one PDF of all ${c.print} ready certificates in Drive first (about a minute), then open it, save it on this device or send it (WhatsApp, email…).</div>
     <input class="search" id="cQ" placeholder="Search name, father name, roll no or Enroll#" value="${esc(S.q)}" autocomplete="off">
     <div class="list" id="cList"></div>
   </section>` : ''}`;
@@ -397,9 +400,41 @@ async function printRows(rows){
   await Promise.all(imgs.map(i => i.complete ? 0 : new Promise(z => { i.onload = i.onerror = z; })));
   window.print();
 }
+/** v7.5: one PDF of all ready certificates: open / download / share */
+async function pdfFile(){
+  if(!S.pdf || !S.pdf.id || !S.pdf.all) await drive(null);
+  if(!S.pdf || !S.pdf.id) throw new Error(S.err || 'The PDF was not made.');
+  if(S.pdfBlob && S.pdfBlob.id === S.pdf.id) return S.pdfBlob;
+  S.busy = 'pdf'; render();
+  try{
+    const r = await api({ action:'pc_pdf_get', id:S.pdf.id }, 360000);
+    if(!r.ok) throw new Error(r.error || 'Could not get the PDF');
+    const bin = atob(r.b64), u = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    S.pdfBlob = { id:S.pdf.id, name:r.name, blob:new Blob([u], { type:'application/pdf' }) };
+    return S.pdfBlob;
+  } finally { S.busy = ''; render(); }
+}
+function saveBlobAs(blob, name){ const a = document.createElement('a'), url = URL.createObjectURL(blob); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000); }
+async function pdfAct(kind){
+  try{
+    if(kind === 'open'){
+      const w = window.open('', '_blank');
+      if(!S.pdf || !S.pdf.id || !S.pdf.all) await drive(null);
+      if(S.pdf && S.pdf.url){ if(w) w.location = S.pdf.url; else location.href = S.pdf.url; } else if(w) w.close();
+      return;
+    }
+    const f = await pdfFile(), file = new File([f.blob], f.name, { type:'application/pdf' });
+    if(kind === 'share' && navigator.canShare && navigator.canShare({ files:[file] })){
+      try{ await navigator.share({ files:[file], title:f.name }); }catch(e){ if(e && e.name !== 'AbortError') saveBlobAs(f.blob, f.name); }
+      return;
+    }
+    saveBlobAs(f.blob, f.name);
+    if(kind === 'share') { S.msg = 'This browser cannot share files: the PDF was downloaded instead. Send it from your Downloads.'; render(); }
+  }catch(e){ S.err = e.message || String(e); render(); }
+}
 async function drive(rows){
   S.busy = 'pdf'; S.err = ''; S.pdf = null; render();
-  try{ S.pdf = await api({ action:'pc_pdf', sheet:S.data.sheet, rows:rows ? rows.map(r => r.row) : [] }, 360000); }catch(e){ S.err = e.message; }
+  try{ S.pdf = await api({ action:'pc_pdf', sheet:S.data.sheet, rows:rows ? rows.map(r => r.row) : [] }, 360000); if(S.pdf && !S.pdf.ok){ S.err = S.pdf.error || 'PDF not made'; S.pdf = null; } else if(S.pdf) S.pdf.all = !rows; }catch(e){ S.err = e.message; }
   S.busy = ''; render(); return S.pdf;
 }
 
@@ -507,7 +542,9 @@ document.addEventListener('click', async e => {
   else if(t.id === 'rAll' || t.id === 'rNone'){ E.tick = new Set(t.id === 'rAll' ? E.items.map((x, i) => i) : []); paintEd(); }
   else if(t.id === 'cAutoSee'){ alert(S.auto.map(p => 'Row ' + p.r.row + ': ' + p.r.name + ' D/o ' + p.r.father + '  →  ' + p.s.enroll + ' ' + p.s.name + ' D/o ' + p.s.father + ' (' + Math.round(p.sc * 100) + '%)').join('\n')); }
   else if(t.id === 'cPrintAll') printRows(S.data.rows.filter(canPrint));
-  else if(t.id === 'cDrive') drive(null);
+  else if(t.id === 'cPdfOpen') pdfAct('open');
+  else if(t.id === 'cPdfDl') pdfAct('download');
+  else if(t.id === 'cPdfSh') pdfAct('share');
   else if(t.id === 'cNew'){ await assets(); openEd(null); }
   else if(t.id === 'eClose'){ E = null; paintEd(); paintStats(); }
   else if(t.id === 'eSave') saveEd();

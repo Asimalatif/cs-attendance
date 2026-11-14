@@ -26,6 +26,7 @@ function rsmRoute_(user, req) {
       case 'rsm_files':    return { ok: true, data: getRecordFileList(!!req.force) };
       case 'rsm_file':     return { ok: true, data: getRecordFile(String(req.id || ''), req.cached || null, Number(req.mod) || 0) };
       case 'rsm_teachers': return { ok: true, data: getRecordTeachers() };
+      case 'rsm_live':     return { ok: true, data: rs_live_() };
     }
     return { ok: false, error: 'UNKNOWN_ACTION' };
   } catch (e) {
@@ -190,6 +191,22 @@ function getRecordFileList(force) {
     const files = list(col.type === "att" ? RS_ATT_FOLDER : col.type === "mon" ? RS_MONTHLY_FOLDER : RS_DET_FOLDER);
     const m = col.month ? col.month.slice(0, 3).toLowerCase() : "";
     out[col.key] = files.filter(f => !m || f.name.toLowerCase().includes(m));
+  });
+  return out;
+}
+
+/* ---------- v7.5: instant ticks from the attendance app (Attendance Index is updated on every save) ---------- */
+function rs_live_() {
+  const TOK = { SEPT: "September", SEP: "September", OCT: "October", NOV: "November", DEC: "December", JAN: "January", FEB: "February", MAR: "March" };
+  const sh = SpreadsheetApp.openById(RS_STUDENT_SS).getSheetByName(typeof INDEX_SHEET !== "undefined" ? INDEX_SHEET : "Attendance Index");
+  const out = {};
+  if (!sh || sh.getLastRow() < 2) return out;
+  sh.getRange(2, 1, sh.getLastRow() - 1, 12).getValues().forEach(x => {
+    const mon = TOK[String(x[1]).toUpperCase().replace(/[^A-Z]/g, "")];
+    if (!mon || !(Number(x[6]) > 0 || String(x[11]).replace(/[,\s]/g, ""))) return;
+    const col = "att_" + mon, sec = rs_norm_(x[2]), sub = rs_subj_(x[3]), n = Number(x[5]) || 1;
+    if (!sec || !sub) return;
+    ((out[col] || (out[col] = {}))[sec] || (out[col][sec] = {}))[sub] = [n, n];
   });
   return out;
 }
