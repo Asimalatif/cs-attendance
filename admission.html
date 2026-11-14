@@ -132,7 +132,7 @@ dialog::backdrop{background:rgba(10,15,25,.55)}
 .feew{margin-top:6px;padding:8px 10px;border:2px solid var(--bad);border-radius:10px;color:var(--bad);font-weight:800;font-size:13px}
 .ml-pick{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.ml-b{border:1.5px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 10px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;text-align:left}.ml-b.on{background:var(--brown,#6B3423);color:#fff;border-color:var(--brown,#6B3423)}.ml-b small{font-weight:600;opacity:.85}
 table.ml{font-size:12.5px;border-collapse:collapse;width:100%}table.ml th,table.ml td{border-bottom:1px solid var(--line);padding:5px 6px;vertical-align:middle;text-align:left}table.ml th{position:sticky;top:0;background:var(--surface);z-index:1}
-table.ml img{width:44px;height:58px;object-fit:cover;border-radius:6px;border:1px solid var(--line);display:block}
+table.ml img{width:72px;height:96px;cursor:zoom-in;object-fit:cover;border-radius:6px;border:1px solid var(--line);display:block}
 table.ml tr.next td{background:#DCEBFF}table.ml tr.bad td{background:#FDE0DD}table.ml tr.cut td{border-bottom:3px solid var(--brown,#6B3423)}
 .mlk{padding:0 6px;border-radius:6px}.mlk.next{background:#DCEBFF}.mlk.bad{background:#FDE0DD}
 .seatlink{background:none;border:0;padding:0;font:inherit;color:inherit;text-decoration:underline;cursor:pointer;font-weight:800}
@@ -1148,7 +1148,7 @@ function mlHtml(){
     ${sel}</section>
   <section class="card"><h3>${esc(cur.label)} · ${esc(cur.quota)}</h3>
     <div class="sub"><b>${cur.seats}</b> seats · <b>${cur.inHome}</b> students in it now · fee ${cur.fee ? '<b>Rs ' + cur.fee.toLocaleString('en-PK') + '</b>' : 'not known yet'}${cur.sibLabel ? ` · ${esc(cur.sibLabel)} fee ${cur.sibFee ? '<b>Rs ' + cur.sibFee.toLocaleString('en-PK') + '</b>' : '–'}` : ''} (most common paid challan)</div>
-    <div class="acts"><button class="btn" type="button" id="mlOut">PDF / Excel / print / share</button>${bad(cur) ? `<button class="btn" type="button" id="mlBad">Only the ${bad(cur)} wrong</button>` : ''}</div>
+    <div class="acts"><button class="btn primary" type="button" id="mlPdf">PDF with photos (white background)</button><button class="btn" type="button" id="mlOut">List without photos: PDF / Excel / share</button>${bad(cur) ? `<button class="btn" type="button" id="mlBad">Only the ${bad(cur)} wrong</button>` : ''}</div>
     <div style="overflow:auto;max-height:70vh;margin-top:8px" id="mlBox"><table class="ml"><thead><tr>${th.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>
     ${cur.rows.slice(0, lim).map((r, i) => { const o = r.o, f = feeOf(o.challan), cut = i === cur.seats - 1 && cur.rows.length > cur.seats;
       return `<tr class="${r.state}${cut ? ' cut' : ''}"><td class="n">${r.rank}</td><td><img alt="" data-mlp="${esc(o.roll || '')}" data-mlu="${esc(mlPic(o.pic))}"></td>
@@ -1159,6 +1159,82 @@ function mlHtml(){
     ${lim < cur.rows.length ? `<div class="acts"><button class="btn" type="button" id="mlMore">Show all ${cur.rows.length} (now ${lim})</button></div>` : ''}</div></section>`;
 }
 let mlAsked = false;
+/* ---------- photos with a white background (same tools as the ID cards page; the white copy made there is used first) ---------- */
+const mlLoadJs = src => new Promise((ok, no) => { const x = document.createElement('script'); x.src = src; x.onload = ok; x.onerror = () => no(new Error('Could not load ' + src)); document.head.appendChild(x); });
+const mlImg = src => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error('picture')); i.src = src; });
+let mlSeg = null;
+async function mlSegmenter(){
+  if(mlSeg) return mlSeg;
+  const V = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14', m = await import(V + '/vision_bundle.mjs'), fs = await m.FilesetResolver.forVisionTasks(V + '/wasm');
+  return mlSeg = await m.ImageSegmenter.createFromOptions(fs, { baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite' }, runningMode:'IMAGE', outputConfidenceMasks:true, outputCategoryMask:false });
+}
+async function mlWhite(src){                     // photo -> small portrait JPEG (3:4) with a white background
+  const img = await mlImg(src), seg = await mlSegmenter(), k = Math.min(1, 600 / Math.max(img.naturalWidth, img.naturalHeight));
+  const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+  const g = c.getContext('2d'); g.drawImage(img, 0, 0, c.width, c.height);
+  const res = seg.segment(c), mk = res.confidenceMasks[0], M = mk.getAsFloat32Array(), mw = mk.width, mh = mk.height;
+  const at = (x, y) => M[Math.min(mh - 1, Math.floor(y * mh / c.height)) * mw + Math.min(mw - 1, Math.floor(x * mw / c.width))];
+  const inv = at(c.width / 2, c.height * .45) < (at(2, 2) + at(c.width - 3, 2)) / 2, D = g.getImageData(0, 0, c.width, c.height), d = D.data;
+  for(let y = 0; y < c.height; y++) for(let x = 0; x < c.width; x++){ let a = at(x, y); if(inv) a = 1 - a; a = Math.min(1, Math.max(0, (a - .25) / .5)); const i = (y * c.width + x) * 4;
+    d[i] = d[i] * a + 255 * (1 - a); d[i + 1] = d[i + 1] * a + 255 * (1 - a); d[i + 2] = d[i + 2] * a + 255 * (1 - a); }
+  g.putImageData(D, 0, 0); if(res.close) res.close();
+  return mlFit(c);
+}
+function mlFit(im){                              // cover a 3:4 frame, 240 × 320
+  const W = 240, H = 320, c = document.createElement('canvas'); c.width = W; c.height = H;
+  const w0 = im.naturalWidth || im.width, h0 = im.naturalHeight || im.height, r = Math.max(W / w0, H / h0), g = c.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); g.drawImage(im, (W - w0 * r) / 2, (H - h0 * r) / 2, w0 * r, h0 * r);
+  return c.toDataURL('image/jpeg', .85);
+}
+const ML_PIC = new Map();
+async function mlPhotoData(o){                   // white photo for the PDF: the ID cards white copy, else made here; '' when there is no copy on this device
+  const k = o.roll; if(!k) return '';
+  if(ML_PIC.has(k)) return ML_PIC.get(k);
+  let out = '';
+  try{
+    const db = await mlIdb();
+    if(db && db.objectStoreNames.contains('raw')){
+      const [w, r] = await new Promise(res => { const t = db.transaction('raw').objectStore('raw'), a = t.get(k + '#white'), b = t.get(k);
+        t.transaction.oncomplete = () => res([a.result, b.result]); t.transaction.onerror = () => res([null, null]); });
+      if(w && w.data) out = mlFit(await mlImg(w.data));
+      else if(r && r.data) out = await mlWhite(r.data);
+    }
+  }catch(e){}
+  ML_PIC.set(k, out); return out;
+}
+async function mlPhotoPdf(){
+  const c = meritLists().find(x => x.key === mlKey && x.quota === mlQ); if(!c) return;
+  const b = $('#mlPdf'), say = t => { if(b) b.textContent = t; };
+  try{
+    b.disabled = true; say('Loading the PDF tools…');
+    if(!(window.jspdf && window.jspdf.jsPDF)) await mlLoadJs('jspdf.umd.min.js');
+    if(!window.jspdf.jsPDF.API.autoTable) await mlLoadJs('jspdf.plugin.autotable.min.js');
+    try{ await mlSegmenter(); }catch(e){ toast('White background needs internet the first time: photos are used as they are.'); }
+    const pics = []; let n = 0, none = 0;
+    for(const r of c.rows){ n++; if(n % 5 === 0) say('Photos ' + n + ' of ' + c.rows.length + '…'); const d = await mlPhotoData(r.o).catch(() => ''); if(!d) none++; pics.push(d); }
+    say('Making the PDF…');
+    const doc = new window.jspdf.jsPDF({ orientation:'landscape', unit:'mm', format:'a4' }), W = doc.internal.pageSize.getWidth();
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text('JINNAH COLLEGE FOR WOMEN, UNIVERSITY OF PESHAWAR', W / 2, 11, { align:'center' });
+    doc.setFontSize(11); doc.text('Merit list 1st Year · ' + c.label + ' · ' + c.quota, W / 2, 17, { align:'center' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+    doc.text(c.seats + ' seats · ' + c.inHome + ' students in it now' + (c.fee ? ' · fee Rs ' + c.fee.toLocaleString('en-PK') : '') + (c.sibLabel && c.sibFee ? ' · ' + c.sibLabel + ' fee Rs ' + c.sibFee.toLocaleString('en-PK') : '') + ' · by Aggregate, then age (older first) · ' + new Date().toLocaleDateString('en-GB'), W / 2, 22, { align:'center' });
+    const body = c.rows.map(r => { const o = r.o; return [r.rank, '', o.roll || '', (o.name || '') + '\nd/o ' + (o.father || '-'), ((prog(o.key) || {}).label || o.key) + '\n' + (o.pcs || ''), o.hq || '', o.metric || '', o.total || '', o._a ? o._a / 100 : '', o.meritNo || '', o.dob || '', o.agewise || '', o.feepaid || '',
+      (r.rank <= c.seats ? 'On a seat' : r.state === 'next' ? 'NEXT IN LINE' : 'Waiting') + (r.state === 'bad' ? '\nWRONG: ' + r.why : r.state === 'next' ? '' : r.why ? '\n' + r.why : '')]; });
+    doc.autoTable({ startY:25, head:[['#', 'Photo', 'Enroll#', 'Student', 'Program · Section', 'HQ', 'Obtained', 'Total', 'Aggregate', 'MeritNo', 'DOB', 'Age-wise', 'Fee paid', 'Seat']], body,
+      theme:'grid', margin:{ left:7, right:7, bottom:10 }, styles:{ fontSize:8, cellPadding:1, textColor:0, lineColor:120, lineWidth:.1, valign:'middle', minCellHeight:27 },
+      headStyles:{ fillColor:235, textColor:0, fontStyle:'bold', minCellHeight:6 }, columnStyles:{ 0:{ cellWidth:8, halign:'center' }, 1:{ cellWidth:21 }, 13:{ cellWidth:40 } },
+      didParseCell:h => { if(h.section !== 'body') return; const r = c.rows[h.row.index]; if(r.state === 'bad'){ h.cell.styles.fontStyle = 'bold'; h.cell.styles.fillColor = [253, 224, 221]; } else if(r.state === 'next') h.cell.styles.fillColor = [220, 235, 255];
+        if(h.row.index === c.seats - 1) h.cell.styles.lineWidth = { bottom:.8, top:.1, left:.1, right:.1 }; },
+      didDrawCell:h => { if(h.section !== 'body' || h.column.index !== 1) return; const d = pics[h.row.index]; if(!d) return;
+        try{ doc.addImage(d, 'JPEG', h.cell.x + 1.5, h.cell.y + 1, 18, 24); }catch(e){} } });
+    const n2 = doc.internal.getNumberOfPages();
+    for(let p = 1; p <= n2; p++){ doc.setPage(p); doc.setFontSize(7); doc.text('Page ' + p + ' of ' + n2, W / 2, doc.internal.pageSize.getHeight() - 4, { align:'center' }); }
+    const name = 'Merit list ' + c.label.replace(/[^\w() .-]+/g, ' ') + ' - ' + c.quota + '.pdf', blob = doc.output('blob');
+    if(window.JCWOUT) JCWOUT.offer({ blob, name, title:'Merit list · ' + c.label + ' · ' + c.quota, sub:none ? none + ' photos not on this device (open the ID cards page once to read them)' : '' });
+    else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); }
+  }catch(e){ toast('PDF not made: ' + (e.message || e)); }
+  finally{ if(b){ b.disabled = false; b.textContent = 'PDF with photos (white background)'; } }
+}
 /* photos: the copy kept on this device by the ID cards page (same site) first, else the link; only when the row is on screen */
 let mlDb = null;
 function mlIdb(){ return mlDb || (mlDb = new Promise(res => { try{ const q = indexedDB.open('jcw-idcards'); q.onsuccess = () => res(q.result); q.onerror = () => res(null); q.onupgradeneeded = () => { try{ q.transaction.abort(); }catch(e){} res(null); }; }catch(e){ res(null); } })); }
@@ -1182,6 +1258,8 @@ function wireMl(){
       rows:R.map(r => { const o = r.o; return [r.rank, o.roll || '', o.name, o.father || '', (prog(o.key) || {}).label || o.key, o.pcs || '', o.hq || '', o.metric || '', o.total || '', o._a ? o._a / 100 : '', o.meritNo || '', o.challan || '', o.dob || '', o.agewise || '', o.feepaid || '',
         r.rank <= c.seats ? 'On a seat' : r.state === 'next' ? 'Next in line' : 'Over the seats', r.why]; }) }); };
   const a = $('#mlOut'); if(a) a.onclick = () => out(false);
+  const pp = $('#mlPdf'); if(pp) pp.onclick = mlPhotoPdf;
+  document.querySelectorAll('[data-mlp]').forEach(im => im.onclick = () => { if(!im.src) return; dlgOpen(`<img src="${im.src}" style="display:block;max-width:100%;max-height:70vh;margin:0 auto;border-radius:10px"><div class="acts"><button class="btn primary" id="dOk">Close</button></div>`); $('#dOk').onclick = dlgClose; });
   const b = $('#mlBad'); if(b) b.onclick = () => out(true);
 }
 
