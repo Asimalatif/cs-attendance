@@ -3728,6 +3728,7 @@ function leftRebuild_(user) {
       if (pr) {
         fill.forEach(function (t) { var v = pr[P.C[t.f]]; if (t.f === 'Obtain Marks/CGPA' || t.f === 'Total Marks/CGPA') v = intText_(v); if (t.f === 'Roll.No.') v = realRoll_(intText_(v)); put(t.c, v); });
         put(cP, pr[P.C['Program']]); put(cC, pr[P.C['Class']]); put(cS, pr[P.C['Section']]);
+        if (P.C['Roll.No.'] != null) put(HH['METRICROLLNO'], realRoll_(intText_(pr[P.C['Roll.No.']])));   // "Metric RollNo" column too
         var y2 = /2/.test(String(row[cC] || '')) ? '2nd' : '1st';
         subC.forEach(function (c, j) { var k2 = P.C['sub' + (j + 1) + ' ' + y2 + ' year']; if (k2 != null) put(c, pr[k2]); });
       }
