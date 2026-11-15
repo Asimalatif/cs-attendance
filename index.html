@@ -6155,14 +6155,16 @@ let seatAl = null, seatAlAt = 0;
 function alertCard(){
   if(!seatAl || Date.now() - seatAlAt > 10 * 60000){ seatAlAt = Date.now(); srv({ action:'at_alerts' }, 60000).then(r => { seatAl = r; const c = $q('#alCard'); if(c){ const t = document.createElement('div'); t.innerHTML = alertCard(); c.replaceWith(t.firstElementChild); } }).catch(() => {}); }
   const d = seatAl && seatAl.data, L = d ? d.items || [] : [];
-  if(!seatAl) return '<section class="card" id="alCard"><h3>Seat alerts</h3><div class="sub">Reading…</div></section>';
-  return `<section class="card" id="alCard"><h3>Seat alerts ${L.length ? `<span class="ct">${L.length}</span>` : ''}</h3>
+  if(!seatAl) return `<section class="card" id="alCard"><h3>${I.flag} Seat alerts</h3><div class="sub">Reading…</div></section>`;
+  const E = L.reduce((t, x) => t + (x.e || 0), 0), B = L.reduce((t, x) => t + (x.b || 0), 0);
+  return `<section class="card" id="alCard"><h3>${I.flag} Seat alerts ${L.length ? `<span class="ct">${L.length}</span>` : ''}</h3>
+    <div class="sub">${!d ? 'Not worked out yet.' : L.length ? L.length + ' quota list' + (L.length === 1 ? '' : 's') + ' need' + (L.length === 1 ? 's' : '') + ' you: ' + E + ' empty seat' + (E === 1 ? '' : 's') + (B ? ', ' + B + ' student' + (B === 1 ? '' : 's') + ' in the wrong place' : '') + '. The number = how many quota lists.' : 'All seats filled.'}</div>
     ${seatAl.stale ? `<div class="sub" style="color:var(--leave);font-weight:700">Changed since: ${esc(seatAl.stale)}. Open the merit lists to bring the alerts up to date.</div>` : ''}
     ${!d ? '<div class="sub">No alerts yet: open Admissions → Merit lists once.</div>' : !L.length ? '<div class="sub">✓ Every seat with a limit is filled and nobody is in the wrong place.</div>' :
       L.map(x => `<div class="li"><span class="tx"><b>${esc(x.l)} · ${esc(x.q)}</b><small>${x.e ? x.e + ' empty seat' + (x.e === 1 ? '' : 's') + ' of ' + x.s : ''}${x.e && x.b ? ' · ' : ''}${x.b ? x.b + ' in the wrong place' : ''}</small>
         ${x.c && x.c.length ? `<small>Next: ${x.c.map(c => esc(c[0]) + ' (' + esc(c[1]) + ', ' + c[2] + ', ' + esc(c[3]) + ')').join(' · ')}</small>` : x.e ? '<small>No candidate in the list yet.</small>' : ''}</span></div>`).join('')}
     ${d ? `<div class="sub">Worked out ${esc(d.at)}${d.by ? ' (' + esc(d.by) + ')' : ''}.</div>` : ''}
-    <div class="acts2"><a class="btn primary" href="admission.html#merit" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open the merit lists</a></div></section>`;
+    <div class="acts2"><a class="btn primary" href="admission.html#merit" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open the merit lists</a><button class="btn" type="button" id="xAlRe">Refresh</button></div></section>`;
 }
 /* SCI TT MORNING ADMIN: timetable editor (morning science sections) + morning classes report, on the home screen */
 function ttmCard(){
@@ -6972,6 +6974,7 @@ document.addEventListener('click', ev => {
   if(t.closest('#xLmGo')) return leftMoveGo();
   if(t.closest('#xLmCsv')) return leftMoveCsv();
   if(t.closest('#xAct')) return openAct();
+  if(t.closest('#xAlRe')){ seatAl = null; seatAlAt = 0; const c = $q('#alCard'); if(c){ const x = document.createElement('div'); x.innerHTML = alertCard(); c.replaceWith(x.firstElementChild); } return; }
   if(t.closest('#xLeftOut')) return left ? leftOut(true) : loadLeft().then(() => leftOut(true));
   if(t.closest('#xLeftOut2')) return leftOut(false);
   if(t.closest('#xLeftRebuild')){
@@ -8344,17 +8347,17 @@ const st = document.createElement('style'); st.id = 'orgCss'; st.textContent = c
 const CFG = {
   home:{ pin:/^Today\b/i, groups:[
     ['My classes', 1, /Tests|exams|My sections|Chief Proctor|My timetable/i],
-    ['Students', 2, /Student search|Approved leaves/i],
+    ['Students', 2, /Student search|Approved leaves|Seat alerts|Science morning timetable/i],
     ['College', 3, /overview|Free teachers/i] ] },
   reports:{ pin:null, groups:[
     ['Make a report', 1, /Create a report|Shortcuts|Official sheet/i],
     ['Students', 2, /Low attendance|Early warning|Student profile|Toppers|Bunkers/i] ] },
   admin:{ pin:/^Teachers, sections/i, groups:[
-    ['Students & admissions', 1, /Admissions|ID cards|Students who left|Student result page/i],
+    ['Students & admissions', 1, /Admissions|Seat alerts|ID cards|Students who left|Student result page/i],
     ['Attendance & records', 2, /Month sheets|Check everything|Approved leaves|shortage|Bunkers|Record summary|Marked-Missed/i],
     ['Exams & results', 4, /Board results|certificates|duty lists/i],
     ['Timetable & reports', 3, /Timetable|Admin tools|College reports/i],
-    ['System', 5, /health check|portal sync/i] ] }
+    ['System', 5, /health check|portal sync|Activity log/i] ] }
 };
 let openKey = '', lastV = '';
 const txt = el => (el ? el.textContent : '').replace(/\s+/g, ' ').trim();
