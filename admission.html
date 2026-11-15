@@ -1285,21 +1285,54 @@ async function mlPhotoPdf(){
     const pics = []; let n = 0, none = 0;
     for(const r of rows){ n++; if(n % 5 === 0) say('Photos ' + n + ' of ' + rows.length + '…'); const d = await mlPhotoData(r.o).catch(() => ''); if(!d) none++; pics.push(d); }
     say('Making the PDF…');
+    /* v8.0: same look as the page: brown title bar, card heading, light pink row lines, bold name + d/o, muted program, coloured rows */
     const doc = new window.jspdf.jsPDF({ orientation:'landscape', unit:'mm', format:'a4' }), W = doc.internal.pageSize.getWidth();
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text('JINNAH COLLEGE FOR WOMEN, UNIVERSITY OF PESHAWAR', W / 2, 11, { align:'center' });
-    doc.setFontSize(11); doc.text('Merit list 1st Year · ' + c.label + ' · ' + c.quota + (P.part ? ' (all seats + next ' + mlWait + ')' : ''), W / 2, 17, { align:'center' });
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
-    doc.text(c.seats + ' seats · ' + c.inHome + ' students in it now' + (c.seats > c.inHome && !c.open ? ' · ' + (c.seats - c.inHome) + ' empty: POSSIBLE CANDIDATES shaded' : '') + (c.fee ? ' · fee Rs ' + c.fee.toLocaleString('en-PK') : '') + (c.sibLabel && c.sibFee ? ' · ' + c.sibLabel + ' fee Rs ' + c.sibFee.toLocaleString('en-PK') : '') + ' · by Aggregate, then age (older first) · ' + new Date().toLocaleDateString('en-GB'), W / 2, 22, { align:'center' });
-    const body = rows.map(r => { const o = r.o; return [r.rank, '', o.roll || '', (o.name || '') + '\nd/o ' + (o.father || '-'), ((prog(o.key) || {}).label || o.key) + '\n' + (o.pcs || ''), o.hq || '', o.metric || '', o.total || '', o._a ? o._a / 100 : '', o.meritNo || '', o.dob || '', o.agewise || '', o.receipt ? o.receipt + '\n(receipt)' : o.feepaid || '',
-      (r.cand ? 'POSSIBLE CANDIDATE' : r.state === 'surplus' ? 'SURPLUS' : r.rank <= c.seats ? 'On a seat' : r.state === 'next' ? 'NEXT IN LINE' : 'Waiting') + (r.state === 'bad' ? '\nWRONG: ' + r.why : r.state === 'next' ? '' : r.why ? '\n' + r.why : '')]; });
-    doc.autoTable({ startY:25, head:[['#', 'Photo', 'Enroll#', 'Student', 'Program · Section', 'HQ', 'Obtained', 'Total', 'Aggregate', 'MeritNo', 'DOB', 'Age-wise', 'Fee paid', 'Seat']], body,
-      theme:'grid', rowPageBreak:'avoid', margin:{ left:7, right:7, bottom:10 }, styles:{ fontSize:8, cellPadding:1, textColor:0, lineColor:120, lineWidth:.1, valign:'middle', minCellHeight:27 },
-      headStyles:{ fillColor:235, textColor:0, fontStyle:'bold', minCellHeight:6 }, columnStyles:{ 0:{ cellWidth:8, halign:'center' }, 1:{ cellWidth:21 }, 13:{ cellWidth:40 } },
-      didParseCell:h => { if(h.section !== 'body') return; const r = rows[h.row.index]; if(r.cand){ h.cell.styles.fontStyle = 'bold'; h.cell.styles.fillColor = [255, 236, 150]; h.cell.styles.lineWidth = .5; } else if(r.state === 'bad'){ h.cell.styles.fontStyle = 'bold'; h.cell.styles.fillColor = [253, 224, 221]; } else if(r.state === 'next') h.cell.styles.fillColor = [220, 235, 255]; else if(r.state === 'surplus') h.cell.styles.fillColor = [255, 233, 204];
-        if(h.row.index === c.seats - 1) h.cell.styles.lineWidth = { bottom:.8, top:.1, left:.1, right:.1 }; },
-      didDrawCell:h => { if(h.section !== 'body' || h.column.index !== 1) return; const d = pics[h.row.index]; if(!d) return;
-        const ih = Math.min(24, h.cell.height - 2); if(ih < 10) return;                    /* never draw a photo outside its own cell */
-        try{ doc.addImage(d, 'JPEG', h.cell.x + 1.5, h.cell.y + (h.cell.height - ih) / 2, ih * 0.75, ih); }catch(e){} } });
+    const BR = [107, 52, 35], PK = [232, 201, 192], MU = [125, 100, 92], INK = [43, 27, 22], TEA = [252, 236, 232];
+    const FILL = { next:[220, 235, 255], bad:[253, 224, 221], surplus:[255, 233, 204], cand:[255, 236, 150] };
+    const sub = c.seats + ' seats · ' + c.inHome + ' students in it now' + (c.seats > c.inHome && !c.open ? ' · ' + (c.seats - c.inHome) + ' empty: possible candidates in yellow' : '')
+      + (c.fee ? ' · fee Rs ' + c.fee.toLocaleString('en-PK') : '') + (c.sibLabel && c.sibFee ? ' · ' + c.sibLabel + ' fee Rs ' + c.sibFee.toLocaleString('en-PK') : '') + ' · by Aggregate, then age (older first)';
+    const bar = first => {
+      doc.setFillColor(...BR); doc.rect(0, 0, W, 13, 'F');
+      doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text('Jinnah College for Women · University of Peshawar', 8, 8.4);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.text('Merit list 1st Year · ' + new Date().toLocaleDateString('en-GB'), W - 8, 8.4, { align:'right' });
+      if(!first) return 17;
+      doc.setFillColor(...TEA); doc.setDrawColor(...PK); doc.setLineWidth(.3); doc.roundedRect(7, 16, W - 14, 15, 2.5, 2.5, 'FD');
+      doc.setTextColor(...INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(12.5); doc.text(c.label + ' · ' + c.quota + (P.part ? '  (all seats + next ' + mlWait + ')' : ''), 11, 22.2);
+      doc.setTextColor(...MU); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.6); doc.text(sub, 11, 27.6);
+      return 34; };
+    const top = bar(true);
+    const fp = o => feeOf(o.challan).map(x => (x.paid ? 'P ' : 'U ') + x.amount.toLocaleString('en-PK')).join(', ') || '–';
+    const seatTxt = r => (r.cand ? 'POSSIBLE CANDIDATE' : r.state === 'surplus' ? 'SURPLUS' : r.rank <= c.seats ? 'On a seat' : r.state === 'next' ? 'NEXT IN LINE' : 'Waiting') + (r.cand ? '\n' + r.why.replace(/^POSSIBLE CANDIDATE /, '') : r.why ? '\n' + r.why : '');
+    const body = rows.map(r => { const o = r.o; return [r.rank, '', o.roll || '–', (o.name || '') + '\nd/o ' + (o.father || '-'), ((prog(o.key) || {}).label || o.key) + '\n' + (o.pcs || ''), o.hq || '', o.metric || '', o.total || '', o._a ? String(o._a / 100) : '', o.meritNo || '', fp(o), o.dob || '', o.agewise || '', o.receipt ? o.receipt + '\n(receipt)' : o.feepaid || '', seatTxt(r)]; });
+    let pg = 1;
+    doc.autoTable({ startY:top, head:[['#', 'Photo', 'Enroll#', 'Student', 'Program · Section', 'HQ', 'Obtained', 'Total', 'Aggregate', 'MeritNo', 'Challan', 'DOB', 'Age-wise', 'Fee paid', 'Seat']], body,
+      theme:'plain', rowPageBreak:'avoid', showHead:'everyPage', margin:{ top:17, left:7, right:7, bottom:10 },
+      styles:{ font:'helvetica', fontSize:8.2, cellPadding:{ top:1.2, bottom:1.2, left:1.5, right:1.5 }, textColor:INK, valign:'middle', minCellHeight:28 },
+      headStyles:{ fontStyle:'bold', textColor:INK, fontSize:7.8, minCellHeight:8, fillColor:false, overflow:'visible' },
+      columnStyles:{ 0:{ cellWidth:7, halign:'center' }, 1:{ cellWidth:22 }, 2:{ cellWidth:17 }, 3:{ cellWidth:33 }, 4:{ cellWidth:26 }, 5:{ cellWidth:9, halign:'center' }, 6:{ cellWidth:15 }, 7:{ cellWidth:10 }, 8:{ cellWidth:16, fontStyle:'bold' }, 9:{ cellWidth:15, halign:'center' }, 10:{ cellWidth:23 }, 11:{ cellWidth:17 }, 12:{ cellWidth:15 }, 13:{ cellWidth:18 }, 14:{ cellWidth:'auto' } },
+      didParseCell:h => { if(h.section !== 'body') return; const r = rows[h.row.index], f = r.cand ? FILL.cand : FILL[r.state]; if(f) h.cell.styles.fillColor = f;
+        if(r.cand || r.state === 'bad') h.cell.styles.fontStyle = 'bold'; if(h.column.index === 14 && (r.cand || r.state === 'bad' || r.state === 'next')) h.cell.styles.fontStyle = 'bold'; },
+      willDrawCell:h => { if(h.section === 'body' && (h.column.index === 3 || h.column.index === 4 || h.column.index === 10)){ h.cell._t = h.cell.text; h.cell.text = []; } },
+      didDrawCell:h => {
+        const x = h.cell.x, y = h.cell.y, w = h.cell.width, ht = h.cell.height;
+        if(h.section === 'head'){ doc.setDrawColor(...PK); doc.setLineWidth(.5); doc.line(x, y + ht, x + w, y + ht); return; }
+        doc.setDrawColor(...PK); doc.setLineWidth(.25); doc.line(x, y + ht, x + w, y + ht);
+        if(h.row.index === c.seats - 1){ doc.setDrawColor(...BR); doc.setLineWidth(.8); doc.line(x, y + ht, x + w, y + ht); }
+        const r = rows[h.row.index], k = h.column.index;
+        if(k === 1){ const d = pics[h.row.index]; const ih = Math.min(24, ht - 3); if(ih < 10) return;
+          const iw = ih * 0.75, ix = x + (w - iw) / 2, iy = y + (ht - ih) / 2;
+          if(d){ try{ doc.addImage(d, 'JPEG', ix, iy, iw, ih); }catch(e){} }
+          doc.setDrawColor(...PK); doc.setLineWidth(.35); doc.roundedRect(ix - .6, iy - .6, iw + 1.2, ih + 1.2, 1.6, 1.6, 'S'); return; }
+        if(!h.cell._t) return;
+        const lines = h.cell._t, cx = x + 1.5, wrap = t => doc.splitTextToSize(String(t), w - 3);
+        let parts;
+        if(k === 3) parts = [[lines[0] && (r.o.name || ''), 'bold', 8.8, INK], ['d/o ' + (r.o.father || '-'), 'normal', 7.8, MU]];
+        else if(k === 4) parts = [[(prog(r.o.key) || {}).label || r.o.key, 'normal', 7.8, MU], [r.o.pcs || '', 'normal', 7.8, MU]];
+        else parts = [[fp(r.o), 'normal', 7.6, MU]];
+        const L2 = []; parts.forEach(pt => wrap(pt[0] || '').forEach(t => L2.push([t].concat(pt.slice(1)))));
+        let ty = y + ht / 2 - (L2.length - 1) * 3.4 / 2 + 1.1;
+        L2.forEach(l => { doc.setFont('helvetica', l[1]); doc.setFontSize(l[2]); doc.setTextColor(...l[3]); doc.text(l[0], cx, ty); ty += 3.4; }); },
+      didDrawPage:() => { if(pg++ > 1) bar(false); } });
     const n2 = doc.internal.getNumberOfPages();
     for(let p = 1; p <= n2; p++){ doc.setPage(p); doc.setFontSize(7); doc.text('Page ' + p + ' of ' + n2, W / 2, doc.internal.pageSize.getHeight() - 4, { align:'center' }); }
     const name = 'Merit list ' + c.label.replace(/[^\w() .-]+/g, ' ') + ' - ' + c.quota + '.pdf', blob = doc.output('blob');
