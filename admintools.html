@@ -123,7 +123,7 @@ table.tt td.tt-miss{background:#FDECEA!important}table.tt td.tt-miss .tt-t{color
 </head>
 <body>
 <header>
-  <div><h1>Admin tools</h1><small id="sub">Timetable · workload · merit · slips · orientation · room tags</small></div>
+  <div><h1>Admin tools</h1><small id="sub">Timetable · workload · merit · slips · orientation · room tags · morning classes</small></div>
   <div class="sp"></div>
   <a class="tb" href="./">← App</a>
 </header>
@@ -141,6 +141,7 @@ table.tt td.tt-miss{background:#FDECEA!important}table.tt td.tt-miss .tt-t{color
     <button data-t="slips">Admission slips</button>
     <button data-t="orient">Orientation</button>
     <button data-t="tags">Room tags</button>
+    <button data-t="morning" class="hidden" id="mcTab">Morning classes</button>
   </div>
 
   <div class="status" id="st"></div>
@@ -275,6 +276,27 @@ table.tt td.tt-miss{background:#FDECEA!important}table.tt td.tt-miss .tt-t{color
     </div>
     <div class="tags" id="tgBox"></div>
   </section>
+
+  <!-- 7. MORNING CLASSES (Subsidized / Non-Subsidized): admin + SCI TT MORNING ADMIN -->
+  <section data-p="morning" class="hidden">
+    <div class="card">
+      <h2>Morning classes report</h2>
+      <div class="note" style="margin:6px 0 10px">Morning students of <b>Transform-ALL-COLLEGE-STRENGTH</b> (evening sections left out):
+        class-wise count with fee and annual income (Subsidized / Non-Subsidized from the <b>CATEGORY</b> sheet), University (UoP) employees' daughters,
+        and section-wise strength of 1st and 2nd year. Type the fees once and press <b>Save fees</b>.</div>
+      <div class="bar" style="margin:0 0 6px;flex-wrap:wrap" id="mcFees"></div>
+      <div class="bar" style="margin:0">
+        <button class="btn" id="mcLoad">Reload students</button>
+        <button class="btn" id="mcSave">Save fees</button>
+        <span id="mcCount" style="color:var(--muted);font-weight:700"></span>
+        <span class="grow"></span>
+        <button class="btn p" id="mcPdf" disabled>PDF</button>
+        <button class="btn" id="mcXlsx" disabled>Excel</button>
+      </div>
+      <div class="note hidden" id="mcWarn" style="margin:10px 0 0"></div>
+    </div>
+    <div id="mcBox"></div>
+  </section>
 </div>
 
 <dialog id="edDlg">
@@ -330,6 +352,7 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
   status('');
   if((b.dataset.t === 'slips' || b.dataset.t === 'orient') && !STU) loadStudents();
   if(b.dataset.t === 'tags' && !TAGS) loadTags();
+  if(b.dataset.t === 'morning' && !MC) loadMorning();
   try{ history.replaceState(null, '', '#' + b.dataset.t); }catch(e){}
 });
 
@@ -342,6 +365,11 @@ async function start(){
     $('wbLink').href = META.url; $('wbName').textContent = META.workbook;
     document.querySelectorAll('.adm').forEach(b => { if(!META.admin){ b.disabled = true; b.title = 'Only the admin can run this'; } });
     if(!META.admin) $('sub').textContent = 'View and print · only the admin can run the generators';
+    if(META.morning) $('mcTab').classList.remove('hidden');
+    if(META.only){                                   /* SCI TT MORNING ADMIN without the other admin tools */
+      document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('hidden', b.dataset.t !== 'morning'));
+      $('sub').textContent = 'Morning classes report'; status(''); $('mcTab').click(); return;
+    }
     const ticked = new Set(META.auto.programs);
     $('autoProgs').innerHTML = (META.programs.length ? META.programs : META.auto.programs).map(p =>
       `<label class="${ticked.has(p) ? 'on' : ''}"><input type="checkbox" value="${esc(p)}" ${ticked.has(p) ? 'checked' : ''}>${esc(p)}</label>`).join('');
@@ -369,7 +397,7 @@ function showSheets(k){
   $(k + 'Out').classList.remove('hidden');
   if(miss.length && miss.length === list.length) status('Not made yet: ' + esc(miss.join(', ')), 'err');
 }
-function refreshOut(){ document.querySelectorAll('.out').forEach(b => { const l = SHEETS[b.dataset.k]; b.disabled = !(l && l.some(s => !s.missing)); }); $('slPdf').disabled = !STU; $('orPdf').disabled = $('orXlsx').disabled = !STU; if(typeof drawTags === 'function' && TAGS){ const n = chosenTags().length; $('tgPdf').disabled = $('tgXlsx').disabled = !n; } }
+function refreshOut(){ document.querySelectorAll('.out').forEach(b => { const l = SHEETS[b.dataset.k]; b.disabled = !(l && l.some(s => !s.missing)); }); $('slPdf').disabled = !STU; $('orPdf').disabled = $('orXlsx').disabled = !STU; $('mcPdf').disabled = $('mcXlsx').disabled = !(MC && MC.list.length); if(typeof drawTags === 'function' && TAGS){ const n = chosenTags().length; $('tgPdf').disabled = $('tgXlsx').disabled = !n; } }
 async function loadSheets(k, names){
   await busy(null, 'Reading the sheet…', async () => {
     const r = await JCW.api({ action:'at_sheet', names });
@@ -913,6 +941,137 @@ $('tgXlsx').onclick = () => busy(null, 'Making the Excel file…', async () => {
   });
   const f = await JCW.xlsx(sheets, 'JCW_Room_Tags_' + new Date().toISOString().slice(0, 10) + '.xlsx'); status('');
   JCW.offer(f.blob, f.name, 'Room tags', { folder:'Room Tags' });
+});
+
+/* ---------- morning classes report (Subsidized / Non-Subsidized) ---------- */
+let MC = null;
+const MC_FEES = [['premed_sub', 'Pre-Medical Subsidized', 60000], ['preeng_sub', 'Pre-Engineering Subsidized', 60000],
+  ['premed_non', 'Pre-Medical Non-Subsidized', 120000], ['preeng_non', 'Pre-Engineering Non-Subsidized', 120000],
+  ['fcs_sub', 'FCS', 60000], ['fcs_non', 'FCS Non-Subsidized', 120000], ['fa', 'F.A', 50000]];
+const MC_KN = { premed:'PRE MED', preeng:'PRE ENG', fcs:'FCS', fa:'FA' }, MC_R = ['', 'I', 'II'];
+const mcKind = p => { p = String(p).toUpperCase(); return /^F\.?\s?A\b/.test(p) ? 'fa' : /PRE-?\s?MED/.test(p) ? 'premed' : /PRE-?\s?ENG/.test(p) ? 'preeng' : /FCS|COMPUTER/.test(p) ? 'fcs' : 'other'; };
+const mcCat = c => { c = String(c).toUpperCase(); return !c || c === 'UNKNOWN' ? '' : /NON/.test(c) ? 'non' : /SUB/.test(c) ? 'sub' : ''; };
+const mcYear = c => /^\s*(1|1st|first|I)\b/i.test(c) ? 1 : /^\s*(2|2nd|second|II)\b/i.test(c) ? 2 : 0;
+const mcNum = n => Number(n || 0).toLocaleString('en-US');
+const mcFee = () => { const o = {}; document.querySelectorAll('#mcFees input').forEach(i => { o[i.dataset.k] = Number(i.value) || 0; }); return o; };
+async function loadMorning(){
+  await busy(null, 'Reading students from Transform-ALL-COLLEGE-STRENGTH…', async () => {
+    const d = (await JCW.api({ action:'at_morning' })).data, saved = d.fees || {};
+    let eve = 0;
+    const list = [];
+    d.rows.forEach(r => {
+      const [p, c, s, pcs, q, cat, ev] = r;
+      if(ev || /\(\s*E\s*\)|EVE/i.test(cat) || /\bEVE/i.test(s + ' ' + pcs)){ eve++; return; }
+      list.push({ p, k:mcKind(p), yr:mcYear(c), cls:c, s:String(s).toUpperCase(), pcs, cat:mcCat(cat), emp:/employ|\bu\.?\s?o\.?\s?p\b/i.test(q) });
+    });
+    MC = { list, eve, hasCat:d.hasCategory, session:d.session || '' };
+    $('mcFees').innerHTML = MC_FEES.map(([k, l, def]) => `<label style="font-weight:700;font-size:12.5px">${esc(l)} <input data-k="${k}" type="number" min="0" step="1000" value="${saved[k] != null ? saved[k] : def}" style="width:105px"></label>`).join('');
+    $('mcFees').querySelectorAll('input').forEach(i => i.oninput = drawMorning);
+    status(''); drawMorning();
+  });
+}
+function mcClassRows(){
+  const L = MC.list, F = mcFee(), out = [];
+  const add = (label, test, fk) => { const n = L.filter(test).length; out.push({ label, n, fee:fk ? F[fk] : null }); return n; };
+  [1, 2].forEach(y => {
+    [['sub', 'Subsidized'], ['non', 'Non-Subsidized']].forEach(([c, cl]) => ['premed', 'preeng'].forEach(k =>
+      add(`F.Sc-${MC_R[y]} (${k === 'premed' ? 'Pre-Medical' : 'Pre-Engineering'}) ${cl}`, s => s.yr === y && s.k === k && s.cat === c, k + '_' + c)));
+    ['premed', 'preeng'].forEach(k => { if(L.some(s => s.yr === y && s.k === k && !s.cat)) add(`F.Sc-${MC_R[y]} (${k === 'premed' ? 'Pre-Medical' : 'Pre-Engineering'}) category not in CATEGORY sheet`, s => s.yr === y && s.k === k && !s.cat, null); });
+  });
+  [1, 2].forEach(y => {
+    const non = L.some(s => s.yr === y && s.k === 'fcs' && s.cat === 'non');
+    add(`FCS-${MC_R[y]} (Computer Science)${non ? ' Subsidized' : ''}`, s => s.yr === y && s.k === 'fcs' && s.cat !== 'non', 'fcs_sub');
+    if(non) add(`FCS-${MC_R[y]} (Computer Science) Non-Subsidized`, s => s.yr === y && s.k === 'fcs' && s.cat === 'non', 'fcs_non');
+  });
+  [1, 2].forEach(y => add(`F.A-${MC_R[y]} (Arts)`, s => s.yr === y && s.k === 'fa', 'fa'));
+  const oth = {}; L.filter(s => s.yr && s.k === 'other').forEach(s => { const key = s.p + ' (' + s.cls + ')'; oth[key] = (oth[key] || 0) + 1; });
+  Object.keys(oth).sort(natCmp).forEach(key => out.push({ label:key, n:oth[key], fee:null }));
+  out.forEach(r => { r.inc = r.fee != null && r.n ? r.n * r.fee : null; });
+  return out;
+}
+function mcSecRows(y){
+  const g = {};
+  MC.list.filter(s => s.yr === y).forEach(s => {
+    const label = s.k === 'fa' ? 'FA-' + s.s : s.k === 'preeng' ? s.s + ' (PRE-ENG)' : s.k === 'fcs' ? s.s + ' (FCS)' : s.k === 'other' ? s.s + ' (' + s.p + ')' : s.s;
+    const o = g[label] || (g[label] = { label, fa:s.k === 'fa', sec:s.s, n:0 }); o.n++;
+  });
+  return Object.values(g).sort((a, b) => (a.fa - b.fa) || natCmp(a.sec, b.sec) || natCmp(a.label, b.label));
+}
+function mcEmp(y){
+  const L = MC.list.filter(s => s.emp && (!y || s.yr === y)), c = {};
+  L.forEach(s => { const k = MC_KN[s.k] || s.p; c[k] = (c[k] || 0) + 1; });
+  const order = ['PRE MED', 'FCS', 'FA', 'PRE ENG'], keys = Object.keys(c).sort((a, b) => ((order.indexOf(a) + 1 || 9) - (order.indexOf(b) + 1 || 9)));
+  return { n:L.length, text:keys.map(k => k + ' (' + c[k] + ')').join(', ') + ' = ' + L.length };
+}
+const mcYearTxt = y => y === 1 ? '1ST YEAR' : '2ND YEAR';
+function drawMorning(){
+  if(!MC) return;
+  const C = mcClassRows(), tot = C.reduce((a, r) => a + r.n, 0), inc = C.reduce((a, r) => a + (r.inc || 0), 0), E = mcEmp(0);
+  $('mcCount').textContent = MC.list.length + ' morning students' + (MC.eve ? ' · ' + MC.eve + ' evening left out' : '');
+  const warn = [];
+  if(!MC.hasCat) warn.push('The <b>CATEGORY</b> sheet was not found, so Subsidized / Non-Subsidized cannot be split.');
+  const unc = C.filter(r => /category not in/.test(r.label)).reduce((a, r) => a + r.n, 0);
+  if(unc) warn.push(unc + ' F.Sc student(s) have a PCS + Class that is not in the CATEGORY sheet (shown in their own row, no fee).');
+  const noYr = MC.list.filter(s => !s.yr).length; if(noYr) warn.push(noYr + ' student(s) have no 1st / 2nd Year in the Class column and are not counted.');
+  $('mcWarn').innerHTML = warn.join('<br>'); $('mcWarn').classList.toggle('hidden', !warn.length);
+  const secTbl = y => { const S = mcSecRows(y), n = S.reduce((a, r) => a + r.n, 0), e = mcEmp(y);
+    return `<div class="sec olist"><h3><span>Section-wise · ${y === 1 ? '1st' : '2nd'} year</span><span class="n" style="background:var(--surface2);color:var(--brown)">${n}</span></h3><div class="scroll"><table><thead><tr><th style="width:60px">S.#</th><th>Section</th><th style="width:150px">No. of Students</th></tr></thead><tbody>`
+      + S.map((r, i) => `<tr><td class="c">${i + 1}.</td><td><b>${esc(r.label)}</b></td><td class="c">${r.n}</td></tr>`).join('')
+      + `<tr><td></td><td><b>Total</b></td><td class="c"><b>${n}</b></td></tr></tbody></table></div>`
+      + `<div class="note" style="margin:8px 12px 12px">NOTE: UOP EMPLOYEE STUDENTS: ${mcYearTxt(y)}; ${esc(e.n ? e.text : 'none')}. These are inclusive of the above students.</div></div>`; };
+  $('mcBox').innerHTML = `<div class="sec olist"><h3><span>Morning classes (Subsidized / Non-Subsidized)</span><span class="n" style="background:var(--surface2);color:var(--brown)">${tot}</span></h3><div class="scroll"><table><thead><tr><th style="width:60px">S.#</th><th>Classes</th><th style="width:130px">No. of Students</th><th style="width:110px">Fee</th><th style="width:140px">Annual Income</th></tr></thead><tbody>`
+    + C.map((r, i) => `<tr><td class="c">${i + 1}.</td><td>${esc(r.label)}</td><td class="c">${r.n || 'NIL'}</td><td class="c">${r.n && r.fee != null ? mcNum(r.fee) + '/-' : '-----'}</td><td class="c">${r.inc ? mcNum(r.inc) + '/-' : ''}</td></tr>`).join('')
+    + `<tr><td></td><td><b>Total</b></td><td class="c"><b>${tot}</b></td><td></td><td class="c"><b>${inc ? mcNum(inc) + '/-' : ''}</b></td></tr></tbody></table></div>`
+    + `<div class="note" style="margin:8px 12px 12px">Total number of students of the University Employees: <b>${E.n}</b>. NOTE: these students are inclusive of the above.</div></div>`
+    + secTbl(1) + secTbl(2);
+  $('mcPdf').disabled = $('mcXlsx').disabled = !MC.list.length;
+}
+$('mcLoad').onclick = () => { MC = null; loadMorning(); };
+$('mcSave').onclick = () => busy(null, 'Saving the fees…', async () => { await JCW.api({ action:'at_mfee', fees:mcFee() }); status('✔ Fees saved for everyone.', 'ok'); });
+const MC_TITLE = 'Morning Classes at the Jinnah College for Women';
+$('mcPdf').onclick = () => busy(null, 'Making the PDF…', async () => {
+  await JCW.libs();
+  const doc = JCW.newDoc('portrait'), C = mcClassRows(), tot = C.reduce((a, r) => a + r.n, 0), inc = C.reduce((a, r) => a + (r.inc || 0), 0), E = mcEmp(0);
+  const st = { font:'helvetica', fontSize:9.4, cellPadding:{ top:1.3, bottom:1.3, left:1.8, right:1.8 }, textColor:[0, 0, 0], lineColor:[90, 90, 90], lineWidth:0.15, valign:'middle' };
+  const note = (Y, t) => { if(Y > JCW.H(doc) - 24){ doc.addPage(); Y = 14; } doc.setFont('helvetica', 'bold'); doc.setFontSize(9.6); doc.setTextColor(0, 0, 0);
+    const ls = doc.splitTextToSize(t, JCW.W(doc) - 28); doc.text(ls, 14, Y + 3); return Y + ls.length * 4.6 + 3; };
+  let Y = JCW.heading(doc, JCW.TOP, MC_TITLE, '(Subsidized / Non-Subsidized)' + (MC.session ? ' · Session ' + MC.session : '') + ' · ' + tot + ' morning students');
+  Y = JCW.table(doc, { startY:Y, styles:st, alternateRowStyles:{ fillColor:false }, head:[['S.#', 'Classes', 'No. of Students', 'Fee', 'Annual Income']],
+    body:C.map((r, i) => [i + 1 + '.', r.label, r.n || 'NIL', r.n && r.fee != null ? mcNum(r.fee) + '/-' : '-----', r.inc ? mcNum(r.inc) + '/-' : ''])
+      .concat([[{ content:'', styles:{ fontStyle:'bold' } }, { content:'Total', styles:{ fontStyle:'bold' } }, { content:String(tot), styles:{ fontStyle:'bold' } }, '', { content:inc ? mcNum(inc) + '/-' : '', styles:{ fontStyle:'bold' } }]]),
+    columnStyles:{ 0:{ halign:'center', cellWidth:12 }, 2:{ halign:'center', cellWidth:28 }, 3:{ halign:'center', cellWidth:26 }, 4:{ halign:'center', cellWidth:34 } } });
+  Y = note(Y, 'Total Number of students of the University Employees: ' + E.n);
+  Y = note(Y, 'NOTE: THESE STUDENTS ARE INCLUSIVE OF THE ABOVE.') + 3;
+  [1, 2].forEach(y => {
+    const S = mcSecRows(y), n = S.reduce((a, r) => a + r.n, 0), e = mcEmp(y);
+    if(Y > JCW.H(doc) - 60){ doc.addPage(); Y = 14; }
+    Y = JCW.table(doc, { startY:Y, styles:st, alternateRowStyles:{ fillColor:false }, margin:{ top:14, left:14, right:14, bottom:18 },
+      head:[['S.#', 'Section wise i.e. A (' + (y === 1 ? '1st' : '2nd') + ' year), B (' + (y === 1 ? '1st' : '2nd') + ' year) etc.', 'No. of Students']],
+      body:S.map((r, i) => [i + 1 + '.', r.label, r.n]).concat([['', { content:'Total', styles:{ fontStyle:'bold' } }, { content:String(n), styles:{ fontStyle:'bold' } }]]),
+      columnStyles:{ 0:{ halign:'center', cellWidth:12 }, 2:{ halign:'center', cellWidth:40 } } });
+    Y = note(Y, 'NOTE: UOP EMPLOYEE STUDENTS: ' + mcYearTxt(y) + '; ' + (e.n ? e.text : 'none'));
+    Y = note(Y, 'THESE ARE INCLUSIVE OF THE ABOVE STUDENTS.') + 4;
+  });
+  JCW.finalize(doc, { bandFirst:true, footer:'pages' }); status('');
+  JCW.offer(doc.output('blob'), 'JCW_Morning_Classes_' + new Date().toISOString().slice(0, 10) + '.pdf', 'Morning classes report', { folder:'JCW Admin Reports' });
+});
+$('mcXlsx').onclick = () => busy(null, 'Making the Excel file…', async () => {
+  const C = mcClassRows(), tot = C.reduce((a, r) => a + r.n, 0), inc = C.reduce((a, r) => a + (r.inc || 0), 0), E = mcEmp(0);
+  const rows = [], groupRows = [], headRows = [];
+  groupRows.push(rows.length); rows.push(['MORNING CLASSES (SUBSIDIZED / NON-SUBSIDIZED)' + (MC.session ? ' · SESSION ' + MC.session : '')]);
+  headRows.push(rows.length); rows.push(['S.#', 'Classes', 'No. of Students', 'Fee', 'Annual Income']);
+  C.forEach((r, i) => rows.push([i + 1, r.label, r.n || 'NIL', r.n && r.fee != null ? r.fee : '-----', r.inc || '']));
+  rows.push(['', 'Total', tot, '', inc || '']);
+  rows.push([]); rows.push(['', 'Total Number of students of the University Employees: ' + E.n]); rows.push(['', 'NOTE: THESE STUDENTS ARE INCLUSIVE OF THE ABOVE.']);
+  [1, 2].forEach(y => {
+    const S = mcSecRows(y), e = mcEmp(y);
+    rows.push([]); groupRows.push(rows.length); rows.push(['SECTION-WISE · ' + mcYearTxt(y)]);
+    headRows.push(rows.length); rows.push(['S.#', 'Section', 'No. of Students']);
+    S.forEach((r, i) => rows.push([i + 1, r.label, r.n])); rows.push(['', 'Total', S.reduce((a, r) => a + r.n, 0)]);
+    rows.push(['', 'NOTE: UOP EMPLOYEE STUDENTS: ' + mcYearTxt(y) + '; ' + (e.n ? e.text : 'none') + '. These are inclusive of the above students.']);
+  });
+  const f = await JCW.xlsx([{ name:'Morning Classes', title:MC_TITLE + ' (Subsidized / Non-Subsidized)', rows, groupRows, headRows, cols:[7, 52, 16, 14, 18] }], 'JCW_Morning_Classes_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+  status(''); JCW.offer(f.blob, f.name, 'Morning classes report', { folder:'JCW Admin Reports' });
 });
 
 start();

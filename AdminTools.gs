@@ -8,6 +8,8 @@
  *   5. Admission slips         (Transform-ALL-COLLEGE-STRENGTH, made as PDF in the app, 4 per A4 landscape page)
  *   6. Orientation lists       (all programs: Program -> PCS -> Room, or one program + chosen sections)
  *   7. Fill room from timetable into every sheet of the destination workbook
+ *   8. Morning classes report  (Transform-ALL-COLLEGE-STRENGTH + CATEGORY: class-wise Subsidized / Non-Subsidized with fee
+ *                               and annual income, UoP employees, section-wise 1st / 2nd year) — admin, principal, SCI TT MORNING ADMIN
  * The original scripts are below the router, unchanged except: they open the workbook by id (no "active"
  * spreadsheet in a web app), the toasts are skipped, and they return what they made.
  *
@@ -45,12 +47,17 @@ function atRoute_(user, req) {
     var see = false, admin = false;
     try { admin = !!isAdmin_(user); } catch (e) {}
     try { see = admin || gtAll_(user) || wrAll_(user); } catch (e) { see = admin; }
-    if (!see) return { ok: false, error: 'The admin tools are for the admin, principal and HODs.' };
+    var morn = admin; try { morn = admin || at_mornOk_(user); } catch (e) {}
+    if (!see && !morn) return { ok: false, error: 'The admin tools are for the admin, principal and HODs.' };
     var a = String(req.action || '');
+    if (!see && !/^at_(meta|morning|mfee)$/.test(a)) return { ok: false, error: 'You can open only the Morning classes report.' };
+    if (/^at_(morning|mfee)$/.test(a) && !morn) return { ok: false, error: 'The Morning classes report is for the admin and the SCI TT MORNING ADMIN.' };
     var mustAdmin = { at_run: 1, at_fillroom: 1, at_savestu: 1 };
     if (mustAdmin[a] && !admin) return { ok: false, error: 'Only the admin can run this (it writes to the workbook).' };
     switch (a) {
-      case 'at_meta':     return { ok: true, data: at_meta_(admin) };
+      case 'at_meta':     return { ok: true, data: Object.assign(at_meta_(admin), { morning: morn, only: !see }) };
+      case 'at_morning':  return { ok: true, data: at_morning_() };
+      case 'at_mfee':     return { ok: true, data: at_mfeeSave_(req.fees) };
       case 'at_sheet':    return { ok: true, data: { sheets: at_readMany_(req.names || [req.name]) } };
       case 'at_strength': return { ok: true, data: at_strength_() };
       case 'at_save':     return { ok: true, data: at_save_(req) };
@@ -164,6 +171,47 @@ function at_strength_() {
     rows.push(o);
   }
   return { rows: rows, hasRoom: C.room >= 0, hasQuota: C.q >= 0, hasSubs: C.sub.some(function (i) { return i >= 0; }), ttSheet: TT.sheet, ttFound: TT.found, faCombos: at_faCombos_() };
+}
+
+/* ---------- Morning classes report (Subsidized / Non-Subsidized): admin, principal and SCI TT MORNING ADMIN ----------
+   The tt_admin column of the Users sheet decides: "SCI TT MORNING ADMIN" (or an old "SCI TT ADMIN") may open it,
+   "SCI TT EVENING ADMIN" / "ARTS TT ADMIN" may not. */
+function at_mornOk_(user) {
+  var ok = function (v) { v = String(v || '').toUpperCase(); return /PRINCIPAL/.test(v) || (/ADMIN/.test(v) && /\bSCI(ENCE)?\b/.test(v) && !/\bEVE(NING)?\b/.test(v)); };
+  if (ok(user.role)) return true;
+  var v = usersTable_(); if (!v.length) return false;
+  var iT = usersCol_(v[0], 'ttadmin', 8), u = String(user.username || '').trim().toLowerCase();
+  for (var i = 1; i < v.length; i++) if (String(v[i][4]).trim().toLowerCase() === u) return ok(v[i][iT]);
+  return false;
+}
+var AT_MFEE_PROP = 'AT_MORNING_FEES';
+function at_mfee_() { try { return JSON.parse(PropertiesService.getScriptProperties().getProperty(AT_MFEE_PROP) || '{}'); } catch (e) { return {}; } }
+function at_mfeeSave_(fees) {
+  var out = {};
+  Object.keys(fees || {}).forEach(function (k) { if (/^[a-z_]{2,20}$/.test(k)) { var n = Number(String(fees[k]).replace(/[^\d.]/g, '')); if (n >= 0 && n < 1e8) out[k] = n; } });
+  PropertiesService.getScriptProperties().setProperty(AT_MFEE_PROP, JSON.stringify(out));
+  return { fees: out };
+}
+/** every student of the strength sheet: [program, class, section, PCS, quota, category (CATEGORY sheet), evening 1/0] */
+function at_morning_() {
+  var ss = at_ss_(), sh = ss.getSheetByName(AT_CFG.STRENGTH);
+  if (!sh) throw new Error("Sheet '" + AT_CFG.STRENGTH + "' not found.");
+  var v = sh.getDataRange().getDisplayValues();
+  if (v.length < 2) throw new Error('No student data found.');
+  var C = at_cols_(v[0]), cat = {}, cs = ss.getSheetByName('CATEGORY');
+  if (cs) {
+    var cv = cs.getDataRange().getDisplayValues(), ch = cv[0].map(function (h) { return String(h).trim(); });
+    var a = ch.indexOf('PCS'), b = ch.indexOf('Class'), c = ch.indexOf('Category');
+    if (a >= 0 && b >= 0 && c >= 0) for (var i = 1; i < cv.length; i++) cat[String(cv[i][a]).trim().toUpperCase() + '||' + String(cv[i][b]).trim().toUpperCase()] = String(cv[i][c]).trim();
+  }
+  var g = function (r, i) { return i >= 0 && i < r.length ? String(r[i]).trim() : ''; }, rows = [];
+  for (var r = 1; r < v.length; r++) {
+    var row = v[r]; if (!g(row, C.e) && !g(row, C.n)) continue;
+    var p = g(row, C.p), cl = g(row, C.c), s = g(row, C.s), pcs = g(row, C.pcs), eve = 0;
+    try { eve = ntt_isEveRow_(p, cl, s) ? 1 : 0; } catch (e) {}
+    rows.push([p, cl, s, pcs, g(row, C.q), cat[pcs.toUpperCase() + '||' + cl.toUpperCase()] || '', eve]);
+  }
+  return { rows: rows, fees: at_mfee_(), hasCategory: !!cs, session: at_session_() };
 }
 
 /* ---------- F.A optional subject combinations: the "FA optional subjects" sheet (gid 444973916), one combination per row ---------- */
