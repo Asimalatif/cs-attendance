@@ -2140,6 +2140,7 @@ const HINTS = [
  ['#xLeftMove,#xLeftMove2','Move students who left','Moves migrated, cancelled, disenrolled and transferred students out of the strength sheet into the sheet Left Students, and takes them out of attendance from this month.','home'],
  ['[data-xros]','Sheets vs strength sheet','Compares every attendance sheet of that month with the strength sheet: missing students, extra students, students struck off by mistake.','home'],
  ['[data-xrf],[data-xrfa]','Add / Remove / Switch on','Add = put the missing student in the sheet. Remove = delete her row (struck through instead if she already has marks that month). Switch on = count her again.','home'],
+['#xLeftOut,#xLeftOut2','PDF / Excel / share','All students who left (or the chosen tab) as a PDF or Excel file: download, open or share.','home'],
  ['#xLeftList','List / restore','Everyone moved so far, with Excel, and Restore for a student moved by mistake.','home'],
  ['#fOpen','Open / Print','PDF: opens it to view or print. Excel: opens it as a table with a filter on every column and a Print button.','home'],
  ['#xBunk,#xBunkA','Bunkers','Students who were present in one lecture but absent (or marked B) in another on the same day. Day, week, month and whole session; by section, subject, class, teacher. Confirm bunk or Excused; PDF, CSV, WhatsApp. Teachers see their own lectures, HOD the department, admin and Chief Proctor the whole college.','bunkers'],
@@ -6718,6 +6719,7 @@ function leftCard(){
     ${left ? `<div class="chips" style="margin:6px 0">${['1st Year', '2nd Year', 'Ex-students', 'Year not known'].filter(y => yr[y]).map(y => `<button class="chip" type="button" data-xlyr="${y}" style="font-weight:800">${y} · ${yr[y]}</button>`).join('')}${Object.keys(by).map(k => `<button class="chip" type="button" data-xlyr="st:${esc(k)}">${esc(k)} · ${by[k]}</button>`).join('') || '<span class="sub">Nobody moved yet.</span>'}</div>` : '<div class="sk"></div>'}
     ${J && J.running ? '<div class="sub" style="color:var(--leave);font-weight:700">Updating the attendance sheets in the background…</div>' : J && J.finished ? `<div class="sub">Attendance sheets updated ${esc(J.finished)}: ${J.struck || 0} row(s) struck through, ${J.removed || 0} removed from later months.</div>` : ''}
     <div class="acts2"><button class="btn" type="button" id="xLeftList">List / restore</button><button class="btn primary" type="button" id="xLeftMove">Move students who left</button></div>
+    <div class="acts2" style="margin-top:6px"><button class="btn" type="button" id="xLeftOut" title="All students who left as a PDF or Excel file: download, open or share">PDF / Excel / share</button></div>
     <div class="acts2" style="margin-top:6px"><button class="btn" type="button" id="xLeftRebuild" title="Recreates the sheet with every column of the strength sheet and fills missing details from the strength sheet and Portal Data (old sheet kept as a backup)">Rebuild Left Students sheet (all details)</button></div></section>`;
 }
 function refreshLeft(){ const c = $q('#leftCard'); if(c){ const t = document.createElement('div'); t.innerHTML = leftCard(); c.replaceWith(t.firstElementChild); } }
@@ -6732,10 +6734,21 @@ function openLeftList(f){
     <div class="meta">${leftF.indexOf('st:') === 0 ? esc(leftF.slice(3)) + ' · ' : ''}${Object.keys(st).map(k => esc(k) + ' ' + st[k]).join(' · ')}. Newest first. <b>Restore</b> = moved by mistake: she goes back to the strength sheet and is counted again from this month.</div>
     <div style="max-height:52vh;overflow:auto">${L.map(x => `<div class="li"><span class="tx"><b>${esc(x.name)}</b><small>${esc(x.roll)} · D/O ${esc(x.father || '–')} · ${esc(x.pcs)} · ${leftYear(x)}</small><small>${esc(x.status)} · moved ${esc(x.on)} by ${esc(x.by)}</small></span>
       <button class="pill" type="button" data-xlrest="${esc(x.roll)}">Restore</button></div>`).join('') || '<div class="empty">Nobody moved yet.</div>'}</div>
-    <div class="acts"><button class="btn small primary grow" type="button" id="xLeftCsv">Excel</button><button class="btn small grow" id="closeDlg">Close</button></div>`);
+    <div class="acts"><button class="btn small primary grow" type="button" id="xLeftOut2">PDF / Excel / share</button><button class="btn small grow" id="closeDlg">Close</button></div>`);
 }
 const leftCsv = () => P.offerFile(csvBlob([['Roll No', 'Student Name', 'Father Name', 'PCS', 'Year', 'Portal Status', 'Moved On', 'Moved By', 'Left In Month']]
   .concat(leftPick().map(x => [x.roll, x.name, x.father, x.pcs, leftYear(x), x.status, x.on, x.by, x.month]))), 'Left-students' + (leftF === 'all' ? '' : '-' + leftF.replace(/^st:/, '').replace(/\s+/g, '-')) + '.csv', 'Students who left' + (leftF === 'all' ? '' : ' · ' + leftF.replace(/^st:/, '')));
+/* v8.4: students who left (the chosen tab, or everyone) as PDF / Excel with download, open and share */
+function leftOut(all){
+  if(all) leftF = 'all';
+  const L = leftPick(); if(!L.length) return toast('Nobody in this list.');
+  const st = {}; L.forEach(x => { st[x.status] = (st[x.status] || 0) + 1; });
+  const what = leftF === 'all' ? '' : ' · ' + leftF.replace(/^st:/, '');
+  JCWOUT.list({ title:'Students who left' + what, sub:L.length + ' students · ' + Object.keys(st).map(k => k + ' ' + st[k]).join(' · ') + ' · newest first',
+    head:['#', 'Enroll#', 'Student Name', 'Father Name', 'Class-Sec', 'Year', 'Portal Status', 'Left in month', 'Moved on', 'Moved by'],
+    rows:L.map((x, i) => [i + 1, x.roll, x.name, x.father || '', x.pcs || '', leftYear(x), x.status, x.month || '', x.on || '', x.by || '']),
+    file:'Students who left' + what });
+}
 const leftMoveCsv = () => P.offerFile(csvBlob([['Roll No', 'Student Name', 'Father Name', 'PCS', 'Portal Status']].concat(leftSel.list.map(x => [x.roll, x.name, x.father, x.pcs, x.status]))), 'Not-enrolled-students.csv', 'Not enrolled on the portal');
 
 const hcText = () => 'JCW ATTENDANCE - HEALTH CHECK ' + hc.at + '\n\n' + hc.checks.map(c => (c.level === 'ok' ? '✓ ' : '! ') + c.title + (c.level === 'ok' ? '' : ' (' + c.n + ')\n' + c.items.slice(0, 15).map(x => '  - ' + x).join('\n'))).join('\n');
@@ -6923,6 +6936,8 @@ document.addEventListener('click', ev => {
   if(t.closest('#xLeftMove') || t.closest('#xLeftMove2')) return openLeftMove();
   if(t.closest('#xLmGo')) return leftMoveGo();
   if(t.closest('#xLmCsv')) return leftMoveCsv();
+  if(t.closest('#xLeftOut')) return left ? leftOut(true) : loadLeft().then(() => leftOut(true));
+  if(t.closest('#xLeftOut2')) return leftOut(false);
   if(t.closest('#xLeftRebuild')){
     if(!confirm('Recreate the sheet "Left Students" with every column of the strength sheet and fill the missing details from the strength sheet and Portal Data?\n\nThe old sheet is kept as "Left Students backup …".')) return;
     toast('Rebuilding Left Students… (up to a minute)');
