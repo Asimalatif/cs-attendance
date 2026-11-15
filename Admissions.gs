@@ -137,6 +137,12 @@ function admRoute_(user, req) {
     case 'adm_index':     return admIndex_();
     case 'adm_left':      return admLeftAll_();
     case 'adm_seats_get': return admSeatsGet_();
+    case 'adm_alerts_save': {                                // v8.6: seat alerts for the home screen (worked out by the merit lists on the phone)
+      var al = { at: admNow_(), by: String(user.teacher || user.username || ''), items: (req.items || []).slice(0, 25) }, txt = JSON.stringify(al);
+      if (txt.length > 8500) { al.items = al.items.slice(0, 10); txt = JSON.stringify(al); }
+      PropertiesService.getScriptProperties().setProperty('ADM_ALERTS', txt); PropertiesService.getScriptProperties().deleteProperty('ADM_ALERTS_STALE');
+      return { ok: true };
+    }
     case 'adm_seats_save': return admSeatsSave_(user, req.rows || [], req.pools || []);
     case 'adm_next_roll': return admNextRollFor_(req.program, req.year);
     case 'adm_portal':    return admPortal_(req.q || req.id);

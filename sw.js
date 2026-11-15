@@ -1,5 +1,5 @@
 // Bump VERSION every time you change index.html so phones pick up the update.
-const VERSION = 'csa-v196';
+const VERSION = 'csa-v197';
 
 // Approved leaves (leaves.html): self.LV = storage + sending of the Leave In-Charge's waiting leaves
 try { importScripts('./leavesync.js'); } catch (e) {}
@@ -35,7 +35,21 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
-  // Other files: saved copy first, then network
+  // v8.6: scripts, styles and data files: newest copy first (so a change to jcwout.js / jcwkit.js … reaches every phone without
+  // raising VERSION), the saved copy when offline or when the network takes more than 4 seconds. Pictures and fonts: saved copy first.
+  if (/\.(js|css|json|svg|pdf)$/i.test(url.pathname) && !/jspdf.*\.min\.js$/i.test(url.pathname)) {
+    e.respondWith(new Promise(resolve => {
+      let done = false;
+      const fromCache = () => caches.match(req).then(hit => hit || fetch(req));
+      const t = setTimeout(() => { if (!done) { done = true; resolve(fromCache()); } }, 4000);
+      fetch(req, { cache:'no-cache' }).then(res => {
+        if (res && res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(req, copy)); }
+        if (!done) { done = true; clearTimeout(t); resolve(res); }
+      }).catch(() => { if (!done) { done = true; clearTimeout(t); resolve(fromCache()); } });
+    }));
+    return;
+  }
+  // Other files (pictures, fonts, the big PDF library): saved copy first, then network
   e.respondWith(caches.match(req).then(hit => hit || fetch(req)));
 });
 

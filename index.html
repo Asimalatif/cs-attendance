@@ -3538,6 +3538,7 @@ function renderHome(){
   const college = scope ? collegeCard() : '';
   if(college && !cur.length) h += college;
   if(isTTM) h += ttmCard();
+  if(isTTM || (isAdmin && scope === 'all')) h += alertCard();
   if(!cur.length && !college) h += `<section class="card"><h3>${I.cal} Today <span class="tdate">${esc(fmtDate(now, { weekday:'short', day:'numeric', month:'short' }))}</span></h3><div class="empty">No classes are assigned to you in the timetable yet. Ask the admin.</div></section>`;
 
   /* Today: one compact line per class: period + start time | class (room, practical, now) | status */
@@ -6112,7 +6113,7 @@ let hc = null, rinfo = null;
 function adminExtraCards(){
   if(scope !== 'all') return '';
   const page = studentPageUrl();
-  return `<div class="grid2" style="margin-top:12px">${shsCard()}${evCard()}${leftCard()}${isAdmin ? `<section class="card"><h3>${I.doc} Admissions</h3>
+  return `<div class="grid2" style="margin-top:12px">${shsCard()}${evCard()}${leftCard()}${isAdmin ? actCard() : ''}${isAdmin ? `<section class="card"><h3>${I.doc} Admissions</h3>
       <div class="sub">Add a new student or change an old admission (program, year, section, quota, roll no, subjects, marks). Saves go straight into Transform-ALL-COLLEGE-STRENGTH, also without internet. Then run <b>Sheets vs strength sheet</b> so the attendance sheets follow.</div>
       <div class="acts2"><a class="btn primary" href="admission.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Admissions</a></div></section><section class="card"><h3>${I.doc} Board results</h3>
       <div class="sub">Peshawar Board gazette PDF (HSSC 1st or 2nd year) → a sheet such as “HSSC 1st year 2026” in Provisional Certificates: every student, college name, board position, Jinnah College top 20.</div>
@@ -6148,6 +6149,20 @@ function adminExtraCards(){
       ${pinfo && pinfo.last ? `<div class="sub" style="margin-top:6px"><b>Last sync:</b> ${esc(pinfo.last.at)} · ${esc(pinfo.last.mode === 'quick' ? 'quick' : 'full')} · ${pinfo.last.rows} students${portalFillTxt(pinfo.last.fill)}</div>` : `<div class="sub" style="margin-top:6px">${pinfo ? 'Never synced yet.' : ''}</div>`}
       <ol class="sub" style="margin:6px 0 0 18px;padding:0"><li>Once: install the free <b>Tampermonkey</b> extension in Chrome, then tap <b>Install the sync button</b>.</li><li>Tap <b>Get sync key</b> and copy it.</li><li>Open the portal, log in, go to <b>Student › Students</b>: a <b>JCW Portal Sync</b> box appears. Choose <b>Quick</b> (1–2 min) or <b>Full</b> (all details, about an hour) and paste the key when it asks.</li></ol>
       <div class="acts2"><a class="btn" href="${esc(portalScriptUrl())}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center;color:var(--ink)">Install the sync button</a><button class="btn primary" type="button" id="xPkey">Get sync key</button></div></section></div>`;
+}
+/* v8.6 seat alerts: empty seats and the next students in line (sent by the Admissions merit lists) */
+let seatAl = null, seatAlAt = 0;
+function alertCard(){
+  if(!seatAl || Date.now() - seatAlAt > 10 * 60000){ seatAlAt = Date.now(); srv({ action:'at_alerts' }, 60000).then(r => { seatAl = r; const c = $q('#alCard'); if(c){ const t = document.createElement('div'); t.innerHTML = alertCard(); c.replaceWith(t.firstElementChild); } }).catch(() => {}); }
+  const d = seatAl && seatAl.data, L = d ? d.items || [] : [];
+  if(!seatAl) return '<section class="card" id="alCard"><h3>Seat alerts</h3><div class="sub">Reading…</div></section>';
+  return `<section class="card" id="alCard"><h3>Seat alerts ${L.length ? `<span class="ct">${L.length}</span>` : ''}</h3>
+    ${seatAl.stale ? `<div class="sub" style="color:var(--leave);font-weight:700">Changed since: ${esc(seatAl.stale)}. Open the merit lists to bring the alerts up to date.</div>` : ''}
+    ${!d ? '<div class="sub">No alerts yet: open Admissions → Merit lists once.</div>' : !L.length ? '<div class="sub">✓ Every seat with a limit is filled and nobody is in the wrong place.</div>' :
+      L.map(x => `<div class="li"><span class="tx"><b>${esc(x.l)} · ${esc(x.q)}</b><small>${x.e ? x.e + ' empty seat' + (x.e === 1 ? '' : 's') + ' of ' + x.s : ''}${x.e && x.b ? ' · ' : ''}${x.b ? x.b + ' in the wrong place' : ''}</small>
+        ${x.c && x.c.length ? `<small>Next: ${x.c.map(c => esc(c[0]) + ' (' + esc(c[1]) + ', ' + c[2] + ', ' + esc(c[3]) + ')').join(' · ')}</small>` : x.e ? '<small>No candidate in the list yet.</small>' : ''}</span></div>`).join('')}
+    ${d ? `<div class="sub">Worked out ${esc(d.at)}${d.by ? ' (' + esc(d.by) + ')' : ''}.</div>` : ''}
+    <div class="acts2"><a class="btn primary" href="admission.html#merit" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open the merit lists</a></div></section>`;
 }
 /* SCI TT MORNING ADMIN: timetable editor (morning science sections) + morning classes report, on the home screen */
 function ttmCard(){
@@ -6711,6 +6726,26 @@ function leftYear(x){
   return m ? (m[1] === '1' ? '1st Year' : '2nd Year') : 'Year not known';
 }
 let leftF = 'all';
+/* v8.6 activity log (main admin): who changed what and when */
+function actCard(){
+  return `<section class="card"><h3>${I.flag} Activity log</h3><div class="sub">Every change made in the app: attendance saved, students moved, admissions, seats, leaves, timetable, backups… with who did it, when, and whether it worked. Kept in the sheet <b>Activity Log</b> (newest 20,000 lines).</div>
+    <div class="acts2"><button class="btn primary" type="button" id="xAct">Open / search the activity log</button></div></section>`;
+}
+let actQ = '';
+async function openAct(q){
+  if(q != null) actQ = q;
+  dlgOpen(`<h2>Activity log</h2><div class="meta">Reading…</div>`);
+  let r; try{ r = await srv({ action:'act_list', q:actQ, n:300 }, 90000); }catch(e){ return dlgOpen(`<h2>Activity log</h2><div class="meta" style="color:var(--bad)">${esc(e.message)}</div><div class="acts"><button class="btn small grow" id="closeDlg">Close</button></div>`); }
+  const R = r.rows || [];
+  dlgOpen(`<h2>Activity log <span class="ct">${r.total}</span></h2>
+    <div style="display:flex;gap:6px;margin:6px 0"><input id="actQ" value="${esc(actQ)}" placeholder="Search: teacher, username, action, student, sheet, date (15/11/2026)…" style="flex:1;height:42px" autocomplete="off"><button class="btn small primary" id="actGo">Search</button></div>
+    <div class="meta">${r.total} line${r.total === 1 ? '' : 's'}${actQ ? ' match "' + esc(actQ) + '"' : ''} in the newest ${r.searched || 0}; ${R.length < r.total ? 'newest ' + R.length + ' shown' : 'newest first'}.</div>
+    <div style="max-height:55vh;overflow:auto">${R.map(x => `<div class="li"><span class="tx"><b>${esc(x[1] || x[2])}</b> · ${esc(x[3])} ${/^OK/.test(x[5]) ? '' : `<span style="color:var(--bad);font-weight:700">${esc(x[5])}</span>`}<small>${esc(x[0])}${x[4] ? ' · ' + esc(x[4]) : ''}</small></span></div>`).join('') || '<div class="empty">Nothing found.</div>'}</div>
+    <div class="acts"><button class="btn small grow" type="button" id="actOut">PDF / Excel / share</button><button class="btn small grow" id="closeDlg">Close</button></div>`);
+  const go = () => openAct($q('#actQ').value.trim());
+  $q('#actGo').onclick = go; $q('#actQ').onkeydown = e => { if(e.key === 'Enter') go(); };
+  $q('#actOut').onclick = () => JCWOUT.list({ title:'Activity log' + (actQ ? ' · ' + actQ : ''), sub:R.length + ' lines, newest first', head:['When', 'Who', 'Username', 'Action', 'What', 'Result'], rows:R, file:'Activity log' + (actQ ? ' - ' + actQ : '') });
+}
 function leftCard(){
   if(scope !== 'all') return '';
   const J = left && left.job, by = {}, yr = {}; (left && left.list || []).forEach(x => { by[x.status] = (by[x.status] || 0) + 1; const y = leftYear(x); yr[y] = (yr[y] || 0) + 1; });
@@ -6936,6 +6971,7 @@ document.addEventListener('click', ev => {
   if(t.closest('#xLeftMove') || t.closest('#xLeftMove2')) return openLeftMove();
   if(t.closest('#xLmGo')) return leftMoveGo();
   if(t.closest('#xLmCsv')) return leftMoveCsv();
+  if(t.closest('#xAct')) return openAct();
   if(t.closest('#xLeftOut')) return left ? leftOut(true) : loadLeft().then(() => leftOut(true));
   if(t.closest('#xLeftOut2')) return leftOut(false);
   if(t.closest('#xLeftRebuild')){

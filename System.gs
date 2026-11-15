@@ -18,6 +18,8 @@ var SYS_CFG = {
   // tabs of the Users workbook that hold one session's work (emptied for a new session if ticked)
   USERS_SESSION_SHEETS: ['Attendance Index', 'Guests', 'Substitutions', 'Student Remarks', 'Chief Proctor Reports', 'Deleted Attendance Log',
                          'Bunk Decisions', 'Bunkers Log', 'ID Card Requests', 'ID Cards Printed', 'Change History', 'Left Students', 'Admission Log'],
+  AUTO_KIND: 'Automatic weekly', AUTO_KEEP: 8,          // v8.6: weekly backup (Sunday 3 am), the 8 newest automatic backups are kept
+  SNAP_FOLDER: 'Daily snapshots', SNAP_KEEP: 14,         // v8.6: daily copy of Users, Transform, Quota Settings, Seat Pools (14 days kept)
   USERS_DEFAULT_ON: ['Attendance Index', 'Guests', 'Substitutions', 'Student Remarks', 'Chief Proctor Reports', 'Deleted Attendance Log', 'Bunk Decisions', 'Bunkers Log', 'ID Card Requests']
 };
 
@@ -36,6 +38,10 @@ function sysRoute_(user, req) {
     case 'sys_ns_promote':    return sysGuard_(user, req, 'session') || sysNsPromote_(req);
     case 'sys_ns_sheets':     return sysNsSheets_(req);
     case 'sys_ns_empty':      return sysGuard_(user, req, 'session') || sysNsEmpty_(req);
+    case 'sys_auto':          return sysAutoSet_(req.on === true);
+    case 'sys_snap_list':     return sysSnapList_();
+    case 'sys_snap_now':      return { ok: true, snap: sysDailySnapshot_('made by hand') };
+    case 'sys_snap_restore':  return sysSnapRestore_(user, req);
   }
   return { ok: false, error: 'UNKNOWN_ACTION' };
 }
@@ -105,7 +111,7 @@ function sysInfo_() {
                 files: m ? m.files.length : 0, done: m ? m.files.filter(function (x) { return x.copy; }).length : 0 });
   }
   list.sort(function (a, b) { return b.at - a.at; });
-  return { ok: true, session: sysSession_(), books: sysBooks_(), root: { id: root.getId(), url: root.getUrl() }, backups: list, last: sysLastBackup_() };
+  return { ok: true, session: sysSession_(), books: sysBooks_(), root: { id: root.getId(), url: root.getUrl() }, backups: list, last: sysLastBackup_(), auto: sysAutoState_() };
 }
 
 /* ---------- backup ---------- */
@@ -138,6 +144,106 @@ function sysBackupFinish_(req) {
   m.complete = true; m.finished = new Date().toISOString(); sysSaveManifest_(folder, m);
   PropertiesService.getScriptProperties().setProperty('SYS_LAST_BACKUP', JSON.stringify({ at: Date.now(), folder: folder.getId(), name: m.name, kind: m.kind }));
   return { ok: true, name: m.name, url: folder.getUrl() };
+}
+
+/* ---------- v8.6 automatic weekly backup (continues by itself, 4.5 minutes at a time) ---------- */
+function sysAutoState_() {
+  var h = {}; ScriptApp.getProjectTriggers().forEach(function (t) { h[t.getHandlerFunction()] = 1; });
+  var job = null; try { job = JSON.parse(PropertiesService.getScriptProperties().getProperty('SYS_AUTO_JOB') || 'null'); } catch (e) {}
+  return { weekly: !!h.sysAutoBackup, daily: !!h.sysDailySnapshot, running: !!job, lastSnap: PropertiesService.getScriptProperties().getProperty('SYS_LAST_SNAP') || '' };
+}
+function sysAutoSet_(on) {
+  ['sysAutoBackup', 'sysDailySnapshot'].forEach(clearContinuation_);
+  if (on) {
+    ScriptApp.newTrigger('sysAutoBackup').timeBased().onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(3).create();
+    ScriptApp.newTrigger('sysDailySnapshot').timeBased().everyDays(1).atHour(1).create();
+  }
+  return { ok: true, auto: sysAutoState_() };
+}
+function sysAutoBackup() { sysAutoRun_(); }
+function sysAutoBackupMore() { clearContinuation_('sysAutoBackupMore'); sysAutoRun_(); }
+function sysAutoRun_() {
+  var p = PropertiesService.getScriptProperties(), t0 = Date.now(), job = null;
+  try { job = JSON.parse(p.getProperty('SYS_AUTO_JOB') || 'null'); } catch (e) {}
+  if (!job) { var st = sysBackupStart_({ kind: SYS_CFG.AUTO_KIND }); job = { folder: st.folder }; p.setProperty('SYS_AUTO_JOB', JSON.stringify(job)); }
+  var folder = DriveApp.getFolderById(job.folder), m = sysManifest_(folder), todo = m.files.filter(function (x) { return !x.copy; });
+  for (var i = 0; i < todo.length; i++) {
+    if (Date.now() - t0 > 270000) { ScriptApp.newTrigger('sysAutoBackupMore').timeBased().after(60 * 1000).create(); return; }
+    try { sysBackupCopy_({ folder: job.folder, id: todo[i].id }); } catch (e) { job.err = (job.err || 0) + 1; p.setProperty('SYS_AUTO_JOB', JSON.stringify(job)); if (job.err < 10) { ScriptApp.newTrigger('sysAutoBackupMore').timeBased().after(5 * 60 * 1000).create(); return; } }
+  }
+  try { sysBackupFinish_({ folder: job.folder }); } catch (e) {}
+  p.deleteProperty('SYS_AUTO_JOB');
+  // keep the newest AUTO_KEEP complete automatic backups; older ones go to the Drive bin (30 days to get them back)
+  var root = sysRoot_(), it = root.getFolders(), auto = [];
+  while (it.hasNext()) { var f = it.next(), mm = sysManifest_(f); if (mm && mm.kind === SYS_CFG.AUTO_KIND && mm.complete) auto.push(f); }
+  auto.sort(function (a, b) { return b.getDateCreated() - a.getDateCreated(); });
+  auto.slice(SYS_CFG.AUTO_KEEP).forEach(function (f) { try { f.setTrashed(true); } catch (e) {} });
+}
+
+/* ---------- v8.6 daily snapshots of the small, much-edited sheets + undo one sheet ---------- */
+function sysSnapSources_() {
+  var out = [{ key: 'users', book: USERS_SS_ID, sheet: 'Users', label: 'Users (logins, roles)' },
+             { key: 'transform', book: USERS_SS_ID, sheet: TRANSFORM_SHEET, label: 'Strength sheet (Transform)' }];
+  try { out.push({ key: 'quota', book: ADM_CFG.SETTINGS_BOOK_ID, sheet: ADM_CFG.SETTINGS_SHEET, label: 'Quota Settings (seats)' });
+        out.push({ key: 'pools', book: ADM_CFG.SETTINGS_BOOK_ID, sheet: ADM_CFG.POOLS_SHEET || 'Seat Pools', label: 'Seat Pools (shared seats)' }); } catch (e) {}
+  return out;
+}
+function sysSnapFolder_() { var r = sysRoot_(), it = r.getFoldersByName(SYS_CFG.SNAP_FOLDER); return it.hasNext() ? it.next() : r.createFolder(SYS_CFG.SNAP_FOLDER); }
+function sysDailySnapshot() { sysDailySnapshot_('daily'); }
+function sysDailySnapshot_(why) {
+  var tz = Session.getScriptTimeZone(), name = 'JCW snapshot ' + Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH-mm') + (why && why !== 'daily' ? ' (' + why + ')' : '');
+  var ss = SpreadsheetApp.create(name), first = ss.getSheets()[0], made = 0;
+  sysSnapSources_().forEach(function (s) {
+    try {
+      var src = SpreadsheetApp.openById(s.book).getSheetByName(s.sheet); if (!src) return;
+      var R = Math.max(1, src.getLastRow()), C = Math.max(1, src.getLastColumn()), v = src.getRange(1, 1, R, C).getValues();
+      var dst = ss.insertSheet(s.sheet);
+      if (dst.getMaxRows() < R) dst.insertRowsAfter(dst.getMaxRows(), R - dst.getMaxRows());
+      if (dst.getMaxColumns() < C) dst.insertColumnsAfter(dst.getMaxColumns(), C - dst.getMaxColumns());
+      dst.getRange(1, 1, R, C).setNumberFormat('@').setValues(v.map(function (r) { return r.map(function (x) { return x instanceof Date ? Utilities.formatDate(x, tz, 'dd/MM/yyyy') : x; }); }));
+      made++;
+    } catch (e) {}
+  });
+  if (made) ss.deleteSheet(first);
+  var file = DriveApp.getFileById(ss.getId()); file.moveTo(sysSnapFolder_());
+  PropertiesService.getScriptProperties().setProperty('SYS_LAST_SNAP', Utilities.formatDate(new Date(), tz, 'dd MMM yyyy HH:mm'));
+  if (why === 'daily') {                                                 // keep the newest SNAP_KEEP daily snapshots
+    var it = sysSnapFolder_().getFiles(), all = [];
+    while (it.hasNext()) { var f = it.next(); if (/^JCW snapshot \d{4}-\d\d-\d\d \d\d-\d\d$/.test(f.getName())) all.push(f); }
+    all.sort(function (a, b) { return b.getDateCreated() - a.getDateCreated(); });
+    all.slice(SYS_CFG.SNAP_KEEP).forEach(function (f) { try { f.setTrashed(true); } catch (e) {} });
+  }
+  return { id: ss.getId(), name: name };
+}
+function sysSnapList_() {
+  var it = sysSnapFolder_().getFiles(), out = [];
+  while (it.hasNext()) { var f = it.next(); if (/^JCW snapshot /.test(f.getName())) out.push({ id: f.getId(), name: f.getName(), at: f.getDateCreated().getTime(), url: f.getUrl() }); }
+  out.sort(function (a, b) { return b.at - a.at; });
+  return { ok: true, list: out.slice(0, 40), sources: sysSnapSources_().map(function (s) { return { key: s.key, label: s.label, sheet: s.sheet }; }), auto: sysAutoState_() };
+}
+/** puts ONE sheet back as it was in a snapshot (a snapshot of now is made first, so this can be undone too) */
+function sysSnapRestore_(user, req) {
+  if (String(req.pass || '') !== String(user.password)) return { ok: false, error: 'Your password is not correct.' };
+  if (String(req.phrase || '').trim().toUpperCase() !== 'RESTORE') return { ok: false, error: 'Type RESTORE to confirm.' };
+  var s = sysSnapSources_().filter(function (x) { return x.key === req.key; })[0]; if (!s) return { ok: false, error: 'Choose a sheet.' };
+  var src = SpreadsheetApp.openById(String(req.snap)).getSheetByName(s.sheet); if (!src) return { ok: false, error: 'This snapshot has no copy of ' + s.sheet + '.' };
+  var book = SpreadsheetApp.openById(s.book), dst = book.getSheetByName(s.sheet);
+  if (dst) { var f = dst.getRange(1, 1, Math.min(3, Math.max(1, dst.getLastRow())), Math.max(1, dst.getLastColumn())).getFormulas();
+    if (f.some(function (r) { return r.some(function (x) { return /QUERY|IMPORTRANGE|FILTER|\{/i.test(x); }); })) return { ok: false, error: s.sheet + ' is made by a formula: restore its source sheet instead.' }; }
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    var safety = sysDailySnapshot_('before restoring ' + s.sheet);
+    var R = src.getLastRow(), C = src.getLastColumn(), v = src.getRange(1, 1, R, C).getValues();
+    if (!dst) dst = book.insertSheet(s.sheet);
+    dst.clearContents();
+    if (dst.getMaxRows() < R) dst.insertRowsAfter(dst.getMaxRows(), R - dst.getMaxRows());
+    if (dst.getMaxColumns() < C) dst.insertColumnsAfter(dst.getMaxColumns(), C - dst.getMaxColumns());
+    dst.getRange(1, 1, R, C).setValues(v);
+    SpreadsheetApp.flush();
+    ['users_att2', 'users_full', 'master_att3'].forEach(function (k) { try { cacheClear_(k); } catch (e) {} });
+    try { CacheService.getScriptCache().remove('adm_set_v1'); } catch (e) {}
+    return { ok: true, rows: R, sheet: s.sheet, safety: safety.name };
+  } finally { lock.releaseLock(); }
 }
 
 /* ---------- restore (values + formulas, sheet by sheet, into the same files) ---------- */

@@ -51,7 +51,7 @@ function atRoute_(user, req) {
     if (!see && !morn) return { ok: false, error: 'The admin tools are for the admin, principal and HODs.' };
     var a = String(req.action || '');
     var wl = String(req.tool || '') === 'workload' || String(req.tool || '') === 'workloadxlsx';
-    if (!see && !/^at_(meta|morning|mfee|roomtags|sheet|run)$/.test(a)) return { ok: false, error: 'You can open only Morning classes, Room tags and Workload.' };
+    if (!see && !/^at_(meta|morning|mfee|roomtags|sheet|run|alerts)$/.test(a)) return { ok: false, error: 'You can open only Morning classes, Room tags and Workload.' };
     if (!see && a === 'at_run' && !wl) return { ok: false, error: 'You can run only the teacher workload.' };
     if (!see && a === 'at_sheet' && (req.names || [req.name]).some(function (n) { return AT_CFG.WORKLOAD_SHEETS.indexOf(String(n)) < 0; })) return { ok: false, error: 'You can open only the workload sheets.' };
     if (/^at_(morning|mfee)$/.test(a) && !morn) return { ok: false, error: 'The Morning classes report is for the admin and the SCI TT MORNING ADMIN.' };
@@ -60,6 +60,11 @@ function atRoute_(user, req) {
     switch (a) {
       case 'at_meta':     return { ok: true, data: Object.assign(at_meta_(admin), { morning: morn, only: !see }) };
       case 'at_morning':  return { ok: true, data: at_morning_() };
+      case 'at_alerts': {                                    // v8.6: seat alerts (admin, principal, SCI TT MORNING ADMIN)
+        if (!morn && !see) return { ok: false, error: 'NOT_ALLOWED' };
+        var pp = PropertiesService.getScriptProperties(), al = null; try { al = JSON.parse(pp.getProperty('ADM_ALERTS') || 'null'); } catch (e) {}
+        return { ok: true, data: al, stale: pp.getProperty('ADM_ALERTS_STALE') || '' };
+      }
       case 'at_mfee':     return { ok: true, data: at_mfeeSave_(req.fees) };
       case 'at_sheet':    return { ok: true, data: { sheets: at_readMany_(req.names || [req.name]) } };
       case 'at_strength': return { ok: true, data: at_strength_() };

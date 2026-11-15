@@ -249,7 +249,7 @@ async function idbSet(k, v){ try{ const db = await idb(); await new Promise((res
 let init = ls.get('adm_init', null);          // programs, sections, seats, subjects, rooms (from the server)
 let idx = null;                               // { cols, rows, at }
 let queue = ls.get('adm_q', []);              // saves waiting for the server
-let tab = 'form', form = null, lastDone = null, syncing = false, nextRoll = {}, searchQ = '', fatal = '';
+let tab = /^#(form|pnew|find|seats|merit|oml|sset|wait)$/.test(location.hash) ? location.hash.slice(1) : 'form', form = null, lastDone = null, syncing = false, nextRoll = {}, searchQ = '', fatal = '';
 let pnew = ls.get('adm_pnew', null);          // students Enrolled on the portal but not yet in Transform (adm_new)
 let pnSel = ls.get('adm_pn_sel', {});         // portal ID -> { on, program, year, section, rollNo, quota, rollManual, secManual }
 let pnHide = ls.get('adm_pn_hide', []);       // portal IDs you chose to hide
@@ -1377,6 +1377,22 @@ function mlFit(im){                              // cover a 3:4 frame, 240 × 32
   return c.toDataURL('image/jpeg', .85);
 }
 const ML_PIC = new Map();
+/* v8.6: white photos saved on the server by the ID cards page: fetched 15 at a time for every student without a white copy on this device */
+async function mlPrefetchWhite(rows, say){
+  const need = [];
+  try{
+    const db = await mlIdb(), has = new Set();
+    if(db && db.objectStoreNames.contains('raw')) await Promise.all(rows.map(r => new Promise(res => { if(!r.o.roll || ML_PIC.has(r.o.roll)) return res();
+      const q = db.transaction('raw').objectStore('raw').get(r.o.roll + '#white'); q.onsuccess = () => { if(q.result && q.result.data) has.add(r.o.roll); res(); }; q.onerror = () => res(); })));
+    rows.forEach(r => { const k = r.o.roll; if(k && !ML_PIC.has(k) && !has.has(k) && !need.includes(k)) need.push(k); });
+  }catch(e){ return; }
+  for(let i = 0; i < need.length; i += 15){
+    if(say) say('White photos from the server: ' + Math.min(i + 15, need.length) + ' of ' + need.length + '…');
+    try{ const r = await api({ action:'idc_white_get', rolls:need.slice(i, i + 15) }, 120000); if(!r.ok) return;
+      for(const k of Object.keys(r.photos || {})){ if(r.photos[k]) try{ ML_PIC.set(k, mlFit(await mlImg(r.photos[k]))); }catch(e){} } }
+    catch(e){ return; }    // older server: made on this device as before
+  }
+}
 async function mlPhotoData(o){                   // white photo for the PDF: the ID cards white copy, else made here; '' when there is no copy on this device
   const k = o.roll; if(!k) return '';
   if(ML_PIC.has(k)) return ML_PIC.get(k);
@@ -1447,6 +1463,21 @@ function mlDraw(doc, c, P, pics, more){
         L2.forEach(l => { doc.setFont('helvetica', l[1]); doc.setFontSize(l[2]); doc.setTextColor(...l[3]); doc.text(l[0], cx, ty); ty += 3.9; }); },
       didDrawPage:() => { if(pg++ > 1) bar(false); } });
 }
+/* ---------- v8.6 seat alerts: empty seats + who is next, sent to the home screen of the admin and SCI TT MORNING ADMIN ---------- */
+async function mlPushAlerts(){
+  try{
+    if(!online()) return;
+    const M = meritLists(); if(!M.length) return;
+    const items = M.filter(c => !c.open && !c.noSeats).map(c => { const empty = c.subs ? c.seats - c.inHome : c.seats - c.held, bad = c.rows.filter(r => r.state === 'bad').length;
+      const cand = c.rows.filter(r => r.cand).slice(0, 4).map(r => [r.o.name, r.o.roll || '', r.o._a / 100, (prog(r.o.key) || {}).label || r.o.key]);
+      const next = !cand.length && empty > 0 ? c.rows.filter(r => !r.here && r.state === 'next').slice(0, 3).map(r => [r.o.name, r.o.roll || '', r.o._a / 100, (prog(r.o.key) || {}).label || r.o.key]) : [];
+      return { l:c.label, q:c.quota, s:c.seats, e:Math.max(0, empty), b:bad, c:cand.length ? cand : next }; }).filter(x => x.e > 0 || x.b > 0);
+    const sig = JSON.stringify(items), old = ls.get('mlAlertSig', '');
+    if(sig === old && Date.now() - ls.get('mlAlertT', 0) < 6 * 3600000) return;     // nothing new (sent again every 6 hours)
+    const r = await api({ action:'adm_alerts_save', items });
+    if(r.ok){ ls.set('mlAlertSig', sig); ls.set('mlAlertT', Date.now()); }
+  }catch(e){}
+}
 /* ---------- v8.4: all programs and quotas in one PDF / Excel / Word file, with photos ---------- */
 const mlSeatTxt = (c, r) => (r.cand ? 'POSSIBLE CANDIDATE' : r.state === 'surplus' ? 'SURPLUS' : r.rank <= c.seats ? 'On a seat' : r.state === 'next' ? 'NEXT IN LINE' : r.state === 'bad' ? 'WRONG PLACE' : 'Waiting')
   + (r.cand ? ' · ' + r.why.replace(/^POSSIBLE CANDIDATE for empty /, '').replace(/ · Next in line: a subsidized seat is empty/, '') : r.why ? ' · ' + r.why : '');
@@ -1467,7 +1498,7 @@ async function mlAllOut(fmt){
   try{
     const L = M.map(c => ({ c, P:mlPick(c) }));
     const total = L.reduce((t, x) => t + x.P.rows.length, 0); let n = 0, none = 0;
-    if(withPics){ try{ await mlSegmenter(); }catch(e){} }
+    if(withPics){ await mlPrefetchWhite(L.flatMap(x => x.P.rows), msg); try{ await mlSegmenter(); }catch(e){} }
     for(const x of L){ x.pics = [];
       for(const r of x.P.rows){ n++; if(n % 10 === 0) msg('Photos ' + n + ' of ' + total + '…');
         const d = withPics ? await mlPhotoData(r.o).catch(() => '') : ''; if(withPics && !d) none++; x.pics.push(d); } }
@@ -1560,6 +1591,7 @@ async function mlPhotoPdf(){
     if(!window.jspdf.jsPDF.API.autoTable) await mlLoadJs('jspdf.plugin.autotable.min.js');
     try{ await mlSegmenter(); }catch(e){ toast('White background needs internet the first time: photos are used as they are.'); }
     const P = mlPick(c), rows = P.rows; if(!rows.length) throw new Error('Nobody in this list.');
+    await mlPrefetchWhite(rows, say);
     const pics = []; let n = 0, none = 0;
     for(const r of rows){ n++; if(n % 5 === 0) say('Photos ' + n + ' of ' + rows.length + '…'); const d = await mlPhotoData(r.o).catch(() => ''); if(!d) none++; pics.push(d); }
     say('Making the PDF…');
@@ -1993,7 +2025,7 @@ async function loadIndex(force){
   if(!idx) idx = await idbGet('index');
   if(!online() || !user) return;
   if(!force && idx && Date.now() - (idx.t || 0) < 10 * 60000) return;
-  try{ const r = await api({ action:'adm_index' }, 120000); if(r.ok){ idx = { cols:r.cols, rows:r.rows, at:r.at, t:Date.now() }; idbSet('index', idx); if(force) toast(idx.rows.length + ' students downloaded'); } }
+  try{ const r = await api({ action:'adm_index' }, 120000); if(r.ok){ idx = { cols:r.cols, rows:r.rows, at:r.at, t:Date.now() }; idbSet('index', idx); setTimeout(mlPushAlerts, 1500); if(force) toast(idx.rows.length + ' students downloaded'); } }
   catch(e){ if(force) toast(e.message); }
 }
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => { if(tab === 'form' && form) readForm(); setTab(b.dataset.tab); });
@@ -2013,9 +2045,11 @@ if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch
 (async function start(){
   const draft = ls.get('adm_draft', null); ls.set('adm_draft', null);
   if(init) form = draft && draft.program ? Object.assign(blankForm(), draft) : blankForm();
+  document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab ? 'true' : 'false'));   // admission.html#merit opens Merit lists
   render();
   idx = await idbGet('index');
-  if(online() && user){ await refreshInit(); await loadIndex(false); await omlLoad(false); sync(); if(tab === 'find') render(); pnLoad(false); }
+  if(idx) setTimeout(mlPushAlerts, 3000);
+  if(online() && user){ await refreshInit(); await loadIndex(false); await omlLoad(false); sync(); if(tab === 'find' || tab === 'merit') render(); pnLoad(false); }
 })();
 </script>
 </body>

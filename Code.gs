@@ -84,6 +84,13 @@ function doPost(e) {
 
   var user = authenticate_(req.username, req.password);
   if (!user) return json_({ ok: false, error: 'BAD_LOGIN' });
+  // v8.6 activity log: every request that changes something is written to "Activity Log" (who, what, result)
+  if (!req.__inner && actIsWrite_(req)) {
+    var inner = JSON.parse(JSON.stringify(req)); inner.__inner = true;
+    var out = doPost({ postData: { contents: JSON.stringify(inner) } });
+    try { var res = {}; try { res = JSON.parse(out.getContent()); } catch (e1) {} actLog_(user, req, res); } catch (e2) {}
+    return out;
+  }
   if (/^adm_/.test(String(req.action || ''))) return json_(admRoute_(user, req));
      if (/^gt_/.test(String(req.action || ''))) return json_(gtRoute_(user, req));
         if (/^bk_/.test(String(req.action || ''))) return json_(bkRoute_(user, req));
@@ -147,6 +154,7 @@ if (req.action === 'report_delete') return json_(deleteReport_(user, req.id));
     if (req.action === 'left_list')     return json_(leftList_(user));
     if (req.action === 'left_restore')  return json_(leftRestore_(user, req.roll));
     if (req.action === 'left_rebuild')  return json_(leftRebuild_(user));
+    if (req.action === 'act_list')      return json_(actList_(user, req.q, req.n));
     if (req.action === 'roster_check')  return json_(rosterCheck_(user, req.mon, req.cursor));
     if (req.action === 'roster_fix')    return json_(rosterFix_(user, req.sheet, req.roll, req.op));
     if (req.action === 'health_fix')    return json_(healthFix_(user, req.what));
@@ -277,6 +285,50 @@ lecture: r[10], cat: r[11], sev: r[12], txt: r[13], att: r[14],
 }
 /* ---------- small helpers ---------- */
 
+/* ================= v8.6 Activity log ================= */
+var ACT_SHEET = 'Activity Log', ACT_KEEP = 20000;
+var ACT_WRITE = /(^|_)(save|savestu|delete|remove|add|move|restore|rebuild|mark|fix|set|run|confirm|promote|empty|strike|sign|fillroom|req_do|last_date|add_new|fee_receipt|photo_save|password|sub_result|snap_now|snap_restore|backup_start|auto|snapshot|eve_set|link|begin|finish)(_|$)/;
+function actIsWrite_(req) {
+  var a = String(req.action || '');
+  if (!a || /^(idc_white_put|adm_alerts_save|sys_backup_copy|sys_backup_finish|br_finish|at_alerts)$/.test(a)) return false;
+  if (a === 'adm_refresh') return req.apply === true;                   // a preview changes nothing
+  return ACT_WRITE.test(a);
+}
+/** a short line saying what was asked (passwords and photos are never written) */
+function actWhat_(req) {
+  var a = String(req.action || '');
+  if (a === 'save' && req.records) { var sh = {}; (req.records || []).forEach(function (r) { if (r && r.sheet) sh[r.sheet] = (sh[r.sheet] || 0) + 1; });
+    return Object.keys(sh).map(function (k) { return k + ' (' + sh[k] + ' row' + (sh[k] === 1 ? '' : 's') + ')'; }).join(', ').slice(0, 450); }
+  var o = {};
+  Object.keys(req).forEach(function (k) {
+    if (/^(username|password|pass|oldPass|newPass|old|new|action|__inner|data|sign|photo|key)$/i.test(k)) return;
+    var v = req[k];
+    if (Array.isArray(v)) v = v.length > 6 ? v.length + ' items' : v.map(function (x) { return typeof x === 'object' && x ? (x.roll || x.name || x.quota || x.sheet || JSON.stringify(x).slice(0, 40)) : x; }).join(', ');
+    else if (v && typeof v === 'object') v = JSON.stringify(v).slice(0, 120);
+    o[k] = String(v).slice(0, 120);
+  });
+  return Object.keys(o).map(function (k) { return k + ': ' + o[k]; }).join(' · ').slice(0, 450);
+}
+function actLog_(user, req, res) {
+  var book = SpreadsheetApp.openById(USERS_SS_ID), sh = book.getSheetByName(ACT_SHEET);
+  if (!sh) { sh = book.insertSheet(ACT_SHEET); sh.getRange(1, 1, 1, 6).setValues([['When', 'Who', 'Username', 'Action', 'What', 'Result']]).setFontWeight('bold'); sh.setFrozenRows(1); }
+  var ok = !res || res.ok !== false, what = typeof req === 'string' ? '' : actWhat_(req);
+  var line = [Utilities.formatDate(new Date(), TZ_(), 'dd/MM/yyyy HH:mm:ss'), String(user.teacher || ''), String(user.username || ''), typeof req === 'string' ? req : String(req.action || ''),
+              typeof res === 'string' ? res : what, ok ? 'OK' : 'Failed: ' + String(res.error || '').slice(0, 150)];
+  sh.appendRow(line);
+  var n = sh.getLastRow();
+  if (n > ACT_KEEP + 2000) sh.deleteRows(2, n - ACT_KEEP);               // keep the newest ACT_KEEP lines
+}
+/** admin: the log, newest first, filtered by words (all must match) */
+function actList_(user, q, n) {
+  if (!isAdmin_(user)) return { ok: false, error: 'Only the main admin can see the activity log.' };
+  var sh = SpreadsheetApp.openById(USERS_SS_ID).getSheetByName(ACT_SHEET);
+  if (!sh || sh.getLastRow() < 2) return { ok: true, rows: [], total: 0 };
+  var last = sh.getLastRow(), take = Math.min(last - 1, 6000), v = sh.getRange(last - take + 1, 1, take, 6).getDisplayValues().reverse();
+  var words = String(q || '').toLowerCase().split(/\s+/).filter(String);
+  var hit = words.length ? v.filter(function (r) { var t = r.join(' ').toLowerCase(); return words.every(function (w) { return t.indexOf(w) >= 0; }); }) : v;
+  return { ok: true, rows: hit.slice(0, Math.min(Number(n) || 300, 1000)), total: hit.length, searched: take };
+}
 function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
@@ -3250,7 +3302,9 @@ function studentChecks_(add, A) {
   };
   var rows = V.slice(1).filter(function (r) { return (ec >= 0 && !blank_(r[ec])) || (nc >= 0 && !blank_(r[nc])); });
   var withRoll = rows.filter(function (r) { return ec >= 0 && !blank_(r[ec]); });
-  var L = { noroll: [], noquota: [], nopic: [], nodob: [], noqual: [], badqual: [], nocontact: [], badcontact: [], noreg: [], nofather: [], nochallan: [], unpaid: [], nosubportal: [], status: [], notportal: [] };
+  var L = { noroll: [], noquota: [], nopic: [], nodob: [], noqual: [], badqual: [], nocontact: [], badcontact: [], noreg: [], nofather: [], nochallan: [], unpaid: [], nosubportal: [], status: [], notportal: [], age: [] };
+  // v8.6: the same Enroll#, portal Student Id or matric roll no (same board) on two rows = one student entered twice; age far from 16-17
+  var dupE = {}, dupId = {}, dupM = {}, sy = academicStartYear_(), clsC = (function () { var H = headIdx_(V[0]); return H['CLASS'] != null ? H['CLASS'] : -1; })();
 
   rows.forEach(function (r) {
     if (ec < 0 || blank_(r[ec])) { L.noroll.push(W(r, 'no roll number')); return; }
@@ -3261,6 +3315,16 @@ function studentChecks_(add, A) {
     var dob = get(r, 'DOB'), ds = dob instanceof Date ? Utilities.formatDate(dob, TZ_(), 'dd/MM/yyyy') : String(dob).trim();
     if (!ds && known) L.nodob.push(W(r, 'no date of birth'));
     else if (/^0?1[\/\-.]0?1[\/\-.]2000$|^2000-0?1-0?1/.test(ds)) L.nodob.push(W(r, ds + ' (placeholder date)'));
+    (dupE[enr_(r[ec])] = dupE[enr_(r[ec])] || []).push(r);
+    var pid = String(get(r, 'Student Id') || '').trim(); if (pid && !/^0+$/.test(pid)) (dupId[pid] = dupId[pid] || []).push(r);
+    var mm = realRoll_(intText_(get(r, 'Roll.No.'))); if (mm) { var bk = squash_(get(r, 'Board / University')) + '|' + squash_(mm); (dupM[bk] = dupM[bk] || []).push(r); }
+    var dm = ds.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/) || ds.match(/^(\d{4})-(\d\d)-(\d\d)/);
+    if (dm && !/^0?1[\/\-.]0?1[\/\-.]2000$/.test(ds)) {
+      var by = dm[3] && dm[3].length === 4 ? Number(dm[3]) : Number(dm[1]), bmo = dm[3] && dm[3].length === 4 ? Number(dm[2]) : Number(dm[2]), bd = dm[3] && dm[3].length === 4 ? Number(dm[1]) : Number(dm[3]);
+      var age = sy - by - ((bmo > 9 || (bmo === 9 && bd > 1)) ? 1 : 0), two_ = /2nd|second/i.test(String(clsC >= 0 ? r[clsC] : '') + ' ' + String(pget(r[ec], 'Class')));
+      var lo = two_ ? 15 : 14, hi = two_ ? 21 : 20;                    // age on 1 September of this session
+      if (age < lo || age > hi) L.age.push(W(r, 'DOB ' + ds + ' · age ' + age + ' on 1 Sept ' + sy + ' (' + (two_ ? '2nd' : '1st') + ' Year)'));
+    }
     var mr = get(r, 'Roll.No.'), ob = get(r, 'Obtain Marks/CGPA'), tt = get(r, 'Total Marks/CGPA'), miss = [];
     if (blank_(realRoll_(mr))) miss.push('matric roll no'); if (blank_(ob)) miss.push('obtained marks'); if (blank_(tt)) miss.push('total marks');
     if (miss.length && known) L.noqual.push(W(r, 'no ' + miss.join(', ')));
@@ -3278,6 +3342,13 @@ function studentChecks_(add, A) {
       if (!any && pget(r[ec], 'Details synced')) L.nosubportal.push(W(r, 'no ' + yr + ' year subjects on the portal'));
     } else if (P.rows.length) L.notportal.push(W(r, 'roll number not found on the portal'));
   });
+
+  var dups = [];
+  var dupAdd = function (G, what) { Object.keys(G).forEach(function (k) { var g = G[k]; if (g.length < 2) return;
+    var rolls = g.map(function (r) { return String(r[ec]).trim(); }), uniq = rolls.filter(function (x, i) { return rolls.indexOf(x) === i; });
+    if (what !== 'Enroll#' && uniq.length < 2) return;                 // same row counted once
+    g.forEach(function (r) { dups.push(W(r, 'same ' + what + (what === 'Enroll#' ? '' : ' (' + k.split('|').pop() + ')') + ' as ' + g.filter(function (x) { return x !== r; }).map(function (x) { return String(x[ec]).trim() + ' ' + String(nc >= 0 ? x[nc] : '').trim(); }).join('; '))); }); }); };
+  dupAdd(dupE, 'Enroll#'); dupAdd(dupId, 'portal Student Id'); dupAdd(dupM, 'matric roll no');
 
   // in two programs: the same student (name + father name) with two DIFFERENT roll numbers.
   // "Pre-Medical (JCW)" and "Pre-Medical (Jinnah College)" are the same program, so only the roll numbers decide.
@@ -3338,6 +3409,8 @@ function studentChecks_(add, A) {
   add('stu_missing', 'Enrolled on the portal but not in the strength sheet', lv(missing, true), missing, 'They are in no attendance sheet. Add them to the strength sheet with their Class-Sec and subjects.' + noP);
   add('stu_notportal', 'In the strength sheet but not on the portal', lv(L.notportal), L.notportal, 'The roll number was not found on the portal: check the roll number.');
   add('stu_two', 'In two programs (same student twice)', lv(two, true), two, 'Same name and father name with two roll numbers. Keep one admission.');
+  add('stu_dup', 'Same student entered twice (Enroll#, portal Student Id or matric roll no)', lv(dups, true), dups, 'Two rows share the same Enroll#, the same portal Student Id, or the same matric roll number of the same board, even if the names are spelt differently. Keep one row.');
+  add('stu_age', 'Age looks wrong (date of birth)', lv(L.age), L.age, 'Age on 1 September of this session is under 14 or over 20 (2nd Year: under 15 or over 21). Usually a typing mistake in the date of birth.');
   add('stu_range', 'Roll number out of range', lv(range), range, 'Roll numbers that are not in the JCW-F26-1234 form, or far away from the roll numbers of the rest of the section.');
   add('stu_quota', 'No quota', lv(L.noquota), L.noquota, 'Quota / category is empty in the strength sheet and on the portal.' + noP);
   add('stu_pic', 'No picture', lv(L.nopic), L.nopic, 'No photo on the portal.' + noP);
@@ -3528,6 +3601,7 @@ function leftMove_(user, rolls) {
     // background: strike through this month, remove from later months
     var p = PropertiesService.getScriptProperties(), job = {}; try { job = JSON.parse(p.getProperty('leftClean') || '{}'); } catch (e2) {}
     job.rolls = job.rolls || {}; moved.forEach(function (m) { job.rolls[enr_(m.roll)] = m.status; });
+    try { PropertiesService.getScriptProperties().setProperty('ADM_ALERTS_STALE', now + ': ' + moved.length + ' student(s) left'); } catch (e) {}   // v8.6: seat alerts need a fresh look
     job.tok = tok; job.running = true; job.struck = job.struck || 0; job.removed = job.removed || 0; job.at = Date.now();
     p.setProperty('leftClean', JSON.stringify(job));
     clearContinuation_('cleanLeftStudents');

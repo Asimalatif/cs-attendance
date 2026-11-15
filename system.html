@@ -80,6 +80,13 @@ function render(){
     ${S.busy ? `<div class="bar"><i id="barI" style="width:${Math.round(S.prog * 100)}%"></i></div>` : ''}
     ${S.log.length ? `<div class="log" id="log">${esc(S.log.join('\n'))}</div>` : ''}
   </section>
+  <section class="sec"><h2>Automatic backups &amp; daily snapshots</h2>
+    <div class="sub"><b>Weekly:</b> every Sunday at 3 am a complete backup is made by itself (the 8 newest are kept, older ones go to the Drive bin).
+      <b>Daily:</b> every night at 1 am a small snapshot of <b>Users</b>, the <b>strength sheet</b>, <b>Quota Settings</b> and <b>Seat Pools</b> is kept for 14 days, so a wrong edit in one of these sheets can be undone.</div>
+    <div class="note ${I.auto && I.auto.weekly && I.auto.daily ? 'ok' : 'mid'}">${I.auto && I.auto.weekly && I.auto.daily ? 'On.' : 'Off.'}${I.auto && I.auto.running ? ' A weekly backup is running now.' : ''}${I.auto && I.auto.lastSnap ? ' Last snapshot: ' + esc(I.auto.lastSnap) + '.' : ''}</div>
+    <div class="acts"><button class="btn ${I.auto && I.auto.weekly ? '' : 'p'}" id="autoT" ${busy ? 'disabled' : ''}>${I.auto && I.auto.weekly ? 'Turn automatic backups off' : 'Turn automatic backups on'}</button>
+      <button class="btn" id="snapNow" ${busy ? 'disabled' : ''}>Snapshot now</button><button class="btn" id="snapUndo" ${busy ? 'disabled' : ''}>Undo a wrong edit (from a snapshot)…</button></div>
+  </section>
   <section class="sec"><h2>Previous backups</h2>
     ${I.backups.length ? `<div style="overflow:auto"><table><thead><tr><th>Backup</th><th>Files</th><th></th></tr></thead><tbody>
       ${I.backups.map(b => `<tr><td><a href="${esc(b.url)}" target="_blank" rel="noopener"><b>${esc(b.name)}</b></a><div class="sub">${fmt(b.at)}${b.kind ? ' · ' + esc(b.kind) : ''}</div></td>
@@ -97,6 +104,33 @@ function render(){
   $('#bk').onclick = () => backup('Complete').then(load).catch(e => { S.busy = ''; S.err = e.message; render(); });
   document.querySelectorAll('[data-rs]').forEach(b => b.onclick = () => restoreAsk(b.dataset.rs));
   $('#nsOpen').onclick = nsAsk;
+  $('#autoT').onclick = async () => { const on = !(I.auto && I.auto.weekly); S.busy = 'auto'; render();
+    try{ const r = await api({ action:'sys_auto', on }); I.auto = r.auto; }catch(e){ S.err = e.message; } S.busy = ''; render(); };
+  $('#snapNow').onclick = async () => { S.busy = 'snap'; render(); try{ const r = await api({ action:'sys_snap_now' }); alert('Snapshot made: ' + r.snap.name); await load(); }catch(e){ S.err = e.message; } S.busy = ''; render(); };
+  $('#snapUndo').onclick = snapAsk;
+}
+/* ---------- v8.6 undo one sheet from a daily snapshot ---------- */
+async function snapAsk(){
+  dlg('<h2 style="margin:0 0 6px">Undo a wrong edit</h2><div class="sub">Reading the snapshots…</div>');
+  let L; try{ L = await api({ action:'sys_snap_list' }); }catch(e){ return dlg(`<div class="note bad">${esc(e.message)}</div><div class="acts"><button class="btn" onclick="this.closest('dialog').close()">Close</button></div>`); }
+  if(!L.list.length) return dlg('<h2 style="margin:0 0 6px">Undo a wrong edit</h2><div class="sub">No snapshots yet. Turn automatic backups on, or press "Snapshot now".</div><div class="acts"><button class="btn" onclick="this.closest(\'dialog\').close()">Close</button></div>');
+  const d = dlg(`<h2 style="margin:0 0 6px;color:var(--neg)">Undo a wrong edit</h2>
+    <div class="sub">Puts <b>one sheet</b> back exactly as it was at the time of the snapshot. Everything typed in that sheet after that time is lost, but a snapshot of the sheet <b>as it is now</b> is made first, so this can be undone too.</div>
+    <label class="f">Sheet<select id="snK" style="display:block;width:100%;height:42px;margin-top:4px">${L.sources.map(x => `<option value="${esc(x.key)}">${esc(x.label)}</option>`).join('')}</select></label>
+    <label class="f">Back to the snapshot of<select id="snS" style="display:block;width:100%;height:42px;margin-top:4px">${L.list.map(x => `<option value="${esc(x.id)}">${esc(x.name.replace('JCW snapshot ', ''))}</option>`).join('')}</select></label>
+    <div class="sub"><a id="snOpen" href="${esc(L.list[0].url)}" target="_blank" rel="noopener">Open this snapshot first to check it</a></div>
+    <label class="f">Your password<input id="snP" type="password" autocomplete="current-password"></label>
+    <label class="f">Type RESTORE<input id="snR" autocomplete="off"></label>
+    <div id="snMsg"></div>
+    <div class="acts"><button class="btn red" id="snGo">Put the sheet back</button><button class="btn" id="snX">Cancel</button></div>`);
+  $('#snS').onchange = () => { const x = L.list.find(z => z.id === $('#snS').value); if(x) $('#snOpen').href = x.url; };
+  $('#snX').onclick = () => d.close();
+  $('#snGo').onclick = async () => { const x = L.list.find(z => z.id === $('#snS').value), k = $('#snK');
+    if(!confirm('Put "' + k.options[k.selectedIndex].text + '" back to ' + x.name.replace('JCW snapshot ', '') + '?')) return;
+    $('#snGo').disabled = true; $('#snMsg').innerHTML = '<div class="sub">Working… (a safety snapshot first)</div>';
+    try{ const r = await api({ action:'sys_snap_restore', key:k.value, snap:x.id, name:x.name, pass:$('#snP').value, phrase:$('#snR').value });
+      $('#snMsg').innerHTML = `<div class="note ok">✔ ${esc(r.sheet)} is back (${r.rows} rows). The sheet as it was a moment ago is kept as <b>${esc(r.safety)}</b>.</div>`; }
+    catch(e){ $('#snMsg').innerHTML = `<div class="note bad">${esc(e.message)}</div>`; $('#snGo').disabled = false; } };
 }
 
 /* ---------- backup ---------- */
