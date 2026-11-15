@@ -1162,6 +1162,12 @@ function meritLists(){
       // v8.0: possible candidates for the empty seats (seats - students in it now): the first students below who are not in this program yet
       const K = open || noSeats ? 0 : Math.max(0, seats - inHome); let kk = 0;
       rows.forEach(r => { if(kk < K && !r.here){ kk++; r.cand = kk; r.why = 'POSSIBLE CANDIDATE for empty seat ' + kk + ' of ' + K + (r.why ? ' · ' + r.why : ''); } });
+      // v8.1: a tie is a tie: everyone below with the SAME Aggregate as the last candidate / next-in-line student is next in line too (blue)
+      let lastN = -1; rows.forEach((r, i) => { if(r.cand || r.state === 'next') lastN = i; });
+      if(lastN >= 0){ const t = rows[lastN].o;
+        for(let i = lastN + 1; i < rows.length; i++){ const r = rows[i];
+          if(r.o._a !== t._a || !!r.o._late !== !!t._late) break;
+          if(!r.here && !r.cand && !r.state){ r.state = 'next'; r.why = 'Next in line: same Aggregate (' + (t._a / 100) + ')' + (r.why ? ' · ' + r.why : ''); } } }
       out.push({ key:p.key, label:pl ? 'Shared pool: ' + home.map(k => (prog(k) || {}).label || k).join(', ') : pr.label || p.key, fee:fees[p.key] || 0,
         sibFee:sib.length ? fees[sib[0]] || 0 : 0, sibLabel:sib.map(k => (prog(k) || {}).label).join(', '), quota:q.name, seats, inHome, rows, subs:!!sib.length, noSeats,
         held:sib.length ? L.slice(0, seats).filter(o => home.includes(o.key)).length : inHome, open, group:pl ? 'Shared pools' : pr.label || p.key, qlabel:q.name });
