@@ -6717,7 +6717,8 @@ function leftCard(){
     <div class="sub">Migrated, cancelled, disenrolled and transferred students moved out of the strength sheet. Their rows are kept in the sheet <b>Left Students</b>.</div>
     ${left ? `<div class="chips" style="margin:6px 0">${['1st Year', '2nd Year', 'Ex-students', 'Year not known'].filter(y => yr[y]).map(y => `<button class="chip" type="button" data-xlyr="${y}" style="font-weight:800">${y} · ${yr[y]}</button>`).join('')}${Object.keys(by).map(k => `<button class="chip" type="button" data-xlyr="st:${esc(k)}">${esc(k)} · ${by[k]}</button>`).join('') || '<span class="sub">Nobody moved yet.</span>'}</div>` : '<div class="sk"></div>'}
     ${J && J.running ? '<div class="sub" style="color:var(--leave);font-weight:700">Updating the attendance sheets in the background…</div>' : J && J.finished ? `<div class="sub">Attendance sheets updated ${esc(J.finished)}: ${J.struck || 0} row(s) struck through, ${J.removed || 0} removed from later months.</div>` : ''}
-    <div class="acts2"><button class="btn" type="button" id="xLeftList">List / restore</button><button class="btn primary" type="button" id="xLeftMove">Move students who left</button></div></section>`;
+    <div class="acts2"><button class="btn" type="button" id="xLeftList">List / restore</button><button class="btn primary" type="button" id="xLeftMove">Move students who left</button></div>
+    <div class="acts2" style="margin-top:6px"><button class="btn" type="button" id="xLeftRebuild" title="Recreates the sheet with every column of the strength sheet and fills missing details from the strength sheet and Portal Data (old sheet kept as a backup)">Rebuild Left Students sheet (all details)</button></div></section>`;
 }
 function refreshLeft(){ const c = $q('#leftCard'); if(c){ const t = document.createElement('div'); t.innerHTML = leftCard(); c.replaceWith(t.firstElementChild); } }
 const leftPick = () => ((left && left.list) || []).filter(x => leftF === 'all' ? true : leftF.indexOf('st:') === 0 ? x.status === leftF.slice(3) : leftYear(x) === leftF);
@@ -6922,6 +6923,14 @@ document.addEventListener('click', ev => {
   if(t.closest('#xLeftMove') || t.closest('#xLeftMove2')) return openLeftMove();
   if(t.closest('#xLmGo')) return leftMoveGo();
   if(t.closest('#xLmCsv')) return leftMoveCsv();
+  if(t.closest('#xLeftRebuild')){
+    if(!confirm('Recreate the sheet "Left Students" with every column of the strength sheet and fill the missing details from the strength sheet and Portal Data?\n\nThe old sheet is kept as "Left Students backup …".')) return;
+    toast('Rebuilding Left Students… (up to a minute)');
+    srv({ action:'left_rebuild' }, 300000).then(r => { const m = Object.keys(r.missing || {});
+      dlgOpen(`<h2>Left Students rebuilt</h2><div class="meta">${r.rows} students · ${r.columns} columns · ${r.filled} empty cells filled · old sheet kept as <b>${esc(r.backup)}</b></div>
+        ${m.length ? `<div class="sub" style="margin-top:8px"><b>Still empty (not on the portal either):</b> ${m.map(k => esc(k) + ' ' + r.missing[k]).join(' · ')}</div>` : '<div class="sub" style="margin-top:8px">Every main detail is filled.</div>'}
+        <div class="acts"><button class="btn primary" id="closeDlg">OK</button></div>`); left = null; loadLeft(); })
+      .catch(e => toast('Not rebuilt: ' + e.message)); return; }
   if(t.closest('#xLeftList')) return left ? openLeftList('all') : loadLeft().then(() => openLeftList('all'));
   if((b = t.closest('[data-xlyr]'))) return left ? openLeftList(b.dataset.xlyr) : loadLeft().then(() => openLeftList(b.dataset.xlyr));
   if((b = t.closest('[data-xlf]'))) return openLeftList(b.dataset.xlf);
