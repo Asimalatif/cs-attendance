@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         JCW Portal Sync
 // @namespace    jcw-attendance
-// @version      1.9
+// @version      1.10
 // @description  Reads Jinnah College students from the UOP portal (read-only) and sends them to the JCW attendance system: fills only the empty cells of Transform-ALL-COLLEGE-STRENGTH, lists cancelled / migrated / disenrolled / transferred students for Left Students (moved only when you press the button) and feeds the health check.
 // @match        https://portal.uop.edu.pk/Student/Students*
 // @match        https://portal.uop.edu.pk/student/students*
@@ -72,6 +72,7 @@
     <button class="p" id="jsQuick">Quick sync (list only, 1–2 min)</button>
     <button id="jsFull">Full sync (all details)</button>
     <button id="jsResume" style="display:none">Resume the full sync</button>
+    <button id="jsLeftD" title="Matric roll no, marks, HQ, DOB, challans, subjects … of the cancelled / migrated / disenrolled / transferred students of this year's two batches (the full sync reads only enrolled students)">Details of students who left</button>
     <div class="bar"><i id="jsBar"></i></div><div class="s" id="jsMsg">Reads the portal only. Fills empty cells in the strength sheet. Students who left go to Left Students only when you press the button.</div>
     <label style="display:flex;gap:6px;align-items:center;font-size:12.5px;margin-top:8px;cursor:pointer"><input type="checkbox" id="jsAuto" style="width:auto;height:auto;margin:0"> Auto quick sync every 20 min while this tab is open (new admissions then show in the app by themselves)</label>
     <div id="jsLeft"></div>
@@ -79,7 +80,7 @@
   document.body.appendChild(box);
   const $ = id => box.querySelector('#' + id);
   const say = (m, pct) => { $('jsMsg').textContent = m; if (pct != null) $('jsBar').style.width = Math.max(0, Math.min(100, pct)) + '%'; };
-  const busy = on => ['jsQuick', 'jsFull', 'jsResume', 'jsKey'].forEach(i => { $(i).disabled = on; });
+  const busy = on => ['jsQuick', 'jsFull', 'jsResume', 'jsKey', 'jsLeftD'].forEach(i => { $(i).disabled = on; });
   $('jsMin').onclick = () => box.classList.toggle('min');
   $('jsKey').onclick = () => askKey(true);
   loadSaved().then(s => { if (s && s.mode === 'full' && s.items && Object.keys(s.done || {}).length < s.items.length) { $('jsResume').style.display = ''; $('jsResume').textContent = 'Resume the full sync (' + Object.keys(s.done).length + ' of ' + s.items.length + ' done)'; } });
@@ -379,17 +380,22 @@
         S = { key: SAVE_KEY, mode, per, items: all.map(it => ({ id: it.id, status: it.status, links: it.links, row: it.row })), done: {} };
         if (mode === 'full') await putSaved(S);
       }
-      if (S.mode === 'full') {
-        const todo = S.items.filter(it => /^enrolled$/i.test(it.status) && !S.done[it.id || it.row['Enrollment#']]);
-        const total = S.items.filter(it => /^enrolled$/i.test(it.status)).length;
+      // v1.10 "left" mode: details of the students who left (this year's two batches) only; the server keeps everyone else's details
+      const bat = e => (String(e || '').toUpperCase().match(/-F(\d{2})-/) || [])[1] || '';
+      const cnt = {}; S.items.forEach(it => { if (/^enrolled$/i.test(it.status)) { const b = bat(it.row['Enrollment#']); if (b) cnt[b] = (cnt[b] || 0) + 1; } });
+      const cur = new Set(Object.keys(cnt).filter(b => cnt[b] >= 10).sort().reverse().slice(0, 2));
+      const want = it => S.mode === 'left' ? !/^enrolled$/i.test(it.status) && cur.has(bat(it.row['Enrollment#'])) : /^enrolled$/i.test(it.status);
+      if (S.mode === 'full' || S.mode === 'left') {
+        const todo = S.items.filter(it => want(it) && !S.done[it.id || it.row['Enrollment#']]);
+        const total = S.items.filter(want).length;
         let i = 0, n = total - todo.length, t0 = Date.now(), stop = null;
         const worker = async () => {
           while (!stop) {
             const it = todo[i++]; if (!it) return;
-            try { const row = await details(it); S.done[it.id || row['Enrollment#']] = row; }
+            try { const row = await details(it); if (S.mode === 'left') row['Details synced'] = new Date().toLocaleString('en-GB'); S.done[it.id || row['Enrollment#']] = row; }
             catch (e) { if (e.message === 'LOGIN') { stop = 'The portal logged you out. Log in again, open Students, and press "Resume".'; return; } }
             n++;
-            if (n % 10 === 0) { await putSaved(S); const left = (Date.now() - t0) / Math.max(1, n - (total - todo.length)) * (total - n); say('Details: ' + n + ' of ' + total + ' enrolled students · about ' + Math.ceil(left / 60000) + ' min left', n / total * 95); }
+            if (n % 10 === 0) { await putSaved(S); const left = (Date.now() - t0) / Math.max(1, n - (total - todo.length)) * (total - n); say('Details: ' + n + ' of ' + total + (S.mode === 'left' ? ' students who left' : ' enrolled students') + ' · about ' + Math.ceil(left / 60000) + ' min left', n / total * 95); }
           }
         };
         await Promise.all(Array.from({ length: CONCURRENCY }, worker));
@@ -397,10 +403,11 @@
         if (stop) throw new Error(stop);
       }
       const rows = S.items.map(it => S.done[it.id || it.row['Enrollment#']] || it.row);
-      const r = await send(rows, S.mode);
+      const r = await send(rows, S.mode === 'left' ? 'quick' : S.mode);   // "quick" on the server = keep the details already there
       if (S.mode === 'full') await dropSaved();
       $('jsResume').style.display = 'none';
       report(r, S.per);
+      if (S.mode === 'left') say($('jsMsg').textContent + '\n\nDetails of ' + Object.keys(S.done).length + ' students who left are in Portal Data. Now in the app: College > Students who left > Rebuild Left Students sheet.', 100);
     } catch (e) {
       say('Stopped: ' + e.message, null);
       loadSaved().then(s => { if (s && s.mode === 'full') { $('jsResume').style.display = ''; $('jsResume').textContent = 'Resume the full sync (' + Object.keys(s.done || {}).length + ' done)'; } });
@@ -420,4 +427,5 @@
   $('jsQuick').onclick = () => run('quick', false);
   $('jsFull').onclick = () => { if (confirm('Full sync reads the details of every enrolled student (about 30–60 minutes). Keep this tab open. Start?')) run('full', false); };
   $('jsResume').onclick = () => run('full', true);
+  $('jsLeftD').onclick = () => { if (confirm('Read the details (matric roll no, marks, HQ, DOB, challans, subjects …) of every cancelled / migrated / disenrolled / transferred student of this year\'s two batches? A few minutes. Keep this tab open.')) run('left', false); };
 })();
