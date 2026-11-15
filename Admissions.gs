@@ -33,6 +33,8 @@ var ADM_CFG = {
   LOG_SHEET: 'Admission Log',                                           // created in the Users workbook
   SETTINGS_BOOK_ID: '1wY8hCFzmBhlVxHjLJGLEDzP_LijbSu7aJfJ-jHhbLRI',  // admissions workbook (read only)
   SETTINGS_SHEET: 'Quota Settings',
+  POOLS_SHEET: 'Seat Pools',                                            // v8.5: floating seats (quota | programs, comma separated)
+  SEATS_LOG: 'Seat Changes',
   SECTIONS_SHEET: 'Program Sections',
   EXTRA_USERS: [],                                                      // e.g. ['clerk@uop.edu.pk']
 
@@ -134,6 +136,8 @@ function admRoute_(user, req) {
     case 'adm_init':      return admInit_();
     case 'adm_index':     return admIndex_();
     case 'adm_left':      return admLeftAll_();
+    case 'adm_seats_get': return admSeatsGet_();
+    case 'adm_seats_save': return admSeatsSave_(user, req.rows || [], req.pools || []);
     case 'adm_next_roll': return admNextRollFor_(req.program, req.year);
     case 'adm_portal':    return admPortal_(req.q || req.id);
     case 'adm_check':     return admCheck_(req.d || {}, req.ctx || null);
@@ -203,6 +207,68 @@ function admLeftAll_() {
   var v = sh.getDataRange().getDisplayValues();
   return { ok: true, head: v[0].map(function (h) { return String(h).trim(); }), rows: v.slice(1).filter(function (r) { return r.some(function (c) { return String(c).trim(); }); }), found: true };
 }
+/* ================= v8.5 Seat settings (edited in the app: seats per program + quota, new quotas, floating seats) ================= */
+function admSeatsGet_() {
+  var book = SpreadsheetApp.openById(ADM_CFG.SETTINGS_BOOK_ID), qs = book.getSheetByName(ADM_CFG.SETTINGS_SHEET), rows = [];
+  if (qs && qs.getLastRow() > 1) qs.getRange(2, 1, qs.getLastRow() - 1, 3).getDisplayValues().forEach(function (r) {
+    if (admS_(r[0]) && admS_(r[1])) rows.push({ program: admS_(r[0]), quota: admS_(r[1]), seats: admS_(r[2]) }); });
+  CacheService.getScriptCache().remove('adm_set_v1');
+  var set = admSettings_();
+  return { ok: true, rows: rows, pools: set.pools.map(function (p) { var s = (set.seats[ADM_CFG.POOL_KEY] || {})[admQ_(p.quota)]; return { quota: p.quota, members: p.members, seats: s === undefined ? '' : s }; }),
+           programs: ADM_CFG.PROGRAMS.map(function (p) { return { key: p.key, label: p.label }; }), quotas: ADM_CFG.DEFAULT_QUOTAS.concat(set.quotaNames || []).filter(function (q, i, a) { return a.map(admQ_).indexOf(admQ_(q)) === i; }),
+           log: admSeatsLog_(book) };
+}
+function admSeatsLog_(book) {
+  var lg = book.getSheetByName(ADM_CFG.SEATS_LOG); if (!lg || lg.getLastRow() < 2) return [];
+  var n = Math.min(15, lg.getLastRow() - 1);
+  return lg.getRange(lg.getLastRow() - n + 1, 1, n, 3).getDisplayValues().reverse();
+}
+function admSeatsSave_(user, rows, pools) {
+  var okUser = false; try { okUser = (typeof isAdmin_ === 'function' && isAdmin_(user)) || !!(typeof scopeOf_ === 'function' && (scopeOf_(user) || {}).all); } catch (e) {}
+  if (!okUser) return { ok: false, error: 'Only the admin or the principal can change seats.' };
+  var keys = ADM_CFG.PROGRAMS.map(function (p) { return p.key; }), clean = [], seen = {}, cp = [], err = [];
+  rows.forEach(function (r) {
+    var p = admS_(r.program), q = admS_(r.quota), n = admS_(r.seats);
+    if (!p && !q) return;
+    if (keys.indexOf(p) < 0) { err.push('Unknown program: ' + p); return; }
+    if (!q) { err.push(p + ': a quota has no name'); return; }
+    if (n === '' || isNaN(Number(n)) || Number(n) < 0 || Number(n) % 1) { err.push(p + ' · ' + q + ': seats must be a whole number'); return; }
+    var k = p + '|' + admQ_(q); if (seen[k]) { err.push(p + ' · ' + q + ' is there twice'); return; } seen[k] = 1;
+    clean.push([p, q, Number(n)]);
+  });
+  pools.forEach(function (r) {
+    var q = admS_(r.quota), n = admS_(r.seats), m = (r.members || []).map(admS_).filter(function (x) { return keys.indexOf(x) >= 0; });
+    if (!q) return;
+    if (m.length < 2) { err.push('Shared seats "' + q + '": choose at least 2 programs'); return; }
+    if (n === '' || isNaN(Number(n)) || Number(n) < 0 || Number(n) % 1) { err.push('Shared seats "' + q + '": seats must be a whole number'); return; }
+    if (seen['POOL|' + admQ_(q)]) { err.push('Shared seats "' + q + '" is there twice'); return; } seen['POOL|' + admQ_(q)] = 1;
+    m.forEach(function (x) { if (seen[x + '|' + admQ_(q)]) err.push(q + ' is both a shared seat and a seat of ' + x + ': keep one'); });
+    clean.push([ADM_CFG.POOL_KEY, q, Number(n)]); cp.push([q, m.join(', ')]);
+  });
+  if (err.length) return { ok: false, error: err.join('\n') };
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    var book = SpreadsheetApp.openById(ADM_CFG.SETTINGS_BOOK_ID), qs = book.getSheetByName(ADM_CFG.SETTINGS_SHEET) || book.insertSheet(ADM_CFG.SETTINGS_SHEET);
+    var before = {}; if (qs.getLastRow() > 1) qs.getRange(2, 1, qs.getLastRow() - 1, 3).getDisplayValues().forEach(function (r) { if (admS_(r[0])) before[admS_(r[0]) + ' · ' + admS_(r[1])] = admS_(r[2]); });
+    var after = {}; clean.forEach(function (r) { after[r[0] + ' · ' + r[1]] = String(r[2]); });
+    var diff = [];
+    Object.keys(after).forEach(function (k) { if (before[k] === undefined) diff.push('+ ' + k + ' = ' + after[k]); else if (before[k] !== after[k]) diff.push(k + ': ' + before[k] + ' → ' + after[k]); });
+    Object.keys(before).forEach(function (k) { if (after[k] === undefined) diff.push('− ' + k + ' (was ' + before[k] + ')'); });
+    if (qs.getLastRow() > 1) qs.getRange(2, 1, qs.getLastRow() - 1, Math.max(3, qs.getLastColumn())).clearContent();
+    qs.getRange(1, 1, 1, 3).setValues([['Program Sheet', 'Quota', 'Seats']]).setFontWeight('bold');
+    if (clean.length) qs.getRange(2, 1, clean.length, 3).setValues(clean);
+    var pl = book.getSheetByName(ADM_CFG.POOLS_SHEET) || book.insertSheet(ADM_CFG.POOLS_SHEET);
+    pl.clearContents(); pl.getRange(1, 1, 1, 2).setValues([['Quota (shared seats)', 'Programs (comma separated)']]).setFontWeight('bold');
+    if (cp.length) pl.getRange(2, 1, cp.length, 2).setValues(cp);
+    var lg = book.getSheetByName(ADM_CFG.SEATS_LOG) || book.insertSheet(ADM_CFG.SEATS_LOG);
+    if (lg.getLastRow() < 1) lg.getRange(1, 1, 1, 3).setValues([['When', 'Who', 'What changed']]).setFontWeight('bold');
+    if (diff.length) lg.appendRow([admNow_(), String(user.teacher || user.username || ''), diff.join('\n')]);
+    SpreadsheetApp.flush();
+  } finally { lock.releaseLock(); }
+  CacheService.getScriptCache().remove('adm_set_v1');
+  var set = admSettings_();
+  return { ok: true, changed: diff, seats: admSeatState_(admAll_(admRead_(), set.sections), set) };
+}
 function admBook_() { return SpreadsheetApp.openById(ADM_CFG.BOOK_ID); }
 function admNum_(v) { var s = admS_(v); return s === '' || isNaN(Number(s)) ? '' : Number(s); }
 function admNow_() { return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd MMM yyyy HH:mm'); }
@@ -210,18 +276,18 @@ function admNow_() { return Utilities.formatDate(new Date(), Session.getScriptTi
 /* ================= Settings (read only, from the admissions workbook) ================= */
 function admSettings_() {
   var cache = CacheService.getScriptCache(), hit = cache.get('adm_set_v1');
-  if (hit) return JSON.parse(hit);
+  if (hit) { var o = JSON.parse(hit); if (o.pools) ADM_CFG.POOLS = o.pools; return o; }
   var out = { seats: null, sections: null, note: '' };
   try {
     var book = SpreadsheetApp.openById(ADM_CFG.SETTINGS_BOOK_ID);
     var qs = book.getSheetByName(ADM_CFG.SETTINGS_SHEET);
     if (qs && qs.getLastRow() > 1) {
-      var seats = {};
+      var seats = {}, qn = {};
       qs.getRange(2, 1, qs.getLastRow() - 1, 3).getValues().forEach(function (r) {
         if (!r[0] || !r[1] || r[2] === '' || isNaN(Number(r[2]))) return;
-        var p = admS_(r[0]); (seats[p] = seats[p] || {})[admQ_(r[1])] = Number(r[2]);
+        var p = admS_(r[0]); (seats[p] = seats[p] || {})[admQ_(r[1])] = Number(r[2]); qn[admQ_(r[1])] = admS_(r[1]);
       });
-      out.seats = seats;
+      out.seats = seats; out.quotaNames = Object.keys(qn).map(function (k) { return qn[k]; });
     }
     var ps = book.getSheetByName(ADM_CFG.SECTIONS_SHEET);
     if (ps && ps.getLastRow() > 1) {
@@ -234,6 +300,11 @@ function admSettings_() {
       });
       out.sections = secs;
     }
+    var pl = book.getSheetByName(ADM_CFG.POOLS_SHEET);                  // v8.5: floating seats shared by programs (edited in the app)
+    if (pl && pl.getLastRow() > 1) {
+      out.pools = pl.getRange(2, 1, pl.getLastRow() - 1, 2).getDisplayValues().filter(function (r) { return admS_(r[0]) && admS_(r[1]); })
+        .map(function (r) { return { quota: admS_(r[0]), members: admS_(r[1]).split(',').map(admS_).filter(String) }; });
+    }
   } catch (e) { out.note = 'Could not read the admissions workbook settings (' + e.message + '), built-in seats and sections are used.'; }
   if (!out.seats) {
     out.seats = {};
@@ -243,7 +314,9 @@ function admSettings_() {
     });
   }
   if (!out.sections) out.sections = JSON.parse(JSON.stringify(ADM_CFG.SECTIONS_BY_PROGRAM));
+  if (!out.pools) out.pools = ADM_CFG.POOLS;
   cache.put('adm_set_v1', JSON.stringify(out), 300);
+  ADM_CFG.POOLS = out.pools;
   return out;
 }
 
@@ -342,6 +415,7 @@ function admStatus_(seats, filled) {
 function admQuotaNames_(counts) {
   var names = {};
   ADM_CFG.DEFAULT_QUOTAS.forEach(function (n) { names[admQ_(n)] = n; });
+  try { var st = admSettings_(); (st.quotaNames || []).forEach(function (n) { if (!names[admQ_(n)]) names[admQ_(n)] = n; }); } catch (e) {}   // v8.5: new categories added in Seat settings
   Object.keys(counts).forEach(function (pk) {
     Object.keys(counts[pk].byQuota).forEach(function (k) {
       if (!names[k]) names[k] = k.replace(/\b\w/g, function (c) { return c.toUpperCase(); });

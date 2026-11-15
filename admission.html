@@ -214,6 +214,7 @@ dialog{border:1.5px solid var(--line);box-shadow:var(--shadow2)}
     <button role="tab" data-tab="seats" aria-selected="false">Seats</button>
     <button role="tab" data-tab="merit" aria-selected="false">Merit lists</button>
     <button role="tab" data-tab="oml" aria-selected="false">Official lists</button>
+    <button role="tab" data-tab="sset" aria-selected="false">Seat settings</button>
     <button role="tab" data-tab="wait" aria-selected="false">Waiting<span class="badge hidden" id="qb">0</span></button>
   </nav>
 </div></header>
@@ -382,6 +383,7 @@ function render(){
   else if(tab === 'seats') m.innerHTML = top + seatsHtml();
   else if(tab === 'merit') m.innerHTML = top + mlHtml();
   else if(tab === 'oml') m.innerHTML = top + omlHtml();
+  else if(tab === 'sset') m.innerHTML = top + ssHtml();
   else m.innerHTML = top + waitHtml();
   if(tab === 'form') wireForm();
   if(tab === 'find') wireFind();
@@ -390,6 +392,7 @@ function render(){
   if(tab === 'seats') wireSeats();
   if(tab === 'merit') wireMl();
   if(tab === 'oml') wireOml();
+  if(tab === 'sset') wireSs();
 }
 const opt = (v, cur, label) => `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(label == null ? v : label)}</option>`;
 
@@ -1074,6 +1077,64 @@ function seatList(keyStr, quota){
   const list = idx ? idx.rows.map(recOf).filter(o => keys.includes(o.key) && !isMig(o.year) && qk(o.quota) === qk(quota)).sort((a, b) => String(a.roll).localeCompare(String(b.roll), undefined, { numeric:true })) : [];
   const lbl = keys.map(k => (prog(k) || {}).label || k).join(', ');
   listDlg(quota + ' · ' + lbl, list.length + ' student' + (list.length === 1 ? '' : 's') + ' (1st Year) from this phone\'s copy of the strength sheet' + (keys.length > 1 ? ' · shared pool' : '') + '.', list, keys.length > 1 ? { h:'Program', v:o => (prog(o.key) || {}).label || o.key } : null);
+}
+/* ---------- v8.5 Seat settings: seats per program + quota (more / fewer), new quotas, shared (floating) seats ---------- */
+let SS = null, ssBusy = false, ssDirty = false, ssMsg = '';
+async function ssLoad(){ if(ssBusy) return; ssBusy = true;
+  try{ const r = await api({ action:'adm_seats_get' }); if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'Paste the new Admissions.gs in Apps Script and deploy a New version' : r.error);
+    SS = { rows:r.rows.filter(x => x.program !== 'POOL'), pools:r.pools.map(p => Object.assign({}, p, { members:p.members.slice() })), programs:r.programs, quotas:r.quotas, log:r.log || [] }; ssDirty = false; ssMsg = ''; }
+  catch(e){ SS = { err:e.message || String(e) }; }
+  finally{ ssBusy = false; if(tab === 'sset') render(); } }
+function ssHtml(){
+  if(!SS){ ssLoad(); return '<section class="card"><div class="sub">Reading the seats from Quota Settings…</div></section>'; }
+  if(SS.err) return `<section class="card"><div class="err">${esc(SS.err)}</div><button class="btn" type="button" id="ssReload">Try again</button></section>`;
+  const num = (v, a) => `<span style="display:inline-flex;align-items:center;gap:4px"><button class="btn" type="button" style="min-width:38px;padding:0" ${a} data-d="-1">−</button><input type="number" min="0" step="1" value="${esc(v)}" ${a} style="width:80px;height:40px;text-align:center;font-weight:800"><button class="btn" type="button" style="min-width:38px;padding:0" ${a} data-d="1">+</button></span>`;
+  const qOpts = SS.quotas.map(q => `<option>${esc(q)}</option>`).join('');
+  const progs = SS.programs.map(p => { const R = SS.rows.map((r, i) => [r, i]).filter(([r]) => r.program === p.key), tot = R.reduce((t, [r]) => t + (Number(r.seats) || 0), 0);
+    return `<div class="ml-g"><div class="ml-gh">${esc(p.label)} <span class="sub">· ${tot} seats</span></div><table class="mlq"><tbody>
+      ${R.map(([r, i]) => `<tr><td><input value="${esc(r.quota)}" data-ssq="${i}" style="width:100%;height:40px"></td><td class="n">${num(r.seats, 'data-ssn="' + i + '"')}</td><td><button class="pill" type="button" data-ssdel="${i}" title="Remove this quota from ${esc(p.label)}">✕</button></td></tr>`).join('') || '<tr><td class="sub" colspan="3">No seats set.</td></tr>'}
+      <tr><td colspan="3"><span style="display:flex;gap:6px;flex-wrap:wrap"><select data-ssaddq="${esc(p.key)}" style="height:40px;flex:1;min-width:180px"><option value="">+ Add a quota…</option>${qOpts}<option value="__new">New category (type its name)…</option></select></span></td></tr>
+    </tbody></table></div>`; }).join('');
+  const pools = SS.pools.map((pl, i) => `<div class="ml-g"><div class="ml-gh"><input value="${esc(pl.quota)}" data-sspq="${i}" style="height:38px;font-weight:800;width:60%"> ${num(pl.seats, 'data-sspn="' + i + '"')} <button class="pill" type="button" data-sspdel="${i}">✕</button></div>
+    <div style="padding:8px 10px;display:flex;flex-wrap:wrap;gap:10px">${SS.programs.map(p => `<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-sspm="${i}" value="${esc(p.key)}"${pl.members.includes(p.key) ? ' checked' : ''}> ${esc(p.label)}</label>`).join('')}</div></div>`).join('');
+  return `<section class="card"><h3>Seat settings (1st Year)</h3>
+    <div class="sub">Change the number of seats with <b>−</b> / <b>+</b> (or type it), add a quota to a program, add a <b>new category</b>, or add <b>shared seats</b> (floating seats used by several programs together, e.g. "08 seats floating amongst F.A / F.Sc"). Nothing changes until you press <b>Save seats</b>; every change is written to the sheets <b>Quota Settings</b>, <b>Seat Pools</b> and logged in <b>Seat Changes</b>.</div>
+    <div class="acts"><button class="btn primary" type="button" id="ssSave"${ssDirty ? '' : ' disabled'}>Save seats</button><button class="btn" type="button" id="ssReload">${ssDirty ? 'Undo my changes' : 'Read again'}</button>${ssDirty ? '<span class="sub" style="color:var(--bad);font-weight:700">Not saved yet</span>' : ''}</div>
+    ${ssMsg ? `<div class="note">${ssMsg}</div>` : ''}</section>
+  <section class="card"><h3>Seats of each program</h3><div class="ml-grid">${progs}</div></section>
+  <section class="card"><h3>Shared seats (floating amongst programs)</h3><div class="sub">One number of seats that the ticked programs fill together.</div><div class="ml-grid">${pools}</div>
+    <div class="acts"><button class="btn" type="button" id="ssAddPool">+ Add shared seats</button></div></section>
+  ${SS.log.length ? `<section class="card"><h3>Last changes</h3>${SS.log.map(l => `<div class="li"><span class="tx"><b>${esc(l[0])}</b> · ${esc(l[1])}<small style="white-space:pre-line">${esc(l[2])}</small></span></div>`).join('')}</section>` : ''}`;
+}
+function wireSs(){
+  const dirty = () => { if(!ssDirty){ ssDirty = true; ssMsg = ''; render(); } };
+  const m = $('#main');
+  m.querySelectorAll('[data-ssq]').forEach(x => x.onchange = () => { SS.rows[+x.dataset.ssq].quota = x.value.trim(); dirty(); });
+  m.querySelectorAll('input[data-ssn]').forEach(x => x.onchange = () => { SS.rows[+x.dataset.ssn].seats = x.value; dirty(); });
+  m.querySelectorAll('button[data-ssn]').forEach(b => b.onclick = () => { const r = SS.rows[+b.dataset.ssn]; r.seats = Math.max(0, (Number(r.seats) || 0) + Number(b.dataset.d)); ssDirty = true; render(); });
+  m.querySelectorAll('[data-ssdel]').forEach(b => b.onclick = () => { const r = SS.rows[+b.dataset.ssdel]; if(!confirm('Remove ' + r.quota + ' (' + r.seats + ' seats) from this program?')) return; SS.rows.splice(+b.dataset.ssdel, 1); ssDirty = true; render(); });
+  m.querySelectorAll('[data-ssaddq]').forEach(x => x.onchange = () => { let q = x.value; if(!q) return;
+    if(q === '__new'){ q = (prompt('Name of the new category (e.g. "Hafiz Quota"):') || '').trim(); if(!q) return render(); if(!SS.quotas.some(z => z.toLowerCase() === q.toLowerCase())) SS.quotas.push(q); }
+    const pk = x.dataset.ssaddq; if(SS.rows.some(r => r.program === pk && r.quota.toLowerCase() === q.toLowerCase())){ toast(q + ' is already there'); return render(); }
+    const n = prompt('How many seats for ' + q + '?', '1'); if(n == null) return render();
+    SS.rows.push({ program:pk, quota:q, seats:String(Math.max(0, parseInt(n, 10) || 0)) }); ssDirty = true; render(); });
+  m.querySelectorAll('[data-sspq]').forEach(x => x.onchange = () => { SS.pools[+x.dataset.sspq].quota = x.value.trim(); dirty(); });
+  m.querySelectorAll('input[data-sspn]').forEach(x => x.onchange = () => { SS.pools[+x.dataset.sspn].seats = x.value; dirty(); });
+  m.querySelectorAll('button[data-sspn]').forEach(b => b.onclick = () => { const r = SS.pools[+b.dataset.sspn]; r.seats = Math.max(0, (Number(r.seats) || 0) + Number(b.dataset.d)); ssDirty = true; render(); });
+  m.querySelectorAll('[data-sspm]').forEach(x => x.onchange = () => { const pl = SS.pools[+x.dataset.sspm]; pl.members = x.checked ? pl.members.concat(x.value) : pl.members.filter(k => k !== x.value); dirty(); });
+  m.querySelectorAll('[data-sspdel]').forEach(b => b.onclick = () => { const pl = SS.pools[+b.dataset.sspdel]; if(!confirm('Remove the shared seats "' + pl.quota + '"?')) return; SS.pools.splice(+b.dataset.sspdel, 1); ssDirty = true; render(); });
+  const ap = $('#ssAddPool'); if(ap) ap.onclick = () => { const q = (prompt('Quota name of the shared seats (e.g. "Sports Quota"):') || '').trim(); if(!q) return;
+    SS.pools.push({ quota:q, seats:'1', members:[] }); ssDirty = true; render(); toast('Tick the programs that share these seats, then Save seats'); };
+  const rl = $('#ssReload'); if(rl) rl.onclick = () => { if(ssDirty && !confirm('Forget the changes you have not saved?')) return; SS = null; render(); };
+  const sv = $('#ssSave'); if(sv) sv.onclick = async () => {
+    sv.disabled = true; sv.textContent = 'Saving…';
+    try{ const r = await api({ action:'adm_seats_save', rows:SS.rows, pools:SS.pools });
+      if(!r.ok) throw new Error(r.error);
+      if(r.seats && init){ init.seats = r.seats; ls.set('adm_init', init); } ML = null;
+      const ch = r.changed || []; SS = null; await ssLoad();
+      ssMsg = ch.length ? '<b>Saved.</b> ' + ch.map(esc).join(' · ') : '<b>Saved.</b> Nothing was different.'; render(); toast('Seats saved');
+      refreshInit(false);   // new quota names reach the admission form's quota list
+    }catch(e){ alert('Not saved:\n' + (e.message || e)); sv.disabled = false; sv.textContent = 'Save seats'; } };
 }
 function wireSeats(){
   const Q = quotaWise(), sortR = L => L.slice().sort((a, b) => String(a.roll).localeCompare(String(b.roll), undefined, { numeric:true }));
