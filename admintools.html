@@ -363,12 +363,14 @@ async function start(){
     META = (await JCW.api({ action:'at_meta' })).data;
     status('');
     $('wbLink').href = META.url; $('wbName').textContent = META.workbook;
-    document.querySelectorAll('.adm').forEach(b => { if(!META.admin){ b.disabled = true; b.title = 'Only the admin can run this'; } });
+    document.querySelectorAll('.adm').forEach(b => { if(!META.admin && !(META.morning && /^work/.test(b.id))){ b.disabled = true; b.title = 'Only the admin can run this'; } });
     if(!META.admin) $('sub').textContent = 'View and print · only the admin can run the generators';
     if(META.morning) $('mcTab').classList.remove('hidden');
     if(META.only){                                   /* SCI TT MORNING ADMIN without the other admin tools */
-      document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('hidden', b.dataset.t !== 'morning'));
-      $('sub').textContent = 'Morning classes report'; status(''); $('mcTab').click(); return;
+      const mine = ['work', 'tags', 'morning'];
+      document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('hidden', !mine.includes(b.dataset.t)));
+      $('sub').textContent = 'Workload · room tags · morning classes'; status('');
+      const t = (location.hash || '').slice(1); (document.querySelector('#tabs button[data-t="' + (mine.includes(t) ? t : 'morning') + '"]') || $('mcTab')).click(); return;
     }
     const ticked = new Set(META.auto.programs);
     $('autoProgs').innerHTML = (META.programs.length ? META.programs : META.auto.programs).map(p =>

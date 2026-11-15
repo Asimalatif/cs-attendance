@@ -6152,8 +6152,9 @@ function adminExtraCards(){
 function ttmCard(){
   const btn = (href, t) => `<a class="btn primary" href="${href}" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">${t}</a>`;
   return `<section class="card"><h3>${I.cal} Science morning timetable</h3>
-    <div class="sub">You are the SCI TT MORNING ADMIN: edit the timetable of the morning science sections (subject, teacher, days, room, clash checks, print and Excel), and see the Morning classes report (subsidized / non-subsidized, fee, sections).</div>
-    <div class="acts2">${btn('timetable.html', 'Open Timetable editor')}${btn('admintools.html#morning', 'Morning classes report')}</div></section>`;
+    <div class="sub">You are the SCI TT MORNING ADMIN: edit the timetable of the morning science sections (subject, teacher, days, room, clash checks, print and Excel), see the Morning classes report (subsidized / non-subsidized, fee, sections), teacher workload and room tags.</div>
+    <div class="acts2">${btn('timetable.html', 'Open Timetable editor')}${btn('admintools.html#morning', 'Morning classes report')}</div>
+    <div class="acts2" style="margin-top:6px">${btn('admintools.html#work', 'Teacher workload')}${btn('admintools.html#tags', 'Room tags')}</div></section>`;
 }
 const studentPageUrl = () => location.origin + location.pathname.replace(/[^/]*$/, '') + 'student.html';
 const portalScriptUrl = () => location.origin + location.pathname.replace(/[^/]*$/, '') + 'jcw-portal-sync.user.js';
