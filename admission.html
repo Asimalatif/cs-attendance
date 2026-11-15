@@ -1288,7 +1288,11 @@ async function mlPhotoPdf(){
     /* v8.0: same look as the page: brown title bar, card heading, light pink row lines, bold name + d/o, muted program, coloured rows */
     const doc = new window.jspdf.jsPDF({ orientation:'landscape', unit:'mm', format:'a4' }), W = doc.internal.pageSize.getWidth();
     const BR = [107, 52, 35], PK = [232, 201, 192], MU = [125, 100, 92], INK = [43, 27, 22], TEA = [252, 236, 232];
-    const FILL = { next:[220, 235, 255], bad:[253, 224, 221], surplus:[255, 233, 204], cand:[255, 236, 150] };
+    /* black & white printing (ink saver on): light tints would come out white, so each row type gets its own grey that survives
+       (darkest = possible candidate, then wrong place, surplus, next in line) */
+    const INKBW = !!(window.JCW_INK && window.JCW_INK.on());
+    const FILL = INKBW ? { cand:[34, 34, 34], bad:[120, 120, 120], surplus:[153, 153, 153], next:[186, 186, 186] }
+      : { next:[220, 235, 255], bad:[253, 224, 221], surplus:[255, 233, 204], cand:[255, 236, 150] };
     const sub = c.seats + ' seats · ' + c.inHome + ' students in it now' + (c.seats > c.inHome && !c.open ? ' · ' + (c.seats - c.inHome) + ' empty: possible candidates in yellow' : '')
       + (c.fee ? ' · fee Rs ' + c.fee.toLocaleString('en-PK') : '') + (c.sibLabel && c.sibFee ? ' · ' + c.sibLabel + ' fee Rs ' + c.sibFee.toLocaleString('en-PK') : '') + ' · by Aggregate, then age (older first)';
     const bar = first => {
