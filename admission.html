@@ -1237,6 +1237,11 @@ function mlHtml(){
     <div class="acts" style="align-items:center"><label class="f" style="margin:0">Last date of admission <input type="date" id="mlLast" value="${esc(mlLast())}" style="height:40px"></label>
       <button class="btn" type="button" id="mlLastSave">Save date</button><span class="sub">${mlLast() ? 'Fee paid after ' + esc(mlLast().split('-').reverse().join('/')) + ' (or not paid) = late: she comes after every on-time student and loses her right to a seat.' : 'No last date set: every student is ranked only by Aggregate and age.'}</span></div>
     ${sel}</section>
+  <section class="card"><h3>All programs and quotas: one file</h3>
+    <div class="sub">Every merit list above in one file with students' photos: a summary page first (program, quota, seats, students in it now, empty / wrong / surplus), then each list with the same colours and notes as the PDF. Uses the <b>Print</b> choice of the list below (all seats + next 5 / 10, or whole program). The first time it can take a few minutes (photos are prepared once, then kept).</div>
+    <div class="acts"><button class="btn primary" type="button" data-mlall="pdf">PDF (all lists)</button><button class="btn" type="button" data-mlall="xlsx">Excel (all lists, one sheet each)</button><button class="btn" type="button" data-mlall="docx">Word (all lists)</button>
+      <label class="f" style="margin:0;display:flex;align-items:center;gap:6px;text-transform:none"><input type="checkbox" id="mlAllPics" checked> with photos</label></div>
+    <div class="sub" id="mlAllMsg"></div></section>
   <section class="card"><h3>${esc(cur.label)} · ${esc(cur.quota)}</h3>
     <div class="sub">${cur.open ? '<b>No seat limit</b> (every employee\'s daughter is admitted, on a subsidized seat)' : cur.noSeats ? '<b>No seats set</b>' : `<b>${cur.seats}</b> seats`} · <b>${cur.inHome}</b> students in it now · fee ${cur.fee ? '<b>Rs ' + cur.fee.toLocaleString('en-PK') + '</b>' : 'not known yet'}${cur.sibLabel ? ` · ${esc(cur.sibLabel)} fee ${cur.sibFee ? '<b>Rs ' + cur.sibFee.toLocaleString('en-PK') + '</b>' : '–'}` : ''} (most common paid challan)</div>
     <div class="acts"><button class="btn primary" type="button" id="mlPdf">PDF with photos (white background)</button><button class="btn" type="button" id="mlOut">List without photos: PDF / Excel / share</button><label class="f" style="margin:0">Print <select id="mlWait" style="height:40px">${[[10, 'All seats + next 10'], [5, 'All seats + next 5'], [0, 'Whole program']].map(([v, l]) => `<option value="${v}"${mlWait === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label><label class="f" style="margin:0;display:flex;align-items:center;gap:6px;text-transform:none" title="Off = black &amp; white with light grey rows (for the college printer). On = the yellow / blue / red rows of this page (for screen or WhatsApp). Same as typing localStorage.setItem('jcw_color_pdf','1') in the console."><input type="checkbox" id="mlColor"${(() => { try{ return localStorage.getItem('jcw_color_pdf') === '1'; }catch(e){ return false; } })() ? ' checked' : ''}> Colour PDF <span class="sub">(off = black &amp; white for the printer)</span></label>${cur.subs ? `<button class="btn" type="button" id="mlRef">Half-fee refund list</button>` : ''}${cur.seats && !cur.open ? `<button class="btn" type="button" id="mlLeft"${LEFT ? '' : ' disabled'}>${LEFT ? `Left students in the top ${cur.seats} (${cur.leftTop.length})` : 'Left students: reading the Left Students sheet…'}</button>` : ''}${LEFT && LEFT.err ? `<span class="sub" style="color:var(--bad)">Left Students sheet: ${esc(LEFT.err)}</span>` : ''}${bad(cur) ? `<button class="btn" type="button" id="mlBad">Only the ${bad(cur)} wrong</button>` : ''}</div>
@@ -1310,20 +1315,10 @@ async function mlPhotoData(o){                   // white photo for the PDF: the
   }catch(e){}
   ML_PIC.set(k, out); return out;
 }
-async function mlPhotoPdf(){
-  const c = meritLists().find(x => x.key === mlKey && x.quota === mlQ); if(!c) return;
-  const b = $('#mlPdf'), say = t => { if(b) b.textContent = t; };
-  try{
-    b.disabled = true; say('Loading the PDF tools…');
-    if(!(window.jspdf && window.jspdf.jsPDF)) await mlLoadJs('jspdf.umd.min.js');
-    if(!window.jspdf.jsPDF.API.autoTable) await mlLoadJs('jspdf.plugin.autotable.min.js');
-    try{ await mlSegmenter(); }catch(e){ toast('White background needs internet the first time: photos are used as they are.'); }
-    const P = mlPick(c), rows = P.rows; if(!rows.length) throw new Error('Nobody in this list.');
-    const pics = []; let n = 0, none = 0;
-    for(const r of rows){ n++; if(n % 5 === 0) say('Photos ' + n + ' of ' + rows.length + '…'); const d = await mlPhotoData(r.o).catch(() => ''); if(!d) none++; pics.push(d); }
-    say('Making the PDF…');
-    /* v8.0: same look as the page: brown title bar, card heading, light pink row lines, bold name + d/o, muted program, coloured rows */
-    const doc = new window.jspdf.jsPDF({ orientation:'landscape', unit:'mm', format:'a4' }), W = doc.internal.pageSize.getWidth();
+/* v8.4: draws one merit list (title card + table with photos) into a jsPDF doc; more = start on a new page */
+function mlDraw(doc, c, P, pics, more){
+  const W = doc.internal.pageSize.getWidth(), rows = P.rows;
+  if(more) doc.addPage();
     const BR = [107, 52, 35], PK = [232, 201, 192], MU = [125, 100, 92], INK = [43, 27, 22], TEA = [252, 236, 232];
     /* black & white printing (ink saver on): light tints would come out white, so each row type gets its own grey that survives
        (darkest = possible candidate, then wrong place, surplus, next in line) */
@@ -1336,7 +1331,7 @@ async function mlPhotoPdf(){
       doc.setFillColor(...BR); doc.rect(0, 0, W, 13, 'F');
       doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text('Jinnah College for Women · University of Peshawar', 8, 8.4);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.text('Merit list 1st Year · ' + new Date().toLocaleDateString('en-GB'), W - 8, 8.4, { align:'right' });
-      if(!first) return 17;
+      if(!first){ doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.text(c.label + ' · ' + c.quota + ' (continued)', W / 2 + 22, 8.4, { align:'center' }); return 17; }
       doc.setFillColor(...TEA); doc.setDrawColor(...PK); doc.setLineWidth(.3); doc.roundedRect(7, 16, W - 14, 15, 2.5, 2.5, 'FD');
       doc.setTextColor(...INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(12.5); doc.text(c.label + ' · ' + c.quota + (P.part ? '  (all seats + next ' + mlWait + ')' : ''), 11, 22.2);
       doc.setTextColor(...MU); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.6); doc.text(sub, 11, 27.6);
@@ -1374,6 +1369,126 @@ async function mlPhotoPdf(){
         let ty = y + ht / 2 - (L2.length - 1) * 3.9 / 2 + 1.3;
         L2.forEach(l => { doc.setFont('helvetica', l[1]); doc.setFontSize(l[2]); doc.setTextColor(...l[3]); doc.text(l[0], cx, ty); ty += 3.9; }); },
       didDrawPage:() => { if(pg++ > 1) bar(false); } });
+}
+/* ---------- v8.4: all programs and quotas in one PDF / Excel / Word file, with photos ---------- */
+const mlSeatTxt = (c, r) => (r.cand ? 'POSSIBLE CANDIDATE' : r.state === 'surplus' ? 'SURPLUS' : r.rank <= c.seats ? 'On a seat' : r.state === 'next' ? 'NEXT IN LINE' : r.state === 'bad' ? 'WRONG PLACE' : 'Waiting')
+  + (r.cand ? ' · ' + r.why.replace(/^POSSIBLE CANDIDATE for empty /, '').replace(/ · Next in line: a subsidized seat is empty/, '') : r.why ? ' · ' + r.why : '');
+const mlFp = o => feeOf(o.challan).map(x => (x.paid ? 'P ' : 'U ') + x.amount.toLocaleString('en-PK')).join(', ') || '–';
+const mlVals = (c, r) => { const o = r.o; return [r.rank, o.roll || '', o.name || '', o.father || '', (prog(o.key) || {}).label || o.key, o.pcs || '', o.hq || '', o.metric || '', o.total || '', o._a ? o._a / 100 : '', o.meritNo || '', mlFp(o), o.dob || '', o.agewise || '', o.receipt || o.feepaid || '', mlSeatTxt(c, r)]; };
+const ML_HEAD = ['#', 'Enroll#', 'Student Name', 'Father Name', 'Program', 'Section', 'HQ', 'Obtained', 'Total', 'Aggregate', 'MeritNo', 'Challan', 'DOB', 'Age-wise', 'Fee paid', 'Seat'];
+const mlTone = r => r.cand ? 'cand' : r.state || '';
+const ML_HEX = { cand:'FFEC96', bad:'FDE0DD', surplus:'FFE9CC', next:'DCEBFF' };
+function mlSum(M){ return M.map(c => { const b = c.rows.filter(r => r.state === 'bad').length, su = c.rows.filter(r => r.state === 'surplus').length;
+  return [c.group || c.label, c.label, c.quota, c.open ? 'no limit' : c.noSeats ? 'not set' : c.seats, c.inHome, c.open || c.noSeats ? '' : Math.max(0, c.seats - (c.subs ? c.inHome : c.held)), b || '', su || '', c.fee ? c.fee.toLocaleString('en-PK') : '']; }); }
+const ML_SUMHEAD = ['Group', 'Program', 'Quota', 'Seats', 'In it now', 'Empty', 'Wrong place', 'Surplus', 'Fee (Rs)'];
+const mlB64 = d => { const b = atob(String(d).split(',')[1] || ''), u = new Uint8Array(b.length); for(let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; };
+async function mlAllOut(fmt){
+  const msg = t => { const m = $('#mlAllMsg'); if(m) m.textContent = t; }, btns = [...document.querySelectorAll('[data-mlall]')];
+  const M = meritLists().filter(c => c.rows.length), withPics = !$('#mlAllPics') || $('#mlAllPics').checked;
+  if(!M.length) return toast('No lists.');
+  btns.forEach(b => b.disabled = true);
+  try{
+    const L = M.map(c => ({ c, P:mlPick(c) }));
+    const total = L.reduce((t, x) => t + x.P.rows.length, 0); let n = 0, none = 0;
+    if(withPics){ try{ await mlSegmenter(); }catch(e){} }
+    for(const x of L){ x.pics = [];
+      for(const r of x.P.rows){ n++; if(n % 10 === 0) msg('Photos ' + n + ' of ' + total + '…');
+        const d = withPics ? await mlPhotoData(r.o).catch(() => '') : ''; if(withPics && !d) none++; x.pics.push(d); } }
+    const stamp = new Date().toLocaleDateString('en-GB'), base = 'JCW Merit lists 1st Year - all programs (' + stamp.replace(/\//g, '-') + ')';
+    let blob, name;
+    if(fmt === 'pdf'){
+      msg('Making the PDF…');
+      if(!(window.jspdf && window.jspdf.jsPDF)) await mlLoadJs('jspdf.umd.min.js');
+      if(!window.jspdf.jsPDF.API.autoTable) await mlLoadJs('jspdf.plugin.autotable.min.js');
+      const doc = new window.jspdf.jsPDF({ orientation:'landscape', unit:'mm', format:'a4' }), W = doc.internal.pageSize.getWidth();
+      doc.setFillColor(107, 52, 35); doc.rect(0, 0, W, 13, 'F'); doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+      doc.text('Jinnah College for Women · University of Peshawar', 8, 8.4); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.text('Merit lists 1st Year · ' + stamp, W - 8, 8.4, { align:'right' });
+      doc.setTextColor(43, 27, 22); doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.text('Merit lists 1st Year: all programs and quotas', 8, 24);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(125, 100, 92);
+      doc.text('Each list follows on its own page(s). Shading: possible candidate for an empty seat (darkest), wrong place, surplus, next in line (lightest). Thick line = last seat.', 8, 30);
+      doc.autoTable({ startY:34, head:[ML_SUMHEAD], body:mlSum(M), theme:'grid', margin:{ left:8, right:8 }, styles:{ fontSize:9.5, textColor:[43, 27, 22], lineColor:[232, 201, 192], lineWidth:.2 },
+        headStyles:{ fillColor:[252, 236, 232], textColor:[43, 27, 22], fontStyle:'bold' }, columnStyles:{ 3:{ halign:'center' }, 4:{ halign:'center' }, 5:{ halign:'center', fontStyle:'bold' }, 6:{ halign:'center' }, 7:{ halign:'center' }, 8:{ halign:'right' } } });
+      L.forEach((x, i) => { msg('Making the PDF: ' + (i + 1) + ' of ' + L.length + ' lists…'); mlDraw(doc, x.c, x.P, x.pics, true); });
+      const n2 = doc.internal.getNumberOfPages();
+      for(let p = 1; p <= n2; p++){ doc.setPage(p); doc.setFontSize(7); doc.setTextColor(125, 100, 92); doc.text('Page ' + p + ' of ' + n2, W / 2, doc.internal.pageSize.getHeight() - 4, { align:'center' }); }
+      blob = doc.output('blob'); name = base + '.pdf';
+    } else if(fmt === 'xlsx'){
+      msg('Making the Excel file…');
+      if(!window.ExcelJS) await mlLoadJs('https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js');
+      const wb = new ExcelJS.Workbook(), used = {};
+      const thin = { style:'thin', color:{ argb:'FFE8C9C0' } }, border = { top:thin, bottom:thin, left:thin, right:thin };
+      const S = wb.addWorksheet('Summary', { pageSetup:{ orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0, paperSize:9 } });
+      S.addRow(['Merit lists 1st Year: all programs and quotas · ' + stamp]).font = { bold:true, size:14, color:{ argb:'FF6B3423' } };
+      S.addRow(['Jinnah College for Women · University of Peshawar. One sheet per list. Colours: yellow = possible candidate for an empty seat, red = wrong place, orange = surplus, blue = next in line.']);
+      S.addRow([]); const hr = S.addRow(ML_SUMHEAD); hr.font = { bold:true }; hr.eachCell(c => { c.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFFCECE8' } }; c.border = border; });
+      mlSum(M).forEach(v => S.addRow(v).eachCell({ includeEmpty:true }, c => c.border = border));
+      S.columns.forEach((c, i) => c.width = [18, 28, 30, 10, 11, 9, 12, 10, 12][i] || 12);
+      L.forEach((x, li) => { msg('Making the Excel file: ' + (li + 1) + ' of ' + L.length + ' lists…');
+        const c = x.c; let nm = (c.label + ' ' + c.quota).replace(/[\\/?*\[\]:]/g, ' ').replace(/Quota/g, 'Q').slice(0, 31).trim(); let k = 2; while(used[nm]) nm = nm.slice(0, 28) + ' ' + k++; used[nm] = 1;
+        const ws = wb.addWorksheet(nm, { pageSetup:{ orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0, paperSize:9 }, views:[{ state:'frozen', ySplit:4 }] });
+        ws.addRow([c.label + ' · ' + c.quota]).font = { bold:true, size:14, color:{ argb:'FF2B1B16' } };
+        ws.addRow([(c.open ? 'No seat limit' : c.seats + ' seats') + ' · ' + c.inHome + ' students in it now' + (c.seats > c.inHome && !c.open && !c.noSeats ? ' · ' + (c.seats - c.inHome) + ' empty' : '') + (c.fee ? ' · fee Rs ' + c.fee.toLocaleString('en-PK') : '') + ' · by Aggregate, then age (older first)' + (x.P.part ? ' · all seats + next ' + mlWait : '')]).font = { color:{ argb:'FF7D645C' } };
+        ws.addRow([]);
+        const h = ws.addRow(['#', 'Photo'].concat(ML_HEAD.slice(1))); h.font = { bold:true }; h.eachCell(cl => { cl.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFFCECE8' } }; cl.border = border; cl.alignment = { vertical:'middle', wrapText:true }; });
+        const imgs = [];   // photos are placed after all rows exist (placing them while adding rows makes Excel skip rows)
+        x.P.rows.forEach((r, i) => { const v = mlVals(c, r), row = ws.addRow([v[0], ''].concat(v.slice(1)));
+          row.height = withPics ? 56 : 20; const t = ML_HEX[mlTone(r)];
+          row.eachCell({ includeEmpty:true }, cl => { cl.border = border; cl.alignment = { vertical:'middle', wrapText:true }; if(t) cl.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FF' + t } }; if(r.cand || r.state === 'bad') cl.font = { bold:true }; });
+          row.getCell(4).font = { bold:true }; row.getCell(11).font = { bold:true };
+          if(i === c.seats - 1) row.eachCell({ includeEmpty:true }, cl => cl.border = Object.assign({}, border, { bottom:{ style:'thick', color:{ argb:'FF6B3423' } } }));
+          if(x.pics[i]) imgs.push([x.pics[i], row.number]); });
+        imgs.forEach(([d, rn]) => { const id = wb.addImage({ base64:d, extension:'jpeg' }); ws.addImage(id, { tl:{ col:1, row:rn - 1 }, br:{ col:2, row:rn }, editAs:'oneCell' }); });   /* the photo fills its own cell (cell shape = photo shape) */
+        ws.columns.forEach((cl, i) => cl.width = [6, withPics ? 7.6 : 4, 15, 22, 22, 20, 8, 6, 9, 7, 10, 9, 20, 11, 9, 11, 30][i] || 10); });
+      blob = new Blob([await wb.xlsx.writeBuffer()], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }); name = base + '.xlsx';
+    } else {
+      msg('Making the Word file…');
+      if(!window.docx) await mlLoadJs('https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js');
+      const D = window.docx, tw = mm => Math.round(mm * 56.7);
+      const cell = (t, o = {}) => new D.TableCell({ children:[new D.Paragraph({ children:[].concat(o.img ? [o.img] : String(t == null ? '' : t).split('\n').map((ln, i) => new D.TextRun({ text:ln, bold:!!o.bold || (o.bold2 && i === 0), size:o.size || 17, color:o.color || '2B1B16', break:i ? 1 : 0 }))) })],
+        shading:o.fill ? { type:D.ShadingType.CLEAR, fill:o.fill, color:'auto' } : undefined, verticalAlign:D.VerticalAlign.CENTER, margins:{ top:40, bottom:40, left:60, right:60 },
+        borders:o.thick ? { bottom:{ style:D.BorderStyle.SINGLE, size:18, color:'6B3423' } } : undefined });
+      const P_ = (t, o = {}) => new D.Paragraph({ spacing:{ after:o.after || 80 }, children:[new D.TextRun({ text:t, bold:!!o.bold, size:o.size || 18, color:o.color || '2B1B16' })] });
+      const sect = children => ({ properties:{ page:{ size:{ orientation:D.PageOrientation.LANDSCAPE, width:tw(210), height:tw(297) }, margin:{ top:tw(10), bottom:tw(10), left:tw(8), right:tw(8) } } },
+        headers:{ default:new D.Header({ children:[P_('Jinnah College for Women · University of Peshawar · Merit lists 1st Year · ' + stamp, { size:16, color:'7D645C' })] }) }, children });
+      const sumRows = [new D.TableRow({ tableHeader:true, children:ML_SUMHEAD.map(h => cell(h, { bold:true, fill:'FCECE8' })) })].concat(mlSum(M).map(v => new D.TableRow({ children:v.map(t => cell(t, { size:18 })) })));
+      const sections = [sect([P_('Merit lists 1st Year: all programs and quotas', { bold:true, size:30 }), P_('Each list starts on a new page. Colours: yellow = possible candidate for an empty seat, red = wrong place, orange = surplus, blue = next in line. Thick line = last seat.', { color:'7D645C' }),
+        new D.Table({ width:{ size:100, type:D.WidthType.PERCENTAGE }, rows:sumRows })])];
+      L.forEach((x, li) => { msg('Making the Word file: ' + (li + 1) + ' of ' + L.length + ' lists…');
+        const c = x.c, head = new D.TableRow({ tableHeader:true, children:['#', 'Photo', 'Enroll#', 'Student', 'Program · Section', 'HQ', 'Obtained / Total', 'Aggregate', 'MeritNo', 'Challan', 'DOB', 'Age-wise', 'Fee paid', 'Seat'].map(h => cell(h, { bold:true, fill:'FCECE8' })) });
+        const rows = x.P.rows.map((r, i) => { const v = mlVals(c, r), f = ML_HEX[mlTone(r)], th = i === c.seats - 1, b = r.cand || r.state === 'bad', d = x.pics[i];
+          const img = d ? new D.ImageRun({ data:mlB64(d), transformation:{ width:45, height:60 } }) : null;
+          return new D.TableRow({ cantSplit:true, children:[cell(v[0], { fill:f, thick:th, bold:b }), img ? cell('', { img, fill:f, thick:th }) : cell('', { fill:f, thick:th }), cell(v[1], { fill:f, thick:th, bold:b }),
+            cell(v[2] + '\nd/o ' + v[3], { fill:f, thick:th, bold2:true }), cell(v[4] + '\n' + v[5], { fill:f, thick:th }), cell(v[6], { fill:f, thick:th }), cell(v[7] + ' / ' + v[8], { fill:f, thick:th }),
+            cell(v[9], { fill:f, thick:th, bold:true }), cell(v[10], { fill:f, thick:th }), cell(v[11], { fill:f, thick:th, size:15 }), cell(v[12], { fill:f, thick:th }), cell(v[13], { fill:f, thick:th }), cell(v[14], { fill:f, thick:th }), cell(v[15], { fill:f, thick:th, bold:b })] }); });
+        sections.push(sect([P_(c.label + ' · ' + c.quota, { bold:true, size:28 }),
+          P_((c.open ? 'No seat limit' : c.seats + ' seats') + ' · ' + c.inHome + ' students in it now' + (c.seats > c.inHome && !c.open && !c.noSeats ? ' · ' + (c.seats - c.inHome) + ' empty: possible candidates in yellow' : '') + (c.fee ? ' · fee Rs ' + c.fee.toLocaleString('en-PK') : '') + ' · by Aggregate, then age (older first)' + (x.P.part ? ' · all seats + next ' + mlWait : ''), { color:'7D645C' }),
+          new D.Table({ layout:D.TableLayoutType.FIXED, width:{ size:tw(279), type:D.WidthType.DXA }, columnWidths:[7, 18, 21, 36, 27, 9, 18, 15, 13, 26, 19, 13, 19, 38].map(tw), rows:[head].concat(rows) })])); });
+      blob = await D.Packer.toBlob(new D.Document({ creator:'JCW', title:'Merit lists 1st Year', styles:{ default:{ document:{ run:{ font:'Calibri' } } } }, sections })); name = base + '.docx';
+    }
+    msg(none ? none + ' photos are not on this device (open the ID cards page once to read them).' : '');
+    const sub = L.length + ' lists · ' + total + ' rows' + (fmt === 'pdf' ? '' : ' · ' + (fmt === 'xlsx' ? 'Excel' : 'Word') + ' file with photos');
+    if(window.JCWOUT && fmt === 'pdf') JCWOUT.offer({ blob, name, title:'Merit lists 1st Year · all programs', sub });
+    else if(window.JCWOUT) JCWOUT.offer({ blob, name, title:'Merit lists 1st Year · all programs', sub, noPdf:true, noXl:true,
+      extra:[{ label:'Download', fn:() => { JCWOUT.download(blob, name); toast('Downloaded: ' + name); } }, { label:'Open / share', fn:() => JCWOUT.share(blob, name, 'Merit lists 1st Year') }] });
+    else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); }
+  }catch(e){ toast('Not made: ' + (e.message || e)); msg('Not made: ' + (e.message || e)); }
+  finally{ btns.forEach(b => b.disabled = false); }
+}
+async function mlPhotoPdf(){
+  const c = meritLists().find(x => x.key === mlKey && x.quota === mlQ); if(!c) return;
+  const b = $('#mlPdf'), say = t => { if(b) b.textContent = t; };
+  try{
+    b.disabled = true; say('Loading the PDF tools…');
+    if(!(window.jspdf && window.jspdf.jsPDF)) await mlLoadJs('jspdf.umd.min.js');
+    if(!window.jspdf.jsPDF.API.autoTable) await mlLoadJs('jspdf.plugin.autotable.min.js');
+    try{ await mlSegmenter(); }catch(e){ toast('White background needs internet the first time: photos are used as they are.'); }
+    const P = mlPick(c), rows = P.rows; if(!rows.length) throw new Error('Nobody in this list.');
+    const pics = []; let n = 0, none = 0;
+    for(const r of rows){ n++; if(n % 5 === 0) say('Photos ' + n + ' of ' + rows.length + '…'); const d = await mlPhotoData(r.o).catch(() => ''); if(!d) none++; pics.push(d); }
+    say('Making the PDF…');
+    /* v8.0: same look as the page: brown title bar, card heading, light pink row lines, bold name + d/o, muted program, coloured rows */
+    const doc = new window.jspdf.jsPDF({ orientation:'landscape', unit:'mm', format:'a4' }), W = doc.internal.pageSize.getWidth();
+    mlDraw(doc, c, P, pics, false);
     const n2 = doc.internal.getNumberOfPages();
     for(let p = 1; p <= n2; p++){ doc.setPage(p); doc.setFontSize(7); doc.text('Page ' + p + ' of ' + n2, W / 2, doc.internal.pageSize.getHeight() - 4, { align:'center' }); }
     const name = 'Merit list ' + c.label.replace(/[^\w() .-]+/g, ' ') + ' - ' + c.quota + '.pdf', blob = doc.output('blob');
@@ -1424,6 +1539,7 @@ function wireMl(){
       head:['Merit #', 'Enroll#', 'Student Name', 'Father Name', 'Program', 'Section', 'Aggregate', 'Fee paid', 'Subsidized fee', 'Refund', 'Note'],
       rows:R.map(x => { const o = x.r.o; return [x.r.rank, o.roll || '', o.name, o.father || '', (prog(o.key) || {}).label || o.key, o.pcs || '', o._a ? o._a / 100 : '', x.paid, sub, x.paid - sub, x.r.cand ? 'Possible candidate: refund only if moved in' : 'On a subsidized seat']; }) }); };
   const pp = $('#mlPdf'); if(pp) pp.onclick = mlPhotoPdf;
+  document.querySelectorAll('[data-mlall]').forEach(b => b.onclick = () => mlAllOut(b.dataset.mlall));
   const mc = $('#mlColor'); if(mc) mc.onchange = () => { try{ mc.checked ? localStorage.setItem('jcw_color_pdf', '1') : localStorage.removeItem('jcw_color_pdf'); }catch(e){} toast(mc.checked ? 'PDFs on this device: in colour' : 'PDFs on this device: black & white (saves ink)'); };
   const mw = $('#mlWait'); if(mw) mw.onchange = () => { mlWait = Number(mw.value) || 0; try{ localStorage.setItem('mlWait', mlWait); }catch(e){} };
   document.querySelectorAll('[data-mlr]').forEach(b => b.onclick = () => mlReceipt(b.dataset.mlr));
