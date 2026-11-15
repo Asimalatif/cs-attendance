@@ -133,7 +133,7 @@ dialog::backdrop{background:rgba(10,15,25,.55)}
 .ml-pick{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.ml-b{border:1.5px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 10px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;text-align:left}.ml-b.on{background:var(--brown,#6B3423);color:#fff;border-color:var(--brown,#6B3423)}.ml-b small{font-weight:600;opacity:.85}
 table.ml{font-size:12.5px;border-collapse:collapse;width:100%}table.ml th,table.ml td{border-bottom:1px solid var(--line);padding:5px 6px;vertical-align:middle;text-align:left}table.ml th{position:sticky;top:0;background:var(--surface);z-index:1}
 table.ml img{width:72px;height:96px;cursor:zoom-in;object-fit:cover;border-radius:6px;border:1px solid var(--line);display:block}
-table.ml tr.next td{background:#DCEBFF}table.ml tr.bad td{background:#FDE0DD}table.ml tr.surplus td{background:#FFE9CC}
+table.ml tr.next td{background:#DCEBFF}table.ml tr.cand td{background:#FFEC96!important;font-weight:700}.mlk.cand{background:#FFEC96}table.ml tr.bad td{background:#FDE0DD}table.ml tr.surplus td{background:#FFE9CC}
 .ml-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px;margin-top:10px}.ml-g{border:1.5px solid var(--line);border-radius:12px;overflow:hidden}
 .ml-gh{background:var(--surface2,#FBEDEA);font-weight:800;padding:6px 10px;font-size:13px}table.mlq{width:100%;border-collapse:collapse;font-size:12.5px}
 table.mlq td{padding:5px 8px;border-top:1px solid var(--line);cursor:pointer}table.mlq tr:hover td{background:#f6efe9}table.mlq tr.on td{outline:2px solid var(--brown,#6B3423);outline-offset:-2px;font-weight:800}
@@ -1157,8 +1157,11 @@ function meritLists(){
         else if(noSeats){ state = 'surplus'; why = 'No seats set for this quota in Quota Settings'; }
         if(o._late) why = (why ? why + ' · ' : '') + (o._paid ? 'Late: fee paid ' + o._paid + ', after the last date' : 'Fee not paid by the last date');
         if(o.receipt) why = (why ? why + ' · ' : '') + 'Fee date from receipt ' + o.receipt + (o.feepaid ? ' (portal ' + o.feepaid + ')' : '') + (o.receiptNote ? ': ' + o.receiptNote : '');
-        return { o, rank, state, why };
+        return { o, rank, state, why, here };
       });
+      // v8.0: possible candidates for the empty seats (seats - students in it now): the first students below who are not in this program yet
+      const K = open || noSeats ? 0 : Math.max(0, seats - inHome); let kk = 0;
+      rows.forEach(r => { if(kk < K && !r.here){ kk++; r.cand = kk; r.why = 'POSSIBLE CANDIDATE for empty seat ' + kk + ' of ' + K + (r.why ? ' · ' + r.why : ''); } });
       out.push({ key:p.key, label:pl ? 'Shared pool: ' + home.map(k => (prog(k) || {}).label || k).join(', ') : pr.label || p.key, fee:fees[p.key] || 0,
         sibFee:sib.length ? fees[sib[0]] || 0 : 0, sibLabel:sib.map(k => (prog(k) || {}).label).join(', '), quota:q.name, seats, inHome, rows, subs:!!sib.length, noSeats,
         held:sib.length ? L.slice(0, seats).filter(o => home.includes(o.key)).length : inHome, open, group:pl ? 'Shared pools' : pr.label || p.key, qlabel:q.name });
@@ -1169,7 +1172,9 @@ function meritLists(){
 }
 let mlAll = false, mlWait = (() => { try{ return Number(localStorage.getItem('mlWait') || 10); }catch(e){ return 10; } })();   // PDF / list: 0 = whole program, else only the next N waiting
 /* rows printed: the next N waiting candidates after the last seat (whole list when the quota has no seat limit) */
-const mlPick = c => !mlWait || c.open || c.noSeats ? { rows:c.rows, part:false } : { rows:c.rows.slice(c.seats, c.seats + mlWait), part:true };
+const mlPick = c => { if(!mlWait || c.open || c.noSeats) return { rows:c.rows, part:false };   // every seat + the next N below (and every possible candidate)
+  const lastCand = c.rows.reduce((m, r, i) => r.cand ? i + 1 : m, 0), end = Math.max(c.seats, lastCand) + mlWait;
+  return { rows:c.rows.slice(0, end), part:end < c.rows.length }; };
 function mlHtml(){
   if(!idx) return '<section class="card"><div class="sub">Loading the student list…</div></section>';
   const old = !idx.cols.includes('receipt');
@@ -1186,7 +1191,7 @@ function mlHtml(){
     ${M.filter(x => x.group === g).map(x => { const l = left(x); return `<tr class="${tone(x)}${x === cur ? ' on' : ''}" data-ml="${esc(x.key + '|' + x.quota)}"><td>${esc(x.qlabel)}</td><td class="n">${x.held}${x.noSeats || x.open ? '' : ' / ' + x.seats}</td>
       <td class="n">${x.open ? '<span class="sub">all admitted</span>' : x.noSeats ? '<span class="pill full">no seats set</span>' : bad(x) ? `<span class="pill full">${bad(x)} wrong</span>` : sur(x) ? `<span class="pill sur">+${sur(x)} surplus</span>` : x.subs && x.seats - x.inHome > 0 ? `<span class="pill lessp">${x.seats - x.inHome} left</span>` : l > 0 ? `<span class="pill lessp">${l} empty</span>` : l < 0 ? `<span class="sub">+${-l}</span>` : '<span class="sub">full</span>'}</td></tr>`; }).join('')}
     </tbody></table></div>`).join('')}</div>
-    <div class="sub" style="margin-top:6px"><span class="mlk less">green</span> = seats still empty · <span class="mlk sur">orange</span> = surplus (more than the seats; fine only in Open Quota of non-subsidized, FCS, F.A, Pre-Engineering) · <span class="mlk bad">red</span> = wrong place for a subsidized seat · <span class="mlk next">blue</span> = next in line.</div>`;
+    <div class="sub" style="margin-top:6px"><span class="mlk less">green</span> = seats still empty · <span class="mlk sur">orange</span> = surplus (more than the seats; fine only in Open Quota of non-subsidized, FCS, F.A, Pre-Engineering) · <span class="mlk bad">red</span> = wrong place for a subsidized seat · <span class="mlk next">blue</span> = next in line · <span class="mlk cand">yellow</span> = possible candidate for an empty seat.</div>`;
   const th = ['#', 'Photo', 'Enroll#', 'Student', 'Program · Section', 'HQ', 'Obtained', 'Total', 'Aggregate', 'MeritNo', 'Challan', 'DOB', 'Age-wise', 'Fee paid', ''];
   const lim = mlAll ? cur.rows.length : Math.min(cur.rows.length, Math.max(cur.seats + 25, 60));
   return `${old ? '<div class="note mid">This list has no Aggregate / Age-wise / FEE PAID DATE yet: paste the new <b>Admissions.gs</b> in Apps Script and deploy a New version (reading the list again…).</div>' : ''}
@@ -1197,10 +1202,10 @@ function mlHtml(){
     ${sel}</section>
   <section class="card"><h3>${esc(cur.label)} · ${esc(cur.quota)}</h3>
     <div class="sub">${cur.open ? '<b>No seat limit</b> (every employee\'s daughter is admitted, on a subsidized seat)' : cur.noSeats ? '<b>No seats set</b>' : `<b>${cur.seats}</b> seats`} · <b>${cur.inHome}</b> students in it now · fee ${cur.fee ? '<b>Rs ' + cur.fee.toLocaleString('en-PK') + '</b>' : 'not known yet'}${cur.sibLabel ? ` · ${esc(cur.sibLabel)} fee ${cur.sibFee ? '<b>Rs ' + cur.sibFee.toLocaleString('en-PK') + '</b>' : '–'}` : ''} (most common paid challan)</div>
-    <div class="acts"><button class="btn primary" type="button" id="mlPdf">PDF with photos (white background)</button><button class="btn" type="button" id="mlOut">List without photos: PDF / Excel / share</button><label class="f" style="margin:0">Print <select id="mlWait" style="height:40px">${[[5, 'Next 5 waiting'], [10, 'Next 10 waiting'], [0, 'Whole program']].map(([v, l]) => `<option value="${v}"${mlWait === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>${bad(cur) ? `<button class="btn" type="button" id="mlBad">Only the ${bad(cur)} wrong</button>` : ''}</div>
+    <div class="acts"><button class="btn primary" type="button" id="mlPdf">PDF with photos (white background)</button><button class="btn" type="button" id="mlOut">List without photos: PDF / Excel / share</button><label class="f" style="margin:0">Print <select id="mlWait" style="height:40px">${[[10, 'All seats + next 10'], [5, 'All seats + next 5'], [0, 'Whole program']].map(([v, l]) => `<option value="${v}"${mlWait === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>${bad(cur) ? `<button class="btn" type="button" id="mlBad">Only the ${bad(cur)} wrong</button>` : ''}</div>
     <div style="overflow:auto;max-height:70vh;margin-top:8px" id="mlBox"><table class="ml"><thead><tr>${th.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>
     ${cur.rows.slice(0, lim).map((r, i) => { const o = r.o, f = feeOf(o.challan), cut = i === cur.seats - 1 && cur.rows.length > cur.seats;
-      return `<tr class="${r.state}${cut ? ' cut' : ''}"><td class="n">${r.rank}</td><td><img alt="" data-mlp="${esc(o.roll || '')}" data-mlu="${esc(mlPic(o.pic))}"></td>
+      return `<tr class="${r.state}${r.cand ? ' cand' : ''}${cut ? ' cut' : ''}"><td class="n">${r.rank}</td><td><img alt="" data-mlp="${esc(o.roll || '')}" data-mlu="${esc(mlPic(o.pic))}"></td>
         <td class="nw">${esc(o.roll || '–')}</td><td><b>${esc(o.name)}</b><div class="sub">d/o ${esc(o.father || '-')}</div></td><td class="sub">${esc((prog(o.key) || {}).label || o.key)}<br>${esc(o.pcs || '')}</td>
         <td>${esc(o.hq || '')}</td><td class="n">${esc(o.metric || '')}</td><td class="n">${esc(o.total || '')}</td><td class="n"><b>${o._a ? o._a / 100 : ''}</b></td><td class="n">${esc(o.meritNo || '')}</td>
         <td class="sub" style="min-width:120px">${f.length ? f.map(x => (x.paid ? 'P ' : 'U ') + x.amount.toLocaleString('en-PK')).join(', ') : '–'}</td><td class="nw">${esc(o.dob || '')}</td><td>${esc(o.agewise || '')}</td><td class="nw">${o.receipt ? `<b>${esc(o.receipt)}</b><div class="sub">receipt · portal ${esc(o.feepaid || '–')}</div>` : esc(o.feepaid || '')} <button type="button" class="seatlink" data-mlr="${esc(o.roll || '')}" title="The date on her fee receipt (when the bank sent it late)">✎</button></td>
@@ -1276,28 +1281,28 @@ async function mlPhotoPdf(){
     if(!(window.jspdf && window.jspdf.jsPDF)) await mlLoadJs('jspdf.umd.min.js');
     if(!window.jspdf.jsPDF.API.autoTable) await mlLoadJs('jspdf.plugin.autotable.min.js');
     try{ await mlSegmenter(); }catch(e){ toast('White background needs internet the first time: photos are used as they are.'); }
-    const P = mlPick(c), rows = P.rows; if(!rows.length) throw new Error('No waiting candidates after the ' + c.seats + ' seats.');
+    const P = mlPick(c), rows = P.rows; if(!rows.length) throw new Error('Nobody in this list.');
     const pics = []; let n = 0, none = 0;
     for(const r of rows){ n++; if(n % 5 === 0) say('Photos ' + n + ' of ' + rows.length + '…'); const d = await mlPhotoData(r.o).catch(() => ''); if(!d) none++; pics.push(d); }
     say('Making the PDF…');
     const doc = new window.jspdf.jsPDF({ orientation:'landscape', unit:'mm', format:'a4' }), W = doc.internal.pageSize.getWidth();
     doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text('JINNAH COLLEGE FOR WOMEN, UNIVERSITY OF PESHAWAR', W / 2, 11, { align:'center' });
-    doc.setFontSize(11); doc.text((P.part ? 'Waiting list (next ' + rows.length + ') 1st Year · ' : 'Merit list 1st Year · ') + c.label + ' · ' + c.quota, W / 2, 17, { align:'center' });
+    doc.setFontSize(11); doc.text('Merit list 1st Year · ' + c.label + ' · ' + c.quota + (P.part ? ' (all seats + next ' + mlWait + ')' : ''), W / 2, 17, { align:'center' });
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
-    doc.text(c.seats + ' seats · ' + c.inHome + ' students in it now' + (c.fee ? ' · fee Rs ' + c.fee.toLocaleString('en-PK') : '') + (c.sibLabel && c.sibFee ? ' · ' + c.sibLabel + ' fee Rs ' + c.sibFee.toLocaleString('en-PK') : '') + ' · by Aggregate, then age (older first) · ' + new Date().toLocaleDateString('en-GB'), W / 2, 22, { align:'center' });
+    doc.text(c.seats + ' seats · ' + c.inHome + ' students in it now' + (c.seats > c.inHome && !c.open ? ' · ' + (c.seats - c.inHome) + ' empty: POSSIBLE CANDIDATES shaded' : '') + (c.fee ? ' · fee Rs ' + c.fee.toLocaleString('en-PK') : '') + (c.sibLabel && c.sibFee ? ' · ' + c.sibLabel + ' fee Rs ' + c.sibFee.toLocaleString('en-PK') : '') + ' · by Aggregate, then age (older first) · ' + new Date().toLocaleDateString('en-GB'), W / 2, 22, { align:'center' });
     const body = rows.map(r => { const o = r.o; return [r.rank, '', o.roll || '', (o.name || '') + '\nd/o ' + (o.father || '-'), ((prog(o.key) || {}).label || o.key) + '\n' + (o.pcs || ''), o.hq || '', o.metric || '', o.total || '', o._a ? o._a / 100 : '', o.meritNo || '', o.dob || '', o.agewise || '', o.receipt ? o.receipt + '\n(receipt)' : o.feepaid || '',
-      (r.state === 'surplus' ? 'SURPLUS' : r.rank <= c.seats ? 'On a seat' : r.state === 'next' ? 'NEXT IN LINE' : 'Waiting') + (r.state === 'bad' ? '\nWRONG: ' + r.why : r.state === 'next' ? '' : r.why ? '\n' + r.why : '')]; });
+      (r.cand ? 'POSSIBLE CANDIDATE' : r.state === 'surplus' ? 'SURPLUS' : r.rank <= c.seats ? 'On a seat' : r.state === 'next' ? 'NEXT IN LINE' : 'Waiting') + (r.state === 'bad' ? '\nWRONG: ' + r.why : r.state === 'next' ? '' : r.why ? '\n' + r.why : '')]; });
     doc.autoTable({ startY:25, head:[['#', 'Photo', 'Enroll#', 'Student', 'Program · Section', 'HQ', 'Obtained', 'Total', 'Aggregate', 'MeritNo', 'DOB', 'Age-wise', 'Fee paid', 'Seat']], body,
       theme:'grid', rowPageBreak:'avoid', margin:{ left:7, right:7, bottom:10 }, styles:{ fontSize:8, cellPadding:1, textColor:0, lineColor:120, lineWidth:.1, valign:'middle', minCellHeight:27 },
       headStyles:{ fillColor:235, textColor:0, fontStyle:'bold', minCellHeight:6 }, columnStyles:{ 0:{ cellWidth:8, halign:'center' }, 1:{ cellWidth:21 }, 13:{ cellWidth:40 } },
-      didParseCell:h => { if(h.section !== 'body') return; const r = rows[h.row.index]; if(r.state === 'bad'){ h.cell.styles.fontStyle = 'bold'; h.cell.styles.fillColor = [253, 224, 221]; } else if(r.state === 'next') h.cell.styles.fillColor = [220, 235, 255]; else if(r.state === 'surplus') h.cell.styles.fillColor = [255, 233, 204];
-        if(!P.part && h.row.index === c.seats - 1) h.cell.styles.lineWidth = { bottom:.8, top:.1, left:.1, right:.1 }; },
+      didParseCell:h => { if(h.section !== 'body') return; const r = rows[h.row.index]; if(r.cand){ h.cell.styles.fontStyle = 'bold'; h.cell.styles.fillColor = [255, 236, 150]; h.cell.styles.lineWidth = .5; } else if(r.state === 'bad'){ h.cell.styles.fontStyle = 'bold'; h.cell.styles.fillColor = [253, 224, 221]; } else if(r.state === 'next') h.cell.styles.fillColor = [220, 235, 255]; else if(r.state === 'surplus') h.cell.styles.fillColor = [255, 233, 204];
+        if(h.row.index === c.seats - 1) h.cell.styles.lineWidth = { bottom:.8, top:.1, left:.1, right:.1 }; },
       didDrawCell:h => { if(h.section !== 'body' || h.column.index !== 1) return; const d = pics[h.row.index]; if(!d) return;
         const ih = Math.min(24, h.cell.height - 2); if(ih < 10) return;                    /* never draw a photo outside its own cell */
         try{ doc.addImage(d, 'JPEG', h.cell.x + 1.5, h.cell.y + (h.cell.height - ih) / 2, ih * 0.75, ih); }catch(e){} } });
     const n2 = doc.internal.getNumberOfPages();
     for(let p = 1; p <= n2; p++){ doc.setPage(p); doc.setFontSize(7); doc.text('Page ' + p + ' of ' + n2, W / 2, doc.internal.pageSize.getHeight() - 4, { align:'center' }); }
-    const name = (P.part ? 'Waiting list ' : 'Merit list ') + c.label.replace(/[^\w() .-]+/g, ' ') + ' - ' + c.quota + '.pdf', blob = doc.output('blob');
+    const name = 'Merit list ' + c.label.replace(/[^\w() .-]+/g, ' ') + ' - ' + c.quota + '.pdf', blob = doc.output('blob');
     if(window.JCWOUT) JCWOUT.offer({ blob, name, title:'Merit list · ' + c.label + ' · ' + c.quota, sub:none ? none + ' photos not on this device (open the ID cards page once to read them)' : '' });
     else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); }
   }catch(e){ toast('PDF not made: ' + (e.message || e)); }
@@ -1321,10 +1326,10 @@ function wireMl(){
   const cur = () => meritLists().find(x => x.key === mlKey && x.quota === mlQ);
   const out = only => { const c = cur(); if(!c || !window.JCWOUT) return;
     const P = mlPick(c), R = only ? c.rows.filter(r => r.state === 'bad') : P.rows;
-    JCWOUT.list({ title:(P.part && !only ? 'Waiting list (next ' + R.length + ') · ' : 'Merit list · ') + c.label + ' · ' + c.quota + (only ? ' · wrong places' : ''), sub:c.seats + ' seats · ' + c.inHome + ' in it now',
+    JCWOUT.list({ title:'Merit list · ' + c.label + ' · ' + c.quota + (only ? ' · wrong places' : ''), sub:c.seats + ' seats · ' + c.inHome + ' in it now',
       head:['Rank', 'Enroll#', 'Student Name', 'Father Name', 'Program', 'Section', 'HQ', 'Obtained Marks', 'Total Marks', 'Aggregate', 'MeritNo', 'Challan Details', 'DOB', 'Age-wise', 'Fee Paid Date', 'Seat', 'Note'],
       rows:R.map(r => { const o = r.o; return [r.rank, o.roll || '', o.name, o.father || '', (prog(o.key) || {}).label || o.key, o.pcs || '', o.hq || '', o.metric || '', o.total || '', o._a ? o._a / 100 : '', o.meritNo || '', o.challan || '', o.dob || '', o.agewise || '', o.receipt ? o.receipt + ' (receipt; portal ' + (o.feepaid || '-') + ')' : o.feepaid || '',
-        r.state === 'surplus' ? 'Surplus' : r.rank <= c.seats ? 'On a seat' : r.state === 'next' ? 'Next in line' : 'Over the seats', r.why]; }) }); };
+        r.cand ? 'POSSIBLE CANDIDATE' : r.state === 'surplus' ? 'Surplus' : r.rank <= c.seats ? 'On a seat' : r.state === 'next' ? 'Next in line' : 'Over the seats', r.why]; }) }); };
   const a = $('#mlOut'); if(a) a.onclick = () => out(false);
   const pp = $('#mlPdf'); if(pp) pp.onclick = mlPhotoPdf;
   const mw = $('#mlWait'); if(mw) mw.onchange = () => { mlWait = Number(mw.value) || 0; try{ localStorage.setItem('mlWait', mlWait); }catch(e){} };
