@@ -1053,7 +1053,11 @@ const SUB_FEE = 60000;
 /** Pre-Medical students in a non-subsidized program whose challan is Rs 60,000 (the subsidized fee) */
 function wrongFee(){
   if(!idx) return [];
-  return idx.rows.map(recOf).filter(o => { const pr = prog(o.key); return pr && pr.classProgram === 'Pre-Medical' && pr.fee === 'non' && feeOf(o.challan).some(x => Math.round(x.amount) === SUB_FEE); })
+  // v8.5: the WHOLE fee charged counts (paid + unpaid challans, registration fee under Rs 3,000 left out): Rs 60,000 paid + Rs 60,000 unpaid
+  // = Rs 120,000 in two parts = the right non-subsidized fee. Only 1st Year (2nd Year challans are that year's fee).
+  return idx.rows.map(recOf).filter(o => { const pr = prog(o.key); if(!pr || pr.classProgram !== 'Pre-Medical' || pr.fee !== 'non' || isMig(o.year)) return false;
+    const f = feeOf(o.challan).filter(x => x.amount >= 3000), tot = f.reduce((t, x) => t + x.amount, 0);
+    return f.some(x => Math.round(x.amount) === SUB_FEE) && tot < (SUB_FEE + PM_NON_FEE) / 2; })
     .sort((a, b) => String(a.pcs).localeCompare(String(b.pcs)) || String(a.name).localeCompare(String(b.name)));
 }
 function stuTable(list, extra){
@@ -1144,7 +1148,7 @@ function wireSeats(){
   const qa = $('#qwAll'); if(qa) qa.onclick = () => window.JCWOUT ? JCWOUT.list({ title:'Quota-wise students (1st Year, all programs)', head:['Quota', 'Program', '#', 'Enroll#', 'Student Name', 'Father Name', 'Section', 'Contact'],
     rows:Q.flatMap(q => [...q.by.entries()].flatMap(([l, X]) => sortR(X).map((o, i) => [q.name, l, i + 1, o.roll || '', o.name, o.father || '', o.pcs, o.contact || '']))) }) : toast('Reload the page once.');
   document.querySelectorAll('[data-seat]').forEach(b => b.onclick = () => seatList(b.dataset.seat, b.dataset.q));
-  const w = $('#wfList'); if(w) w.onclick = () => { const L = wrongFee(); listDlg('Rs ' + SUB_FEE.toLocaleString('en-PK') + ' fee in a non-subsidized Pre-Medical program', 'These students have a Rs ' + SUB_FEE.toLocaleString('en-PK') + ' (subsidized) challan but are in a non-subsidized program. Move them to <b>Pre-Medical Open (S)</b> with Find &amp; edit if that is right.', L, { h:'Program now', v:o => (prog(o.key) || {}).label || o.key }); };
+  const w = $('#wfList'); if(w) w.onclick = () => { const L = wrongFee(); listDlg('Rs ' + SUB_FEE.toLocaleString('en-PK') + ' fee in a non-subsidized Pre-Medical program', '1st Year students in a non-subsidized program whose challans (paid + unpaid) come to only the subsidized fee of Rs ' + SUB_FEE.toLocaleString('en-PK') + '. Students paying Rs 120,000 in two parts (Rs 60,000 paid + Rs 60,000 unpaid) are not listed. Move them to <b>Pre-Medical Open (S)</b> with Find &amp; edit if that is right.', L, { h:'Program now', v:o => (prog(o.key) || {}).label || o.key }); };
 }
 
 /* ---------- v7.7: merit lists, 1st Year, every quota of every program, on the seats ----------
