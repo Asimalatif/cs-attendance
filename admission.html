@@ -1091,7 +1091,21 @@ function wireSeats(){
    (Open (S) + Self Morning + Evening): Aggregate, then age (older first). The rest belong in the non-subsidized programs.
    Blue = next in line when a seat empties (left / cancelled / migrated). Red = a wrong place in the strength sheet. */
 let mlKey = '', mlQ = '';
-const mlGone = o => /left|cancel|migrat|struck|disenrol|drop|expel|withdraw/i.test(o.status || '');
+/* v8.3: Left Students sheet: a student found there (by Enroll#) has left, even if she is still in the strength sheet */
+let LEFT = null, leftBusy = false;
+async function loadLeft(){ if(LEFT || leftBusy) return; leftBusy = true;
+  try{ const r = await api({ action:'adm_left' }); if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'Paste the new Admissions.gs and deploy a New version' : r.error);
+    const h = r.head.map(x => String(x).toLowerCase().replace(/[^a-z0-9#]/g, '')), col = names => { for(const n of names){ const k = h.indexOf(n); if(k >= 0) return k; } return -1; };
+    const C = { roll:col(['enroll#', 'enrollment#', 'enrollmentno', 'enrollno', 'rollno']), name:col(['studentname', 'name']), father:col(['fathername']), program:col(['program']), cls:col(['class']),
+      pcs:col(['pcs', 'section']), quota:col(['quota']), hq:col(['hq', 'hafiz', 'hafizquran']), metric:col(['obtainedmarks', 'obtained', 'metric', 'marks']), total:col(['totalmarks', 'total']),
+      aggregate:col(['aggregate', 'agg']), dob:col(['dob', 'dateofbirth']), status:col(['portalstatus', 'status']), left:col(['leftinmonth', 'leftin', 'leftdate', 'date']), challan:col(['challandetails', 'challan']) };
+    const g = (row, i) => i >= 0 ? String(row[i] || '').trim() : '';
+    LEFT = { rows:r.rows.map(row => { const o = {}; Object.keys(C).forEach(k => o[k] = g(row, C[k])); o._st = /migrat/i.test(o.status || row.join(' ')) ? 'MIGRATED' : 'CANCELLED'; return o; }), err:'' };
+    LEFT.by = new Map(LEFT.rows.filter(o => o.roll).map(o => [nroll(o.roll), o]));
+  }catch(e){ LEFT = { rows:[], by:new Map(), err:e.message || String(e) }; }
+  finally{ leftBusy = false; ML = null; if(typeof render === 'function') render(); } }
+const mlLeftOf = o => LEFT && o.roll ? LEFT.by.get(nroll(o.roll)) : null;
+const mlGone = o => !!mlLeftOf(o) || /left|cancel|migrat|struck|disenrol|drop|expel|withdraw/i.test(o.status || '');
 const mlAgg = o => { const a = Number(String(o.aggregate || '').replace(/[^0-9.]/g, '')); if(a) return a;
   const m = Number(String(o.metric || '').replace(/,/g, '')), t = Number(String(o.total || '').replace(/,/g, '')); return m && t ? Math.round((m + (/^y/i.test(o.hq || '') ? 20 : 0)) * 10000 / t) / 100 : 0; };
 const mlDob = o => { const m = String(o.dob || '').match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/); return m ? m[3] + m[2].padStart(2, '0') + m[1].padStart(2, '0') : '99999999'; };
@@ -1115,6 +1129,7 @@ function meritLists(){
   const all = [];
   // v7.7: last date of admission: a student whose fee was paid after it (or not paid) lost her right; she comes after all on-time students
   const last = mlLast(), lastK = last ? last.replace(/-/g, '') : '';
+  const idxRoll = new Set(idx.rows.map(row => nroll(recOf(row).roll)));
   const goneAll = [];   // v8.3: left students (cancelled / migrated …), to show who would have been inside the seats
   for(const row of idx.rows){ const o = recOf(row); if(!isMig(o.year) && o.key && mlGone(o)){ o._a = Math.round(mlAgg(o) * 100); o._d = mlDob(o); o._late = false; goneAll.push(o); continue; }
     if(!isMig(o.year) && o.key && !mlGone(o)){ o._a = Math.round(mlAgg(o) * 100); o._d = mlDob(o);
@@ -1142,8 +1157,18 @@ function meritLists(){
       const L = all.filter(o => keys.includes(o.key) && qk(o.quota) === qq).sort(srt);
       const inHome = L.filter(o => home.includes(o.key)).length;
       // left students ranked among everyone: those whose place would be inside the seats
-      const G = goneAll.filter(o => keys.includes(o.key) && qk(o.quota) === qq), leftTop = [];
-      if(G.length && seats){ const both = L.concat(G).sort(srt); both.forEach((o, i) => { if(i < seats && G.includes(o)) leftTop.push({ o, pos:i + 1 }); }); }
+      // v8.3: left students (strength sheet status, or found in the Left Students sheet) with an Aggregate at or above the last seat
+      const cp = (pr.classProgram || '').toLowerCase().replace(/[^a-z]/g, ''), leftTop = [];
+      const G = goneAll.filter(o => keys.includes(o.key) && qk(o.quota) === qq);
+      const inG = new Set(G.map(o => nroll(o.roll)));
+      if(LEFT) LEFT.rows.forEach(x => { if(!x.roll || inG.has(nroll(x.roll)) || (x.roll && idxRoll.has(nroll(x.roll)))) return;
+        const xp = String(x.program || '').toLowerCase().replace(/\(.*?\)/g, '').replace(/[^a-z]/g, '');
+        if(!cp || xp !== cp || (x.quota && qk(x.quota) !== qq) || (x.cls && isMig(x.cls))) return;
+        const yy = r => (String(r || '').toUpperCase().match(/-F(\d{2})-/) || [])[1]; if(L.length && yy(L[0].roll) && yy(x.roll) && yy(x.roll) !== yy(L[0].roll)) return;   // older batch
+        const o = Object.assign({ key:'', _left:true }, x); o._a = Math.round(mlAgg(o) * 100); o._d = mlDob(o); G.push(o); });
+      if(G.length && seats && L.length){
+        const cut = L[Math.min(seats, L.length) - 1]._a, both = L.concat(G).sort(srt);
+        both.forEach((o, i) => { if(G.includes(o) && o._a && o._a >= cut) leftTop.push({ o, pos:i + 1, cut }); }); }
       const open = emp;                                                  // no seat limit: no surplus, no "no seats set"
       if(emp) seats = L.length;
       // empty subsidized seats: students of the non-subsidized programs inside the seats fill them first (blue, not wrong)
@@ -1187,6 +1212,7 @@ const mlPick = c => { if(!mlWait || c.open || c.noSeats) return { rows:c.rows, p
   const lastCand = c.rows.reduce((m, r, i) => r.cand ? i + 1 : m, 0), end = Math.max(c.seats, lastCand) + mlWait;
   return { rows:c.rows.slice(0, end), part:end < c.rows.length }; };
 function mlHtml(){
+  if(idx && !LEFT) loadLeft();
   if(!idx) return '<section class="card"><div class="sub">Loading the student list…</div></section>';
   const old = !idx.cols.includes('receipt');
   if(old && !mlAsked){ mlAsked = true; loadIndex(true).then(() => { ML = null; render(); }); }
@@ -1213,7 +1239,7 @@ function mlHtml(){
     ${sel}</section>
   <section class="card"><h3>${esc(cur.label)} · ${esc(cur.quota)}</h3>
     <div class="sub">${cur.open ? '<b>No seat limit</b> (every employee\'s daughter is admitted, on a subsidized seat)' : cur.noSeats ? '<b>No seats set</b>' : `<b>${cur.seats}</b> seats`} · <b>${cur.inHome}</b> students in it now · fee ${cur.fee ? '<b>Rs ' + cur.fee.toLocaleString('en-PK') + '</b>' : 'not known yet'}${cur.sibLabel ? ` · ${esc(cur.sibLabel)} fee ${cur.sibFee ? '<b>Rs ' + cur.sibFee.toLocaleString('en-PK') + '</b>' : '–'}` : ''} (most common paid challan)</div>
-    <div class="acts"><button class="btn primary" type="button" id="mlPdf">PDF with photos (white background)</button><button class="btn" type="button" id="mlOut">List without photos: PDF / Excel / share</button><label class="f" style="margin:0">Print <select id="mlWait" style="height:40px">${[[10, 'All seats + next 10'], [5, 'All seats + next 5'], [0, 'Whole program']].map(([v, l]) => `<option value="${v}"${mlWait === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label><label class="f" style="margin:0;display:flex;align-items:center;gap:6px;text-transform:none" title="Off = black &amp; white with light grey rows (for the college printer). On = the yellow / blue / red rows of this page (for screen or WhatsApp). Same as typing localStorage.setItem('jcw_color_pdf','1') in the console."><input type="checkbox" id="mlColor"${(() => { try{ return localStorage.getItem('jcw_color_pdf') === '1'; }catch(e){ return false; } })() ? ' checked' : ''}> Colour PDF <span class="sub">(off = black &amp; white for the printer)</span></label>${cur.subs ? `<button class="btn" type="button" id="mlRef">Half-fee refund list</button>` : ''}${cur.leftTop && cur.leftTop.length ? `<button class="btn" type="button" id="mlLeft">Left students in the top ${cur.seats} (${cur.leftTop.length})</button>` : ''}${bad(cur) ? `<button class="btn" type="button" id="mlBad">Only the ${bad(cur)} wrong</button>` : ''}</div>
+    <div class="acts"><button class="btn primary" type="button" id="mlPdf">PDF with photos (white background)</button><button class="btn" type="button" id="mlOut">List without photos: PDF / Excel / share</button><label class="f" style="margin:0">Print <select id="mlWait" style="height:40px">${[[10, 'All seats + next 10'], [5, 'All seats + next 5'], [0, 'Whole program']].map(([v, l]) => `<option value="${v}"${mlWait === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label><label class="f" style="margin:0;display:flex;align-items:center;gap:6px;text-transform:none" title="Off = black &amp; white with light grey rows (for the college printer). On = the yellow / blue / red rows of this page (for screen or WhatsApp). Same as typing localStorage.setItem('jcw_color_pdf','1') in the console."><input type="checkbox" id="mlColor"${(() => { try{ return localStorage.getItem('jcw_color_pdf') === '1'; }catch(e){ return false; } })() ? ' checked' : ''}> Colour PDF <span class="sub">(off = black &amp; white for the printer)</span></label>${cur.subs ? `<button class="btn" type="button" id="mlRef">Half-fee refund list</button>` : ''}${cur.seats && !cur.open ? `<button class="btn" type="button" id="mlLeft"${LEFT ? '' : ' disabled'}>${LEFT ? `Left students in the top ${cur.seats} (${cur.leftTop.length})` : 'Left students: reading the Left Students sheet…'}</button>` : ''}${LEFT && LEFT.err ? `<span class="sub" style="color:var(--bad)">Left Students sheet: ${esc(LEFT.err)}</span>` : ''}${bad(cur) ? `<button class="btn" type="button" id="mlBad">Only the ${bad(cur)} wrong</button>` : ''}</div>
     <div style="overflow:auto;max-height:70vh;margin-top:8px" id="mlBox"><table class="ml"><thead><tr>${th.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>
     ${cur.rows.slice(0, lim).map((r, i) => { const o = r.o, f = feeOf(o.challan), cut = i === cur.seats - 1 && cur.rows.length > cur.seats;
       return `<tr class="${r.state}${r.cand ? ' cand' : ''}${cut ? ' cut' : ''}"><td class="n">${r.rank}</td><td><img alt="" data-mlp="${esc(o.roll || '')}" data-mlu="${esc(mlPic(o.pic))}"></td>
@@ -1381,12 +1407,14 @@ function wireMl(){
   const a = $('#mlOut'); if(a) a.onclick = () => out(false);
   /* v8.2: students inside the subsidized seats who paid the non-subsidized fee: the difference is refunded (possible candidates listed apart) */
   const lf = $('#mlLeft'); if(lf) lf.onclick = () => { const c = cur(); if(!c || !window.JCWOUT) return;
-    const st = o => /migrat/i.test(o.status) ? 'MIGRATED' : /cancel/i.test(o.status) ? 'CANCELLED' : String(o.status || '').toUpperCase();
+    const st = o => { const l = mlLeftOf(o); return l ? l._st : o._st || (/migrat/i.test(o.status) ? 'MIGRATED' : /cancel/i.test(o.status) ? 'CANCELLED' : String(o.status || '').toUpperCase()); };
+    if(!c.leftTop.length) return toast('No left student had an Aggregate at or above the last seat (' + (c.rows[Math.min(c.seats, c.rows.length) - 1] ? c.rows[Math.min(c.seats, c.rows.length) - 1].o._a / 100 : '-') + ').');
     const n = s0 => c.leftTop.filter(x => st(x.o) === s0).length;
     JCWOUT.list({ title:'Left students whose Aggregate was in the top ' + c.seats + ' · ' + c.label + ' · ' + c.quota,
-      sub:c.leftTop.length + ' students · cancelled ' + n('CANCELLED') + ' · migrated ' + n('MIGRATED') + ' · place = her rank among all students (left ones included)',
-      head:['Place', 'Enroll#', 'Student Name', 'Father Name', 'Program', 'Section', 'HQ', 'Obtained', 'Total', 'Aggregate', 'DOB', 'Challan', 'Status'],
-      rows:c.leftTop.map(x => { const o = x.o; return [x.pos, o.roll || '', o.name, o.father || '', (prog(o.key) || {}).label || o.key, o.pcs || '', o.hq || '', o.metric || '', o.total || '', o._a ? o._a / 100 : '', o.dob || '', o.challan || '', st(o)]; }) }); };
+      sub:c.leftTop.length + ' students · cancelled ' + n('CANCELLED') + ' · migrated ' + n('MIGRATED') + ' · Aggregate at or above the last seat (' + c.leftTop[0].cut / 100 + ') · place = her rank among all students (left ones included)',
+      head:['Place', 'Enroll#', 'Student Name', 'Father Name', 'Program', 'Section', 'HQ', 'Obtained', 'Total', 'Aggregate', 'DOB', 'Challan', 'Status', 'Found in'],
+      rows:c.leftTop.map(x => { const o = x.o; return [x.pos, o.roll || '', o.name, o.father || '', o._left ? o.program : (prog(o.key) || {}).label || o.key, o.pcs || '', o.hq || '', o.metric || '', o.total || '', o._a ? o._a / 100 : '', o.dob || '', o.challan || '', st(o),
+        o._left ? 'Left Students sheet' : mlLeftOf(o) ? 'Strength sheet + Left Students sheet' : 'Strength sheet (status)']; }) }); };
   const rf = $('#mlRef'); if(rf) rf.onclick = () => { const c = cur(); if(!c || !window.JCWOUT) return;
     const sub = c.fee || 60000, paidOf = o => feeOf(o.challan).filter(x => x.paid && x.amount >= sub * 0.8).reduce((t, x) => t + x.amount, 0);
     const R = c.rows.filter(r => (r.rank <= c.seats && r.here) || r.cand).map(r => ({ r, paid:paidOf(r.o) })).filter(x => x.paid > sub * 1.05);

@@ -133,6 +133,7 @@ function admRoute_(user, req) {
   switch (String(req.action)) {
     case 'adm_init':      return admInit_();
     case 'adm_index':     return admIndex_();
+    case 'adm_left':      return admLeftAll_();
     case 'adm_next_roll': return admNextRollFor_(req.program, req.year);
     case 'adm_portal':    return admPortal_(req.q || req.id);
     case 'adm_check':     return admCheck_(req.d || {}, req.ctx || null);
@@ -194,6 +195,13 @@ function admRollNum_(v, prefix) {
 function admFmtRoll_(n) { return ADM_CFG.ROLL_PREFIX + (n < 10 ? '0' + n : String(n)); }
 function admNormName_(s) {
   return String(s == null ? '' : s).toLowerCase().replace(/[^a-z؀-ۿ\s]/g, ' ').split(/\s+/).filter(Boolean).sort().join(' ');
+}
+/** v8.3: the whole Left Students sheet (as shown), for the merit lists: who left although her Aggregate was inside the seats */
+function admLeftAll_() {
+  var sh = admBook_().getSheetByName(ADM_CFG.LEFT_SHEET);
+  if (!sh || sh.getLastRow() < 2) return { ok: true, head: [], rows: [], found: !!sh };
+  var v = sh.getDataRange().getDisplayValues();
+  return { ok: true, head: v[0].map(function (h) { return String(h).trim(); }), rows: v.slice(1).filter(function (r) { return r.some(function (c) { return String(c).trim(); }); }), found: true };
 }
 function admBook_() { return SpreadsheetApp.openById(ADM_CFG.BOOK_ID); }
 function admNum_(v) { var s = admS_(v); return s === '' || isNaN(Number(s)) ? '' : Number(s); }
