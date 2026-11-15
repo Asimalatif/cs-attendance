@@ -32,7 +32,9 @@ var IDC_CFG = {
   REQS: 'ID Card Requests',                                  // sheet: what students sent from idcheck.html (made by itself)
   REQ_FOLDER: 'Student requests',                            // inside "JCW ID Cards": photos students sent, waiting for the admin
   CHECK_PROP: 'IDC_CHECK',                                   // { open: true/false, until: 'yyyy-mm-dd' } for the student page
-  TRIES: 8                                                   // wrong checks allowed per Enroll# in 30 minutes
+  TRIES: 8,                                                  // wrong checks allowed per Enroll# in 30 minutes
+  WHITE_FOLDER: 'White photos',                              // v8.6: white-background copies made on a device, kept for every device
+  WHITE_INDEX: 'white-index.json'
 };
 
 function idcAuthorize() {
@@ -48,6 +50,9 @@ function idcRoute_(user, req) {
     switch (String(req.action || '')) {
       case 'idc_list':   return idcList_();
       case 'idc_photos': return idcPhotos_(req.items || []);
+      case 'idc_white_put':  return idcWhitePut_(req.items || []);
+      case 'idc_white_get':  return idcWhiteGet_(req.rolls || []);
+      case 'idc_white_have': return { ok: true, have: idcWhiteHave_() };
       case 'idc_mark':   return idcMark_(user, req.rolls || []);
       case 'idc_settings': return idcSaveSettings_(req.cfg || {});
       case 'idc_sign':   return idcSaveSign_(req.year, req.data);
@@ -162,6 +167,38 @@ function idcSaveSign_(year, data) {
 }
 
 /** items: [{ roll, pic }] -> { photos: { roll: dataURL | '' } }. Drive files and web links are fetched in parallel. */
+/* ---------- v8.6 white-background photos kept in Drive ("JCW ID Cards/White photos"), so every device gets them at once ---------- */
+function idcWhiteFolder_() { var p = idcFolder_(), it = p.getFoldersByName(IDC_CFG.WHITE_FOLDER); return it.hasNext() ? it.next() : p.createFolder(IDC_CFG.WHITE_FOLDER); }
+function idcWhiteIdx_(fd) {
+  var it = fd.getFilesByName(IDC_CFG.WHITE_INDEX);
+  if (!it.hasNext()) return { file: null, map: {} };
+  var f = it.next(); try { return { file: f, map: JSON.parse(f.getBlob().getDataAsString()) || {} }; } catch (e) { return { file: f, map: {} }; }
+}
+function idcWhiteHave_() { var x = idcWhiteIdx_(idcWhiteFolder_()), out = {}; Object.keys(x.map).forEach(function (k) { out[k] = x.map[k].key || ''; }); return out; }
+function idcWhitePut_(items) {
+  var fd = idcWhiteFolder_(), lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    var x = idcWhiteIdx_(fd), n = 0;
+    items.slice(0, 10).forEach(function (it) {
+      var roll = idcS_(it.roll), key = String(it.key || ''), m = String(it.data || '').match(/^data:image\/(jpeg|png);base64,(.+)$/);
+      if (!roll || !m || (x.map[roll] && x.map[roll].key === key)) return;
+      var blob = Utilities.newBlob(Utilities.base64Decode(m[2]), 'image/' + m[1], roll.replace(/[^\w-]/g, '_') + (m[1] === 'png' ? '.png' : '.jpg'));
+      if (x.map[roll]) try { DriveApp.getFileById(x.map[roll].id).setTrashed(true); } catch (e) {}
+      x.map[roll] = { id: fd.createFile(blob).getId(), key: key, at: Date.now() }; n++;
+    });
+    var txt = JSON.stringify(x.map);
+    if (x.file) x.file.setContent(txt); else fd.createFile(IDC_CFG.WHITE_INDEX, txt, MimeType.PLAIN_TEXT);
+    return { ok: true, saved: n };
+  } finally { lock.releaseLock(); }
+}
+function idcWhiteGet_(rolls) {
+  var x = idcWhiteIdx_(idcWhiteFolder_()), out = {};
+  rolls.slice(0, 15).forEach(function (r) {
+    var e = x.map[idcS_(r)]; if (!e) return;
+    try { var b = DriveApp.getFileById(e.id).getBlob(); out[idcS_(r)] = 'data:' + (b.getContentType() || 'image/jpeg') + ';base64,' + Utilities.base64Encode(b.getBytes()); } catch (err) {}
+  });
+  return { ok: true, photos: out };
+}
 function idcPhotos_(items) {
   items = items.slice(0, IDC_CFG.BATCH);
   var out = {}, reqs = [], who = [], tok = ScriptApp.getOAuthToken();

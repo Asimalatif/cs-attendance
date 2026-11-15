@@ -163,6 +163,21 @@ async function whitePhoto(st){
   await DB.put('raw', { roll: st.roll + '#white', key, data }).catch(() => {});
   return data;
 }
+/* v8.6: the white copies made on this device are saved in Drive (JCW ID Cards/White photos), so the merit list PDFs on any device are fast */
+async function uploadWhite(list){
+  S.busy = true; render();
+  try{
+    const have = (await api({ action:'idc_white_have' })).have || {}, todo = [];
+    for(const st of list){ const w = await DB.get('raw', st.roll + '#white').catch(() => null); if(w && w.data && have[st.roll] !== w.key) todo.push({ roll:st.roll, key:w.key, data:w.data }); }
+    let n = 0;
+    for(let i = 0; i < todo.length; i += 6){
+      await api({ action:'idc_white_put', items:todo.slice(i, i + 6) }, 180000); n += Math.min(6, todo.length - i);
+      S.msg = 'Saving white photos on the server: ' + n + ' of ' + todo.length + '…'; render();
+    }
+    S.msg = todo.length ? '✔ ' + todo.length + ' white photos saved on the server (every device now uses them).' : 'All white photos made on this device are already on the server.';
+  }catch(e){ S.msg = 'White photos not saved on the server: ' + e.message; }
+  S.busy = false; render();
+}
 async function cardPhoto(st){
   const e = EDIT[st.roll] || {};
   if(e.photo) return WHITE() ? await bgData(await loadImg(e.photo), '#FFFFFF').then(d => coverJpeg(d)).catch(() => e.photo) : e.photo;
@@ -867,6 +882,7 @@ function render(){
     <div class="acts">
       <button class="btn sm pri" id="phCheck" ${cnt.ready && !S.busy ? '' : 'disabled'}>Check all ${cnt.ready} photos (sideways, far away, no face)</button>
       <button class="btn sm" id="phWhiteAll" ${WHITE() && cnt.ready && !S.busy ? '' : 'disabled'}>Make all ${cnt.ready} photos white now</button>
+      <button class="btn sm" id="phWhiteUp" ${!S.busy ? '' : 'disabled'} title="The merit list PDFs and files on every other device then use these white photos at once">Save white photos on the server</button>
       <button class="btn sm" id="phMiss" ${cnt.none + cnt.failed ? '' : 'disabled'}>Show students without photo (${cnt.none + cnt.failed})</button>
       <button class="btn sm" id="phCsv" ${cnt.none + cnt.failed ? '' : 'disabled'}>Download that list (CSV)</button>
       <button class="btn sm" id="phAll" ${cnt.pending && !S.busy ? '' : 'disabled'}>Read all ${cnt.pending} photos now</button>
@@ -989,7 +1005,9 @@ function render(){
   $('#phWhiteAll').onclick = async () => {
     const L = all.filter(st => photoState(st) === 'ready'); S.busy = true; S.cancel = false; let n = 0, bad = 0;
     for(const st of L){ if(S.cancel) break; try{ await whitePhoto(st); }catch(e){ bad++; } n++; if(n % 5 === 0 || n === L.length){ S.msg = 'White backgrounds: ' + n + ' of ' + L.length + (bad ? ' (' + bad + ' could not be done)' : '') + '…'; render(); } }
-    S.busy = false; S.msg = 'White background ready for ' + (n - bad) + ' photos' + (bad ? '; ' + bad + ' kept as they are' : '') + '.'; render(); };
+    S.busy = false; S.msg = 'White background ready for ' + (n - bad) + ' photos' + (bad ? '; ' + bad + ' kept as they are' : '') + '. Saving them on the server for every device…'; render();
+    await uploadWhite(L); };
+  $('#phWhiteUp').onclick = () => uploadWhite(all);
   $('#phAll').onclick = async () => { S.err = ''; await fetchPhotos(all); render(); };
   $('#phRetry').onclick = async () => { S.err = ''; await fetchPhotos(all.filter(st => photoState(st) === 'failed'), true); render(); };
   $('#yV').onchange = e => { S.dV = e.target.value.trim(); };
