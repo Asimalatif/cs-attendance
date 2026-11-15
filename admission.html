@@ -1060,18 +1060,22 @@ function wrongFee(){
     return f.some(x => Math.round(x.amount) === SUB_FEE) && tot < (SUB_FEE + PM_NON_FEE) / 2; })
     .sort((a, b) => String(a.pcs).localeCompare(String(b.pcs)) || String(a.name).localeCompare(String(b.name)));
 }
+const stuMarks = o => o.metric || o.total ? (o.metric || '?') + ' / ' + (o.total || '?') : '–';
+const stuAgg = o => { const a = typeof mlAgg === 'function' ? mlAgg(o) : Number(o.aggregate); return a ? String(Math.round(a * 100) / 100) : '–'; };
 function stuTable(list, extra){
-  return `<div style="max-height:55vh;overflow:auto;margin-top:8px"><table><thead><tr><th>#</th><th>Enroll#</th><th>Student</th><th>Section</th>${extra ? '<th>' + extra.h + '</th>' : ''}<th>Fee</th></tr></thead><tbody>
-    ${list.map((o, i) => { const f = feeOf(o.challan); return `<tr><td>${i + 1}</td><td class="nw">${esc(o.roll || '–')}</td><td>${esc(o.name)}<div class="sub">d/o ${esc(o.father || '-')}</div></td><td class="nw">${esc(o.pcs)}</td>${extra ? '<td>' + esc(extra.v(o)) + '</td>' : ''}<td class="sub">${f.length ? f.map(x => (x.paid ? 'Paid ' : 'Unpaid ') + money(x.amount)).join(', ') : '–'}</td></tr>`; }).join('') || '<tr><td colspan="6" class="sub">Nobody.</td></tr>'}</tbody></table></div>`;
+  // v8.5: + quota, matric marks, HQ, Aggregate and MeritNo
+  return `<div style="max-height:55vh;overflow:auto;margin-top:8px"><table><thead><tr><th>#</th><th>Enroll#</th><th>Student</th><th>Section</th>${extra ? '<th>' + extra.h + '</th>' : ''}<th>Quota</th><th>Obtained / Total</th><th>HQ</th><th>Aggregate</th><th>MeritNo</th><th>Fee</th></tr></thead><tbody>
+    ${list.map((o, i) => { const f = feeOf(o.challan); return `<tr><td>${i + 1}</td><td class="nw">${esc(o.roll || '–')}</td><td>${esc(o.name)}<div class="sub">d/o ${esc(o.father || '-')}</div></td><td class="nw">${esc(o.pcs)}</td>${extra ? '<td>' + esc(extra.v(o)) + '</td>' : ''}<td>${esc(o.quota || '–')}</td><td class="nw">${esc(stuMarks(o))}</td><td>${esc(o.hq || '–')}</td><td class="nw"><b>${esc(stuAgg(o))}</b></td><td class="n">${esc(o.meritNo || '–')}</td><td class="sub">${f.length ? f.map(x => (x.paid ? 'Paid ' : 'Unpaid ') + money(x.amount)).join(', ') : '–'}</td></tr>`; }).join('') || '<tr><td colspan="11" class="sub">Nobody.</td></tr>'}</tbody></table></div>`;
 }
-function listText(title, list){ return title + '\n\n' + list.map((o, i) => (i + 1) + '. ' + (o.roll || '-') + ' ' + o.name + ' d/o ' + (o.father || '-') + ' (' + o.pcs + ')').join('\n'); }
+function listText(title, list){ return title + '\n\n' + list.map((o, i) => (i + 1) + '. ' + (o.roll || '-') + ' ' + o.name + ' d/o ' + (o.father || '-') + ' (' + o.pcs + ') · ' + (o.quota || 'no quota') + ' · ' + stuMarks(o) + (/^y/i.test(o.hq || '') ? ' · HQ' : '') + ' · Agg ' + stuAgg(o) + (o.meritNo ? ' · Merit ' + o.meritNo : '')).join('\n'); }
 function listDlg(title, sub, list, extra){
+  const dg = $('#dlg'); if(dg){ dg.style.maxWidth = 'min(1100px,calc(100vw - 24px))'; dg.addEventListener('close', () => { dg.style.maxWidth = ''; }, { once:true }); }   // wider: more columns
   dlgOpen(`<h2>${esc(title)}</h2><div class="sub">${sub}</div>${stuTable(list, extra)}
     <div class="acts"><button class="btn" id="dOut">PDF / Excel / print / share</button><button class="btn" id="dCopy">Copy as text</button><button class="btn primary" id="dOk">Close</button></div>`);
   $('#dOk').onclick = dlgClose;
   $('#dOut').onclick = () => { if(!window.JCWOUT) return toast('Reload the page once.');
-    JCWOUT.list({ title, sub:String(sub).replace(/<[^>]+>/g, ''), head:['#', 'Enroll#', 'Student Name', 'Father Name', 'Section', 'Quota'].concat(extra ? [extra.h] : []).concat(['Contact', 'Fee']),
-      rows:list.map((o, i) => [i + 1, o.roll || '', o.name, o.father || '', o.pcs, o.quota || ''].concat(extra ? [extra.v(o)] : []).concat([o.contact || '', feeOf(o.challan).map(x => (x.paid ? 'Paid ' : 'Unpaid ') + x.amount).join(', ')])) }); };
+    JCWOUT.list({ title, sub:String(sub).replace(/<[^>]+>/g, ''), head:['#', 'Enroll#', 'Student Name', 'Father Name', 'Section', 'Quota'].concat(extra ? [extra.h] : []).concat(['Obtained / Total', 'HQ', 'Aggregate', 'MeritNo', 'Contact', 'Fee']),
+      rows:list.map((o, i) => [i + 1, o.roll || '', o.name, o.father || '', o.pcs, o.quota || ''].concat(extra ? [extra.v(o)] : []).concat([stuMarks(o), o.hq || '', stuAgg(o), o.meritNo || '', o.contact || '', feeOf(o.challan).map(x => (x.paid ? 'Paid ' : 'Unpaid ') + x.amount).join(', ')])) }); };
   $('#dCopy').onclick = async () => { const t = listText(title, list);
     try{ if(navigator.share){ await navigator.share({ title, text:t }); return; } }catch(e){ if(e && e.name === 'AbortError') return; }
     try{ await navigator.clipboard.writeText(t); toast('List copied'); }catch(e){ toast('Could not copy'); } };
