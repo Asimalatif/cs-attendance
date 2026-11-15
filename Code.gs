@@ -2129,6 +2129,7 @@ function scopeName_(user) { var s = scopeOf_(user); return s ? (s.all ? 'all' : 
 function whoami_(user) {
   var s = scopeOf_(user), out = { ok: true, view: scopeName_(user), dept: s && !s.all ? user.dept : '' };
   try { out.cp = isCP_(user); } catch (e) { out.cp = false; }
+  try { out.ttm = typeof at_mornOk_ === 'function' && !!at_mornOk_(user); } catch (e) { out.ttm = false; }   // SCI TT MORNING ADMIN: timetable editor + morning classes
   try { out.tt = myTimetable_(user); } catch (e) { out.tt = []; }
   try { out.times = periodTimes_(); } catch (e) { out.times = []; }
   return out;

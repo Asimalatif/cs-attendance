@@ -3246,6 +3246,7 @@ const P = window.JCWPDF;
 let appView = 'home', prevView = 'home', lastView = '', lastSheet = '', forceNext = false, heldRender = false;
 let prof = null, lastReps = [], lowMode = 'week';
 let scopeUser = store.get('scopeUser', ''), scope = store.get('scope', ''), scopeAt = 0;
+let isTTM = store.get('isTTM', false);   // SCI TT MORNING ADMIN (tt_admin column)
 let ov = store.get('ov', null), ovBusy = false, ovErr = '', ovLow = null, ovLowBusy = false, ovLowErr = '', ovTd = null, ovTdBusy = false, ovTdErr = '';
 let adminTab = 'teachers', aF = { q:'', pend:true, dept:'', sort:'low' }, openSec = {};
 
@@ -3535,6 +3536,7 @@ function renderHome(){
   let h = header('JCW Daily Attendance', greet() + ', ' + (teacher || user) + (isAdmin ? ' (admin)' : '')) + '<main class="wrap2"><div class="grid2">';
   const college = scope ? collegeCard() : '';
   if(college && !cur.length) h += college;
+  if(isTTM) h += ttmCard();
   if(!cur.length && !college) h += `<section class="card"><h3>${I.cal} Today <span class="tdate">${esc(fmtDate(now, { weekday:'short', day:'numeric', month:'short' }))}</span></h3><div class="empty">No classes are assigned to you in the timetable yet. Ask the admin.</div></section>`;
 
   /* Today: one compact line per class: period + start time | class (room, practical, now) | status */
@@ -6146,6 +6148,13 @@ function adminExtraCards(){
       <ol class="sub" style="margin:6px 0 0 18px;padding:0"><li>Once: install the free <b>Tampermonkey</b> extension in Chrome, then tap <b>Install the sync button</b>.</li><li>Tap <b>Get sync key</b> and copy it.</li><li>Open the portal, log in, go to <b>Student › Students</b>: a <b>JCW Portal Sync</b> box appears. Choose <b>Quick</b> (1–2 min) or <b>Full</b> (all details, about an hour) and paste the key when it asks.</li></ol>
       <div class="acts2"><a class="btn" href="${esc(portalScriptUrl())}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center;color:var(--ink)">Install the sync button</a><button class="btn primary" type="button" id="xPkey">Get sync key</button></div></section></div>`;
 }
+/* SCI TT MORNING ADMIN: timetable editor (morning science sections) + morning classes report, on the home screen */
+function ttmCard(){
+  const btn = (href, t) => `<a class="btn primary" href="${href}" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">${t}</a>`;
+  return `<section class="card"><h3>${I.cal} Science morning timetable</h3>
+    <div class="sub">You are the SCI TT MORNING ADMIN: edit the timetable of the morning science sections (subject, teacher, days, room, clash checks, print and Excel), and see the Morning classes report (subsidized / non-subsidized, fee, sections).</div>
+    <div class="acts2">${btn('timetable.html', 'Open Timetable editor')}${btn('admintools.html#morning', 'Morning classes report')}</div></section>`;
+}
 const studentPageUrl = () => location.origin + location.pathname.replace(/[^/]*$/, '') + 'student.html';
 const portalScriptUrl = () => location.origin + location.pathname.replace(/[^/]*$/, '') + 'jcw-portal-sync.user.js';
 let pinfo = null;
@@ -6781,6 +6790,7 @@ async function checkScope(){
     if(r && r.ok){
       const ttChanged = setTT(r);
       if(!!r.cp !== isCP){ isCP = !!r.cp; store.set('isCP', isCP); if(appView !== 'att') rerender(); }
+      if(!!r.ttm !== isTTM){ isTTM = !!r.ttm; store.set('isTTM', isTTM); if(appView !== 'att') rerender(); }
       if(ttChanged){ if(appView === 'att') renderMain(); else rerender(); }
       const was = scope; scope = r.view || ''; store.set('scope', scope);
       if(was !== scope){ if(!scope && appView === 'admin') appView = 'home'; if(appView !== 'att') rerender(); }
@@ -6793,7 +6803,7 @@ const baseRender = window.renderMain;
 window.renderMain = function(){
   if(!authed()) return baseRender.apply(this, arguments);
   if(scopeUser !== user){
-    scopeUser = user; store.set('scopeUser', user); scope = ''; store.set('scope', ''); ov = null; ovLow = null; scopeAt = 0; tt = null; store.set('tt2', null); ttAll = null; store.set('ttAll', null); cts = null; store.set('cts', null); isCP = false; store.set('isCP', false);
+    scopeUser = user; store.set('scopeUser', user); scope = ''; store.set('scope', ''); ov = null; ovLow = null; scopeAt = 0; tt = null; store.set('tt2', null); ttAll = null; store.set('ttAll', null); cts = null; store.set('cts', null); isCP = false; store.set('isCP', false); isTTM = false; store.set('isTTM', false);
     try{ store.set('ov', null); }catch(e){}
     appView = 'home'; prof = null;
   }
