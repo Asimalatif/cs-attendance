@@ -628,9 +628,13 @@ async function boardPhoto(st, px, kb){
   const white = useW ? full : await loadImg(await bgData(await loadImg(full.toDataURL('image/jpeg', .95)), '#FFFFFF'));
   // square round the head and shoulders: face about 45% of the height, a little space above the head
   const fx = best.b.originX * k, fy = best.b.originY * k, fw = best.b.width * k, fh = best.b.height * k;
-  const side = Math.max(fh / .45, fw * 1.9), x0 = fx + fw / 2 - side / 2, y0 = fy - fh * .55;
+  // v8.6: a photo smaller than the square (face close to the edge, small or cut photo) is zoomed in so the photo fills the whole 3 × 3
+  // square: no white bands; the square stays inside the photo, the face stays as central as the photo allows
+  const W0 = white.naturalWidth || white.width, H0 = white.naturalHeight || white.height;
+  let side = Math.min(Math.max(fh / .45, fw * 1.9), W0, H0), x0 = fx + fw / 2 - side / 2, y0 = fy - fh * .55 * Math.min(1, side / Math.max(fh / .45, fw * 1.9));
+  x0 = Math.max(0, Math.min(x0, W0 - side)); y0 = Math.max(0, Math.min(y0, H0 - side));
   const c = document.createElement('canvas'); c.width = c.height = px;
-  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, px, px);
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, px, px); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
   g.drawImage(white, x0, y0, side, side, 0, 0, px, px);            // parts outside the photo stay white
   let q = .92, out = c.toDataURL('image/jpeg', q);
   while(kb && out.length * .75 / 1024 > kb && q > .35){ q -= .07; out = c.toDataURL('image/jpeg', q); }
@@ -670,6 +674,10 @@ async function boardPhotos(list, onlyTry){
     }catch(e){ bad.push([st, e.message || String(e)]); }
   }
   if(!onlyTry){
+    // v8.6: students of the same sections without a usable photo are listed too (even if they were not ticked)
+    const secs = new Set(list.map(x => x.pcs || x.section)), inList = new Set(list.map(x => x.roll));
+    S.list.filter(x => secs.has(x.pcs || x.section) && !inList.has(x.roll) && /^(none|failed)$/.test(photoState(x)))
+      .forEach(x => bad.push([x, photoState(x) === 'none' ? 'no photo (not ticked; no photo link in the sheet)' : 'no photo (not ticked; photo link is broken)']));
     if(bad.length) zip.file('_not included.csv', '\uFEFFEnroll#,Student Name,Father Name,Section,Metric RollNo,Problem\n' + bad.map(([st, w]) => [st.roll, st.name, st.father, st.pcs || st.section, st.matric || '', w].map(v => '"' + String(v || '').replace(/"/g, '""') + '"').join(',')).join('\n'));
     const name = 'Board photos ' + px + 'px ' + new Date().toISOString().slice(0, 10) + '.zip';
     S.bpBlob = await zip.generateAsync({ type:'blob' });
