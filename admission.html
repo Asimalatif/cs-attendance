@@ -1135,6 +1135,14 @@ function meritLists(){
     if(!isMig(o.year) && o.key && !mlGone(o)){ o._a = Math.round(mlAgg(o) * 100); o._d = mlDob(o);
     o._paid = o.receipt || o.feepaid || '';                           // a receipt date you entered wins over the portal date
     const pk = mlDob({ dob:o._paid }); o._late = !!lastK && (pk === '99999999' || pk > lastK); all.push(o); } }
+  // v8.5: MeritNo and Age-wise worked out NOW from today's list (same rule as the sheet: each program + quota, highest Aggregate = 1,
+  // equal Aggregate = same MeritNo; Age-wise 1st, 2nd … only among equal Aggregates, older first). The sheet's values can be old.
+  { const G = {}; all.forEach(o => { if(o._a && o.quota) (G[o.key + '|' + qk(o.quota)] = G[o.key + '|' + qk(o.quota)] || []).push(o); });
+    const ord = n => { const t = n % 100, u = n % 10; return n + (t >= 11 && t <= 13 ? 'th' : u === 1 ? 'st' : u === 2 ? 'nd' : u === 3 ? 'rd' : 'th'); };
+    Object.values(G).forEach(L => { L.sort((a, b) => b._a - a._a || a._d.localeCompare(b._d) || String(a.name).localeCompare(String(b.name)));
+      const cnt = {}; L.forEach(o => cnt[o._a] = (cnt[o._a] || 0) + 1);
+      let rank = 0, tie = 0; L.forEach((o, i) => { if(!i || o._a !== L[i - 1]._a){ rank++; tie = 0; } tie++; o._mn = rank; o._aw = cnt[o._a] > 1 ? ord(tie) : ''; }); });
+    all.forEach(o => { if(o._mn == null){ o._mn = ''; o._aw = ''; } }); }
   const used = new Set(all.map(o => o.key)), fees = mlFees(all), out = [], s = init.seats;
   const srt = (a, b) => (a._late ? 1 : 0) - (b._late ? 1 : 0) || b._a - a._a || a._d.localeCompare(b._d) || String(a.name).localeCompare(String(b.name));
   s.programs.forEach(p => {
@@ -1249,8 +1257,8 @@ function mlHtml(){
     ${cur.rows.slice(0, lim).map((r, i) => { const o = r.o, f = feeOf(o.challan), cut = i === cur.seats - 1 && cur.rows.length > cur.seats;
       return `<tr class="${r.state}${r.cand ? ' cand' : ''}${cut ? ' cut' : ''}"><td class="n">${r.rank}</td><td><img alt="" data-mlp="${esc(o.roll || '')}" data-mlu="${esc(mlPic(o.pic))}"></td>
         <td class="nw">${esc(o.roll || '–')}</td><td><b>${esc(o.name)}</b><div class="sub">d/o ${esc(o.father || '-')}</div></td><td class="sub">${esc((prog(o.key) || {}).label || o.key)}<br>${esc(o.pcs || '')}</td>
-        <td>${esc(o.hq || '')}</td><td class="n">${esc(o.metric || '')}</td><td class="n">${esc(o.total || '')}</td><td class="n"><b>${o._a ? o._a / 100 : ''}</b></td><td class="n">${esc(o.meritNo || '')}</td>
-        <td class="sub" style="min-width:120px">${f.length ? f.map(x => (x.paid ? 'P ' : 'U ') + x.amount.toLocaleString('en-PK')).join(', ') : '–'}</td><td class="nw">${esc(o.dob || '')}</td><td>${esc(o.agewise || '')}</td><td class="nw">${o.receipt ? `<b>${esc(o.receipt)}</b><div class="sub">receipt · portal ${esc(o.feepaid || '–')}</div>` : esc(o.feepaid || '')} <button type="button" class="seatlink" data-mlr="${esc(o.roll || '')}" title="The date on her fee receipt (when the bank sent it late)">✎</button></td>
+        <td>${esc(o.hq || '')}</td><td class="n">${esc(o.metric || '')}</td><td class="n">${esc(o.total || '')}</td><td class="n"><b>${o._a ? o._a / 100 : ''}</b></td><td class="n">${esc((o._mn != null ? o._mn : o.meritNo || ''))}</td>
+        <td class="sub" style="min-width:120px">${f.length ? f.map(x => (x.paid ? 'P ' : 'U ') + x.amount.toLocaleString('en-PK')).join(', ') : '–'}</td><td class="nw">${esc(o.dob || '')}</td><td>${esc((o._aw != null ? o._aw : o.agewise || ''))}</td><td class="nw">${o.receipt ? `<b>${esc(o.receipt)}</b><div class="sub">receipt · portal ${esc(o.feepaid || '–')}</div>` : esc(o.feepaid || '')} <button type="button" class="seatlink" data-mlr="${esc(o.roll || '')}" title="The date on her fee receipt (when the bank sent it late)">✎</button></td>
         <td class="sub" style="min-width:130px">${r.why ? `<b>${esc(r.why)}</b>` : ''}</td></tr>`; }).join('') || `<tr><td colspan="${th.length}" class="sub">Nobody in this quota.</td></tr>`}</tbody></table>
     ${lim < cur.rows.length ? `<div class="acts"><button class="btn" type="button" id="mlMore">Show all ${cur.rows.length} (now ${lim})</button></div>` : ''}</div></section>`;
 }
@@ -1339,7 +1347,7 @@ function mlDraw(doc, c, P, pics, more){
     const top = bar(true);
     const fp = o => feeOf(o.challan).map(x => (x.paid ? 'P ' : 'U ') + x.amount.toLocaleString('en-PK')).join(', ') || '–';
     const seatTxt = r => (r.cand ? 'POSSIBLE CANDIDATE' : r.state === 'surplus' ? 'SURPLUS' : r.rank <= c.seats ? 'On a seat' : r.state === 'next' ? 'NEXT IN LINE' : 'Waiting') + (r.cand ? '\n' + r.why.replace(/^POSSIBLE CANDIDATE for empty /, '').replace(/ · Next in line: a subsidized seat is empty/, '') : r.why ? '\n' + r.why : '');
-    const body = rows.map(r => { const o = r.o; return [r.rank, '', o.roll || '–', (o.name || '') + '\nd/o ' + (o.father || '-'), ((prog(o.key) || {}).label || o.key) + '\n' + (o.pcs || ''), o.hq || '', o.metric || '', o.total || '', o._a ? String(o._a / 100) : '', o.meritNo || '', fp(o), o.dob || '', o.agewise || '', o.receipt ? o.receipt + '\n(receipt)' : o.feepaid || '', seatTxt(r)]; });
+    const body = rows.map(r => { const o = r.o; return [r.rank, '', o.roll || '–', (o.name || '') + '\nd/o ' + (o.father || '-'), ((prog(o.key) || {}).label || o.key) + '\n' + (o.pcs || ''), o.hq || '', o.metric || '', o.total || '', o._a ? String(o._a / 100) : '', (o._mn != null ? o._mn : o.meritNo || ''), fp(o), o.dob || '', (o._aw != null ? o._aw : o.agewise || ''), o.receipt ? o.receipt + '\n(receipt)' : o.feepaid || '', seatTxt(r)]; });
     let pg = 1;
     doc.autoTable({ startY:top, head:[['#', 'Photo', 'Enroll#', 'Student', 'Program · Section', 'HQ', 'Obtained', 'Total', 'Aggregate', 'MeritNo', 'Challan', 'DOB', 'Age-wise', 'Fee paid', 'Seat']], body,
       theme:'plain', rowPageBreak:'avoid', showHead:'everyPage', margin:{ top:17, left:5, right:5, bottom:10 },
@@ -1374,7 +1382,7 @@ function mlDraw(doc, c, P, pics, more){
 const mlSeatTxt = (c, r) => (r.cand ? 'POSSIBLE CANDIDATE' : r.state === 'surplus' ? 'SURPLUS' : r.rank <= c.seats ? 'On a seat' : r.state === 'next' ? 'NEXT IN LINE' : r.state === 'bad' ? 'WRONG PLACE' : 'Waiting')
   + (r.cand ? ' · ' + r.why.replace(/^POSSIBLE CANDIDATE for empty /, '').replace(/ · Next in line: a subsidized seat is empty/, '') : r.why ? ' · ' + r.why : '');
 const mlFp = o => feeOf(o.challan).map(x => (x.paid ? 'P ' : 'U ') + x.amount.toLocaleString('en-PK')).join(', ') || '–';
-const mlVals = (c, r) => { const o = r.o; return [r.rank, o.roll || '', o.name || '', o.father || '', (prog(o.key) || {}).label || o.key, o.pcs || '', o.hq || '', o.metric || '', o.total || '', o._a ? o._a / 100 : '', o.meritNo || '', mlFp(o), o.dob || '', o.agewise || '', o.receipt || o.feepaid || '', mlSeatTxt(c, r)]; };
+const mlVals = (c, r) => { const o = r.o; return [r.rank, o.roll || '', o.name || '', o.father || '', (prog(o.key) || {}).label || o.key, o.pcs || '', o.hq || '', o.metric || '', o.total || '', o._a ? o._a / 100 : '', (o._mn != null ? o._mn : o.meritNo || ''), mlFp(o), o.dob || '', (o._aw != null ? o._aw : o.agewise || ''), o.receipt || o.feepaid || '', mlSeatTxt(c, r)]; };
 const ML_HEAD = ['#', 'Enroll#', 'Student Name', 'Father Name', 'Program', 'Section', 'HQ', 'Obtained', 'Total', 'Aggregate', 'MeritNo', 'Challan', 'DOB', 'Age-wise', 'Fee paid', 'Seat'];
 const mlTone = r => r.cand ? 'cand' : r.state || '';
 const ML_HEX = { cand:'FFEC96', bad:'FDE0DD', surplus:'FFE9CC', next:'DCEBFF' };
@@ -1517,7 +1525,7 @@ function wireMl(){
     const P = mlPick(c), R = only ? c.rows.filter(r => r.state === 'bad') : P.rows;
     JCWOUT.list({ title:'Merit list · ' + c.label + ' · ' + c.quota + (only ? ' · wrong places' : ''), sub:c.seats + ' seats · ' + c.inHome + ' in it now',
       head:['Rank', 'Enroll#', 'Student Name', 'Father Name', 'Program', 'Section', 'HQ', 'Obtained Marks', 'Total Marks', 'Aggregate', 'MeritNo', 'Challan Details', 'DOB', 'Age-wise', 'Fee Paid Date', 'Seat', 'Note'],
-      rows:R.map(r => { const o = r.o; return [r.rank, o.roll || '', o.name, o.father || '', (prog(o.key) || {}).label || o.key, o.pcs || '', o.hq || '', o.metric || '', o.total || '', o._a ? o._a / 100 : '', o.meritNo || '', o.challan || '', o.dob || '', o.agewise || '', o.receipt ? o.receipt + ' (receipt; portal ' + (o.feepaid || '-') + ')' : o.feepaid || '',
+      rows:R.map(r => { const o = r.o; return [r.rank, o.roll || '', o.name, o.father || '', (prog(o.key) || {}).label || o.key, o.pcs || '', o.hq || '', o.metric || '', o.total || '', o._a ? o._a / 100 : '', (o._mn != null ? o._mn : o.meritNo || ''), o.challan || '', o.dob || '', (o._aw != null ? o._aw : o.agewise || ''), o.receipt ? o.receipt + ' (receipt; portal ' + (o.feepaid || '-') + ')' : o.feepaid || '',
         r.cand ? 'POSSIBLE CANDIDATE' : r.state === 'surplus' ? 'Surplus' : r.rank <= c.seats ? 'On a seat' : r.state === 'next' ? 'Next in line' : 'Over the seats', r.why]; }) }); };
   const a = $('#mlOut'); if(a) a.onclick = () => out(false);
   /* v8.2: students inside the subsidized seats who paid the non-subsidized fee: the difference is refunded (possible candidates listed apart) */
