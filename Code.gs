@@ -146,6 +146,7 @@ if (req.action === 'report_delete') return json_(deleteReport_(user, req.id));
     if (req.action === 'left_move')     return json_(leftMove_(user, req.rolls || []));
     if (req.action === 'left_list')     return json_(leftList_(user));
     if (req.action === 'left_restore')  return json_(leftRestore_(user, req.roll));
+    if (req.action === 'left_rebuild')  return json_(leftRebuild_(user));
     if (req.action === 'roster_check')  return json_(rosterCheck_(user, req.mon, req.cursor));
     if (req.action === 'roster_fix')    return json_(rosterFix_(user, req.sheet, req.roll, req.op));
     if (req.action === 'health_fix')    return json_(healthFix_(user, req.what));
@@ -3684,6 +3685,75 @@ function leftList_(user) {
   }
   var job = null; try { job = JSON.parse(PropertiesService.getScriptProperties().getProperty('leftClean') || 'null'); } catch (e) {}
   return { ok: true, list: out.reverse(), job: job };
+}
+/** v8.3: recreates "Left Students" with every column of the strength sheet (S.No … FEE DATE NOTE) after MOVED ON / MOVED BY / PORTAL STATUS / LEFT IN MONTH.
+ *  Nothing already there is lost (old sheet copied to "Left Students backup …", extra old columns kept at the end). Empty cells are filled from:
+ *  1) the strength sheet (same Enroll#, if she is still there), 2) Portal Data (same Enrollment#: marks, DOB, challans, subjects …),
+ *  3) other students of the same Program + Class + Section (PCS, Program/Class/Section, Appeared in), 4) Aggregate worked out from the marks (+20 for HQ). */
+function leftRebuild_(user) {
+  var scope = scopeOf_(user);
+  if (!scope || !scope.all) return { ok: false, error: 'Only the admin and the principal can rebuild Left Students.' };
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    var book = SpreadsheetApp.openById(USERS_SS_ID), L = book.getSheetByName(LEFT_SHEET), T = transformRead_();
+    if (!L || L.getLastRow() < 2) return { ok: false, error: 'The sheet Left Students is empty.' };
+    if (!T) return { ok: false, error: 'The strength sheet is empty.' };
+    var LV = L.getRange(1, 1, L.getLastRow(), L.getLastColumn()).getDisplayValues(), LH = headIdx_(LV[0]);
+    var tHead = T.V[0].map(function (h) { return String(h).trim(); }).filter(String);
+    var head = LEFT_EXTRA.concat(tHead), HH = headIdx_(head);
+    LV[0].forEach(function (h) { h = String(h).trim(); if (h && HH[norm_(h)] == null) { HH[norm_(h)] = head.length; head.push(h); } });
+    var col = function (names) { return pickCol_(HH, names.map(norm_)); };
+    var ec = col(ENROLL_HEADS), txt = function (v) { return v instanceof Date ? Utilities.formatDate(v, TZ_(), 'dd/MM/yyyy') : String(v == null ? '' : v).trim(); };
+    // strength sheet rows by Enroll#, and Program|Class|Section -> PCS etc.
+    var TH = T.H, tByE = {}, look = {}, tc = function (n) { return TH[norm_(n)]; };
+    var tP = tc('Program'), tC = tc('Class'), tS = tc('Section');
+    for (var i = 1; i < T.V.length; i++) {
+      var r = T.V[i], e = T.ec >= 0 ? enr_(r[T.ec]) : ''; if (e) tByE[e] = r;
+      if (tP != null && tC != null && tS != null) { var k = squash_(r[tP]) + '|' + squash_(r[tC]) + '|' + squash_(r[tS]); look[k] = look[k] || r; var kp = squash_(r[tP]); look[kp] = look[kp] || r; }
+    }
+    var P = portalRows_(), pByE = {};
+    if (P) P.rows.forEach(function (r) { var e = enr_(r[P.C['Enrollment#']]); if (e) pByE[e] = r; });
+    var fill = []; FILL_MAP.forEach(function (m) { var c = col(m[1].map(norm_).concat(m[2] ? [norm_(m[2])] : [])); if (c >= 0) fill.push({ f: m[0], c: c }); });
+    var subC = []; for (var s = 1; s <= 7; s++) subC.push(HH['SUB' + s]);
+    var cP = HH['PROGRAM'], cC = HH['CLASS'], cS = HH['SECTION'], same = ['PCS', 'PROGRAM/CLASS/SECTION', 'APPEAREDIN', 'ROOM'].map(function (h) { return HH[h]; });
+    var cObt = col(['OBTAINEDMARKS']), cTot = col(['TOTALMARKS']), cHQ = HH['HQ'], cAgg = HH['AGGREGATE'], cSno = col(['S.NO', 'SNO', 'S#']);
+    var filled = 0, out = [];
+    for (var i2 = 1; i2 < LV.length; i2++) {
+      var old = LV[i2]; if (!old.some(function (x) { return String(x).trim(); })) continue;
+      var row = head.map(function (h) { var k = LH[norm_(h)]; return k != null ? String(old[k] == null ? '' : old[k]).trim() : ''; });
+      var put = function (c, v) { v = txt(v); if (c != null && c >= 0 && !row[c] && v) { row[c] = v; filled++; } };
+      var e2 = enr_(row[ec]), tr = tByE[e2];
+      if (tr) T.V[0].forEach(function (h, j) { var c = HH[norm_(h)]; if (c != null && c >= LEFT_EXTRA.length) put(c, tr[j]); });
+      var pr = pByE[e2];
+      if (pr) {
+        fill.forEach(function (t) { var v = pr[P.C[t.f]]; if (t.f === 'Obtain Marks/CGPA' || t.f === 'Total Marks/CGPA') v = intText_(v); if (t.f === 'Roll.No.') v = realRoll_(intText_(v)); put(t.c, v); });
+        put(cP, pr[P.C['Program']]); put(cC, pr[P.C['Class']]); put(cS, pr[P.C['Section']]);
+        var y2 = /2/.test(String(row[cC] || '')) ? '2nd' : '1st';
+        subC.forEach(function (c, j) { var k2 = P.C['sub' + (j + 1) + ' ' + y2 + ' year']; if (k2 != null) put(c, pr[k2]); });
+      }
+      var lk = look[squash_(row[cP]) + '|' + squash_(row[cC]) + '|' + squash_(row[cS])] || null;
+      if (lk) same.forEach(function (c) { if (c != null) { var h2 = norm_(head[c]), j2 = TH[h2]; if (j2 != null && h2 !== 'ROOM') put(c, lk[j2]); } });
+      var lp = look[squash_(row[cP])]; if (lp && HH['APPEAREDIN'] != null && TH['APPEAREDIN'] != null) put(HH['APPEAREDIN'], lp[TH['APPEAREDIN']]);
+      if (cAgg != null && !row[cAgg] && cObt >= 0 && cTot >= 0) {
+        var ob = Number(String(row[cObt]).replace(/,/g, '')), to = Number(String(row[cTot]).replace(/,/g, ''));
+        if (ob && to) put(cAgg, String(Math.round((ob + (/^y/i.test(row[cHQ] || '') ? 20 : 0)) * 10000 / to) / 100));
+      }
+      out.push(row);
+    }
+    if (cSno >= 0) out.forEach(function (r, i3) { if (!r[cSno]) r[cSno] = String(i3 + 1); });
+    var missing = {}; ['STUDENTNAME', 'FATHERNAME', 'PROGRAM', 'CLASS', 'SECTION', 'PCS', 'QUOTA', 'DOB', 'OBTAINEDMARKS', 'TOTALMARKS', 'AGGREGATE', 'CHALLANDETAILS'].forEach(function (h) {
+      var c = HH[h]; if (c != null) { var n = out.filter(function (r) { return !r[c]; }).length; if (n) missing[head[c]] = n; } });
+    // backup, then write the new sheet in place (same name, same position)
+    var stamp = Utilities.formatDate(new Date(), TZ_(), 'dd-MM-yyyy HHmm');
+    L.copyTo(book).setName(LEFT_SHEET + ' backup ' + stamp);
+    L.clear();
+    if (L.getMaxColumns() < head.length) L.insertColumnsAfter(L.getMaxColumns(), head.length - L.getMaxColumns());
+    L.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight('bold').setBackground('#F4C7C3');
+    if (out.length) L.getRange(2, 1, out.length, head.length).setNumberFormat('@').setValues(out);
+    L.setFrozenRows(1);
+    SpreadsheetApp.flush();
+    return { ok: true, rows: out.length, columns: head.length, filled: filled, missing: missing, backup: LEFT_SHEET + ' backup ' + stamp };
+  } finally { lock.releaseLock(); }
 }
 /** Puts one student back into the strength sheet (moved by mistake) and switches her on again in this month's sheets. */
 function leftRestore_(user, roll) {
