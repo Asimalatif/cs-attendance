@@ -1115,7 +1115,9 @@ function meritLists(){
   const all = [];
   // v7.7: last date of admission: a student whose fee was paid after it (or not paid) lost her right; she comes after all on-time students
   const last = mlLast(), lastK = last ? last.replace(/-/g, '') : '';
-  for(const row of idx.rows){ const o = recOf(row); if(!isMig(o.year) && o.key && !mlGone(o)){ o._a = Math.round(mlAgg(o) * 100); o._d = mlDob(o);
+  const goneAll = [];   // v8.3: left students (cancelled / migrated …), to show who would have been inside the seats
+  for(const row of idx.rows){ const o = recOf(row); if(!isMig(o.year) && o.key && mlGone(o)){ o._a = Math.round(mlAgg(o) * 100); o._d = mlDob(o); o._late = false; goneAll.push(o); continue; }
+    if(!isMig(o.year) && o.key && !mlGone(o)){ o._a = Math.round(mlAgg(o) * 100); o._d = mlDob(o);
     o._paid = o.receipt || o.feepaid || '';                           // a receipt date you entered wins over the portal date
     const pk = mlDob({ dob:o._paid }); o._late = !!lastK && (pk === '99999999' || pk > lastK); all.push(o); } }
   const used = new Set(all.map(o => o.key)), fees = mlFees(all), out = [], s = init.seats;
@@ -1139,6 +1141,9 @@ function meritLists(){
       const surplusOk = qq === qk((init.cfg && init.cfg.openQuota) || 'Open Quota');
       const L = all.filter(o => keys.includes(o.key) && qk(o.quota) === qq).sort(srt);
       const inHome = L.filter(o => home.includes(o.key)).length;
+      // left students ranked among everyone: those whose place would be inside the seats
+      const G = goneAll.filter(o => keys.includes(o.key) && qk(o.quota) === qq), leftTop = [];
+      if(G.length && seats){ const both = L.concat(G).sort(srt); both.forEach((o, i) => { if(i < seats && G.includes(o)) leftTop.push({ o, pos:i + 1 }); }); }
       const open = emp;                                                  // no seat limit: no surplus, no "no seats set"
       if(emp) seats = L.length;
       // empty subsidized seats: students of the non-subsidized programs inside the seats fill them first (blue, not wrong)
@@ -1169,7 +1174,7 @@ function meritLists(){
           if(r.o._a !== t._a || !!r.o._late !== !!t._late) break;
           if(!r.here && !r.cand && !r.state){ r.state = 'next'; r.why = 'Next in line: same Aggregate (' + (t._a / 100) + ')' + (r.why ? ' · ' + r.why : ''); } } }
       out.push({ key:p.key, label:pl ? 'Shared pool: ' + home.map(k => (prog(k) || {}).label || k).join(', ') : pr.label || p.key, fee:fees[p.key] || 0,
-        sibFee:sib.length ? fees[sib[0]] || 0 : 0, sibLabel:sib.map(k => (prog(k) || {}).label).join(', '), quota:q.name, seats, inHome, rows, subs:!!sib.length, noSeats,
+        sibFee:sib.length ? fees[sib[0]] || 0 : 0, sibLabel:sib.map(k => (prog(k) || {}).label).join(', '), quota:q.name, seats, inHome, rows, leftTop, subs:!!sib.length, noSeats,
         held:sib.length ? L.slice(0, seats).filter(o => home.includes(o.key)).length : inHome, open, group:pl ? 'Shared pools' : pr.label || p.key, qlabel:q.name });
     });
   });
@@ -1208,7 +1213,7 @@ function mlHtml(){
     ${sel}</section>
   <section class="card"><h3>${esc(cur.label)} · ${esc(cur.quota)}</h3>
     <div class="sub">${cur.open ? '<b>No seat limit</b> (every employee\'s daughter is admitted, on a subsidized seat)' : cur.noSeats ? '<b>No seats set</b>' : `<b>${cur.seats}</b> seats`} · <b>${cur.inHome}</b> students in it now · fee ${cur.fee ? '<b>Rs ' + cur.fee.toLocaleString('en-PK') + '</b>' : 'not known yet'}${cur.sibLabel ? ` · ${esc(cur.sibLabel)} fee ${cur.sibFee ? '<b>Rs ' + cur.sibFee.toLocaleString('en-PK') + '</b>' : '–'}` : ''} (most common paid challan)</div>
-    <div class="acts"><button class="btn primary" type="button" id="mlPdf">PDF with photos (white background)</button><button class="btn" type="button" id="mlOut">List without photos: PDF / Excel / share</button><label class="f" style="margin:0">Print <select id="mlWait" style="height:40px">${[[10, 'All seats + next 10'], [5, 'All seats + next 5'], [0, 'Whole program']].map(([v, l]) => `<option value="${v}"${mlWait === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label><label class="f" style="margin:0;display:flex;align-items:center;gap:6px;text-transform:none" title="Off = black &amp; white with light grey rows (for the college printer). On = the yellow / blue / red rows of this page (for screen or WhatsApp). Same as typing localStorage.setItem('jcw_color_pdf','1') in the console."><input type="checkbox" id="mlColor"${(() => { try{ return localStorage.getItem('jcw_color_pdf') === '1'; }catch(e){ return false; } })() ? ' checked' : ''}> Colour PDF <span class="sub">(off = black &amp; white for the printer)</span></label>${cur.subs ? `<button class="btn" type="button" id="mlRef">Half-fee refund list</button>` : ''}${bad(cur) ? `<button class="btn" type="button" id="mlBad">Only the ${bad(cur)} wrong</button>` : ''}</div>
+    <div class="acts"><button class="btn primary" type="button" id="mlPdf">PDF with photos (white background)</button><button class="btn" type="button" id="mlOut">List without photos: PDF / Excel / share</button><label class="f" style="margin:0">Print <select id="mlWait" style="height:40px">${[[10, 'All seats + next 10'], [5, 'All seats + next 5'], [0, 'Whole program']].map(([v, l]) => `<option value="${v}"${mlWait === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label><label class="f" style="margin:0;display:flex;align-items:center;gap:6px;text-transform:none" title="Off = black &amp; white with light grey rows (for the college printer). On = the yellow / blue / red rows of this page (for screen or WhatsApp). Same as typing localStorage.setItem('jcw_color_pdf','1') in the console."><input type="checkbox" id="mlColor"${(() => { try{ return localStorage.getItem('jcw_color_pdf') === '1'; }catch(e){ return false; } })() ? ' checked' : ''}> Colour PDF <span class="sub">(off = black &amp; white for the printer)</span></label>${cur.subs ? `<button class="btn" type="button" id="mlRef">Half-fee refund list</button>` : ''}${cur.leftTop && cur.leftTop.length ? `<button class="btn" type="button" id="mlLeft">Left students in the top ${cur.seats} (${cur.leftTop.length})</button>` : ''}${bad(cur) ? `<button class="btn" type="button" id="mlBad">Only the ${bad(cur)} wrong</button>` : ''}</div>
     <div style="overflow:auto;max-height:70vh;margin-top:8px" id="mlBox"><table class="ml"><thead><tr>${th.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>
     ${cur.rows.slice(0, lim).map((r, i) => { const o = r.o, f = feeOf(o.challan), cut = i === cur.seats - 1 && cur.rows.length > cur.seats;
       return `<tr class="${r.state}${r.cand ? ' cand' : ''}${cut ? ' cut' : ''}"><td class="n">${r.rank}</td><td><img alt="" data-mlp="${esc(o.roll || '')}" data-mlu="${esc(mlPic(o.pic))}"></td>
@@ -1375,6 +1380,13 @@ function wireMl(){
         r.cand ? 'POSSIBLE CANDIDATE' : r.state === 'surplus' ? 'Surplus' : r.rank <= c.seats ? 'On a seat' : r.state === 'next' ? 'Next in line' : 'Over the seats', r.why]; }) }); };
   const a = $('#mlOut'); if(a) a.onclick = () => out(false);
   /* v8.2: students inside the subsidized seats who paid the non-subsidized fee: the difference is refunded (possible candidates listed apart) */
+  const lf = $('#mlLeft'); if(lf) lf.onclick = () => { const c = cur(); if(!c || !window.JCWOUT) return;
+    const st = o => /migrat/i.test(o.status) ? 'MIGRATED' : /cancel/i.test(o.status) ? 'CANCELLED' : String(o.status || '').toUpperCase();
+    const n = s0 => c.leftTop.filter(x => st(x.o) === s0).length;
+    JCWOUT.list({ title:'Left students whose Aggregate was in the top ' + c.seats + ' · ' + c.label + ' · ' + c.quota,
+      sub:c.leftTop.length + ' students · cancelled ' + n('CANCELLED') + ' · migrated ' + n('MIGRATED') + ' · place = her rank among all students (left ones included)',
+      head:['Place', 'Enroll#', 'Student Name', 'Father Name', 'Program', 'Section', 'HQ', 'Obtained', 'Total', 'Aggregate', 'DOB', 'Challan', 'Status'],
+      rows:c.leftTop.map(x => { const o = x.o; return [x.pos, o.roll || '', o.name, o.father || '', (prog(o.key) || {}).label || o.key, o.pcs || '', o.hq || '', o.metric || '', o.total || '', o._a ? o._a / 100 : '', o.dob || '', o.challan || '', st(o)]; }) }); };
   const rf = $('#mlRef'); if(rf) rf.onclick = () => { const c = cur(); if(!c || !window.JCWOUT) return;
     const sub = c.fee || 60000, paidOf = o => feeOf(o.challan).filter(x => x.paid && x.amount >= sub * 0.8).reduce((t, x) => t + x.amount, 0);
     const R = c.rows.filter(r => (r.rank <= c.seats && r.here) || r.cand).map(r => ({ r, paid:paidOf(r.o) })).filter(x => x.paid > sub * 1.05);
