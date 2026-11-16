@@ -150,6 +150,9 @@ function admRoute_(user, req) {
     case 'adm_save':      return admSave_(user, req.d || {}, req.ctx || null, req.override === true, String(req.cid || ''));
     case 'adm_new':       return admNew_();
     case 'adm_refresh':   return admRefresh_(user, req.fields || [], req.apply === true, req.accept || {});
+    case 'adm_keep_save': return admKeepSave_(user, req.items || []);
+    case 'adm_keep_list': return admKeepList_();
+    case 'adm_keep_del':  return admKeepDel_(req.roll, req.f);
     case 'adm_add_new':   return admAddNew_(user, req.items || [], req.override === true);
     case 'adm_fee_receipt': return admFeeReceipt_(user, req);
     case 'adm_oml_get':   return admOmlGet_();
@@ -274,6 +277,67 @@ function admSeatsSave_(user, rows, pools) {
   CacheService.getScriptCache().remove('adm_set_v1');
   var set = admSettings_();
   return { ok: true, changed: diff, seats: admSeatState_(admAll_(admRead_(), set.sections), set) };
+}
+/* ================= v8.9 portal values that are wrong: hints + "Keep always" (sheet Portal Keep = list to fix on the portal) ================= */
+var ADM_KEEP_SHEET = 'Portal Keep';
+var ADM_SCI_SUBJ = /^(PHYSICS|CHEMISTRY|BIOLOGY|ZOOLOGY|BOTANY|COMPUTER SCIENCE|COMPUTER|MATHEMATICS|MATHS|STATISTICS)$/;
+var ADM_ART_SUBJ = /^(CIVICS|HISTORY|ECONOMICS|LOGIC|PSYCHOLOGY|SOCIOLOGY|GEOGRAPHY|URDU ADVANCE|ENGLISH ADVANCE|ARABIC|ISLAMIYAT ELECTIVE|ISLAMIYAT ELE|PUSHTO|GENERAL MATHEMATICS|EDUCATION|FINE ARTS)$/;
+/** why the portal value is probably the wrong one ('' = no reason to think so) */
+function admPortalHint_(r, f, now, pv) {
+  var prog = admProg_(r.key || '') || {}, cp = String(prog.classProgram || ''), arts = /F\.?\s?A|ARTS/i.test(cp + ' ' + (r.programName || ''));
+  if (f === 'subjects') {
+    var th = String(pv || '').toUpperCase().split(/\s*,\s*/).filter(String);
+    var wrong = th.filter(function (x) { return arts ? ADM_SCI_SUBJ.test(x) : ADM_ART_SUBJ.test(x) && !/GENERAL MATHEMATICS/.test(x); });
+    if (wrong.length) return 'The portal has ' + (arts ? 'science' : 'F.A') + ' subjects (' + wrong.join(', ') + ') for a ' + (prog.label || cp) + ' student: her program on the portal is probably wrong. Keep, and correct the program on the portal.';
+  }
+  if (f === 'metric' || f === 'total') {
+    var oL = /o.?level|ibcc|foreign|cambridge/i.test(String(r.quota || '') + ' ' + String(r.board || ''));
+    var pn = Number(String(pv).replace(/[^\d.]/g, '')), nn = Number(String(now).replace(/[^\d.]/g, ''));
+    if (f === 'total' && pn && pn !== 1100 && pn !== 1200 && (nn === 1100 || nn === 1200)) return 'Portal total ' + pv + ' is not a matric total: the portal still has the O-Level / foreign marks, not the IBCC equivalence. Keep.';
+    if (f === 'metric' && pn && nn > 200 && pn <= 120) return 'Portal marks ' + pv + ' are not matric marks (O-Level grade points or percent before IBCC equivalence). Keep.';
+    if (oL) return 'O-Level / IBCC student: the strength sheet has the IBCC-equivalent marks; the portal may still have the old marks. Check her IBCC certificate before you accept.';
+  }
+  return '';
+}
+function admKeepSheet_() {
+  var b = admBook_(), sh = b.getSheetByName(ADM_KEEP_SHEET);
+  if (!sh) { sh = b.insertSheet(ADM_KEEP_SHEET); sh.getRange(1, 1, 1, 10).setValues([['Enroll#', 'Student Name', 'Section', 'Field', 'Column', 'College value (kept)', 'Portal value (wrong)', 'Why', 'By', 'When']]).setFontWeight('bold'); sh.setFrozenRows(1); }
+  return sh;
+}
+function admKeepMap_() {
+  var out = {}; try {
+    var sh = admBook_().getSheetByName(ADM_KEEP_SHEET); if (!sh || sh.getLastRow() < 2) return out;
+    sh.getRange(2, 1, sh.getLastRow() - 1, 6).getDisplayValues().forEach(function (r) { if (r[0] && r[3]) out[admNormRoll_(r[0]) + '|' + r[3]] = r[5]; });
+  } catch (e) {}
+  return out;
+}
+/** items: [{ roll, name, pcs, f, label, now, portal, hint }] -> saved in "Portal Keep" (a row for the same Enroll# + field is replaced) */
+function admKeepSave_(user, items) {
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    var sh = admKeepSheet_(), last = sh.getLastRow(), v = last > 1 ? sh.getRange(2, 1, last - 1, 10).getDisplayValues() : [], at = {};
+    v.forEach(function (r, i) { at[admNormRoll_(r[0]) + '|' + r[3]] = i; });
+    var add = [], who = String(user.teacher || user.username || ''), now = admNow_();
+    (items || []).slice(0, 2000).forEach(function (it) {
+      if (!it || !it.roll || !it.f) return;
+      var row = [it.roll, it.name || '', it.pcs || '', it.f, it.label || it.f, String(it.now == null ? '' : it.now), String(it.portal == null ? '' : it.portal), it.hint || '', who, now], k = admNormRoll_(it.roll) + '|' + it.f;
+      if (at[k] !== undefined) v[at[k]] = row; else add.push(row);
+    });
+    if (v.length) sh.getRange(2, 1, v.length, 10).setNumberFormat('@').setValues(v);
+    if (add.length) sh.getRange(sh.getLastRow() + 1, 1, add.length, 10).setNumberFormat('@').setValues(add);
+    return { ok: true, saved: (items || []).length };
+  } finally { lock.releaseLock(); }
+}
+function admKeepList_() {
+  var sh = admBook_().getSheetByName(ADM_KEEP_SHEET);
+  if (!sh || sh.getLastRow() < 2) return { ok: true, rows: [] };
+  return { ok: true, rows: sh.getRange(2, 1, sh.getLastRow() - 1, 10).getDisplayValues().filter(function (r) { return r[0]; }) };
+}
+function admKeepDel_(roll, f) {
+  var sh = admBook_().getSheetByName(ADM_KEEP_SHEET); if (!sh || sh.getLastRow() < 2) return { ok: true };
+  var v = sh.getRange(2, 1, sh.getLastRow() - 1, 4).getDisplayValues();
+  for (var i = v.length - 1; i >= 0; i--) if (admNormRoll_(v[i][0]) === admNormRoll_(roll) && v[i][3] === f) sh.deleteRow(i + 2);
+  return { ok: true };
 }
 function admBook_() { return SpreadsheetApp.openById(ADM_CFG.BOOK_ID); }
 function admNum_(v) { var s = admS_(v); return s === '' || isNaN(Number(s)) ? '' : Number(s); }
@@ -1201,7 +1265,7 @@ function admRefresh_(user, fields, apply, accept) {
     var CMPS = ADM_CMP.concat(Object.keys(C).filter(function (k) {
       return !covered[k] && pHas[k] && k !== 'feepaiddate' && !/^(s?no|sr|srno|serial|enroll.*|rollno|roll|program.*|class|section|pcs|status|category|session|aggregate|merit.*|room.*|quota|year|group.*|key|id|sub\d.*)$/.test(k);
     }).map(function (k) { return { f: 'x_' + k, label: admS_(T.head[C[k]]), t: [k], type: 'name', raw: true }; }));
-    var names = admQuotaNames_(admCounts_(recs)), rooms = admRooms_();
+    var names = admQuotaNames_(admCounts_(recs)), rooms = admRooms_(), keep = admKeepMap_(), kept = 0;
     var nv = {}, changes = [], cnt = {}, unknownCat = {}, ask = [], quotaOk = {}, gw = {}, fcol = {};
     var formulaCol = function (j) {           // portal values are never written over a formula
       if (!(j in fcol)) fcol[j] = n ? sh.getRange(2, j + 1, n, 1).getFormulas().some(function (x) { return x[0]; }) : false;
@@ -1253,11 +1317,14 @@ function admRefresh_(user, fields, apply, accept) {
             if (admSame_(d.type, now, pv)) return;
             sug = pv;
           }
+          // v8.9: "Keep always" (Portal Keep sheet): the college's value stays and is not asked again while it is unchanged
+          var kk = keep[admNormRoll_(r.roll) + '|' + d.f]; if (kk !== undefined && admSame_(d.type || 'name', String(now), kk)) { kept++; return; }
+          var hint = admPortalHint_(r, d.f, now, pv);
           var cols = (d.t || []).map(function (k) { return C[k]; }).filter(function (c) { return c !== undefined; });
           var info = d.info || !cols.length || cols.some(formulaCol);
           if (ask.length < 4000) ask.push({ key: key, row: r.row, f: d.f, label: d.label, roll: r.roll, name: r.name, pcs: r.pcs, now: now, portal: d.f === 'quota' ? pv : pv,
-                     suggest: d.f === 'subjects' ? pv : sug, info: info ? (d.info ? 'set by the college: change it in Find & edit (or on the portal)' : 'no such column, or it is a formula') : '' });
-          var ans = accept[key] || (accept['*|' + d.f] && sug ? (d.f === 'quota' ? sug : 'yes') : '');    // '*|field' = Accept the whole column
+                     suggest: d.f === 'subjects' ? pv : sug, hint: hint, info: info ? (d.info ? 'set by the college: change it in Find & edit (or on the portal)' : 'no such column, or it is a formula') : '' });
+          var ans = accept[key] || (accept['*|' + d.f] && sug && !hint ? (d.f === 'quota' ? sug : 'yes') : '');   // "Accept all" never takes a value the app thinks is wrong    // '*|field' = Accept the whole column
           if (!ans || info) return;
           if (d.f === 'quota') {
             if (!quotaOk[admQ_(ans)]) return;
@@ -1336,6 +1403,7 @@ function admRefresh_(user, fields, apply, accept) {
       var total = Object.keys(cnt).reduce(function (a, f) { return a + cnt[f]; }, 0);
       admLog_(user, 'UPDATE FROM PORTAL', '', '', fields.map(function (f) { return ADM_REFRESH[f] + ' ' + cnt[f]; }).join(', ') + ' (' + total + ' cells)', '');
     }
+    if (kept) notes.push(kept + ' difference(s) not asked: you chose "Keep always" for them (list: Fix on the portal).');
     return { ok: true, applied: apply, counts: cnt, fields: fields, changes: changes, ask: ask,
              quotas: Object.keys(quotaOk).map(function (k) { return quotaOk[k]; }).sort(), notes: notes, skipped: Object.keys(skip), students: recs.length,
              seats: apply ? admSeatState_(admAll_(admRead_(), set.sections), set) : null };

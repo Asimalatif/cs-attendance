@@ -254,7 +254,7 @@ let pnew = ls.get('adm_pnew', null);          // students Enrolled on the portal
 let pnSel = ls.get('adm_pn_sel', {});         // portal ID -> { on, program, year, section, rollNo, quota, rollManual, secManual }
 let pnHide = ls.get('adm_pn_hide', []);       // portal IDs you chose to hide
 let pnShowHidden = false, pnLoading = false, pnBusy = false;
-let rfAns = {}, rfAll = {}, rfCol = '';   // 'row|field' -> accepted value ('' = keep) · field -> accept the whole column
+let rfAns = {}, rfAll = {}, rfCol = '', rfKept = {};   // rfKept: v8.9 'row|field' kept always   // 'row|field' -> accepted value ('' = keep) · field -> accept the whole column
 let rf = null, rfBusy = false, rfFields = ls.get('adm_rf_fields', ['portal', 'hq', 'aggregate', 'merit', 'room']).map(f => f === 'quota' ? 'portal' : f), rfShow = '';
 const RF = { portal:'Every column vs portal (ask me)', hq:'HQ (Hafiz-e-Quran)', aggregate:'Aggregate', merit:'MeritNo', room:'Room (timetable)' };
 const RFN = { portal:'Accepted from portal', hq:'HQ', aggregate:'Aggregate', merit:'MeritNo', room:'Room', agewise:'Age-wise', feepaid:'FEE PAID DATE' };
@@ -925,7 +925,7 @@ async function pnAdd(list, force){
 
 /* ---------- update everybody from the portal: quota, HQ, aggregate, merit no, room ---------- */
 function rfHtml(){
-  const nAcc = rf && rf.ask ? rf.ask.filter(a => !a.info && (rfAns[a.key] || (rfAll[a.f] && a.suggest))).length : 0;
+  const nAcc = rf && rf.ask ? rf.ask.filter(a => !a.info && (rfAns[a.key] || (rfAll[a.f] && a.suggest && !a.hint))).length : 0;
   const cnt = rf ? rfFields.filter(f => f !== 'portal').reduce((a, f) => a + (rf.counts[f] || 0), 0) + (rfFields.includes('merit') ? rf.counts.agewise || 0 : 0) + (rfFields.includes('portal') ? rf.counts.feepaid || 0 : 0) + nAcc : 0;
   const list = rf ? rf.changes.filter(c => !rfShow || c.field === RFN[rfShow]) : [];
   return `<section class="card"><h3>Update all students from the portal</h3>
@@ -947,19 +947,20 @@ function rfAskHtml(){
   if(!rf || rf.applied || !rf.ask || !rf.ask.length) return '';
   const by = {}; rf.ask.forEach(a => (by[a.label] = by[a.label] || []).push(a));
   const cols = Object.keys(by), cur = by[rfCol] ? rfCol : cols[0], L = by[cur];
-  const accN = lab => (by[lab] || []).filter(a => !a.info && (rfAns[a.key] || (rfAll[a.f] && a.suggest))).length;
+  const accN = lab => (by[lab] || []).filter(a => !a.info && (rfAns[a.key] || (rfAll[a.f] && a.suggest && !a.hint))).length;
   const f0 = L[0].f, info = L.every(a => a.info);
   const shown = L.slice(0, 300);
   return `<div class="card" style="padding:12px;margin-top:10px;border-top:4px solid var(--mid)">
     <h3 style="margin:0">Strength sheet ≠ portal (${rf.ask.length})</h3>
     <div class="sub">Every column is compared with the portal copy. Nothing is taken from the portal unless you press <b>Accept</b>. Tap a column:</div>
     <div class="acts" style="margin-top:8px;flex-wrap:wrap">${cols.map(c => `<button class="btn small${c === cur ? ' primary' : ''}" type="button" data-rcol="${esc(c)}">${esc(c)} ${by[c].length}${accN(c) ? ' · ✓' + accN(c) : ''}</button>`).join('')}</div>
-    ${info ? `<div class="seat near" style="margin-top:8px">${esc(L[0].info)}.</div>` : `<div class="acts" style="margin-top:8px"><button class="btn small" type="button" id="rfAccAll">${rfAll[f0] ? '✓ ' : ''}Accept all ${esc(cur)} from the portal</button><button class="btn small" type="button" id="rfKeepAll">Keep all ${esc(cur)}</button></div>`}
+    ${info ? `<div class="seat near" style="margin-top:8px">${esc(L[0].info)}.</div>` : `<div class="acts" style="margin-top:8px"><button class="btn small" type="button" id="rfAccAll">${rfAll[f0] ? '✓ ' : ''}Accept all ${esc(cur)} from the portal${L.some(a => a.hint) ? ' (not the ⚠ ones)' : ''}</button><button class="btn small" type="button" id="rfKeepAlways">Keep all ${esc(cur)} always</button><button class="btn small" type="button" id="rfFixList">Fix on the portal (list)</button><button class="btn small" type="button" id="rfKeepAll">Keep all ${esc(cur)}</button></div>`}
     <div style="max-height:60vh;overflow:auto;margin-top:8px"><table><thead><tr><th>Student</th><th>Strength sheet</th><th>Portal</th>${info ? '' : '<th>Your answer</th>'}</tr></thead><tbody>
-    ${shown.map(a => { const v = rfAns[a.key] || (rfAll[a.f] && a.suggest ? (a.f === 'quota' ? a.suggest : 'yes') : '');
-      const portalTxt = esc(a.portal) + (a.f === 'quota' ? (a.suggest ? '<div class="sub">= ' + esc(a.suggest) + '</div>' : '<div class="sub" style="color:var(--mid)">not a known quota</div>') : '');
+    ${shown.map(a => { const v = rfAns[a.key] || (rfAll[a.f] && a.suggest && !a.hint ? (a.f === 'quota' ? a.suggest : 'yes') : '');
+      const portalTxt = esc(a.portal) + (a.f === 'quota' ? (a.suggest ? '<div class="sub">= ' + esc(a.suggest) + '</div>' : '<div class="sub" style="color:var(--mid)">not a known quota</div>') : '')
+        + (a.hint ? `<div class="sub" style="color:var(--bad);font-weight:700">⚠ ${esc(a.hint)}</div>` : '') + (rfKept[a.key] ? '<div class="sub" style="color:var(--good, green);font-weight:700">✓ kept always (not asked again)</div>' : '');
       return `<tr><td><b>${esc(a.name)}</b><div class="sub">${esc(a.roll)} · ${esc(a.pcs)}</div></td><td class="sub">${esc(a.now || '–')}</td><td>${portalTxt}</td>
-        ${a.info ? '' : `<td class="nw">${a.suggest ? `<button class="btn small${v && v !== '' && (a.f !== 'quota' || v === a.suggest) ? ' primary' : ''}" type="button" data-qa="${esc(a.key)}" data-qv="${esc(a.f === 'quota' ? a.suggest : 'yes')}">Accept</button> ` : ''}<button class="btn small${!v ? ' primary' : ''}" type="button" data-qa="${esc(a.key)}" data-qv="">Keep</button>
+        ${a.info ? '' : `<td class="nw">${a.suggest ? `<button class="btn small${v && v !== '' && (a.f !== 'quota' || v === a.suggest) ? ' primary' : ''}" type="button" data-qa="${esc(a.key)}" data-qv="${esc(a.f === 'quota' ? a.suggest : 'yes')}">Accept</button> ` : ''}<button class="btn small${!v ? ' primary' : ''}" type="button" data-qa="${esc(a.key)}" data-qv="">Keep</button> <button class="btn small${rfKept[a.key] ? ' primary' : ''}" type="button" data-qk="${esc(a.key)}" title="Keep the strength sheet value and never ask again (it goes on the Fix on the portal list)">Keep always</button>
         ${a.f === 'quota' ? `<select data-qs="${esc(a.key)}" style="min-height:36px;margin-top:6px;font-size:13px"><option value="">${a.suggest ? 'or choose…' : 'Choose quota…'}</option>${rf.quotas.map(q => `<option ${v === q && v !== a.suggest ? 'selected' : ''}>${esc(q)}</option>`).join('')}</select>` : ''}</td>`}</tr>`; }).join('')}
     </tbody></table></div>${L.length > shown.length ? `<div class="sub">First 300 of ${L.length} shown; “Accept all” covers all ${L.length}.</div>` : ''}</div>`;
 }
@@ -972,12 +973,30 @@ function wireRf(){
   document.querySelectorAll('[data-rcol]').forEach(b => b.onclick = () => { rfCol = b.dataset.rcol; render(); });
   const curF = () => { const a = rf.ask.find(x => x.label === (rf.ask.some(y => y.label === rfCol) ? rfCol : rf.ask[0].label)); return a ? a.f : ''; };
   const AA = $('#rfAccAll'); if(AA) AA.onclick = () => { const f = curF(); rfAll[f] = !rfAll[f]; rf.ask.forEach(a => { if(a.f === f) delete rfAns[a.key]; }); render(); };
+  // v8.9 Keep always: the college's value stays, the difference is not asked again and goes on the "Fix on the portal" list
+  const keepAlways = async L => { L = L.filter(a => !rfKept[a.key]); if(!L.length) return toast('Already kept.');
+    try{ const r = await api({ action:'adm_keep_save', items:L.map(a => ({ roll:a.roll, name:a.name, pcs:a.pcs, f:a.f, label:a.label, now:a.now, portal:a.portal, hint:a.hint || '' })) }, 120000);
+      if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'Paste the new Admissions.gs and deploy a New version' : r.error);
+      L.forEach(a => { rfKept[a.key] = 1; rfAns[a.key] = ''; if(rfAll[a.f]) rfAll[a.f] = false; }); toast(L.length + ' kept always'); render(); }
+    catch(e){ toast('Not saved: ' + e.message); } };
+  document.querySelectorAll('[data-qk]').forEach(b => b.onclick = () => { const a = rf.ask.find(x => x.key === b.dataset.qk); if(a) keepAlways([a]); });
+  const KW = $('#rfKeepAlways'); if(KW) KW.onclick = () => { const f = curF(), L = rf.ask.filter(a => a.f === f && !a.info);
+    if(confirm('Keep the strength sheet value of all ' + L.length + ' students for "' + L[0].label + '" and never ask again?')) keepAlways(L); };
+  const FL = $('#rfFixList'); if(FL) FL.onclick = rfFixList;
   const KA = $('#rfKeepAll'); if(KA) KA.onclick = () => { const f = curF(); rfAll[f] = false; rf.ask.forEach(a => { if(a.f === f) delete rfAns[a.key]; }); render(); };
   document.querySelectorAll('[data-rf]').forEach(el => el.onchange = () => {
     rfFields = Object.keys(RF).filter(f => (document.querySelector(`[data-rf="${f}"]`) || {}).checked); ls.set('adm_rf_fields', rfFields); rf = null; render(); });
   document.querySelectorAll('[data-rfs]').forEach(a => a.onclick = ev => { ev.preventDefault(); rfShow = a.dataset.rfs; render(); });
   const P = $('#rfPre'); if(P) P.onclick = () => rfRun(false);
   const G = $('#rfGo'); if(G) G.onclick = () => rfRun(true);
+}
+/* v8.9 the values kept against the portal = what the office should correct on the portal (program, marks after IBCC …) */
+async function rfFixList(){
+  let r; try{ r = await api({ action:'adm_keep_list' }, 90000); if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'Paste the new Admissions.gs and deploy a New version' : r.error); }catch(e){ return toast(e.message); }
+  if(!r.rows.length) return toast('Nothing kept yet: press "Keep always" on a difference first.');
+  JCWOUT.list({ title:'Fix on the UOP portal', sub:r.rows.length + ' values: the college keeps its own value, the portal has a wrong one (wrong program → wrong subjects, old marks before IBCC equivalence …). Correct them on portal.uop.edu.pk/Student/Students.',
+    head:['#', 'Enroll#', 'Student Name', 'Section', 'Column', 'Correct (college)', 'On the portal now', 'Why', 'Kept by', 'When'],
+    rows:r.rows.map((x, i) => [i + 1, x[0], x[1], x[2], x[4], x[5], x[6], x[7], x[8], x[9]]), file:'Fix on the UOP portal' });
 }
 async function rfRun(apply){
   rfBusy = true; render();
