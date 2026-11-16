@@ -66,6 +66,13 @@ function doPost(e) {
     try { return json_(portalImport_(req)); }
     catch (err) { return json_({ ok: false, error: String(err && err.message || err) }); }
   }
+  if (req.action === 'portal_fixlist') {                               // v8.12: the Enrollment Manager script (sync key) reads what to correct on the portal
+    try {
+      var fk = PropertiesService.getScriptProperties().getProperty('portalKey');
+      if (!fk || String(req.key || '') !== fk) return json_({ ok: false, error: 'The sync key is not correct. Get it in the app: College > UOP portal sync.' });
+      return json_(admPortalFixList_());
+    } catch (err) { return json_({ ok: false, error: String(err && err.message || err) }); }
+  }
   if (req.action === 'portal_known') {                                 // v8.11: portal IDs + Enroll#s already in the strength sheet (quick sync reads only the NEW students' fee)
     try {
       var pk = PropertiesService.getScriptProperties().getProperty('portalKey');
