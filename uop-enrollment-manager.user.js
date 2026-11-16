@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UOP VC - Enrollment Manager
 // @namespace    UOP-JCW
-// @version      3.4
+// @version      3.5
 // @description  From the JCW CSV: set Enrollment#, Reg# (= Enrollment#), Program, Class and Section on each student's edit page (matched by PORTAL ID)
 // @match        https://portal.uop.edu.pk/Student/Students*
 // @grant        none
@@ -775,7 +775,7 @@
     const p = document.createElement("div");
     p.id = "uopEM";
     p.innerHTML = `
-<header id="uopEM_hdr"><span>🎓 UOP Enrollment Manager v3.4 (JCW)</span><span id="uopEM_min">–</span></header>
+<header id="uopEM_hdr"><span>🎓 UOP Enrollment Manager v3.5 (JCW)</span><span id="uopEM_min">–</span></header>
 <div class="b" id="uopEM_body">
   <div class="r"><button class="g" id="uopEM_app">⬇ Load wrong values from JCW app</button><small>or CSV:</small><input type="file" id="uopEM_file" accept=".csv"><small id="uopEM_info"></small></div>
   <div class="r"><small>Edit URL</small><input type="text" id="uopEM_url" style="flex:1"><button class="s" id="uopEM_detect">Detect</button></div>
@@ -850,7 +850,7 @@
     try {
       const res = await fetch(JCW_API, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "portal_fixlist", key }) });
       const j = await res.json();
-      if (!j.ok) { if (/key/i.test(j.error || "")) localStorage.removeItem("uopEM_key"); log("JCW app: " + (j.error || "error"), "err"); return; }
+      if (!j.ok) { if (/key/i.test(j.error || "")) localStorage.removeItem("uopEM_key"); log("JCW app: " + (/BAD_LOGIN|UNKNOWN_ACTION/.test(j.error || "") ? "the server does not know 'portal_fixlist' yet. Paste the Code.gs block ABOVE  if (req.action === 'portal_known')  and the Admissions.gs function, then Deploy > Manage deployments > Edit > New version > Deploy." : (j.error || "error")), "err"); return; }
       localStorage.setItem("uopEM_key", key);
       rows = (j.rows || []).map((x, n) => ({ line: n + 1, id: String(x.id || "").replace(/\D/g, ""), enroll: x.enroll, program: x.program, cls: x.cls, section: x.section, name: x.name, father: x.father, obt: x.obt || "", tot: x.tot || "", why: x.why })).filter((x) => x.id);
       rows.forEach((x) => { delete done[x.id]; }); lsSet(LS.done, done); lsSet(LS.rows, rows);
