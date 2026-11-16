@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UOP VC - Enrollment Manager
 // @namespace    UOP-JCW
-// @version      3.5
+// @version      3.6
 // @description  From the JCW CSV: set Enrollment#, Reg# (= Enrollment#), Program, Class and Section on each student's edit page (matched by PORTAL ID)
 // @match        https://portal.uop.edu.pk/Student/Students*
 // @grant        none
@@ -505,6 +505,7 @@
     const first = (x) => norm(String(x || "").trim().split(/\s+/)[0]);
     const okName = norm(name) === norm(s.name) || (first(name) && first(name) === first(s.name));
     const okFather = s.father && father && (norm(father) === norm(s.father) || first(father) === first(s.father));
+    if (s.fromApp) return okName && (okFather || !s.father || !father);   // v3.6: list from the app: name AND father must match
     return okName || okFather;
   }
 
@@ -595,6 +596,7 @@
   function selectedRows() {
     const ids = $("#uopEM_ids").value.split(/[\s,;]+/).map((x) => x.replace(/\D/g, "")).filter(Boolean);
     let list = rows;
+    if (rows.length && rows[0].fromApp) list = rows.filter((r) => r.pick);   // v3.6: only the ticked students
     if (ids.length) list = rows.filter((r) => ids.includes(r.id));
     const cls = $("#uopEM_cls").value;
     if (cls) list = list.filter((r) => norm(r.cls) === norm(cls));
@@ -775,7 +777,7 @@
     const p = document.createElement("div");
     p.id = "uopEM";
     p.innerHTML = `
-<header id="uopEM_hdr"><span>🎓 UOP Enrollment Manager v3.5 (JCW)</span><span id="uopEM_min">–</span></header>
+<header id="uopEM_hdr"><span>🎓 UOP Enrollment Manager v3.6 (JCW)</span><span id="uopEM_min">–</span></header>
 <div class="b" id="uopEM_body">
   <div class="r"><button class="g" id="uopEM_app">⬇ Load wrong values from JCW app</button><small>or CSV:</small><input type="file" id="uopEM_file" accept=".csv"><small id="uopEM_info"></small></div>
   <div class="r"><small>Edit URL</small><input type="text" id="uopEM_url" style="flex:1"><button class="s" id="uopEM_detect">Detect</button></div>
@@ -801,6 +803,7 @@
   </div>
   <div id="uopEM_track"><div id="uopEM_bar"></div></div>
   <div class="r"><small id="uopEM_stat"></small></div>
+  <div id="uopEM_pick" style="display:none;max-height:220px;overflow:auto;border:1px solid #ddd;border-radius:5px;padding:4px;margin:4px 0;font-size:12px"></div>
   <div id="uopEM_log"></div>
 </div>`;
     document.body.appendChild(p);
@@ -823,7 +826,7 @@
       rd.onload = () => {
         try {
           rows = buildRows(rd.result);
-          lsSet(LS.rows, rows);
+          lsSet(LS.rows, rows); drawPick();
           refreshFilters();
           log("CSV loaded: " + rows.length + " students (" + f.name + ")", "ok");
         } catch (err) { log("CSV error: " + err.message, "err"); }
@@ -837,6 +840,7 @@
     $("#uopEM_dl").onclick = downloadReport;
     $("#uopEM_reset").onclick = () => { if (confirm("Forget which students were already done?")) { done = {}; lsSet(LS.done, done); log("Done-list cleared.", "warn"); } };
 
+    drawPick();
     if (/uopem-fix/i.test(location.hash)) { history.replaceState(null, "", location.pathname + location.search); setTimeout(() => loadFromApp(true), 800); return; }
     if (rows.length) log("Previous CSV still loaded (" + rows.length + " students). Choose a new file to replace it.", "dim");
   }
@@ -852,15 +856,32 @@
       const j = await res.json();
       if (!j.ok) { if (/key/i.test(j.error || "")) localStorage.removeItem("uopEM_key"); log("JCW app: " + (/BAD_LOGIN|UNKNOWN_ACTION/.test(j.error || "") ? "the server does not know 'portal_fixlist' yet. Paste the Code.gs block ABOVE  if (req.action === 'portal_known')  and the Admissions.gs function, then Deploy > Manage deployments > Edit > New version > Deploy." : (j.error || "error")), "err"); return; }
       localStorage.setItem("uopEM_key", key);
-      rows = (j.rows || []).map((x, n) => ({ line: n + 1, id: String(x.id || "").replace(/\D/g, ""), enroll: x.enroll, program: x.program, cls: x.cls, section: x.section, name: x.name, father: x.father, obt: x.obt || "", tot: x.tot || "", why: x.why })).filter((x) => x.id);
+      rows = (j.rows || []).map((x, n) => ({ line: n + 1, id: String(x.id || "").replace(/\D/g, ""), enroll: x.enroll, program: x.program, cls: x.cls, section: x.section, name: x.name, father: x.father, obt: x.obt || "", tot: x.tot || "", why: x.why, fromApp: true, pick: true })).filter((x) => x.id);
       rows.forEach((x) => { delete done[x.id]; }); lsSet(LS.done, done); lsSet(LS.rows, rows);
       $("#uopEM_ids").value = ""; refreshFilters();
       if (j.note) log(j.note, "warn");
       log(rows.length ? rows.length + " student(s) with wrong values on the portal:" : "Nothing to correct: Program, Class, Section and Enroll# on the portal match the strength sheet. ✔", "ok");
-      rows.slice(0, 200).forEach((x) => log("• " + x.id + " " + x.name + ": " + x.why, "dim"));
+      const risky = new Set((j.keep || []).filter((k) => /student name|father/i.test(k[4])).map((k) => String(k[0]).toUpperCase().replace(/\s+/g, "")));
+      rows.forEach((x) => { x.risk = risky.has(String(x.enroll).toUpperCase().replace(/\s+/g, "")); if (x.risk) x.pick = false; });
+      lsSet(LS.rows, rows); drawPick();
       (j.keep || []).forEach((k) => log("✋ By hand (marks etc.): " + k[0] + " " + k[1] + " — " + k[4] + ": app " + k[5] + ", portal " + k[6], "warn"));
       if (rows.length && auto) { log("Checking each student on the portal first (nothing is saved)…", "dim"); await run(true); log("Check done. Press ▶ Update to correct them on the portal.", "head"); }
     } catch (e) { log("Could not reach the JCW app: " + e.message, "err"); }
+  }
+
+  // v3.6: tick list of the students loaded from the app
+  function drawPick() {
+    const box = $("#uopEM_pick"); if (!box) return;
+    if (!rows.length || !rows[0].fromApp) { box.style.display = "none"; return; }
+    const esc = (t) => String(t == null ? "" : t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const n = rows.filter((x) => x.pick).length;
+    box.style.display = "";
+    box.innerHTML = '<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px"><b>' + n + " of " + rows.length + ' ticked</b><button class="s" id="uopEM_all">Tick all</button><button class="s" id="uopEM_none">Untick all</button><small>Check / Update work only on the ticked students.</small></div>' +
+      rows.map((x, i) => '<label style="display:block;padding:3px 2px;border-bottom:1px solid #eee' + (x.risk ? ';background:#fff4e5' : '') + '"><input type="checkbox" data-i="' + i + '"' + (x.pick ? " checked" : "") + "> <b>" + esc(x.id) + "</b> " + esc(x.name) + " — " + esc(x.why) +
+        (x.risk ? ' <b style="color:#b45309">⚠ name / father on the portal is different: may be another student — check by hand first</b>' : "") + "</label>").join("");
+    box.querySelectorAll("input[data-i]").forEach((c) => (c.onchange = () => { rows[+c.dataset.i].pick = c.checked; lsSet(LS.rows, rows); drawPick(); }));
+    $("#uopEM_all").onclick = () => { rows.forEach((x) => (x.pick = true)); lsSet(LS.rows, rows); drawPick(); };
+    $("#uopEM_none").onclick = () => { rows.forEach((x) => (x.pick = false)); lsSet(LS.rows, rows); drawPick(); };
   }
 
   // Don't build the panel inside our own hidden frame / popup
