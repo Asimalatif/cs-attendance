@@ -3894,7 +3894,7 @@ async function kpiList(k){
     head:['#', 'Teacher', 'Department', 'Classes today', 'Marked', 'Status', 'Still to mark'],
     rows:teachersAgg(rows).sort((a, b) => (a.done === a.rows.length) - (b.done === b.rows.length) || a.name.localeCompare(b.name)).map((t, i) => [i + 1, t.name, t.dept || '', t.rows.length, t.done, t.done === t.rows.length ? 'Fully marked' : 'Pending', t.rows.filter(r => !r.today).map(r => r.cls + ' ' + titleCase(r.sub)).join(', ')]) });
   if(k === 'sec') return JCWOUT.list({ title:'Sections · ' + mon, sub:sc, head:['#', 'Section', 'Subjects', 'Students', 'Attendance %', 'Below ' + LOW + '%', 'Marked today'],
-    rows:sectionsAgg(rows).sort((a, b) => String(a.cls).localeCompare(String(b.cls), undefined, { numeric:true })).map((g, i) => [i + 1, g.cls, g.rows.length, g.students, pct2(g.att, g.pos) == null ? '' : pct2(g.att, g.pos), g.low, g.today + ' / ' + g.exp]) });
+    rows:sectionsAgg(rows).sort((a, b) => /optional/i.test(a.cls) - /optional/i.test(b.cls) || String(a.cls).localeCompare(String(b.cls), undefined, { numeric:true })).map((g, i) => [/optional/i.test(g.cls) ? '–' : i + 1, /optional/i.test(g.cls) ? g.cls + ' (A + B together, not a separate section)' : g.cls, g.rows.length, g.students, pct2(g.att, g.pos) == null ? '' : pct2(g.att, g.pos), g.low, g.today + ' / ' + g.exp]) });
   if(k === 'low'){
     if(!ovLow){ toast('Loading the students below ' + LOW + '%…'); await loadLow(); }
     if(!ovLow) return toast(ovLowErr || 'Could not load the list.');
@@ -3937,7 +3937,7 @@ function renderAdmin(){
   h += `<div class="kpis"><button type="button" data-xkpi="att" class="kpi kbtn ${tone(avg)}"><b>${avg == null ? '–' : avg + '%'}</b><small>${label} attendance (${MONTHS[ov.m].slice(0, 3)}) · list ›</small></button>
     <button type="button" data-xkpi="teach" class="kpi kbtn"><b>${tDone}/${T.length}</b><small>Teachers fully marked today · list ›</small></button>
     <button type="button" data-xkpi="low" class="kpi kbtn ${lowN ? 'bad' : 'good'}"><b>${lowN}</b><small>Students below ${LOW}% · list ›</small></button>
-    <button type="button" data-xkpi="sec" class="kpi kbtn"><b>${new Set(rows.map(r => r.cls)).size}</b><small>Sections · list ›</small></button></div>`;
+    <button type="button" data-xkpi="sec" class="kpi kbtn"><b>${new Set(rows.map(r => r.cls).filter(c => !/optional/i.test(c))).size}</b><small>Sections · list ›</small></button></div>`;
   const depts = scope === 'all' ? [...new Set(all.map(r => r.dept).filter(Boolean))].sort() : [];
   const nNot = T.length - tDone;
   h += `<details class="card fold" id="aFold" ${store.get('aFold', false) ? 'open' : ''}><summary><span><b>Teachers, sections &amp; free periods</b><small>${sun ? 'Sunday' : nNot + ' teacher' + (nNot === 1 ? '' : 's') + ' still to mark today'} · section %, low attendance, workload</small></span><span class="pill">${store.get('aFold', false) ? 'Close' : 'Open'}</span></summary><div class="seg2" role="tablist"><button type="button" data-xtab="teachers" class="${adminTab === 'teachers' ? 'on' : ''}">Today</button><button type="button" data-xtab="marked" class="${adminTab === 'marked' ? 'on' : ''}">Marked today</button><button type="button" data-xtab="sections" class="${adminTab === 'sections' ? 'on' : ''}">Sections</button><button type="button" data-xtab="low" class="${adminTab === 'low' ? 'on' : ''}">Low %</button><button type="button" data-xtab="work" class="${adminTab === 'work' ? 'on' : ''}">Workload</button></div>
