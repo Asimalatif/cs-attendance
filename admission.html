@@ -1778,17 +1778,14 @@ function wireMl(){
       <table style="margin-top:4px"><thead><tr><th></th><th>Section</th><th>Room</th><th>Capacity</th><th>Students now</th><th>Free seats</th></tr></thead><tbody>
       ${SR.map((x, i) => `<tr${x.free != null && x.free <= 0 ? ' style="color:var(--bad)"' : ''}><td><input type="radio" name="shSec" value="${esc(x.name)}"${i === 0 ? ' checked' : ''}></td><td><b>${esc(x.name)}</b>${i === 0 ? ' <span class="pill">suggested</span>' : ''}</td><td>${esc(x.room || '–')}</td><td class="n">${x.cap == null ? '?' : x.cap}</td><td class="n">${x.n}</td><td class="n">${x.free == null ? '?' : x.free <= 0 ? 'full (' + x.free + ')' : x.free}</td></tr>`).join('') || '<tr><td colspan="6" class="sub">No sections found for this program.</td></tr>'}
       </tbody></table></div>
-      <div class="sub" style="margin-top:8px">The edit form opens with the new program, quota, the section you ticked and a <b>new Enroll#</b> of that program. Check it, then press <b>Save</b>. Nothing changes until you save. Her fee difference shows in the Half-fee refund list; the shifting letter is under "Shifting letter to the Director Admissions".</div>
+      <div class="sub" style="margin-top:8px">The edit form opens with the new program, quota and the section you ticked; she <b>keeps her Enroll# ${esc(o.roll)}</b>. (The form may note that the number is outside the program's range: that is only a note.) Check it, then press <b>Save</b>. Nothing changes until you save. Her fee difference shows in the Half-fee refund list; the shifting letter is under "Shifting letter to the Director Admissions".</div>
       <div class="acts"><button class="btn" id="shNo">Cancel</button><button class="btn primary" id="shGo">Open the form to shift her</button></div>`);
     $('#shNo').onclick = dlgClose;
-    $('#shGo').onclick = async () => {
+    $('#shGo').onclick = () => {
       const pick = (document.querySelector('input[name=shSec]:checked') || {}).value || '';
-      $('#shGo').disabled = true; $('#shGo').textContent = 'Getting a new Enroll#…';
-      let nr = ''; try{ const r = await api({ action:'adm_next_roll', program:c.key, year:o.year || '1st Year' }); nr = r.roll || ''; }catch(e){}
       dlgClose();
-      if(!nr) toast('Could not get a new Enroll# (offline?): press "New number" in the form.');
       const d = dFromRec(o);
-      form = Object.assign(blankForm(), d, { program:c.key, quota:c.quota, section:pick, room:roomOf(pick), rollNo:nr, rollManual:true, group:'', qid:null,
+      form = Object.assign(blankForm(), d, { program:c.key, quota:c.quota, section:pick, room:roomOf(pick), rollNo:o.roll, rollManual:true, group:'', qid:null,
         ctx:{ roll:o.roll, sno:o.sno, origName:o.name, orig:JSON.parse(JSON.stringify(Object.assign({}, d, { rollNo:o.roll }))) } });
       lastDone = null; setTab('form'); window.scrollTo({ top:0 });
       toast('Shifting ' + o.name + ' to ' + c.label + ' · ' + c.quota + (pick ? ' · section ' + pick : '') + ': check, then Save.');
