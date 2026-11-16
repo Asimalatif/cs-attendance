@@ -28,7 +28,9 @@ function nttRoute_(user, req) {
         nttUpdateMany: nttUpdateMany, nttAddTeacher: nttAddTeacher, nttDeleteTeacher: nttDeleteTeacher, nttAddRoom: nttAddRoom,
         nttDeleteRoom: nttDeleteRoom, nttAddSectionName: nttAddSectionName, nttAddSection: nttAddSection, nttDeleteSection: nttDeleteSection,
         nttAddSlot: nttAddSlot, nttDeleteSlot: nttDeleteSlot, nttGetLog: nttGetLog, nttBackup: nttBackup };
-      return { ok: true, data: FN[fn].apply(null, args) };
+      var res = FN[fn].apply(null, args);
+      if (!/^ntt(GetBoot|GetLog|Logout|Backup)$/.test(fn)) { try { cacheClear_('tt_att3'); } catch (e) {} }   // v8.13: the attendance app sees timetable edits at once
+      return { ok: true, data: res };
     }
     return { ok: false, error: 'UNKNOWN_ACTION' };
   } catch (e) {
@@ -70,7 +72,7 @@ function nttRoute_(user, req) {
 const NTT_CFG = {
   SPREADSHEET_ID: '1ARU8zMO2daJUfU_SIIo4baeSOG7qBPuni5TYRIRLBNY',   // the Users workbook (has Users, Naila Timetable, DropdownData)
   USERS: 'Users',
-  TIMETABLE: 'Naila Timetable',
+  TIMETABLE: 'Timetable',          // v8.13: edits go straight into the app's Timetable sheet (was 'Naila Timetable')
   DROPDOWN: 'DropdownData',
   SETTINGS: 'NTT Settings',      // created automatically on first "Save settings"
   ADMIN_MATCH: [],               // extra full-admin names / user names (empty: roles come only from the tt_admin column)
@@ -1304,7 +1306,8 @@ function ntt_ctx_(t, sheetRow) {
   const row = t.rows[sheetRow - 2];
   if (!row) return 'row ' + sheetRow;
   const sc = ntt_rowScope_(t, row);
-  return sc.filter(Boolean).join(' ') + ' · ' + ntt_str_(ntt_get_(row, t.map, 'Subject'));
+  const pd = ntt_str_(ntt_get_(row, t.map, 'Period'));                  // v8.13: + period, for the teacher-change log
+  return sc.filter(Boolean).join(' ') + ' · ' + ntt_str_(ntt_get_(row, t.map, 'Subject')) + (pd ? ' · period ' + pd : '');
 }
 function ntt_fieldVal_(t, row, f) {
   if (f === 'Days') return ntt_rowDays_(t, row);

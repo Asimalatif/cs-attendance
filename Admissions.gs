@@ -321,6 +321,22 @@ function admPortalFixList_() {
   var keep = []; try { keep = admKeepList_().rows.filter(function (x) { return !/^(subjects|metric|total)$/.test(x[3]); }); } catch (e) {}
   return { ok: true, rows: out, keep: keep, at: admNow_() };
 }
+/** v8.13 health check: Open Quota students of a subsidized program that has a full-fee twin (Pre-Medical Open (S) / Self Morning)
+ *  whose Aggregate is below the last subsidized Open Quota seat: on Open Quota she belongs on the full-fee seat, or she is really in another quota. */
+function admQuotaCheck_() {
+  var set = admSettings_(), recs = admAll_(admRead_(), set.sections), items = [], OQ = admQ_(ADM_CFG.OPEN_QUOTA), parts = [];
+  ADM_CFG.PROGRAMS.filter(function (p) { return p.fee === 'sub' && ADM_CFG.PROGRAMS.some(function (q) { return q.fee === 'non' && q.program === p.program; }); }).forEach(function (p) {
+    var seats = Number((set.seats[p.key] || {})[OQ]); if (!seats) return;
+    var L = recs.filter(function (r) { return r.key === p.key && !admIsMig_(r.year) && admQ_(r.quota) === OQ && r.name; }).map(function (r) {
+      var a = Number(String(r.aggregate || '').replace(/[^0-9.]/g, '')) || Number(admAgg_(r.metric, r.total, r.hq)) || 0; return { r: r, a: a };
+    }).sort(function (x, y) { return y.a - x.a; });
+    if (L.length <= seats) return;
+    var cut = L[seats - 1].a; parts.push(p.label + ': ' + seats + ' Open Quota seats, cutoff ' + cut);
+    L.slice(seats).forEach(function (x) { if (x.a < cut) items.push({ t: x.r.roll + ' · ' + x.r.name + ' · Aggregate ' + x.a + ' < cutoff ' + cut,
+      r: [x.r.roll, x.r.name, x.r.father || '', x.r.pcs || '', 'Aggregate ' + x.a + ' below the ' + p.label + ' Open Quota cutoff ' + cut + ': another quota? (employee, sports, O-Level, minority …) else full-fee seat'] }); });
+  });
+  return { items: items, help: 'She is in Open Quota on a subsidized seat (half fee) but her Aggregate is below the last subsidized Open Quota seat. Check her real quota (UoP employee, sports, O-Level, minority, disabled, FATA …) on the portal / admission form; if she really is Open Quota, she belongs on the full-fee (Self Morning) seat. ' + parts.join(' · ') };
+}
 function admKeepSheet_() {
   var b = admBook_(), sh = b.getSheetByName(ADM_KEEP_SHEET);
   if (!sh) { sh = b.insertSheet(ADM_KEEP_SHEET); sh.getRange(1, 1, 1, 10).setValues([['Enroll#', 'Student Name', 'Section', 'Field', 'Column', 'College value (kept)', 'Portal value (wrong)', 'Why', 'By', 'When']]).setFontWeight('bold'); sh.setFrozenRows(1); }

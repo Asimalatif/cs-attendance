@@ -4979,14 +4979,29 @@ initFilters=function(){ _ifAA2.apply(this, arguments); btn.style.display = (S.us
       '<h3>📜 Change log</h3>'+
       '<div class="hint">The latest changes made in this timetable (newest first). The full log is kept in the hidden-free sheet “NTT Log”.</div>'+
       '<div class="setrow"><input type="search" id="lg_q" placeholder="Search user, action or text…">'+
+      '<label style="display:inline-flex;gap:4px;align-items:center"><input type="checkbox" id="lg_tch"> Only teacher changes (which period went from whom to whom)</label>'+
       '<button type="button" class="sec" id="lg_reload">↻ Reload</button><span id="lg_cnt" class="hint"></span></div>'+
-      '<div class="crwrap"><table class="crt"><thead><tr><th style="width:140px">Time</th><th style="width:150px">User</th>'+
+      '<div class="crwrap"><table class="crt"><thead id="lg_head"><tr><th style="width:140px">Time</th><th style="width:150px">User</th>'+
       '<th style="width:110px">Action</th><th>Detail</th></tr></thead><tbody id="lg_body"></tbody></table></div>'+
       '<div class="row"><button type="button" class="sec" id="lg_close">Close</button></div>'+
     '</div></div>');
 
   var LG=[];
+  function lgTch(){                       /* v8.13 one line per teacher change: date | section · subject · period | from -> to | by */
+    var q=nk($('lg_q').value), out=[];
+    LG.forEach(function(r){
+      var d=String(r[4]||''), i=d.indexOf(' | '); if(i<0) return;
+      var ctx=d.slice(0,i), m=d.slice(i+3).match(/Teacher:\s*([^;]*?)\s*→\s*([^;]*)/i); if(!m) return;
+      if(q && nk(r.join(' ')).indexOf(q)<0) return;
+      out.push('<tr><td>'+esc(r[0])+'</td><td>'+esc(ctx)+'</td><td><b>'+esc(m[1])+'</b> → <b>'+esc(m[2])+'</b></td><td>'+esc(r[1])+'</td></tr>');
+    });
+    $('lg_head').innerHTML='<tr><th style="width:140px">Date / time</th><th>Section · subject · period</th><th>From teacher → to teacher</th><th style="width:150px">Changed by</th></tr>';
+    $('lg_body').innerHTML = out.join('') || '<tr><td colspan="4" class="hint">No teacher changes found.</td></tr>';
+    $('lg_cnt').textContent = out.length+' teacher change(s)';
+  }
   function lgDraw(){
+    if($('lg_tch').checked) return lgTch();
+    $('lg_head').innerHTML='<tr><th style="width:140px">Time</th><th style="width:150px">User</th><th style="width:110px">Action</th><th>Detail</th></tr>';
     var q=nk($('lg_q').value), n=0;
     $('lg_body').innerHTML = LG.filter(function(r){ return !q || nk(r.join(' ')).indexOf(q)>=0; }).map(function(r){
       n++;
@@ -4999,12 +5014,13 @@ initFilters=function(){ _ifAA2.apply(this, arguments); btn.style.display = (S.us
     google.script.run
       .withSuccessHandler(function(res){ LG=res.rows||[]; lgDraw(); })
       .withFailureHandler(function(e){ $('lg_body').innerHTML=''; handleFail(e); })
-      .nttGetLog(token, 500);
+      .nttGetLog(token, 1000);
   }
   $('lg_btn').addEventListener('click', function(){ $('lg_q').value=''; $('lgModal').style.display='flex'; lgLoad(); });
   $('lg_reload').addEventListener('click', lgLoad);
   $('lg_close').addEventListener('click', function(){ $('lgModal').style.display='none'; });
   $('lg_q').addEventListener('input', lgDraw);
+  $('lg_tch').addEventListener('change', lgDraw);
 
   /* ---- manual backup ---- */
   $('bk_btn').addEventListener('click', function(){

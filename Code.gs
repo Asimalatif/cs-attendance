@@ -101,6 +101,29 @@ function doPost(e) {
 
   var user = authenticate_(req.username, req.password);
   if (!user) return json_({ ok: false, error: 'BAD_LOGIN' });
+  // v8.13 load test (loadtest.html): admin only; everything is written into the COPY of a month workbook, never the real ones
+  if (req.test === true || req.action === 'test_setup') {
+    try {
+      if (!isAdmin_(user)) return json_({ ok: false, error: 'Only the admin can run the load test.' });
+      var tp = PropertiesService.getScriptProperties();
+      if (req.action === 'test_setup') {
+        var mon = String(req.mon || '').toUpperCase(), id = String(req.id || '').trim().replace(/^.*\/d\/([\w-]{20,}).*$/, '$1');
+        if (!BOOK_IDS[mon]) return json_({ ok: false, error: 'Unknown month ' + mon });
+        if (!id) { tp.deleteProperty('TEST_BOOKS'); return json_({ ok: true, off: true }); }
+        var real = Object.keys(BOOK_IDS).map(function (k) { return BOOK_IDS[k]; }).concat([USERS_SS_ID]);
+        if (real.indexOf(id) >= 0) return json_({ ok: false, error: 'That is a REAL workbook. Make a copy (File > Make a copy) and paste the COPY\'s link.' });
+        var nm = SpreadsheetApp.openById(id).getName(), o = {}; o[mon] = id; tp.setProperty('TEST_BOOKS', JSON.stringify(o));
+        return json_({ ok: true, mon: mon, name: nm });
+      }
+      var tb = tp.getProperty('TEST_BOOKS'); if (!tb) return json_({ ok: false, error: 'Paste the link of the copy first (step 1).' });
+      if (!/^(sheets|sheet|save|tt_all)$/.test(String(req.action))) return json_({ ok: false, error: 'Not allowed in the load test: ' + req.action });
+      TEST_ = JSON.parse(tb);
+      if (req.action === 'sheets') return json_({ ok: true, test: TEST_, sheets: listSheets_(user).filter(function (s) { return TEST_[s.mon]; }) });
+      if (req.action === 'tt_all') return json_(ttAll_(user));
+      if (req.action === 'sheet') return json_(getSheetData_(user, req.sheet, req.create === true));
+      var t0 = Date.now(), sv = saveRecords_(user, req.records || []); sv.ms = Date.now() - t0; return json_(sv);
+    } catch (err) { return json_({ ok: false, error: String(err && err.message || err) }); }
+  }
   // v8.6 activity log: every request that changes something is written to "Activity Log" (who, what, result)
   if (!req.__inner && actIsWrite_(req)) {
     var inner = JSON.parse(JSON.stringify(req)); inner.__inner = true;
@@ -406,7 +429,9 @@ function currentSeasonToken_() {
 var BOOK_CACHE_ = {};
 
 /** Spreadsheet id of the workbook that holds the sheets of this month token (SEPT, OCT, NOV, DEC, JAN). */
+var TEST_ = null;   // v8.13 load test: { NOV: 'id of the COPY' } while a test request runs (loadtest.html); real workbooks are never opened for writing
 function bookIdFor_(tok) {
+  if (TEST_) { var tid = TEST_[String(tok || '').toUpperCase()]; if (!tid) throw new Error('Load test: no test copy for ' + tok + '. Only the month of the copy can be tested.'); return tid; }
   var id = BOOK_IDS[String(tok || '').toUpperCase()];
   if (!id) throw new Error('No workbook is set for month "' + tok + '". Check BOOK_IDS.');
   return id;
@@ -530,6 +555,7 @@ function changePassword_(user, oldPass, newPass) {
 
 /* ---------- timetable -> this teacher's sections ---------- */
 
+function testBookId_() { for (var k in TEST_) return TEST_[k]; throw new Error('Load test: no copy set.'); }
 function getTimetable_() {
   var t = cacheGetBig_('tt_att3');
   if (t) return t;
@@ -2088,7 +2114,7 @@ var LOW_PCT = 73;
 
 var INDEX_OK_ = false;
 function indexSheet_() {
-  var book = SpreadsheetApp.openById(USERS_SS_ID), sh = book.getSheetByName(INDEX_SHEET);
+  var book = SpreadsheetApp.openById(TEST_ ? testBookId_() : USERS_SS_ID), sh = book.getSheetByName(INDEX_SHEET);
   if (sh) {
     if (!INDEX_OK_ && String(sh.getRange(1, INDEX_HEAD.length).getValue()) !== INDEX_HEAD[INDEX_HEAD.length - 1]) {
       if (sh.getMaxColumns() < INDEX_HEAD.length) sh.insertColumnsAfter(sh.getMaxColumns(), INDEX_HEAD.length - sh.getMaxColumns());
@@ -2675,7 +2701,7 @@ function auditAdd_(user, meta, day, per, roll, name, was, now, what) {
                date, per ? 'P' + per : '', String(roll), String(name || ''), String(was), String(now), what]);
 }
 function auditSheet_() {
-  var book = SpreadsheetApp.openById(USERS_SS_ID), sh = book.getSheetByName(AUDIT_SHEET);
+  var book = SpreadsheetApp.openById(TEST_ ? testBookId_() : USERS_SS_ID), sh = book.getSheetByName(AUDIT_SHEET);
   if (sh) return sh;
   sh = book.insertSheet(AUDIT_SHEET);
   sh.getRange(1, 1, 1, AUDIT_HEAD.length).setValues([AUDIT_HEAD]).setFontWeight('bold').setBackground('#D9D9D9');
@@ -3293,6 +3319,21 @@ function fillTransform_(rows, C) {
 }
 
 /* ---------- v6.8 health check: the student data (strength sheet + Portal Data) ---------- */
+/** v8.13 reads "Permanent Workload" (S.No | Teacher | Designation | Classes | WORKLOAD under department headings) */
+function workloadCheck_() {
+  var sh = at_ss_().getSheetByName('Permanent Workload'), over = [], under = [];
+  if (!sh || sh.getLastRow() < 3) return { over: over, under: under, note: 'The sheet "Permanent Workload" is empty: run Admin tools > Teacher workload first.' };
+  var V = sh.getRange(1, 1, sh.getLastRow(), 5).getDisplayValues(), dept = '';
+  var limitOf = function (d) { d = String(d || '').toLowerCase(); if (/associate/.test(d)) return 9; if (/assistant/.test(d)) return 12; if (/professor/.test(d)) return 9; if (/lecturer/.test(d)) return 12; return null; };
+  V.forEach(function (r) {
+    if (r[0] && !r[1] && !r[4]) { dept = String(r[0]).replace(/^DEPARTMENT OF\s*/i, ''); return; }
+    var n = Number(String(r[4]).replace(/[^0-9.]/g, '')); if (!r[1] || /^teacher$/i.test(r[1]) || r[4] === '' || isNaN(n)) return;
+    var lim = limitOf(r[2]); if (lim === null) return;
+    var row = { t: r[1] + ' · ' + (r[2] || '') + ' · ' + n + ' (limit ' + lim + ')', r: [r[1], r[2], dept, n, lim + ' (' + (n > lim ? '+' : '') + (n - lim) + ')'] };
+    if (n > lim) over.push(row); else if (n < lim) under.push(row);
+  });
+  return { over: over, under: under, note: '' };
+}
 function studentChecks_(add, A) {
   var book = SpreadsheetApp.openById(USERS_SS_ID), ts = book.getSheetByName(TRANSFORM_SHEET);
   if (!ts || ts.getLastRow() < 2) return;
@@ -3442,6 +3483,15 @@ function studentChecks_(add, A) {
   add('stu_unpaid', 'Unpaid challan', lv(L.unpaid), L.unpaid, 'U- = unpaid challan (P- = paid).' + noP);
   add('stu_father', 'No father name', lv(L.nofather), L.nofather, '');
   add('room', 'Timetable classes without a room', lv(room), room, 'Fill the Room column of the Timetable.', SEC_COLS);
+  // v8.13 permanent teachers' workload against the limit of their designation (from the sheet "Permanent Workload" = last Workload run in Admin tools)
+  try {
+    var WL = workloadCheck_();
+    add('wl_over', 'Permanent teachers over their workload limit', lv(WL.over), WL.over, 'Limits: Lecturer 12, Assistant Professor 12, Associate Professor 9, Professor 9 (per week). From the sheet "Permanent Workload": run Admin tools > Teacher workload again after timetable changes.' + (WL.note ? ' ' + WL.note : ''), ['Teacher', 'Designation', 'Department', 'Workload', 'Limit / difference']);
+    add('wl_under', 'Permanent teachers under their workload limit', lv(WL.under), WL.under, 'Same limits as above; a teacher with fewer periods than her limit can take more classes.', ['Teacher', 'Designation', 'Department', 'Workload', 'Limit / difference']);
+  } catch (e) { add('wl_err', 'Workload check could not run', 'warn', [String(e.message || e)], ''); }
+  // v8.13 Open Quota students on a subsidized (half-fee) seat whose Aggregate is below the subsidized Open Quota cutoff
+  try { var QC = admQuotaCheck_(); add('stu_subq', 'Open Quota on a subsidized (half-fee) seat but Aggregate below the cutoff', lv(QC.items), QC.items, QC.help, ['Roll No', 'Student Name', 'Father Name', 'PCS', 'Detail / Status']); }
+  catch (e) { add('stu_subq_err', 'Subsidized quota check could not run', 'warn', [String(e.message || e)], ''); }
   var days = last && last.at ? 0 : 999;
   if (last && last.at) { var d = new Date(last.at.replace(/(\d+) (\w+) (\d+) .*/, '$2 $1, $3')); if (!isNaN(d)) days = Math.floor((Date.now() - d.getTime()) / 864e5); }
   add('portal', 'UOP portal data', days > 7 ? 'warn' : 'ok', days > 7 ? [last && last.at ? 'Last synced ' + last.at + ' (' + days + ' days ago)' : 'Never synced'] : [], 'Run "JCW Portal Sync" on the portal Students page (College > UOP portal sync).');
