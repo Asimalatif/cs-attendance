@@ -213,7 +213,7 @@ dialog{border:1.5px solid var(--line);box-shadow:var(--shadow2)}
     <button role="tab" data-tab="find" aria-selected="false">Find &amp; edit</button>
     <button role="tab" data-tab="seats" aria-selected="false">Seats</button>
     <button role="tab" data-tab="merit" aria-selected="false">Merit lists</button>
-    <button role="tab" data-tab="oml" aria-selected="false">Official lists</button>
+    <button role="tab" data-tab="fix" aria-selected="false">Wrong on portal<span class="badge hidden" id="fb">0</span></button>
     <button role="tab" data-tab="sset" aria-selected="false">Seat settings</button>
     <button role="tab" data-tab="wait" aria-selected="false">Waiting<span class="badge hidden" id="qb">0</span></button>
   </nav>
@@ -249,7 +249,7 @@ async function idbSet(k, v){ try{ const db = await idb(); await new Promise((res
 let init = ls.get('adm_init', null);          // programs, sections, seats, subjects, rooms (from the server)
 let idx = null;                               // { cols, rows, at }
 let queue = ls.get('adm_q', []);              // saves waiting for the server
-let tab = /^#(form|pnew|find|seats|merit|oml|sset|wait)$/.test(location.hash) ? location.hash.slice(1) : 'form', form = null, lastDone = null, syncing = false, nextRoll = {}, searchQ = '', fatal = '';
+let tab = /^#(form|pnew|find|seats|merit|fix|sset|wait)$/.test(location.hash) ? location.hash.slice(1) : 'form', form = null, lastDone = null, syncing = false, nextRoll = {}, searchQ = '', fatal = '';
 let pnew = ls.get('adm_pnew', null);          // students Enrolled on the portal but not yet in Transform (adm_new)
 let pnSel = ls.get('adm_pn_sel', {});         // portal ID -> { on, program, year, section, rollNo, quota, rollManual, secManual }
 let pnHide = ls.get('adm_pn_hide', []);       // portal IDs you chose to hide
@@ -397,7 +397,7 @@ function render(){
   else if(tab === 'pnew') m.innerHTML = top + pnHtml() + rfHtml();
   else if(tab === 'seats') m.innerHTML = top + seatsHtml();
   else if(tab === 'merit') m.innerHTML = top + mlHtml();
-  else if(tab === 'oml') m.innerHTML = top + omlHtml();
+  else if(tab === 'fix') m.innerHTML = top + fxHtml();
   else if(tab === 'sset') m.innerHTML = top + ssHtml();
   else m.innerHTML = top + waitHtml();
   if(tab === 'form') wireForm();
@@ -406,7 +406,7 @@ function render(){
   if(tab === 'wait') wireWait();
   if(tab === 'seats') wireSeats();
   if(tab === 'merit') wireMl();
-  if(tab === 'oml') wireOml();
+  if(tab === 'fix') wireFx();
   if(tab === 'sset') wireSs();
 }
 const opt = (v, cur, label) => `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(label == null ? v : label)}</option>`;
@@ -1106,7 +1106,7 @@ const stuAgg = o => { const a = typeof mlAgg === 'function' ? mlAgg(o) : Number(
 function stuTable(list, extra){
   // v8.5: + quota, matric marks, HQ, Aggregate and MeritNo
   return `<div style="max-height:55vh;overflow:auto;margin-top:8px"><table><thead><tr><th>#</th><th>Enroll#</th><th>Student</th><th>Section</th><th>Room</th>${extra ? '<th>' + extra.h + '</th>' : ''}<th>Quota</th><th>Obtained / Total</th><th>HQ</th><th>Aggregate</th><th>MeritNo</th><th>Fee</th></tr></thead><tbody>
-    ${list.map((o, i) => { const f = feeOf(o.challan); return `<tr><td>${i + 1}</td><td class="nw">${esc(o.roll || '–')}</td><td>${esc(o.name)}<div class="sub">d/o ${esc(o.father || '-')}</div></td><td class="nw">${esc(o.pcs)}</td><td class="nw">${esc(o.room || '–')}</td>${extra ? '<td>' + esc(extra.v(o)) + '</td>' : ''}<td>${esc(o.quota || '–')}</td><td class="nw">${esc(stuMarks(o))}</td><td>${esc(o.hq || '–')}</td><td class="nw"><b>${esc(stuAgg(o))}</b></td><td class="n">${esc(o.meritNo || '–')}</td><td class="sub">${f.length ? f.map(x => (x.paid ? 'Paid ' : 'Unpaid ') + money(x.amount)).join(', ') : '–'}</td></tr>`; }).join('') || '<tr><td colspan="12" class="sub">Nobody.</td></tr>'}</tbody></table></div>`;
+    ${list.map((o, i) => { const f = feeOf(o.challan); return `<tr><td>${i + 1}</td><td class="nw">${esc(o.roll || '–')}</td><td>${esc(o.name)}<div class="sub">d/o ${esc(o.father || '-')}</div>${fxWhy(o)}</td><td class="nw">${esc(o.pcs)}</td><td class="nw">${esc(o.room || '–')}</td>${extra ? '<td>' + esc(extra.v(o)) + '</td>' : ''}<td>${esc(o.quota || '–')}</td><td class="nw">${esc(stuMarks(o))}</td><td>${esc(o.hq || '–')}</td><td class="nw"><b>${esc(stuAgg(o))}</b></td><td class="n">${esc(o.meritNo || '–')}</td><td class="sub">${f.length ? f.map(x => (x.paid ? 'Paid ' : 'Unpaid ') + money(x.amount)).join(', ') : '–'}</td></tr>`; }).join('') || '<tr><td colspan="12" class="sub">Nobody.</td></tr>'}</tbody></table></div>`;
 }
 function listText(title, list){ return title + '\n\n' + list.map((o, i) => (i + 1) + '. ' + (o.roll || '-') + ' ' + o.name + ' d/o ' + (o.father || '-') + ' (' + o.pcs + (o.room ? ', room ' + o.room : '') + ') · ' + (o.quota || 'no quota') + ' · ' + stuMarks(o) + (/^y/i.test(o.hq || '') ? ' · HQ' : '') + ' · Agg ' + stuAgg(o) + (o.meritNo ? ' · Merit ' + o.meritNo : '')).join('\n'); }
 function listDlg(title, sub, list, extra){
@@ -1126,6 +1126,56 @@ function seatList(keyStr, quota){
   const list = idx ? idx.rows.map(recOf).filter(o => keys.includes(o.key) && !isMig(o.year) && qk(o.quota) === qk(quota)).sort((a, b) => String(a.roll).localeCompare(String(b.roll), undefined, { numeric:true })) : [];
   const lbl = keys.map(k => (prog(k) || {}).label || k).join(', ');
   listDlg(quota + ' · ' + lbl, list.length + ' student' + (list.length === 1 ? '' : 's') + ' (1st Year) from this phone\'s copy of the strength sheet' + (keys.length > 1 ? ' · shared pool' : '') + '.', list, keys.length > 1 ? { h:'Program', v:o => (prog(o.key) || {}).label || o.key } : null);
+}
+/* ---------- v8.13 Wrong on portal: students whose Program / Class / Section / Enroll# / marks on the UOP portal differ from the strength sheet ---------- */
+let FX = null, fxBusy = false, fxErr = '', fxF = '';
+const FXK = ['Program', 'Class', 'Section', 'Enroll#', 'Marks'];
+const fxKind = w => FXK.filter(k => w.indexOf(k + ' ') === 0 || w.indexOf('; ' + k + ' ') >= 0);
+const fxRoll = x => String(x || '').toUpperCase().replace(/\s+/g, '');
+function fxWhy(o){
+  const x = FX && FX.map && FX.map[fxRoll(o.roll)]; if(!x) return '';
+  return `<div style="color:var(--bad);font-weight:600;font-size:12px;margin-top:2px">⚠ Wrong on the portal: ${esc(x.why)}</div>`;
+}
+async function fxLoad(show){
+  if(fxBusy) return; fxBusy = true; fxErr = ''; if(show && tab === 'fix') render();
+  try{
+    const r = await api({ action:'adm_fixlist' }, 180000);
+    if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'The server needs the new Admissions.gs (admPortalFixList_): paste it and Deploy a New version.' : r.error);
+    const map = {}; (r.rows || []).forEach(x => { map[fxRoll(x.enroll)] = x; });
+    FX = { rows:r.rows || [], keep:r.keep || [], note:r.note || '', at:r.at || '', map };
+  }catch(e){ fxErr = e.message || String(e); }
+  fxBusy = false;
+  const b = $('#fb'); if(b){ const n = FX ? FX.rows.length : 0; b.textContent = n; b.classList.toggle('hidden', !n); }
+  if(tab === 'fix' || tab === 'find') render();
+}
+function fxHtml(){
+  if(!FX && !fxBusy && !fxErr) fxLoad(true);
+  const rows = FX ? FX.rows : [], cnt = {}; rows.forEach(x => fxKind(x.why).forEach(k => cnt[k] = (cnt[k] || 0) + 1));
+  const list = fxF ? rows.filter(x => fxKind(x.why).includes(fxF)) : rows;
+  const hl = w => esc(w).replace(/(Program[^;]*)/, '<b style="color:var(--bad)">$1</b>');
+  return `<section class="card"><h3>Wrong on the UOP portal</h3>
+    <div class="sub">Students whose <b>Program, Class, Section, Enroll# or Matric / O-Level marks</b> on the portal are different from the strength sheet (the strength sheet is taken as right). A wrong Program on the portal gives her the wrong subjects. Read from the last portal sync${FX && FX.at ? ' · checked ' + esc(FX.at) : ''}.</div>
+    ${fxErr ? `<div class="err">${esc(fxErr)}</div>` : ''}${FX && FX.note ? `<div class="warnp">${esc(FX.note)}</div>` : ''}
+    <div class="acts" style="margin-top:8px;flex-wrap:wrap">
+      <button class="btn small${fxF ? '' : ' primary'}" data-fx="">All ${rows.length}</button>
+      ${FXK.map(k => `<button class="btn small${fxF === k ? ' primary' : ''}" data-fx="${k}">${k} ${cnt[k] || 0}</button>`).join('')}
+    </div>
+    ${fxBusy ? '<div class="sub" style="margin-top:8px">Reading…</div>' : !rows.length && FX ? '<div class="sub" style="margin-top:8px">✓ Nothing wrong: the portal matches the strength sheet.</div>' : `
+    <div style="max-height:60vh;overflow:auto;margin-top:8px"><table><thead><tr><th>#</th><th>Portal ID</th><th>Enroll#</th><th>Student</th><th>Section</th><th>Wrong on the portal → correct</th><th></th></tr></thead><tbody>
+    ${list.map((x, i) => `<tr${/Program/.test(x.why) ? ' style="background:rgba(220,38,38,.08)"' : ''}><td>${i + 1}</td><td class="nw">${esc(x.id)}</td><td class="nw">${esc(x.enroll)}</td><td>${esc(x.name)}<div class="sub">d/o ${esc(x.father || '-')}</div></td><td class="nw">${esc(x.section)}</td><td>${hl(x.why)}</td>
+      <td><a class="btn small" style="text-decoration:none" target="_blank" rel="noopener" href="https://portal.uop.edu.pk/Student/NewStudent/${encodeURIComponent(x.id)}">Open ↗</a></td></tr>`).join('')}
+    </tbody></table></div>`}
+    <div class="acts" style="margin-top:10px"><button class="btn" id="fxRe">Check again</button><button class="btn" id="fxOut">PDF / Excel</button>
+      <a class="btn primary" style="text-decoration:none" target="_blank" rel="noopener" href="https://portal.uop.edu.pk/Student/Students#uopem-fix">Correct them on the portal ↗</a></div>
+    <div class="sub" style="margin-top:6px">Run a portal Quick sync first if the portal was changed by hand. "Correct them on the portal" opens the Enrollment Manager: tick the students you want, Check only, then ▶ Update. These students are also marked in red in Find &amp; edit.</div></section>`;
+}
+function wireFx(){
+  document.querySelectorAll('[data-fx]').forEach(b => b.onclick = () => { fxF = b.dataset.fx; render(); });
+  const re = $('#fxRe'); if(re) re.onclick = () => fxLoad(true);
+  const o = $('#fxOut'); if(o) o.onclick = () => { if(!window.JCWOUT || !FX) return toast('Reload the page once.');
+    const L = fxF ? FX.rows.filter(x => fxKind(x.why).includes(fxF)) : FX.rows;
+    JCWOUT.list({ title:'Wrong on the UOP portal' + (fxF ? ' · ' + fxF : ''), sub:L.length + ' students', head:['#', 'Portal ID', 'Enroll#', 'Student Name', 'Father Name', 'Section', 'Wrong on the portal → correct'],
+      rows:L.map((x, i) => [i + 1, x.id, x.enroll, x.name, x.father || '', x.section || '', x.why]), file:'Wrong on the UOP portal' }); };
 }
 /* ---------- v8.5 Seat settings: seats per program + quota (more / fewer), new quotas, shared (floating) seats ---------- */
 let SS = null, ssBusy = false, ssDirty = false, ssMsg = '';
@@ -2140,7 +2190,7 @@ if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch
   render();
   idx = await idbGet('index');
   if(idx) setTimeout(mlPushAlerts, 3000);
-  if(online() && user){ await refreshInit(); await loadIndex(false); await omlLoad(false); sync(); if(tab === 'find' || tab === 'merit') render(); pnLoad(false); }
+  if(online() && user){ await refreshInit(); await loadIndex(false); fxLoad(false); sync(); if(tab === 'find' || tab === 'merit') render(); pnLoad(false); }
 })();
 </script>
 </body>
