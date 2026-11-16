@@ -1495,8 +1495,9 @@ function mlShiftAsk(c){
   dlgOpen(`<h2>Shifting letter (Word)</h2>
     <div class="sub">Your letter to <b>The Director Admissions, University of Peshawar</b>: "students are hereby shifted from F.Sc-I (Non-subsidized, Morning) to F.Sc-I (subsidized, Morning) on <i>date</i>", with S.No, Student Name, Father Name and Marks (obtained / total matric marks, e.g. 1146/1200; the quota is written after the marks when it is not Open Quota). Students: on a subsidized seat but paid the non-subsidized fee, highest Aggregate first.</div>
     <label class="f">Date of shifting<input id="shDate" value="${today}" style="height:42px"></label>
-    <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="shAll" checked> Every subsidized quota (Open, Minority, O-Level, …), not only ${esc(c.quota)}</label>
+    <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="shAll"> Also the other subsidized quotas (Minority, O-Level, …): their students on a seat who paid the non-subsidized fee</label>
     <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="shCand"> Also the possible candidates for the empty seats</label>
+    <div class="sub">Without ticks: only <b>${esc(c.label)} · ${esc(c.quota)}</b>. The possible candidates (yellow rows, e.g. serial 84 and 85) are the students for the empty seats of this list only.</div>
     <div class="sub" id="shN"></div>
     <div class="acts"><button class="btn primary" id="shGo">Make the Word letter</button><button class="btn" id="shX">Close</button></div>`);
   const upd = () => { $('#shN').textContent = cnt() + ' students will be in the letter.'; };
