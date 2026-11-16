@@ -153,6 +153,7 @@ function admRoute_(user, req) {
     case 'adm_keep_save': return admKeepSave_(user, req.items || []);
     case 'adm_keep_list': return admKeepList_();
     case 'adm_keep_del':  return admKeepDel_(req.roll, req.f);
+    case 'adm_fixlist':   return admPortalFixList_();
     case 'adm_add_new':   CacheService.getScriptCache().remove('adm_home_al_v1'); return admAddNew_(user, req.items || [], req.override === true);
     case 'adm_fee_receipt': return admFeeReceipt_(user, req);
     case 'adm_oml_get':   return admOmlGet_();
@@ -298,6 +299,25 @@ function admPortalHint_(r, f, now, pv) {
     if (oL) return 'O-Level / IBCC student: the strength sheet has the IBCC-equivalent marks; the portal may still have the old marks. Check her IBCC certificate before you accept.';
   }
   return '';
+}
+/** v8.12 students whose Program / Class / Section / Enroll# on the portal differ from the strength sheet (the strength sheet is right):
+ *  the list the "UOP Enrollment Manager" script corrects on the portal by itself. Marks etc. kept in "Portal Keep" are listed apart (by hand). */
+function admPortalFixList_() {
+  var P = admPortalSheet_(); if (!P) return { ok: true, rows: [], keep: [], note: 'Portal Data is empty: run a sync on the portal first.' };
+  var set = admSettings_(), T = admRead_(), recs = admAll_(T, set.sections), byId = {}, byRoll = {}, out = [];
+  P.v.slice(1).forEach(function (r) { var id = P.g(r, 'studentid'), en = P.g(r, 'enrollment'); if (id) byId[id] = r; if (en) byRoll[admNormRoll_(en)] = r; });
+  recs.forEach(function (r) {
+    if (!r.roll || !r.name) return;
+    var pr = (r.id && byId[r.id]) || byRoll[admNormRoll_(r.roll)]; if (!pr || !/^enrolled$/i.test(P.g(pr, 'status'))) return;
+    var why = [], pp = P.g(pr, 'program'), pc = P.g(pr, 'class'), ps = P.g(pr, 'section'), pe = P.g(pr, 'enrollment');
+    if (r.programName && pp && !admSame_('program', r.programName, pp)) why.push('Program "' + pp + '" → "' + r.programName + '"');
+    if (r.year && pc && admYear_(pc) !== r.year) why.push('Class "' + pc + '" → "' + r.year + '"');
+    if (r.section && ps && !admSame_('section', r.section, ps)) why.push('Section "' + ps + '" → "' + r.section + '"');
+    if (!admSame_('roll', r.roll, pe)) why.push('Enroll# "' + (pe || '–') + '" → "' + r.roll + '"');
+    if (why.length) out.push({ id: r.id || P.g(pr, 'studentid'), enroll: r.roll, program: r.programName, cls: r.year, section: r.section, name: r.name, father: r.father, why: why.join('; ') });
+  });
+  var keep = []; try { keep = admKeepList_().rows.filter(function (x) { return x[3] !== 'subjects'; }); } catch (e) {}
+  return { ok: true, rows: out, keep: keep, at: admNow_() };
 }
 function admKeepSheet_() {
   var b = admBook_(), sh = b.getSheetByName(ADM_KEEP_SHEET);
