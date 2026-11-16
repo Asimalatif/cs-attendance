@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         JCW Portal Sync
 // @namespace    jcw-attendance
-// @version      1.10
+// @version      1.11
 // @description  Reads Jinnah College students from the UOP portal (read-only) and sends them to the JCW attendance system: fills only the empty cells of Transform-ALL-COLLEGE-STRENGTH, lists cancelled / migrated / disenrolled / transferred students for Left Students (moved only when you press the button) and feeds the health check.
 // @match        https://portal.uop.edu.pk/Student/Students*
 // @match        https://portal.uop.edu.pk/student/students*
@@ -384,15 +384,19 @@
       const bat = e => (String(e || '').toUpperCase().match(/-F(\d{2})-/) || [])[1] || '';
       const cnt = {}; S.items.forEach(it => { if (/^enrolled$/i.test(it.status)) { const b = bat(it.row['Enrollment#']); if (b) cnt[b] = (cnt[b] || 0) + 1; } });
       const cur = new Set(Object.keys(cnt).filter(b => cnt[b] >= 10).sort().reverse().slice(0, 2));
-      const want = it => S.mode === 'left' ? !/^enrolled$/i.test(it.status) && cur.has(bat(it.row['Enrollment#'])) : /^enrolled$/i.test(it.status);
-      if (S.mode === 'full' || S.mode === 'left') {
+      // v1.11 quick sync also reads the details (fee challans, marks …) of the NEW enrolled students: not yet in the strength sheet
+      let known = null;
+      if (S.mode === 'quick') { try { const k = await gmPost({ action: 'portal_known', key: GM_getValue('jcwKey', '') }); if (k && k.ok) known = { ids: new Set(k.ids.map(String)), rolls: new Set(k.rolls.map(x => String(x).toUpperCase().replace(/\s+/g, ''))) }; } catch (e) {} }
+      const isNew = it => known && /^enrolled$/i.test(it.status) && !known.ids.has(String(it.id || it.row['Student Id'] || '')) && !known.rolls.has(String(it.row['Enrollment#'] || '').toUpperCase().replace(/\s+/g, '')) && cur.has(bat(it.row['Enrollment#']) || [...cur][0]);
+      const want = it => S.mode === 'left' ? !/^enrolled$/i.test(it.status) && cur.has(bat(it.row['Enrollment#'])) : S.mode === 'quick' ? isNew(it) : /^enrolled$/i.test(it.status);
+      if (S.mode === 'full' || S.mode === 'left' || (S.mode === 'quick' && known)) {
         const todo = S.items.filter(it => want(it) && !S.done[it.id || it.row['Enrollment#']]);
         const total = S.items.filter(want).length;
         let i = 0, n = total - todo.length, t0 = Date.now(), stop = null;
         const worker = async () => {
           while (!stop) {
             const it = todo[i++]; if (!it) return;
-            try { const row = await details(it); if (S.mode === 'left') row['Details synced'] = new Date().toLocaleString('en-GB'); S.done[it.id || row['Enrollment#']] = row; }
+            try { const row = await details(it); if (S.mode !== 'full') row['Details synced'] = new Date().toLocaleString('en-GB'); S.done[it.id || row['Enrollment#']] = row; }
             catch (e) { if (e.message === 'LOGIN') { stop = 'The portal logged you out. Log in again, open Students, and press "Resume".'; return; } }
             n++;
             if (n % 10 === 0) { await putSaved(S); const left = (Date.now() - t0) / Math.max(1, n - (total - todo.length)) * (total - n); say('Details: ' + n + ' of ' + total + (S.mode === 'left' ? ' students who left' : ' enrolled students') + ' · about ' + Math.ceil(left / 60000) + ' min left', n / total * 95); }
@@ -407,6 +411,10 @@
       if (S.mode === 'full') await dropSaved();
       $('jsResume').style.display = 'none';
       report(r, S.per);
+      if (S.mode === 'quick' && known) say($('jsMsg').textContent + '\n\nFee and details read for ' + Object.keys(S.done).length + ' new student(s).', 100);
+      // v1.11 opened from the app ("Sync with the portal now"): tell the app and close this small window
+      GM_setValue('jcwPending', 0);
+      if (opened) { try { window.opener && window.opener.postMessage({ jcwSync: 'done', at: Date.now() }, '*'); } catch (e) {} say($('jsMsg').textContent + '\n\nDone. This window closes by itself.', 100); setTimeout(() => window.close(), 4000); }
       if (S.mode === 'left') say($('jsMsg').textContent + '\n\nDetails of ' + Object.keys(S.done).length + ' students who left are in Portal Data. Now in the app: College > Students who left > Rebuild Left Students sheet.', 100);
     } catch (e) {
       say('Stopped: ' + e.message, null);
@@ -423,6 +431,13 @@
     run('quick', false, true);
   }
   setInterval(() => autoTick(false), 60000);
+  // v1.11 the app opens https://portal.uop.edu.pk/Student/Students#jcw-sync: start a quick sync at once (also after logging in again, for 15 minutes)
+  const opened = /jcw-sync/.test(location.hash) || !!window.opener;
+  if (/jcw-sync/.test(location.hash)) GM_setValue('jcwPending', Date.now());
+  if (Date.now() - GM_getValue('jcwPending', 0) < 15 * 60000) {
+    if (!GM_getValue('jcwKey', '')) say('Paste the sync key once (button "Sync key"), then the app can start the sync by itself.', null);
+    else setTimeout(() => run('quick', false, true), 1500);
+  }
   setTimeout(() => autoTick(false), 15000);
   $('jsQuick').onclick = () => run('quick', false);
   $('jsFull').onclick = () => { if (confirm('Full sync reads the details of every enrolled student (about 30–60 minutes). Keep this tab open. Start?')) run('full', false); };
