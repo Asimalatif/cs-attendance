@@ -1321,7 +1321,7 @@ function mlHtml(){
     <div class="sub" id="mlAllMsg"></div></section>
   <section class="card"><h3>${esc(cur.label)} · ${esc(cur.quota)}</h3>
     <div class="sub">${cur.open ? '<b>No seat limit</b> (every employee\'s daughter is admitted, on a subsidized seat)' : cur.noSeats ? '<b>No seats set</b>' : `<b>${cur.seats}</b> seats`} · <b>${cur.inHome}</b> students in it now · fee ${cur.fee ? '<b>Rs ' + cur.fee.toLocaleString('en-PK') + '</b>' : 'not known yet'}${cur.sibLabel ? ` · ${esc(cur.sibLabel)} fee ${cur.sibFee ? '<b>Rs ' + cur.sibFee.toLocaleString('en-PK') + '</b>' : '–'}` : ''} (most common paid challan)</div>
-    <div class="acts"><button class="btn primary" type="button" id="mlPdf">PDF with photos (white background)</button><button class="btn" type="button" id="mlOut">List without photos: PDF / Excel / share</button><label class="f" style="margin:0">Print <select id="mlWait" style="height:40px">${[[10, 'All seats + next 10'], [5, 'All seats + next 5'], [0, 'Whole program']].map(([v, l]) => `<option value="${v}"${mlWait === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label><label class="f" style="margin:0;display:flex;align-items:center;gap:6px;text-transform:none" title="Off = black &amp; white with light grey rows (for the college printer). On = the yellow / blue / red rows of this page (for screen or WhatsApp). Same as typing localStorage.setItem('jcw_color_pdf','1') in the console."><input type="checkbox" id="mlColor"${(() => { try{ return localStorage.getItem('jcw_color_pdf') === '1'; }catch(e){ return false; } })() ? ' checked' : ''}> Colour PDF <span class="sub">(off = black &amp; white for the printer)</span></label>${cur.subs ? `<button class="btn" type="button" id="mlRef">Half-fee refund list</button>` : ''}${cur.seats && !cur.open ? `<button class="btn" type="button" id="mlLeft"${LEFT ? '' : ' disabled'}>${LEFT ? `Left students in the top ${cur.seats} (${cur.leftTop.length})` : 'Left students: reading the Left Students sheet…'}</button>` : ''}${LEFT && LEFT.err ? `<span class="sub" style="color:var(--bad)">Left Students sheet: ${esc(LEFT.err)}</span>` : ''}${bad(cur) ? `<button class="btn" type="button" id="mlBad">Only the ${bad(cur)} wrong</button>` : ''}</div>
+    <div class="acts"><button class="btn primary" type="button" id="mlPdf">PDF with photos (white background)</button><button class="btn" type="button" id="mlOut">List without photos: PDF / Excel / share</button><label class="f" style="margin:0">Print <select id="mlWait" style="height:40px">${[[10, 'All seats + next 10'], [5, 'All seats + next 5'], [0, 'Whole program']].map(([v, l]) => `<option value="${v}"${mlWait === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label><label class="f" style="margin:0;display:flex;align-items:center;gap:6px;text-transform:none" title="Off = black &amp; white with light grey rows (for the college printer). On = the yellow / blue / red rows of this page (for screen or WhatsApp). Same as typing localStorage.setItem('jcw_color_pdf','1') in the console."><input type="checkbox" id="mlColor"${(() => { try{ return localStorage.getItem('jcw_color_pdf') === '1'; }catch(e){ return false; } })() ? ' checked' : ''}> Colour PDF <span class="sub">(off = black &amp; white for the printer)</span></label>${cur.subs ? `<button class="btn" type="button" id="mlRef">Half-fee refund list</button><button class="btn" type="button" id="mlShift">Shifting letter to the Director Admissions (Word)</button>` : ''}${cur.seats && !cur.open ? `<button class="btn" type="button" id="mlLeft"${LEFT ? '' : ' disabled'}>${LEFT ? `Left students in the top ${cur.seats} (${cur.leftTop.length})` : 'Left students: reading the Left Students sheet…'}</button>` : ''}${LEFT && LEFT.err ? `<span class="sub" style="color:var(--bad)">Left Students sheet: ${esc(LEFT.err)}</span>` : ''}${bad(cur) ? `<button class="btn" type="button" id="mlBad">Only the ${bad(cur)} wrong</button>` : ''}</div>
     <div style="overflow:auto;max-height:70vh;margin-top:8px" id="mlBox"><table class="ml"><thead><tr>${th.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>
     ${cur.rows.slice(0, lim).map((r, i) => { const o = r.o, f = feeOf(o.challan), cut = i === cur.seats - 1 && cur.rows.length > cur.seats;
       return `<tr class="${r.state}${r.cand ? ' cand' : ''}${cut ? ' cut' : ''}"><td class="n">${r.rank}</td><td><img alt="" data-mlp="${esc(o.roll || '')}" data-mlu="${esc(mlPic(o.pic))}"></td>
@@ -1477,6 +1477,54 @@ async function mlPushAlerts(){
     const r = await api({ action:'adm_alerts_save', items });
     if(r.ok){ ls.set('mlAlertSig', sig); ls.set('mlAlertT', Date.now()); }
   }catch(e){}
+}
+/* ---------- v8.7 shifting letter: your Word letter to the Director Admissions (templates/shifting-letter.docx), filled with
+   the students on a subsidized seat who paid the non-subsidized fee (= shifted from non-subsidized to subsidized) ---------- */
+function mlShiftRows(c, all, cand){
+  const M = all ? meritLists().filter(x => x.subs && !x.open && !x.noSeats) : [c], out = [], seen = new Set();
+  M.forEach(L => { const sub = L.fee || 60000;
+    L.rows.forEach(r => { const o = r.o; if(!((r.rank <= L.seats && r.here) || (cand && r.cand))) return;
+      const paid = feeOf(o.challan).filter(x => x.paid && x.amount >= sub * .8).reduce((t, x) => t + x.amount, 0); if(paid <= sub * 1.05) return;
+      const k = nroll(o.roll) || o.name; if(seen.has(k)) return; seen.add(k); out.push({ o, q:L.quota, cand:!!r.cand && !(r.rank <= L.seats && r.here) }); }); });
+  return out.sort((a, b) => (b.o._a - a.o._a) || (Number(b.o.metric) - Number(a.o.metric)) || String(a.o._d).localeCompare(String(b.o._d)));
+}
+function mlShiftAsk(c){
+  if(!c) return;
+  const d = new Date(), today = String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + d.getFullYear();
+  const cnt = () => mlShiftRows(c, $('#shAll').checked, $('#shCand').checked).length;
+  dlgOpen(`<h2>Shifting letter (Word)</h2>
+    <div class="sub">Your letter to <b>The Director Admissions, University of Peshawar</b>: "students are hereby shifted from F.Sc-I (Non-subsidized, Morning) to F.Sc-I (subsidized, Morning) on <i>date</i>", with S.No, Student Name, Father Name and Marks (obtained matric marks; the quota is written after the marks when it is not Open Quota). Students: on a subsidized seat but paid the non-subsidized fee, highest Aggregate first.</div>
+    <label class="f">Date of shifting<input id="shDate" value="${today}" style="height:42px"></label>
+    <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="shAll" checked> Every subsidized quota (Open, Minority, O-Level, …), not only ${esc(c.quota)}</label>
+    <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="shCand"> Also the possible candidates for the empty seats</label>
+    <div class="sub" id="shN"></div>
+    <div class="acts"><button class="btn primary" id="shGo">Make the Word letter</button><button class="btn" id="shX">Close</button></div>`);
+  const upd = () => { $('#shN').textContent = cnt() + ' students will be in the letter.'; };
+  $('#shAll').onchange = upd; $('#shCand').onchange = upd; upd();
+  $('#shX').onclick = dlgClose;
+  $('#shGo').onclick = async () => { const b = $('#shGo'); b.disabled = true; b.textContent = 'Making…';
+    try{ await mlShiftWord(mlShiftRows(c, $('#shAll').checked, $('#shCand').checked), $('#shDate').value.trim() || today); dlgClose(); }
+    catch(e){ toast('Not made: ' + (e.message || e)); b.disabled = false; b.textContent = 'Make the Word letter'; } };
+}
+async function mlShiftWord(list, date){
+  if(!list.length) throw new Error('No students to shift.');
+  if(!window.JSZip) await mlLoadJs('https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js');
+  const res = await fetch('templates/shifting-letter.docx', { cache:'no-cache' }); if(!res.ok) throw new Error('The letter template is missing (templates/shifting-letter.docx).');
+  const z = await JSZip.loadAsync(await res.arrayBuffer()), f = 'word/document.xml';
+  let x = await z.file(f).async('string');
+  const i = x.indexOf('{NAME}'), s = x.lastIndexOf('<w:tr ', i), e = x.indexOf('</w:tr>', i) + 7, pat = x.slice(s, e);
+  const xe = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const rows = list.map(it => { const q = /^open/i.test(String(it.q || '').trim()) ? '' : it.q;
+    return pat.replace('{NAME}', xe(it.o.name)).replace('{FATHER}', xe(it.o.father || '')).replace('{MARKS}', xe(String(it.o.metric || '').replace(/\.0+$/, '')) + (q ? ' ' : ''))
+      .replace('{QUOTA}', q ? xe('(' + q + ')') : ''); });
+  x = x.slice(0, s) + rows.join('') + x.slice(e);
+  x = x.replace('{DATE}', xe(date));
+  z.file(f, x);
+  const blob = await z.generateAsync({ type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  const name = 'Shifting of students non-subsidized to subsidized ' + date.replace(/[\/]/g, '.') + '.docx';
+  if(window.JCWOUT) JCWOUT.offer({ blob, name, title:'Shifting letter (Word)', sub:list.length + ' students · ' + date, noPdf:true, noXl:true,
+    extra:[{ label:'Download', fn:() => { JCWOUT.download(blob, name); toast('Downloaded: ' + name); } }, { label:'Open / share', fn:() => JCWOUT.share(blob, name, 'Shifting letter') }] });
+  else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); }
 }
 /* ---------- v8.4: all programs and quotas in one PDF / Excel / Word file, with photos ---------- */
 const mlSeatTxt = (c, r) => (r.cand ? 'POSSIBLE CANDIDATE' : r.state === 'surplus' ? 'SURPLUS' : r.rank <= c.seats ? 'On a seat' : r.state === 'next' ? 'NEXT IN LINE' : r.state === 'bad' ? 'WRONG PLACE' : 'Waiting')
@@ -1639,6 +1687,7 @@ function wireMl(){
       head:['Place', 'Enroll#', 'Student Name', 'Father Name', 'Program', 'Section', 'HQ', 'Obtained', 'Total', 'Aggregate', 'DOB', 'Challan', 'Status', 'Found in'],
       rows:c.leftTop.map(x => { const o = x.o; return [x.pos, o.roll || '', o.name, o.father || '', o._left ? o.program : (prog(o.key) || {}).label || o.key, o.pcs || '', o.hq || '', o.metric || '', o.total || '', o._a ? o._a / 100 : '', o.dob || '', o.challan || '', st(o),
         o._left ? 'Left Students sheet' : mlLeftOf(o) ? 'Strength sheet + Left Students sheet' : 'Strength sheet (status)']; }) }); };
+  const sf = $('#mlShift'); if(sf) sf.onclick = () => mlShiftAsk(cur());
   const rf = $('#mlRef'); if(rf) rf.onclick = () => { const c = cur(); if(!c || !window.JCWOUT) return;
     const sub = c.fee || 60000, paidOf = o => feeOf(o.challan).filter(x => x.paid && x.amount >= sub * 0.8).reduce((t, x) => t + x.amount, 0);
     const R = c.rows.filter(r => (r.rank <= c.seats && r.here) || r.cand).map(r => ({ r, paid:paidOf(r.o) })).filter(x => x.paid > sub * 1.05);
