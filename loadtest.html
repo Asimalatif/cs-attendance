@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JCW attendance · load test</title>
+<style>
+body{font:15px/1.5 system-ui,Segoe UI,Arial,sans-serif;margin:0;background:#FBF4F2;color:#2B1B16}
+main{max-width:1100px;margin:0 auto;padding:14px}
+h1{font-size:22px;margin:4px 0 2px}h2{font-size:17px;margin:0 0 6px}
+.card{background:#fff;border:1px solid #E8C9C0;border-radius:12px;padding:14px;margin:12px 0}
+.sub{color:#7D645C;font-size:13px}
+input,select{font:inherit;padding:7px 9px;border:1px solid #D9B8AE;border-radius:8px;background:#fff}
+button{font:inherit;padding:8px 14px;border-radius:8px;border:1px solid #B98A7C;background:#fff;cursor:pointer}
+button.p{background:#6B3423;color:#fff;border-color:#6B3423}button:disabled{opacity:.5;cursor:default}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:8px 0}
+.k{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.k div{background:#FCEFEB;border-radius:10px;padding:10px}.k b{display:block;font-size:22px}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{border-bottom:1px solid #F0DCD5;padding:5px 6px;text-align:left;vertical-align:top}
+th{background:#FCEFEB;position:sticky;top:0}.n{text-align:right}
+.bad{color:#B42318;font-weight:600}.ok{color:#0E7A4F;font-weight:600}.warn{color:#9A5B00;font-weight:600}
+#log{max-height:240px;overflow:auto;font:12px Consolas,monospace;background:#FAF6F5;border:1px solid #eee;border-radius:8px;padding:6px;white-space:pre-wrap}
+.bar{height:10px;background:#F3E2DC;border-radius:6px;overflow:hidden}.bar i{display:block;height:100%;background:#6B3423;width:0}
+</style></head><body><main>
+<h1>Load test: 7 days of fake attendance</h1>
+<div class="sub">Every teacher of the timetable "marks" every period of the days you choose, with random P / A / L, the way the app does it (one save per period). <b>All marks go into a COPY of the month workbook</b>: the real attendance sheets, the Attendance Index and the change history are never written. Admin login only. Run it in the evening, when real teachers are not marking.</div>
+
+<section class="card"><h2>1 · The copy</h2>
+<div class="sub">Open the real November attendance workbook in Google Sheets → <b>File › Make a copy</b> (name it "TEST COPY November"). Paste the copy's link here. The server refuses a real workbook.</div>
+<div class="row"><select id="mon"><option>NOV</option><option>DEC</option><option>OCT</option><option>JAN</option><option>SEPT</option></select>
+<input id="cid" placeholder="https://docs.google.com/spreadsheets/d/…  (the COPY)" style="flex:1;min-width:260px">
+<button class="p" id="bSet">Use this copy</button><button id="bOff">Switch test off</button></div>
+<div id="setMsg" class="sub"></div></section>
+
+<section class="card"><h2>2 · What to simulate</h2>
+<div class="row">First day <input id="d0" type="number" min="1" max="31" value="17" style="width:70px">
+Working days <input id="nd" type="number" min="1" max="14" value="7" style="width:70px">
+<span class="sub">(Sundays are skipped; the days are in the month of the copy)</span></div>
+<div class="row">Teachers saving at the same moment <input id="par" type="number" min="1" max="60" value="20" style="width:70px">
+<span class="sub">(end of a period: many teachers press Save together. 20 = a busy moment, 40 = worst case)</span></div>
+<div class="row">Present <input id="pp" type="number" value="85" style="width:60px">% · Absent <input id="pa" type="number" value="10" style="width:60px">% · rest Leave
+· Check <input id="chk" type="number" value="10" style="width:60px">% of saves by reading them back
+· App time-out <input id="to" type="number" value="90" style="width:60px"> s</div>
+<div class="row"><button class="p" id="bRun">Start the test</button><button id="bStop" disabled>Stop</button><button id="bCsv" disabled>Download all requests (Excel CSV)</button></div>
+<div class="bar"><i id="bar"></i></div><div id="prog" class="sub"></div></section>
+
+<section class="card"><h2>3 · Results</h2>
+<div class="k" id="kpi"></div>
+<h2 style="margin-top:14px">Risks found</h2><div id="risk" class="sub">Run the test first.</div>
+<h2 style="margin-top:14px">Each period (burst of saves)</h2>
+<div style="max-height:360px;overflow:auto"><table><thead><tr><th>Day</th><th>Period</th><th class="n">Saves</th><th class="n">Failed</th><th class="n">Average s</th><th class="n">Slowest s</th><th class="n">Burst took s</th></tr></thead><tbody id="per"></tbody></table></div>
+<h2 style="margin-top:14px">Errors</h2><div id="errs" class="sub">None yet.</div>
+<h2 style="margin-top:14px">Log</h2><div id="log"></div></section>
+</main>
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm7d7-UKg0W-OoWAiuRBHe4mjlRgMQXIHuLm6zi--i/exec';
+const ls = { get(k, d){ try{ const v = localStorage.getItem('csa2_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } } };
+const user = ls.get('user', ''), pass = ls.get('pass', '');
+const $ = s => document.querySelector(s), esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+const log = t => { const b = $('#log'); b.textContent += new Date().toLocaleTimeString() + '  ' + t + '\n'; b.scrollTop = b.scrollHeight; };
+async function api(p, ms){
+  const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), ms || 120000), t0 = performance.now();
+  try{
+    const r = await fetch(API, { method:'POST', body:JSON.stringify(Object.assign({ username:user, password:pass }, p)), signal:ctl.signal });
+    const j = JSON.parse(await r.text()); j._ms = performance.now() - t0; return j;
+  }catch(e){ return { ok:false, error:e.name === 'AbortError' ? 'APP TIME-OUT (no answer in ' + Math.round((ms || 120000) / 1000) + ' s)' : 'NETWORK: ' + e.message, _ms:performance.now() - t0 }; }
+  finally{ clearTimeout(tm); }
+}
+if(!user) $('#setMsg').innerHTML = '<span class="bad">Sign in to the attendance app with the admin login first (same browser), then reload this page.</span>';
+$('#bSet').onclick = async () => { const r = await api({ action:'test_setup', mon:$('#mon').value, id:$('#cid').value.trim() }, 60000);
+  $('#setMsg').innerHTML = r.ok ? (r.off ? 'Test switched off.' : '<span class="ok">✓ Using the copy "' + esc(r.name) + '" for ' + esc(r.mon) + '.</span> Real workbooks stay untouched.') : '<span class="bad">' + esc(r.error) + '</span>'; };
+$('#bOff').onclick = async () => { const r = await api({ action:'test_setup', mon:$('#mon').value, id:'' }, 60000); $('#setMsg').textContent = r.ok ? 'Test switched off: the server no longer knows the copy.' : r.error; };
+
+let stop = false, ALL = [];
+$('#bStop').onclick = () => { stop = true; log('Stopping after the running saves…'); };
+$('#bCsv').onclick = () => {
+  const head = ['Day', 'Period', 'Section', 'Subject', 'Teacher', 'Sheet', 'Students', 'OK', 'Seconds (phone)', 'Seconds (server)', 'Error', 'Read back'];
+  const csv = [head].concat(ALL.map(x => [x.day, x.per, x.cls, x.sub, x.teacher, x.sheet, x.n, x.ok ? 'yes' : 'NO', (x.ms / 1000).toFixed(1), x.sms ? (x.sms / 1000).toFixed(1) : '', x.err || '', x.chk || '']))
+    .map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\r\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type:'text/csv' })); a.download = 'JCW load test.csv'; a.click();
+};
+const pct = (L, p) => { if(!L.length) return 0; const s = L.slice().sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.floor(p / 100 * s.length))]; };
+function paint(PER){
+  const ok = ALL.filter(x => x.ok), bad = ALL.filter(x => !x.ok), ms = ok.map(x => x.ms), chk = ALL.filter(x => x.chk), chkBad = chk.filter(x => x.chk !== 'same');
+  $('#kpi').innerHTML = [['Saves', ALL.length], ['Failed', bad.length], ['Average', (ms.reduce((a, b) => a + b, 0) / (ms.length || 1) / 1000).toFixed(1) + ' s'],
+    ['95% within', (pct(ms, 95) / 1000).toFixed(1) + ' s'], ['Slowest', (Math.max(0, ...ms) / 1000).toFixed(1) + ' s'], ['Read back wrong', chkBad.length + ' of ' + chk.length]]
+    .map(([a, b]) => `<div><small>${a}</small><b class="${/Failed|wrong/.test(a) && parseInt(b) ? 'bad' : ''}">${b}</b></div>`).join('');
+  $('#per').innerHTML = PER.map(p => `<tr><td>${p.day}</td><td>${p.per}</td><td class="n">${p.n}</td><td class="n ${p.f ? 'bad' : ''}">${p.f}</td><td class="n">${p.avg}</td><td class="n ${p.max > 30 ? 'warn' : ''}">${p.max}</td><td class="n">${p.dur}</td></tr>`).join('');
+  const E = {}; bad.forEach(x => { const k = String(x.err).replace(/\d+/g, '#').slice(0, 140); (E[k] = E[k] || []).push(x); });
+  $('#errs').innerHTML = Object.keys(E).length ? '<table><tr><th>Error</th><th class="n">Times</th><th>Example</th></tr>' + Object.entries(E).sort((a, b) => b[1].length - a[1].length).map(([k, L]) => `<tr><td class="bad">${esc(k)}</td><td class="n">${L.length}</td><td>${esc(L[0].day + ' P' + L[0].per + ' ' + L[0].cls + ' ' + L[0].sub)}</td></tr>`).join('') + '</table>' : 'None.';
+  const R = [], to = Number($('#to').value) * 1000;
+  if(bad.some(x => /TIME-OUT/.test(x.err))) R.push(['bad', 'Some saves got no answer within the app\'s time-out: on a phone the marks would stay in the "waiting" queue and be sent again later (nothing lost, but the teacher sees "not saved yet").']);
+  if(bad.some(x => /lock|timed out waiting|try again/i.test(x.err))) R.push(['bad', 'The save lock was busy too long: too many teachers saving at the same moment. Fix: shorter work inside the lock, or fewer saves at once.']);
+  if(bad.some(x => /too many times|quota|exceeded|rate/i.test(x.err))) R.push(['bad', 'A Google quota was hit (too many calls / too much time). This would stop syncing for everyone for a while.']);
+  if(bad.some(x => /NETWORK/.test(x.err))) R.push(['warn', 'Network errors on this computer (check your internet).']);
+  if(chkBad.length) R.push(['bad', chkBad.length + ' saved period(s) did not read back the same: data problem.']);
+  if(pct(ms, 95) > 30000) R.push(['warn', '5% of saves took more than ' + (pct(ms, 95) / 1000).toFixed(0) + ' s: teachers wait long at busy moments.']);
+  if(!R.length && ALL.length) R.push(['ok', 'No problem found at this load. Try a higher "same moment" number to find the limit.']);
+  $('#risk').innerHTML = R.map(([c, t]) => `<div class="${c}">• ${esc(t)}</div>`).join('');
+}
+$('#bRun').onclick = async () => {
+  if(!user) return alert('Sign in to the app as admin first.');
+  stop = false; ALL = []; const PER = []; $('#bRun').disabled = true; $('#bStop').disabled = false; $('#log').textContent = '';
+  try{
+    log('Reading the timetable and the sheet list (test copy)…');
+    const tt = await api({ action:'tt_all', test:true }), sl = await api({ action:'sheets', test:true });
+    if(!tt.ok) throw new Error(tt.error); if(!sl.ok) throw new Error(sl.error);
+    const mon = Object.keys(sl.test || {})[0]; if(!mon) throw new Error('No copy set (step 1).');
+    const byKey = {}; sl.sheets.forEach(s => { byKey[String(s.cls).toUpperCase() + '|' + String(s.sub).toUpperCase()] = s.name; });
+    const rows = (tt.rows || tt.data || []).filter(r => r.cls && r.sub);
+    const MON = { SEPT:8, OCT:9, NOV:10, DEC:11, JAN:0 }, yr = new Date().getFullYear() + (mon === 'JAN' && new Date().getMonth() > 6 ? 1 : 0);
+    const days = []; let d = Number($('#d0').value);
+    while(days.length < Number($('#nd').value) && d <= 31){ const dt = new Date(yr, MON[mon], d); if(dt.getMonth() !== MON[mon]) break; if(dt.getDay() !== 0) days.push({ d, wd:dt.getDay() }); d++; }
+    log(rows.length + ' timetable rows · ' + sl.sheets.length + ' sheets in ' + mon + ' · days ' + days.map(x => x.d).join(', '));
+    const roster = {}, pP = Number($('#pp').value) / 100, pA = Number($('#pa').value) / 100, par = Math.max(1, Number($('#par').value)), to = Number($('#to').value) * 1000, chkP = Number($('#chk').value) / 100;
+    let plan = []; days.forEach(D => { for(let per = 1; per <= 8; per++){
+      const L = rows.filter(r => (r.ps || []).map(Number).includes(per) && ((r.th || []).includes(D.wd) || (r.pr || []).includes(D.wd)));
+      if(L.length) plan.push({ D, per, L }); } });
+    const total = plan.reduce((a, b) => a + b.L.length, 0); let done = 0;
+    log(total + ' saves planned.');
+    for(const step of plan){
+      if(stop) break;
+      const t0 = performance.now(), res = []; let i = 0;
+      const one = async r => {
+        const sheet = byKey[String(r.cls).toUpperCase() + '|' + String(r.sub).toUpperCase()], x = { day:step.D.d, per:step.per, cls:r.cls, sub:r.sub, teacher:r.teacher, sheet:sheet || '' };
+        try{
+          if(!sheet) throw new Error('No sheet for this timetable class');
+          if(!roster[sheet]){ const s = await api({ action:'sheet', test:true, sheet, create:true }, to); if(!s.ok) throw new Error('open sheet: ' + s.error); roster[sheet] = (s.students || []).filter(z => !z.off).map(z => z.roll); }
+          const marks = {}; roster[sheet].forEach(roll => { const q = Math.random(); marks[roll] = q < pP ? 'P' : q < pP + pA ? 'A' : 'L'; });
+          x.n = roster[sheet].length;
+          const id = 'lt' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+          const sv = await api({ action:'save', test:true, records:[{ id, sheet, day:step.D.d, period:step.per, marks, ts:Date.now() }] }, to);
+          x.ms = sv._ms; x.sms = sv.ms;
+          if(!sv.ok) throw new Error(sv.error);
+          if((sv.failed || []).length) throw new Error('not saved: ' + JSON.stringify(sv.failed[0]).slice(0, 200));
+          x.ok = true;
+          if(Math.random() < chkP){ const b = await api({ action:'sheet', test:true, sheet }, to); const got = b.ok && b.marks && b.marks[step.D.d] && b.marks[step.D.d][step.per];
+            x.chk = got && Object.keys(marks).every(k => got[k] === marks[k]) ? 'same' : 'DIFFERENT'; }
+        }catch(e){ x.ok = false; x.err = e.message; if(x.ms == null) x.ms = 0; }
+        ALL.push(x); res.push(x); done++;
+        $('#bar').style.width = (done / total * 100).toFixed(1) + '%'; $('#prog').textContent = done + ' of ' + total + ' saves · day ' + step.D.d + ' period ' + step.per;
+      };
+      const worker = async () => { while(!stop && i < step.L.length) await one(step.L[i++]); };
+      await Promise.all(Array.from({ length:Math.min(par, step.L.length) }, worker));
+      const okms = res.filter(x => x.ok).map(x => x.ms);
+      PER.push({ day:step.D.d, per:step.per, n:res.length, f:res.filter(x => !x.ok).length, avg:(okms.reduce((a, b) => a + b, 0) / (okms.length || 1) / 1000).toFixed(1), max:+(Math.max(0, ...okms) / 1000).toFixed(1), dur:((performance.now() - t0) / 1000).toFixed(0) });
+      log('Day ' + step.D.d + ' P' + step.per + ': ' + res.length + ' saves, ' + res.filter(x => !x.ok).length + ' failed, burst ' + ((performance.now() - t0) / 1000).toFixed(0) + ' s');
+      paint(PER);
+    }
+    log(stop ? 'Stopped.' : 'Finished.');
+  }catch(e){ log('ERROR: ' + e.message); alert(e.message); }
+  $('#bRun').disabled = false; $('#bStop').disabled = true; $('#bCsv').disabled = !ALL.length; paint(PER);
+};
+</script></body></html>

@@ -101,6 +101,29 @@ function doPost(e) {
 
   var user = authenticate_(req.username, req.password);
   if (!user) return json_({ ok: false, error: 'BAD_LOGIN' });
+  // v8.13 load test (loadtest.html): admin only; everything is written into the COPY of a month workbook, never the real ones
+  if (req.test === true || req.action === 'test_setup') {
+    try {
+      if (!isAdmin_(user)) return json_({ ok: false, error: 'Only the admin can run the load test.' });
+      var tp = PropertiesService.getScriptProperties();
+      if (req.action === 'test_setup') {
+        var mon = String(req.mon || '').toUpperCase(), id = String(req.id || '').trim().replace(/^.*\/d\/([\w-]{20,}).*$/, '$1');
+        if (!BOOK_IDS[mon]) return json_({ ok: false, error: 'Unknown month ' + mon });
+        if (!id) { tp.deleteProperty('TEST_BOOKS'); return json_({ ok: true, off: true }); }
+        var real = Object.keys(BOOK_IDS).map(function (k) { return BOOK_IDS[k]; }).concat([USERS_SS_ID]);
+        if (real.indexOf(id) >= 0) return json_({ ok: false, error: 'That is a REAL workbook. Make a copy (File > Make a copy) and paste the COPY\'s link.' });
+        var nm = SpreadsheetApp.openById(id).getName(), o = {}; o[mon] = id; tp.setProperty('TEST_BOOKS', JSON.stringify(o));
+        return json_({ ok: true, mon: mon, name: nm });
+      }
+      var tb = tp.getProperty('TEST_BOOKS'); if (!tb) return json_({ ok: false, error: 'Paste the link of the copy first (step 1).' });
+      if (!/^(sheets|sheet|save|tt_all)$/.test(String(req.action))) return json_({ ok: false, error: 'Not allowed in the load test: ' + req.action });
+      TEST_ = JSON.parse(tb);
+      if (req.action === 'sheets') return json_({ ok: true, test: TEST_, sheets: listSheets_(user).filter(function (s) { return TEST_[s.mon]; }) });
+      if (req.action === 'tt_all') return json_(ttAll_(user));
+      if (req.action === 'sheet') return json_(getSheetData_(user, req.sheet, req.create === true));
+      var t0 = Date.now(), sv = saveRecords_(user, req.records || []); sv.ms = Date.now() - t0; return json_(sv);
+    } catch (err) { return json_({ ok: false, error: String(err && err.message || err) }); }
+  }
   // v8.6 activity log: every request that changes something is written to "Activity Log" (who, what, result)
   if (!req.__inner && actIsWrite_(req)) {
     var inner = JSON.parse(JSON.stringify(req)); inner.__inner = true;
@@ -406,7 +429,9 @@ function currentSeasonToken_() {
 var BOOK_CACHE_ = {};
 
 /** Spreadsheet id of the workbook that holds the sheets of this month token (SEPT, OCT, NOV, DEC, JAN). */
+var TEST_ = null;   // v8.13 load test: { NOV: 'id of the COPY' } while a test request runs (loadtest.html); real workbooks are never opened for writing
 function bookIdFor_(tok) {
+  if (TEST_) { var tid = TEST_[String(tok || '').toUpperCase()]; if (!tid) throw new Error('Load test: no test copy for ' + tok + '. Only the month of the copy can be tested.'); return tid; }
   var id = BOOK_IDS[String(tok || '').toUpperCase()];
   if (!id) throw new Error('No workbook is set for month "' + tok + '". Check BOOK_IDS.');
   return id;
@@ -530,6 +555,7 @@ function changePassword_(user, oldPass, newPass) {
 
 /* ---------- timetable -> this teacher's sections ---------- */
 
+function testBookId_() { for (var k in TEST_) return TEST_[k]; throw new Error('Load test: no copy set.'); }
 function getTimetable_() {
   var t = cacheGetBig_('tt_att3');
   if (t) return t;
@@ -2088,7 +2114,7 @@ var LOW_PCT = 73;
 
 var INDEX_OK_ = false;
 function indexSheet_() {
-  var book = SpreadsheetApp.openById(USERS_SS_ID), sh = book.getSheetByName(INDEX_SHEET);
+  var book = SpreadsheetApp.openById(TEST_ ? testBookId_() : USERS_SS_ID), sh = book.getSheetByName(INDEX_SHEET);
   if (sh) {
     if (!INDEX_OK_ && String(sh.getRange(1, INDEX_HEAD.length).getValue()) !== INDEX_HEAD[INDEX_HEAD.length - 1]) {
       if (sh.getMaxColumns() < INDEX_HEAD.length) sh.insertColumnsAfter(sh.getMaxColumns(), INDEX_HEAD.length - sh.getMaxColumns());
@@ -2675,7 +2701,7 @@ function auditAdd_(user, meta, day, per, roll, name, was, now, what) {
                date, per ? 'P' + per : '', String(roll), String(name || ''), String(was), String(now), what]);
 }
 function auditSheet_() {
-  var book = SpreadsheetApp.openById(USERS_SS_ID), sh = book.getSheetByName(AUDIT_SHEET);
+  var book = SpreadsheetApp.openById(TEST_ ? testBookId_() : USERS_SS_ID), sh = book.getSheetByName(AUDIT_SHEET);
   if (sh) return sh;
   sh = book.insertSheet(AUDIT_SHEET);
   sh.getRange(1, 1, 1, AUDIT_HEAD.length).setValues([AUDIT_HEAD]).setFontWeight('bold').setBackground('#D9D9D9');

@@ -4624,7 +4624,8 @@ function ewCard(){
 function oneStudent(S, roll){
   const list = S.filter(s => s.roll === roll); if(list.length < 2) return list;
   const home = list.find(s => !s.guest && !/optional/i.test(s.cls)) || list[0], m = Object.assign({}, home, { subs:Object.assign({}, home.subs) });
-  list.forEach(s => { if(s !== home) Object.keys(s.subs).forEach(k => { if(!m.subs[k]) m.subs[k] = s.subs[k]; }); });
+  list.forEach(s => { if(s !== home) Object.keys(s.subs).forEach(k => { const h = m.subs[k], g = s.subs[k];   // v8.13: the guest class wins when her home row of that subject is switched off
+    if(!h || (h.off && !g.off)) m.subs[k] = g; }); });
   const live = Object.values(m.subs).filter(g => !g.off);
   m.p = live.reduce((a, g) => a + g.p, 0); m.d = live.reduce((a, g) => a + g.d, 0); m.pct = pct2(m.p, m.d);
   m.ms = live.reduce((a, g) => a + g.ms, 0); m.mtT = live.reduce((a, g) => a + g.mtT, 0); m.tp = m.mtT ? pct2(m.ms, m.mtT) : null;
