@@ -1415,7 +1415,7 @@ function mlHtml(){
     <div class="acts"><button class="btn primary" type="button" id="mlPdf">PDF with photos (white background)</button><button class="btn" type="button" id="mlOut">List without photos: PDF / Excel / share</button><label class="f" style="margin:0">Print <select id="mlWait" style="height:40px">${[[10, 'All seats + next 10'], [5, 'All seats + next 5'], [0, 'Whole program']].map(([v, l]) => `<option value="${v}"${mlWait === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label><label class="f" style="margin:0;display:flex;align-items:center;gap:6px;text-transform:none" title="Off = black &amp; white with light grey rows (for the college printer). On = the yellow / blue / red rows of this page (for screen or WhatsApp). Same as typing localStorage.setItem('jcw_color_pdf','1') in the console."><input type="checkbox" id="mlColor"${(() => { try{ return localStorage.getItem('jcw_color_pdf') === '1'; }catch(e){ return false; } })() ? ' checked' : ''}> Colour PDF <span class="sub">(off = black &amp; white for the printer)</span></label>${cur.subs ? `<button class="btn" type="button" id="mlRef">Half-fee refund list</button><button class="btn" type="button" id="mlShift">Shifting letter to the Director Admissions (Word)</button>` : ''}${cur.seats && !cur.open ? `<button class="btn" type="button" id="mlLeft"${LEFT ? '' : ' disabled'}>${LEFT ? `Left students in the top ${cur.seats} (${cur.leftTop.length})` : 'Left students: reading the Left Students sheet…'}</button>` : ''}${LEFT && LEFT.err ? `<span class="sub" style="color:var(--bad)">Left Students sheet: ${esc(LEFT.err)}</span>` : ''}${bad(cur) ? `<button class="btn" type="button" id="mlBad">Only the ${bad(cur)} wrong</button>` : ''}</div>
     <div style="overflow:auto;max-height:70vh;margin-top:8px" id="mlBox"><table class="ml"><thead><tr>${th.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>
     ${cur.rows.slice(0, lim).map((r, i) => { const o = r.o, f = feeOf(o.challan), cut = i === cur.seats - 1 && cur.rows.length > cur.seats;
-      return `<tr class="${r.state}${r.cand ? ' cand' : ''}${cut ? ' cut' : ''}"><td class="n">${r.rank}</td><td><img alt="" data-mlp="${esc(o.roll || '')}" data-mlu="${esc(mlPic(o.pic))}"></td>
+      return `<tr class="${r.state}${r.cand ? ' cand' : ''}${cut ? ' cut' : ''}"${r.cand && o.key !== cur.key ? ` data-mlshift="${esc(o.roll || '')}" style="cursor:pointer" title="Click: shift her to ${esc(cur.label)} · ${esc(cur.quota)}"` : ''}><td class="n">${r.rank}</td><td><img alt="" data-mlp="${esc(o.roll || '')}" data-mlu="${esc(mlPic(o.pic))}"></td>
         <td class="nw">${esc(o.roll || '–')}</td><td><b>${esc(o.name)}</b><div class="sub">d/o ${esc(o.father || '-')}</div></td><td class="sub">${esc((prog(o.key) || {}).label || o.key)}<br>${esc(o.pcs || '')}</td>
         <td>${esc(o.hq || '')}</td><td class="n">${esc(o.metric || '')}</td><td class="n">${esc(o.total || '')}</td><td class="n"><b>${o._a ? o._a / 100 : ''}</b></td><td class="n">${esc((o._mn != null ? o._mn : o.meritNo || ''))}</td>
         <td class="sub" style="min-width:120px">${f.length ? f.map(x => (x.paid ? 'P ' : 'U ') + x.amount.toLocaleString('en-PK')).join(', ') : '–'}</td><td class="nw">${esc(o.dob || '')}</td><td>${esc((o._aw != null ? o._aw : o.agewise || ''))}</td><td class="nw">${o.receipt ? `<b>${esc(o.receipt)}</b><div class="sub">receipt · portal ${esc(o.feepaid || '–')}</div>` : esc(o.feepaid || '')} <button type="button" class="seatlink" data-mlr="${esc(o.roll || '')}" title="The date on her fee receipt (when the bank sent it late)">✎</button></td>
@@ -1759,6 +1759,29 @@ async function mlPhoto(img){
 function wireMl(){
   document.querySelectorAll('[data-ml]').forEach(b => b.onclick = () => { [mlKey, mlQ] = b.dataset.ml.split('|'); mlAll = false; render(); });
   const more = $('#mlMore'); if(more) more.onclick = () => { mlAll = true; render(); };
+  /* v8.13 click a yellow row (possible candidate from another program) -> shift her into this list: the edit form opens with the new program, quota and a new Enroll# */
+  document.querySelectorAll('[data-mlshift]').forEach(tr => tr.onclick = () => {
+    const c = cur() || meritLists()[0], row = idx && idx.rows.find(x => x[1] === tr.dataset.mlshift); if(!c || !row) return toast('Student not found: refresh the list.');
+    const o = recOf(row), from = (prog(o.key) || {}).label || o.key;
+    dlgOpen(`<h2>Shift ${esc(o.name)}?</h2>
+      <div class="sub">d/o ${esc(o.father || '-')} · ${esc(o.roll)} · Aggregate ${esc(o.metric || '')}/${esc(o.total || '')}</div>
+      <table style="margin-top:10px"><tr><td class="sub">Now</td><td><b>${esc(from)}</b> · ${esc(o.pcs || '')} · ${esc(o.quota || '')}</td></tr>
+        <tr><td class="sub">Shift to</td><td><b>${esc(c.label)}</b> · ${esc(c.quota)} (empty seat)</td></tr></table>
+      <div class="sub" style="margin-top:8px">The edit form opens with the new program and quota and a <b>new Enroll#</b> of that program. Choose her section, check, then press <b>Save</b>. Nothing changes until you save. Her fee difference shows in the Half-fee refund list; the shifting letter is under "Shifting letter to the Director Admissions".</div>
+      <div class="acts"><button class="btn" id="shNo">Cancel</button><button class="btn primary" id="shGo">Open the form to shift her</button></div>`);
+    $('#shNo').onclick = dlgClose;
+    $('#shGo').onclick = async () => {
+      $('#shGo').disabled = true; $('#shGo').textContent = 'Getting a new Enroll#…';
+      let nr = ''; try{ const r = await api({ action:'adm_next_roll', program:c.key, year:o.year || '1st Year' }); nr = r.roll || ''; }catch(e){}
+      dlgClose();
+      if(!nr) toast('Could not get a new Enroll# (offline?): press "New number" in the form.');
+      const d = dFromRec(o);
+      form = Object.assign(blankForm(), d, { program:c.key, quota:c.quota, section:'', rollNo:nr, rollManual:true, group:'', qid:null,
+        ctx:{ roll:o.roll, sno:o.sno, origName:o.name, orig:JSON.parse(JSON.stringify(Object.assign({}, d, { rollNo:o.roll }))) } });
+      lastDone = null; setTab('form'); window.scrollTo({ top:0 });
+      toast('Shifting ' + o.name + ' to ' + c.label + ' · ' + c.quota + ': choose her section, then Save.');
+    };
+  });
   const box = $('#mlBox'), io = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(e => { if(e.isIntersecting){ io.unobserve(e.target); mlPhoto(e.target); } }), { root:box, rootMargin:'200px' }) : null;
   document.querySelectorAll('[data-mlp]').forEach(im => io ? io.observe(im) : mlPhoto(im));
   const cur = () => meritLists().find(x => x.key === mlKey && x.quota === mlQ);
