@@ -3162,6 +3162,7 @@ function portalFinish_(book, st, mode) {
   cacheClear_('master_att3');
   var last = { at: stamp, mode: mode, rows: rows.length, fill: fill };
   PropertiesService.getScriptProperties().setProperty('portalLast', JSON.stringify(last));
+  try { CacheService.getScriptCache().remove('adm_home_al_v1'); } catch (e) {}   // v8.10: home alerts read the new portal copy
   return { ok: true, done: true, last: last };
 }
 

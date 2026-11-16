@@ -63,7 +63,8 @@ function atRoute_(user, req) {
       case 'at_alerts': {                                    // v8.6: seat alerts (admin, principal, SCI TT MORNING ADMIN)
         if (!morn && !see) return { ok: false, error: 'NOT_ALLOWED' };
         var pp = PropertiesService.getScriptProperties(), al = null; try { al = JSON.parse(pp.getProperty('ADM_ALERTS') || 'null'); } catch (e) {}
-        return { ok: true, data: al, stale: pp.getProperty('ADM_ALERTS_STALE') || '' };
+        var home = null; try { home = admHomeAlerts_(); } catch (e) {}       // v8.10: rooms over capacity + new paid students on the portal
+        return { ok: true, data: al, stale: pp.getProperty('ADM_ALERTS_STALE') || '', home: home };
       }
       case 'at_mfee':     return { ok: true, data: at_mfeeSave_(req.fees) };
       case 'at_sheet':    return { ok: true, data: { sheets: at_readMany_(req.names || [req.name]) } };

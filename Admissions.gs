@@ -147,13 +147,13 @@ function admRoute_(user, req) {
     case 'adm_next_roll': return admNextRollFor_(req.program, req.year);
     case 'adm_portal':    return admPortal_(req.q || req.id);
     case 'adm_check':     return admCheck_(req.d || {}, req.ctx || null);
-    case 'adm_save':      return admSave_(user, req.d || {}, req.ctx || null, req.override === true, String(req.cid || ''));
+    case 'adm_save':      CacheService.getScriptCache().remove('adm_home_al_v1'); return admSave_(user, req.d || {}, req.ctx || null, req.override === true, String(req.cid || ''));
     case 'adm_new':       return admNew_();
     case 'adm_refresh':   return admRefresh_(user, req.fields || [], req.apply === true, req.accept || {});
     case 'adm_keep_save': return admKeepSave_(user, req.items || []);
     case 'adm_keep_list': return admKeepList_();
     case 'adm_keep_del':  return admKeepDel_(req.roll, req.f);
-    case 'adm_add_new':   return admAddNew_(user, req.items || [], req.override === true);
+    case 'adm_add_new':   CacheService.getScriptCache().remove('adm_home_al_v1'); return admAddNew_(user, req.items || [], req.override === true);
     case 'adm_fee_receipt': return admFeeReceipt_(user, req);
     case 'adm_oml_get':   return admOmlGet_();
     case 'adm_portal_quota': return admPortalQuota_();
@@ -338,6 +338,37 @@ function admKeepDel_(roll, f) {
   var v = sh.getRange(2, 1, sh.getLastRow() - 1, 4).getDisplayValues();
   for (var i = v.length - 1; i >= 0; i--) if (admNormRoll_(v[i][0]) === admNormRoll_(roll) && v[i][3] === f) sh.deleteRow(i + 2);
   return { ok: true };
+}
+/* ================= v8.10 home alerts: rooms over capacity, new portal students who paid the fee ================= */
+/** "R # 05/40" and "R # 05/40 (EVENING)" = 40 seats; "R # LIBRARY(60)" = 60; else the JCW_HC_rooms_Capacity list */
+var ADM_ROOM_CAP = { '5': 40, '6': 55, '7': 55, '8': 40, '9': 40, '1': 55, '10': 65, '11': 60, '13': 60, '14': 55, '15': 55, '16': 55, '17': 55, '18': 80, '19': 80, '2': 40, '20': 60, '21': 60, '22': 60, '23': 60, '24': 60,
+  '3': 50, '4': 50, 'ARABIC ROOM': 10, 'BOT LAB-I': 65, 'CHEM LAB-I': 60, 'CHEM LAB-II': 60, 'ELECT LAB': 40, 'GEO LAB I': 60, 'GEO LAB II': 15, 'J.C 1': 80, 'J.C 2': 80, 'J.C 3': 50, 'J.C 4': 50, 'J.C 5': 0,
+  'J.C 6': 80, 'J.C GEO LAB': 15, 'J.C GEO LAB A': 20, 'LIBRARY': 60, 'MINI HALL': 70, 'OLD ELECT LAB': 15, 'OLD ENGLISH ROOM': 18, 'PHYSICS LAB-I': 70, 'PHYSICS LAB-II': 70, 'PROCTOR OFFICE': 7, 'SICK ROOM': 30, 'ZOOLOGY LAB': 70 };
+function admRoomCap_(room) {
+  var r = String(room || ''); if (!r) return null;
+  var m = r.match(/\/\s*(\d+)\s*(\(\s*EVENING\s*\))?\s*$/i) || r.match(/\(\s*(\d+)\s*\)\s*$/); if (m) return Number(m[1]);
+  var k = r.toUpperCase().replace(/\(\s*EVENING\s*\)|EVENING/g, '').replace(/^\s*R\s*#?\s*/, '').replace(/[–—]/g, '-').replace(/\s+/g, ' ').trim().replace(/^0+(\d)/, '$1');
+  return ADM_ROOM_CAP[k] !== undefined ? ADM_ROOM_CAP[k] : null;
+}
+function admHomeAlerts_() {
+  var cache = CacheService.getScriptCache(), hit = cache.get('adm_home_al_v1'); if (hit) return JSON.parse(hit);
+  var out = { rooms: [], fresh: [], at: admNow_(), sync: '' };
+  try {
+    var set = admSettings_(), T = admRead_(), recs = admAll_(T, set.sections), rooms = admRoomMap_(recs), cnt = {};
+    recs.forEach(function (r) { if (r.pcs) cnt[r.pcs] = (cnt[r.pcs] || 0) + 1; });
+    Object.keys(cnt).forEach(function (pcs) { var room = rooms[pcs], cap = admRoomCap_(room); if (cap !== null && cnt[pcs] > cap) out.rooms.push([pcs, room, cap, cnt[pcs]]); });
+    out.rooms.sort(function (a, b) { return (b[3] - b[2]) - (a[3] - a[2]); });
+  } catch (e) { out.roomErr = String(e.message || e); }
+  try {
+    var nw = admNew_(), progs = {}; ADM_CFG.PROGRAMS.forEach(function (p) { progs[p.key] = p.label; });
+    (nw.list || []).forEach(function (s) {
+      var paid = 0; String(s.challan || '').split(',').forEach(function (x) { var m = String(x).trim().match(/^P\s*-?\s*([\d,.]+)/i); if (m) { var a = Number(m[1].replace(/,/g, '')); if (a >= 3000) paid += a; } });
+      if (paid) out.fresh.push([s.name || '', s.father || '', progs[s.program] || s.programName || '', s.year || '', s.id || '', paid, s.quota || '']);
+    });
+    try { var l = JSON.parse(PropertiesService.getScriptProperties().getProperty('portalLast') || 'null'); if (l) out.sync = l.at || ''; } catch (e) {}
+  } catch (e) { out.freshErr = String(e.message || e); }
+  try { var txt = JSON.stringify(out); if (txt.length < 90000) cache.put('adm_home_al_v1', txt, 600); } catch (e) {}
+  return out;
 }
 function admBook_() { return SpreadsheetApp.openById(ADM_CFG.BOOK_ID); }
 function admNum_(v) { var s = admS_(v); return s === '' || isNaN(Number(s)) ? '' : Number(s); }
