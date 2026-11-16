@@ -335,6 +335,13 @@ function roomCap(room){
 }
 /** a section's room and seats: { room, cap, n, free } (cap null = room or its size not known) */
 function secRoom(pcs, n){ const room = roomOf(pcs), cap = roomCap(room); return { room, cap, n, free:cap == null ? null : cap - n }; }
+/** v8.13 sections of a program ranked like the portal suggestion: room with a free seat first, the biggest room first, then most free seats, then fewest students */
+function secRank(key, year){
+  const cnt = {}; if(idx) idx.rows.forEach(row => { const o = recOf(row); if(o.key === key && (o.year || '1st Year') === year) cnt[o.pcs] = (cnt[o.pcs] || 0) + 1; });
+  const all = sectionsOf(key, year), cand = all.filter(x => !/optional/i.test(x)), list = (cand.length ? cand : all).map(x => secRoom(x, cnt[x] || 0)).map((v, i, a) => Object.assign(v, { name:(cand.length ? cand : all)[i] }));
+  const rank = x => x.free == null ? [1, 0, 0, x.n] : x.free > 0 ? [0, -x.cap, -x.free, x.n] : [2, -x.free, 0, x.n];
+  return list.sort((a, b) => { const p = rank(a), q = rank(b); for(let i = 0; i < p.length; i++) if(p[i] !== q[i]) return p[i] - q[i]; return 0; });
+}
 function quotasOf(p){
   const pr = prog(p); if(!init) return ['Open Quota'];
   return pr && pr.only ? pr.only : init.quotas;
@@ -1762,24 +1769,29 @@ function wireMl(){
   /* v8.13 click a yellow row (possible candidate from another program) -> shift her into this list: the edit form opens with the new program, quota and a new Enroll# */
   document.querySelectorAll('[data-mlshift]').forEach(tr => tr.onclick = () => {
     const c = cur() || meritLists()[0], row = idx && idx.rows.find(x => x[1] === tr.dataset.mlshift); if(!c || !row) return toast('Student not found: refresh the list.');
-    const o = recOf(row), from = (prog(o.key) || {}).label || o.key;
+    const o = recOf(row), from = (prog(o.key) || {}).label || o.key, SR = secRank(c.key, o.year || '1st Year');
     dlgOpen(`<h2>Shift ${esc(o.name)}?</h2>
       <div class="sub">d/o ${esc(o.father || '-')} · ${esc(o.roll)} · Aggregate ${esc(o.metric || '')}/${esc(o.total || '')}</div>
       <table style="margin-top:10px"><tr><td class="sub">Now</td><td><b>${esc(from)}</b> · ${esc(o.pcs || '')} · ${esc(o.quota || '')}</td></tr>
         <tr><td class="sub">Shift to</td><td><b>${esc(c.label)}</b> · ${esc(c.quota)} (empty seat)</td></tr></table>
-      <div class="sub" style="margin-top:8px">The edit form opens with the new program and quota and a <b>new Enroll#</b> of that program. Choose her section, check, then press <b>Save</b>. Nothing changes until you save. Her fee difference shows in the Half-fee refund list; the shifting letter is under "Shifting letter to the Director Admissions".</div>
+      <div style="margin-top:10px"><b>Section</b> <span class="sub">(room capacity: the biggest room with a free seat is ticked)</span>
+      <table style="margin-top:4px"><thead><tr><th></th><th>Section</th><th>Room</th><th>Capacity</th><th>Students now</th><th>Free seats</th></tr></thead><tbody>
+      ${SR.map((x, i) => `<tr${x.free != null && x.free <= 0 ? ' style="color:var(--bad)"' : ''}><td><input type="radio" name="shSec" value="${esc(x.name)}"${i === 0 ? ' checked' : ''}></td><td><b>${esc(x.name)}</b>${i === 0 ? ' <span class="pill">suggested</span>' : ''}</td><td>${esc(x.room || '–')}</td><td class="n">${x.cap == null ? '?' : x.cap}</td><td class="n">${x.n}</td><td class="n">${x.free == null ? '?' : x.free <= 0 ? 'full (' + x.free + ')' : x.free}</td></tr>`).join('') || '<tr><td colspan="6" class="sub">No sections found for this program.</td></tr>'}
+      </tbody></table></div>
+      <div class="sub" style="margin-top:8px">The edit form opens with the new program, quota, the section you ticked and a <b>new Enroll#</b> of that program. Check it, then press <b>Save</b>. Nothing changes until you save. Her fee difference shows in the Half-fee refund list; the shifting letter is under "Shifting letter to the Director Admissions".</div>
       <div class="acts"><button class="btn" id="shNo">Cancel</button><button class="btn primary" id="shGo">Open the form to shift her</button></div>`);
     $('#shNo').onclick = dlgClose;
     $('#shGo').onclick = async () => {
+      const pick = (document.querySelector('input[name=shSec]:checked') || {}).value || '';
       $('#shGo').disabled = true; $('#shGo').textContent = 'Getting a new Enroll#…';
       let nr = ''; try{ const r = await api({ action:'adm_next_roll', program:c.key, year:o.year || '1st Year' }); nr = r.roll || ''; }catch(e){}
       dlgClose();
       if(!nr) toast('Could not get a new Enroll# (offline?): press "New number" in the form.');
       const d = dFromRec(o);
-      form = Object.assign(blankForm(), d, { program:c.key, quota:c.quota, section:'', rollNo:nr, rollManual:true, group:'', qid:null,
+      form = Object.assign(blankForm(), d, { program:c.key, quota:c.quota, section:pick, room:roomOf(pick), rollNo:nr, rollManual:true, group:'', qid:null,
         ctx:{ roll:o.roll, sno:o.sno, origName:o.name, orig:JSON.parse(JSON.stringify(Object.assign({}, d, { rollNo:o.roll }))) } });
       lastDone = null; setTab('form'); window.scrollTo({ top:0 });
-      toast('Shifting ' + o.name + ' to ' + c.label + ' · ' + c.quota + ': choose her section, then Save.');
+      toast('Shifting ' + o.name + ' to ' + c.label + ' · ' + c.quota + (pick ? ' · section ' + pick : '') + ': check, then Save.');
     };
   });
   const box = $('#mlBox'), io = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(e => { if(e.isIntersecting){ io.unobserve(e.target); mlPhoto(e.target); } }), { root:box, rootMargin:'200px' }) : null;
