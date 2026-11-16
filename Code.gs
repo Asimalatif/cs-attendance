@@ -66,6 +66,16 @@ function doPost(e) {
     try { return json_(portalImport_(req)); }
     catch (err) { return json_({ ok: false, error: String(err && err.message || err) }); }
   }
+  if (req.action === 'portal_known') {                                 // v8.11: portal IDs + Enroll#s already in the strength sheet (quick sync reads only the NEW students' fee)
+    try {
+      var pk = PropertiesService.getScriptProperties().getProperty('portalKey');
+      if (!pk || String(req.key || '') !== pk) return json_({ ok: false, error: 'The sync key is not correct.' });
+      var TT = transformRead_(), ids = [], rolls = [];
+      if (TT) { var hh = headIdx_(TT.V[0]), ic = pickCol_(hh, ['PORTALID', 'STUDENTID']);
+        for (var q = 1; q < TT.V.length; q++) { if (TT.ec >= 0 && TT.V[q][TT.ec]) rolls.push(enr_(TT.V[q][TT.ec])); if (ic >= 0 && TT.V[q][ic]) ids.push(String(TT.V[q][ic]).trim()); } }
+      return json_({ ok: true, ids: ids, rolls: rolls });
+    } catch (err) { return json_({ ok: false, error: String(err && err.message || err) }); }
+  }
     if (req.action === 'portal_left') {                                  // v7.3: the sync panel's Left Students buttons (sync key)
     try { return json_(portalLeftDo_(req)); }
     catch (err) { return json_({ ok: false, error: String(err && err.message || err) }); }
