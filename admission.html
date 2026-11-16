@@ -731,9 +731,11 @@ function pnSuggest(){
       // v8.8: only sections whose room still has a free seat; among them the one with the most free seats (then the fewest students).
       // Sections without a known room size come after the ones with room; when every room is full, the least-full section is used.
       const c = counts(k), cand = pl.secs.filter(x => !/optional/i.test(x.name)), list = cand.length ? cand : pl.secs;
-      const free = x => { const cap = roomCap(roomOf(x.name)); return cap == null ? null : cap - (c[x.name] || 0); };
-      const rank = x => { const f = free(x); return f == null ? [1, 0, c[x.name] || 0] : f > 0 ? [0, -f, c[x.name] || 0] : [2, -f, c[x.name] || 0]; };
-      let best = ''; list.forEach(x => { if(!best) return best = x.name; const a = rank(x), b = rank(list.find(y => y.name === best)); if(a[0] < b[0] || (a[0] === b[0] && (a[1] < b[1] || (a[1] === b[1] && a[2] < b[2])))) best = x.name; });
+      // v8.8b: the biggest room first (highest capacity), then the most free seats, then the fewest students
+      const capOf = x => roomCap(roomOf(x.name)), free = x => { const cap = capOf(x); return cap == null ? null : cap - (c[x.name] || 0); };
+      const rank = x => { const f = free(x), n = c[x.name] || 0; return f == null ? [1, 0, 0, n] : f > 0 ? [0, -capOf(x), -f, n] : [2, -f, 0, n]; };
+      const less = (a, b) => { for(let i = 0; i < a.length; i++){ if(a[i] !== b[i]) return a[i] < b[i]; } return false; };
+      let best = ''; list.forEach(x => { if(!best) return best = x.name; if(less(rank(x), rank(list.find(y => y.name === best)))) best = x.name; });
       e.section = best; if(best) c[best] = (c[best] || 0) + 1;
     }
     if(!e.rollManual){
@@ -807,7 +809,7 @@ function pnHtml(){
     <div class="sub">Students who are <b>Enrolled</b> on the portal${pnew.batch ? ' (batch ' + esc(pnew.batch) + ', plus 2nd Year migrations)' : ''} but are not in Transform-ALL-COLLEGE-STRENGTH or Left Students yet. List read ${esc(pnew.at || '')}.
     The portal copy is refreshed by <b>Quick sync</b> in the JCW Portal Sync panel on the portal.</div>
     ${pnew.note ? `<div class="seat near">${esc(pnew.note)}</div>` : ''}
-    <div class="hint"><b>Suggested Roll No</b>: the next free numbers of her program's range, in the order the portal admitted them (an Enrollment# already on the portal is kept). <b>Suggested section</b>: a section of her program whose room still has free seats (room size from its name, e.g. R # 05/40 = 40 seats; R # 05/40 (EVENING) is the same room), the one with the most free seats first ("Optional Subjects" is never suggested). Change any of them; the rest re-arrange.</div>
+    <div class="hint"><b>Suggested Roll No</b>: the next free numbers of her program's range, in the order the portal admitted them (an Enrollment# already on the portal is kept). <b>Suggested section</b>: a section of her program whose room still has free seats (room size from its name, e.g. R # 05/40 = 40 seats; R # 05/40 (EVENING) is the same room), the one in the <b>biggest room</b> first, then the most free seats ("Optional Subjects" is never suggested). Change any of them; the rest re-arrange.</div>
   </section>`;
   if(!pnew.list.length) return head + `<div class="card"><h2>Nobody new</h2><div class="sub">Everyone Enrolled on the portal is already in the strength sheet.</div><div class="acts"><button class="btn" type="button" id="pnRef" ${online() && !pnLoading ? '' : 'disabled'}>${pnLoading ? 'Checking…' : 'Check again'}</button></div></div>`;
   const bar = `<div class="stickbar"><div class="acts">
