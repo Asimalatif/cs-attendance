@@ -1301,7 +1301,7 @@ function meritLists(){
   for(const row of idx.rows){ const o = recOf(row); if(!isMig(o.year) && o.key && mlGone(o)){ o._a = Math.round(mlAgg(o) * 100); o._d = mlDob(o); o._late = false; goneAll.push(o); continue; }
     if(!isMig(o.year) && o.key && !mlGone(o)){ o._a = Math.round(mlAgg(o) * 100); o._d = mlDob(o);
     o._paid = o.receipt || o.feepaid || '';                           // a receipt date you entered wins over the portal date
-    const pk = mlDob({ dob:o._paid }); o._late = !!lastK && (pk === '99999999' || pk > lastK); all.push(o); } }
+    const pk = mlDob({ dob:o._paid }); o._pk = pk; o._late = !!lastK && (pk === '99999999' || pk > lastK); all.push(o); } }
   // v8.5: MeritNo and Age-wise worked out NOW from today's list (same rule as the sheet: each program + quota, highest Aggregate = 1,
   // equal Aggregate = same MeritNo; Age-wise 1st, 2nd … only among equal Aggregates, older first). The sheet's values can be old.
   { const G = {}; all.forEach(o => { if(o._a && o.quota) (G[o.key + '|' + qk(o.quota)] = G[o.key + '|' + qk(o.quota)] || []).push(o); });
@@ -1311,7 +1311,8 @@ function meritLists(){
       let rank = 0, tie = 0; L.forEach((o, i) => { if(!i || o._a !== L[i - 1]._a){ rank++; tie = 0; } tie++; o._mn = rank; o._aw = cnt[o._a] > 1 ? ord(tie) : ''; }); });
     all.forEach(o => { if(o._mn == null){ o._mn = ''; o._aw = ''; } }); }
   const used = new Set(all.map(o => o.key)), fees = mlFees(all), out = [], s = init.seats;
-  const srt = (a, b) => (a._late ? 1 : 0) - (b._late ? 1 : 0) || b._a - a._a || a._d.localeCompare(b._d) || String(a.name).localeCompare(String(b.name));
+  // v8.13: late students come after every on-time student, in the order they paid (first paid first; not paid last), then by Aggregate
+  const srt = (a, b) => (a._late ? 1 : 0) - (b._late ? 1 : 0) || (a._late && b._late ? String(a._pk).localeCompare(String(b._pk)) : 0) || b._a - a._a || a._d.localeCompare(b._d) || String(a.name).localeCompare(String(b.name));
   s.programs.forEach(p => {
     if(!used.has(p.key)) return;                                       // e.g. Evening Pre-Medical: no 1st Year this year
     const pr = prog(p.key) || {}, sib = pr.fee === 'sub' ? init.programs.filter(x => x.classProgram === pr.classProgram && x.fee === 'non' && used.has(x.key)).map(x => x.key) : [];
@@ -1371,7 +1372,7 @@ function meritLists(){
       let lastN = -1; rows.forEach((r, i) => { if(r.cand || r.state === 'next') lastN = i; });
       if(lastN >= 0){ const t = rows[lastN].o;
         for(let i = lastN + 1; i < rows.length; i++){ const r = rows[i];
-          if(r.o._a !== t._a || !!r.o._late !== !!t._late) break;
+          if(r.o._a !== t._a || !!r.o._late !== !!t._late || (t._late && r.o._pk !== t._pk)) break;
           if(!r.here && !r.cand && !r.state){ r.state = 'next'; r.why = 'Next in line: same Aggregate (' + (t._a / 100) + ')' + (r.why ? ' · ' + r.why : ''); } } }
       out.push({ key:p.key, label:pl ? 'Shared pool: ' + home.map(k => (prog(k) || {}).label || k).join(', ') : pr.label || p.key, fee:fees[p.key] || 0,
         sibFee:sib.length ? fees[sib[0]] || 0 : 0, sibLabel:sib.map(k => (prog(k) || {}).label).join(', '), quota:q.name, seats, inHome, rows, leftTop, subs:!!sib.length, noSeats,
