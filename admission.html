@@ -1493,7 +1493,7 @@ function mlShiftAsk(c){
   const d = new Date(), today = String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + d.getFullYear();
   const cnt = () => mlShiftRows(c, $('#shAll').checked, $('#shCand').checked).length;
   dlgOpen(`<h2>Shifting letter (Word)</h2>
-    <div class="sub">Your letter to <b>The Director Admissions, University of Peshawar</b>: "students are hereby shifted from F.Sc-I (Non-subsidized, Morning) to F.Sc-I (subsidized, Morning) on <i>date</i>", with S.No, Student Name, Father Name and Marks (obtained matric marks; the quota is written after the marks when it is not Open Quota). Students: on a subsidized seat but paid the non-subsidized fee, highest Aggregate first.</div>
+    <div class="sub">Your letter to <b>The Director Admissions, University of Peshawar</b>: "students are hereby shifted from F.Sc-I (Non-subsidized, Morning) to F.Sc-I (subsidized, Morning) on <i>date</i>", with S.No, Student Name, Father Name and Marks (obtained / total matric marks, e.g. 1146/1200; the quota is written after the marks when it is not Open Quota). Students: on a subsidized seat but paid the non-subsidized fee, highest Aggregate first.</div>
     <label class="f">Date of shifting<input id="shDate" value="${today}" style="height:42px"></label>
     <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="shAll" checked> Every subsidized quota (Open, Minority, O-Level, …), not only ${esc(c.quota)}</label>
     <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="shCand"> Also the possible candidates for the empty seats</label>
@@ -1515,7 +1515,7 @@ async function mlShiftWord(list, date){
   const i = x.indexOf('{NAME}'), s = x.lastIndexOf('<w:tr ', i), e = x.indexOf('</w:tr>', i) + 7, pat = x.slice(s, e);
   const xe = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const rows = list.map(it => { const q = /^open/i.test(String(it.q || '').trim()) ? '' : it.q;
-    return pat.replace('{NAME}', xe(it.o.name)).replace('{FATHER}', xe(it.o.father || '')).replace('{MARKS}', xe(String(it.o.metric || '').replace(/\.0+$/, '')) + (q ? ' ' : ''))
+    return pat.replace('{NAME}', xe(it.o.name)).replace('{FATHER}', xe(it.o.father || '')).replace('{MARKS}', xe(String(it.o.metric || '').replace(/\.0+$/, '') + (it.o.total ? '/' + String(it.o.total).replace(/\.0+$/, '') : '')) + (q ? ' ' : ''))   // obtained / total, e.g. 1146/1200
       .replace('{QUOTA}', q ? xe('(' + q + ')') : ''); });
   x = x.slice(0, s) + rows.join('') + x.slice(e);
   x = x.replace('{DATE}', xe(date));
