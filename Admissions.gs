@@ -314,9 +314,11 @@ function admPortalFixList_() {
     if (r.year && pc && admYear_(pc) !== r.year) why.push('Class "' + pc + '" → "' + r.year + '"');
     if (r.section && ps && !admSame_('section', r.section, ps)) why.push('Section "' + ps + '" → "' + r.section + '"');
     if (!admSame_('roll', r.roll, pe)) why.push('Enroll# "' + (pe || '–') + '" → "' + r.roll + '"');
-    if (why.length) out.push({ id: r.id || P.g(pr, 'studentid'), enroll: r.roll, program: r.programName, cls: r.year, section: r.section, name: r.name, father: r.father, why: why.join('; ') });
+    var mo = admNum_(String(r.metric).replace(/,/g, '')), mt = admNum_(String(r.total).replace(/,/g, '')), po = admNum_(P.g(pr, 'obtainmarkscgpa').replace(/,/g, '')), pt = admNum_(P.g(pr, 'totalmarkscgpa').replace(/,/g, '')), fixM = false;
+    if (mo !== '' && mt !== '' && mo > 0 && mt > 0 && po !== '' && (Math.abs(mo - po) > 0.001 || (pt !== '' && Math.abs(mt - pt) > 0.001))) { fixM = true; why.push('Marks ' + po + '/' + (pt === '' ? '?' : pt) + ' → ' + mo + '/' + mt); }
+    if (why.length) out.push({ id: r.id || P.g(pr, 'studentid'), enroll: r.roll, program: r.programName, cls: r.year, section: r.section, name: r.name, father: r.father, obt: fixM ? String(mo) : '', tot: fixM ? String(mt) : '', why: why.join('; ') });
   });
-  var keep = []; try { keep = admKeepList_().rows.filter(function (x) { return x[3] !== 'subjects'; }); } catch (e) {}
+  var keep = []; try { keep = admKeepList_().rows.filter(function (x) { return !/^(subjects|metric|total)$/.test(x[3]); }); } catch (e) {}
   return { ok: true, rows: out, keep: keep, at: admNow_() };
 }
 function admKeepSheet_() {

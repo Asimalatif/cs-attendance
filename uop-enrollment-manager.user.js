@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UOP VC - Enrollment Manager
 // @namespace    UOP-JCW
-// @version      3.3
+// @version      3.4
 // @description  From the JCW CSV: set Enrollment#, Reg# (= Enrollment#), Program, Class and Section on each student's edit page (matched by PORTAL ID)
 // @match        https://portal.uop.edu.pk/Student/Students*
 // @grant        none
@@ -354,6 +354,12 @@
     if (missing.length) log("  ⚠ Field(s) not found on page: " + missing.join(", ") + ". Fields seen: " + describeFields(doc), "warn");
 
     const d = diffs(cur, s);
+    let q = null;
+    if (s.obt) {                                  // v3.4: matric / O-Level (IBCC) marks = first row of the Qualifications table
+      q = await qualRow(doc);
+      if (!q) return { status: "ERROR", msg: "Qualifications table did not load — fix marks by hand" };
+      if (num(q.obt.value) !== num(s.obt) || num(q.tot.value) !== num(s.tot)) d.push("Marks " + q.obt.value + "/" + q.tot.value + " → " + s.obt + "/" + s.tot); else q = null;
+    }
     if (!d.length) return { status: "SAME", msg: "Already correct" };
     if (dryRun) return { status: "WOULD CHANGE", msg: d.join("; ") };
 
@@ -362,7 +368,8 @@
     let r = await waitOption(doc, "program", wantProg, "program");
     if (!r.sel) return { status: "ERROR", msg: "Program dropdown not found" };
     if (!r.opt) return { status: "ERROR", msg: "Program '" + wantProg + "' not in dropdown. Options: " + [...r.sel.options].map((o) => o.text).join(", ") };
-    if (r.sel.value !== r.opt.value) { setSelect(win, r.sel, r.opt); await waitIdle(win); }
+    const oldTbl = doc.querySelector("#tblStuQualification"); let progChanged = false;
+    if (r.sel.value !== r.opt.value) { setSelect(win, r.sel, r.opt); progChanged = true; await waitIdle(win); }
 
     if (findField(doc, "cls")) {
       r = await waitOption(doc, "cls", s.cls, "cls");
@@ -383,6 +390,18 @@
     if (!r.opt) return { status: "ERROR", msg: "Section '" + s.section + "' not in dropdown. Options: " + [...r.sel.options].map((o) => o.text).join(", ") };
     setSelect(win, r.sel, r.opt);
     await sleep(300);
+
+    // --- v3.4 marks (set after Program, because a Program change reloads the Qualifications table) ---
+    if (q) {
+      for (let t = 0; progChanged && t < 40 && doc.querySelector("#tblStuQualification") === oldTbl; t++) await sleep(250);   // the new Program's table replaces the old one
+      await sleep(600);
+      q = await qualRow(doc);
+      if (!q) return { status: "ERROR", msg: "Qualifications table did not load — fix marks by hand" };
+      if (q.incomplete) return { status: "ERROR", msg: "A qualification row on the portal is incomplete (" + q.incomplete + ") — saving could drop it, fix by hand" };
+      setText(win, q.obt, String(s.obt)); setText(win, q.tot, String(s.tot));
+      if (q.pct) setText(win, q.pct, (Math.round(num(s.obt) / num(s.tot) * 10000) / 100).toFixed(2));
+      await sleep(200);
+    }
 
     // --- Enrollment# and Reg# ---
     const en = findField(doc, "enroll"); if (en && en.value.trim() !== s.enroll) setText(win, en, s.enroll);
@@ -422,10 +441,39 @@
     if (verifyOn()) {
       await sleep(300);
       const q = await quickCheck(s);
-      if (q.diffs && q.diffs.length) return { status: "ERROR", msg: "Saved but still different: " + q.diffs.join("; ") };
-      return { status: "UPDATED", msg: d.join("; ") + (q.diffs ? " ✔ verified" : "") };
+      const q2 = s.obt ? { diffs: null } : await quickCheck(s);
+      if (q2.diffs && q2.diffs.length) return { status: "ERROR", msg: "Saved but still different: " + q2.diffs.join("; ") };
+      if (s.obt) { const m = await readMarks(s.id); if (m && (num(m.obt) !== num(s.obt) || num(m.tot) !== num(s.tot))) return { status: "ERROR", msg: "Saved but marks still " + m.obt + "/" + m.tot }; if (m) return { status: "UPDATED", msg: d.join("; ") + " ✔ verified" }; }
+      return { status: "UPDATED", msg: d.join("; ") + (q2.diffs ? " ✔ verified" : "") };
     }
     return { status: "UPDATED", msg: d.join("; ") + (navigated ? "" : " (no page reload seen)") };
+  }
+
+  // v3.4 Qualifications table helpers (row 0 = Matric / O-Level)
+  const num = (x) => { const n = parseFloat(String(x == null ? "" : x).replace(/,/g, "")); return isNaN(n) ? -1 : Math.round(n * 100) / 100; };
+  async function qualRow(doc) {
+    for (let t = 0; t < 40; t++) {
+      const rows = [...doc.querySelectorAll("#tblStuQualification tbody tr")];
+      const r = rows[0];
+      if (r && r.querySelector(".obt-marks-class")) {
+        const need = [".degree-class", ".board-class", ".passing-year-class", ".roll-no-class", ".total-marks-class", ".obt-marks-class", ".division-class", ".percentage-marks-class"];
+        let incomplete = "";
+        rows.forEach((x, i) => need.forEach((c) => { const e = x.querySelector(c); if (!incomplete && (!e || !String(e.value).trim() || (c === ".degree-class" && e.value == 0))) incomplete = "row " + (i + 1) + " " + c.replace(/^\.|-class$/g, ""); }));
+        return { obt: r.querySelector(".obt-marks-class"), tot: r.querySelector(".total-marks-class"), pct: r.querySelector(".percentage-marks-class"), incomplete };
+      }
+      await sleep(250);
+    }
+    return null;
+  }
+  async function readMarks(id) {
+    try {
+      const st = await readQuick(id); if (!st.programId) return null;
+      const r = await fetch("/Student/StudentQualificationPartail", { method: "POST", credentials: "include", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "Id=" + encodeURIComponent(id) + "&ProgramId=" + encodeURIComponent(st.programId) });
+      const d = new DOMParser().parseFromString(await r.text(), "text/html"), row = d.querySelector("#tblStuQualification tbody tr");
+      if (!row) return null;
+      const v = (c) => { const e = row.querySelector(c); return e ? (e.getAttribute("value") || e.value || "") : ""; };
+      return { obt: v(".obt-marks-class"), tot: v(".total-marks-class") };
+    } catch (e) { return null; }
   }
 
   function swalInfo(doc) {
@@ -511,6 +559,7 @@
 
   // Returns {diffs:[...]} when sure, {diffs:null} when the page must be opened, {error} on a definite problem
   async function quickCheck(s) {
+    if (s.obt) return { diffs: null };          // v3.4: marks live in the Qualifications tab: open the page
     let st;
     try { st = await readQuick(s.id); }
     catch (e) { if (/^LOGIN/.test(e.message)) throw e; return { diffs: null }; }
@@ -726,7 +775,7 @@
     const p = document.createElement("div");
     p.id = "uopEM";
     p.innerHTML = `
-<header id="uopEM_hdr"><span>🎓 UOP Enrollment Manager v3.3 (JCW)</span><span id="uopEM_min">–</span></header>
+<header id="uopEM_hdr"><span>🎓 UOP Enrollment Manager v3.4 (JCW)</span><span id="uopEM_min">–</span></header>
 <div class="b" id="uopEM_body">
   <div class="r"><button class="g" id="uopEM_app">⬇ Load wrong values from JCW app</button><small>or CSV:</small><input type="file" id="uopEM_file" accept=".csv"><small id="uopEM_info"></small></div>
   <div class="r"><small>Edit URL</small><input type="text" id="uopEM_url" style="flex:1"><button class="s" id="uopEM_detect">Detect</button></div>
@@ -803,7 +852,7 @@
       const j = await res.json();
       if (!j.ok) { if (/key/i.test(j.error || "")) localStorage.removeItem("uopEM_key"); log("JCW app: " + (j.error || "error"), "err"); return; }
       localStorage.setItem("uopEM_key", key);
-      rows = (j.rows || []).map((x, n) => ({ line: n + 1, id: String(x.id || "").replace(/\D/g, ""), enroll: x.enroll, program: x.program, cls: x.cls, section: x.section, name: x.name, father: x.father, why: x.why })).filter((x) => x.id);
+      rows = (j.rows || []).map((x, n) => ({ line: n + 1, id: String(x.id || "").replace(/\D/g, ""), enroll: x.enroll, program: x.program, cls: x.cls, section: x.section, name: x.name, father: x.father, obt: x.obt || "", tot: x.tot || "", why: x.why })).filter((x) => x.id);
       rows.forEach((x) => { delete done[x.id]; }); lsSet(LS.done, done); lsSet(LS.rows, rows);
       $("#uopEM_ids").value = ""; refreshFilters();
       if (j.note) log(j.note, "warn");
