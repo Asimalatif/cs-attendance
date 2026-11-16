@@ -320,6 +320,21 @@ function compulsory(p, year){ const s = init && init.subjects[p] && init.subject
 function groupsOf(p, year){ const s = init && init.subjects[p] && init.subjects[p][year]; return s ? s.groups : []; }
 function sectionsOf(p, year){ return (init && init.sections[p] && init.sections[p][year]) || []; }
 function roomOf(pcs){ return (init && init.rooms && init.rooms[pcs]) || ''; }
+/* v8.8 room capacity: "R # 05/40" and "R # 05/40 (EVENING)" are the same room (40 seats). The capacity is read from the room's
+   name; this list (JCW_HC_rooms_Capacity) is used when a timetable room is written without it. */
+const ROOM_CAP_LIST = ['05/40','06/55','07/55','08/40','09/40','1/55','10/65','11/60','13/60','14/55','15/55','16/55','17/55','18/80','19/80','2/40','20/60','21/60','22/60','23/60','24/60','3/50','4/50',
+  'ARABIC ROOM/10','BOT LAB–I/65','CHEM LAB-I/60','CHEM LAB-II/60','ELECT LAB/40','GEO LAB I/60','GEO LAB II/15','J.C 1/80','J.C 2/80','J.C 3/50','J.C 4/50','J.C 5/0','J.C 6/80','J.C GEO LAB/15','J.C GEO LAB A/20',
+  'LIBRARY/60','Mini Hall/70','OLD ELECT LAB/15','OLD ENGLISH ROOM/18','Physics Lab-I/70','Physics Lab-II/70','PROCTOR OFFICE/7','SICK ROOM/30','Zoology Lab/70'];
+const roomKey = r => String(r || '').toUpperCase().replace(/\(\s*EVENING\s*\)|EVENING/g, '').replace(/^\s*R\s*#?\s*/, '').replace(/\/\s*\d+\s*$|\(\s*\d+\s*\)\s*$/, '')
+  .replace(/[–—]/g, '-').replace(/\s+/g, ' ').trim().replace(/^0+(\d)/, '$1');
+const ROOM_CAP = Object.fromEntries(ROOM_CAP_LIST.map(x => { const i = x.lastIndexOf('/'); return [roomKey(x.slice(0, i)), Number(x.slice(i + 1))]; }));
+function roomCap(room){
+  const r = String(room || ''), m = r.match(/\/\s*(\d+)\s*(\(\s*EVENING\s*\))?\s*$/i) || r.match(/\(\s*(\d+)\s*\)\s*$/);
+  if(m) return Number(m[1]);
+  const c = ROOM_CAP[roomKey(r)]; return c != null ? c : null;
+}
+/** a section's room and seats: { room, cap, n, free } (cap null = room or its size not known) */
+function secRoom(pcs, n){ const room = roomOf(pcs), cap = roomCap(room); return { room, cap, n, free:cap == null ? null : cap - n }; }
 function quotasOf(p){
   const pr = prog(p); if(!init) return ['Open Quota'];
   return pr && pr.only ? pr.only : init.quotas;
@@ -713,8 +728,12 @@ function pnSuggest(){
     const k = e.program + '|' + e.year, pl = pool(e);
     if(!pl){ if(!e.rollManual) e.rollNo = ''; if(!e.secManual) e.section = ''; return; }
     if(!e.secManual){
+      // v8.8: only sections whose room still has a free seat; among them the one with the most free seats (then the fewest students).
+      // Sections without a known room size come after the ones with room; when every room is full, the least-full section is used.
       const c = counts(k), cand = pl.secs.filter(x => !/optional/i.test(x.name)), list = cand.length ? cand : pl.secs;
-      let best = ''; list.forEach(x => { if(!best || (c[x.name] || 0) < (c[best] || 0)) best = x.name; });
+      const free = x => { const cap = roomCap(roomOf(x.name)); return cap == null ? null : cap - (c[x.name] || 0); };
+      const rank = x => { const f = free(x); return f == null ? [1, 0, c[x.name] || 0] : f > 0 ? [0, -f, c[x.name] || 0] : [2, -f, c[x.name] || 0]; };
+      let best = ''; list.forEach(x => { if(!best) return best = x.name; const a = rank(x), b = rank(list.find(y => y.name === best)); if(a[0] < b[0] || (a[0] === b[0] && (a[1] < b[1] || (a[1] === b[1] && a[2] < b[2])))) best = x.name; });
       e.section = best; if(best) c[best] = (c[best] || 0) + 1;
     }
     if(!e.rollManual){
@@ -788,7 +807,7 @@ function pnHtml(){
     <div class="sub">Students who are <b>Enrolled</b> on the portal${pnew.batch ? ' (batch ' + esc(pnew.batch) + ', plus 2nd Year migrations)' : ''} but are not in Transform-ALL-COLLEGE-STRENGTH or Left Students yet. List read ${esc(pnew.at || '')}.
     The portal copy is refreshed by <b>Quick sync</b> in the JCW Portal Sync panel on the portal.</div>
     ${pnew.note ? `<div class="seat near">${esc(pnew.note)}</div>` : ''}
-    <div class="hint"><b>Suggested Roll No</b>: the next free numbers of her program's range, in the order the portal admitted them (an Enrollment# already on the portal is kept). <b>Suggested section</b>: the section of her program with the fewest students, so sections stay even ("Optional Subjects" is never suggested). Change any of them; the rest re-arrange.</div>
+    <div class="hint"><b>Suggested Roll No</b>: the next free numbers of her program's range, in the order the portal admitted them (an Enrollment# already on the portal is kept). <b>Suggested section</b>: a section of her program whose room still has free seats (room size from its name, e.g. R # 05/40 = 40 seats; R # 05/40 (EVENING) is the same room), the one with the most free seats first ("Optional Subjects" is never suggested). Change any of them; the rest re-arrange.</div>
   </section>`;
   if(!pnew.list.length) return head + `<div class="card"><h2>Nobody new</h2><div class="sub">Everyone Enrolled on the portal is already in the strength sheet.</div><div class="acts"><button class="btn" type="button" id="pnRef" ${online() && !pnLoading ? '' : 'disabled'}>${pnLoading ? 'Checking…' : 'Check again'}</button></div></div>`;
   const bar = `<div class="stickbar"><div class="acts">
@@ -819,7 +838,8 @@ function pnHtml(){
       ${hid ? '' : `<div class="g2">
         <div><label>Program</label><select data-k="program">${init.programs.map(p => opt(p.key, e.program, p.label)).join('')}${e.program ? '' : opt('', '', 'Choose…')}</select></div>
         <div><label>Year</label><select data-k="year">${opt('1st Year', e.year)}${opt('2nd Year', e.year, '2nd Year (migration)')}</select></div>
-        <div><label>Section</label><select data-k="section">${e.section ? '' : opt('', '', '–')}${secs.map(x => opt(x.name, e.section, x.name + ' · ' + secCount(x.name) + (extra[x.name] ? ' +' + extra[x.name] : ''))).join('')}</select></div>
+        <div><label>Section</label><select data-k="section">${e.section ? '' : opt('', '', '–')}${secs.map(x => { const r = secRoom(x.name, secCount(x.name) + (extra[x.name] || 0)); return opt(x.name, e.section, x.name + ' · ' + secCount(x.name) + (extra[x.name] ? ' +' + extra[x.name] : '') + (r.cap != null ? ' / ' + r.cap + ' seats' + (r.free < 0 ? ' · FULL by ' + (-r.free) : r.free === 0 ? ' · full' : ' · ' + r.free + ' free') : r.room ? ' · room size not known' : ' · no room')); }).join('')}</select>
+          ${(() => { const r = e.section ? secRoom(e.section, secCount(e.section) + (extra[e.section] || 0)) : null; return r && r.cap != null && r.free < 0 ? `<div class="warnp" style="color:var(--bad)">⚠ ${esc(e.section)} is over its room's capacity: ${esc(r.room)} has ${r.cap} seats, ${r.n} students would sit there.</div>` : r && r.room ? `<div class="sub">Room ${esc(r.room)}${r.cap != null ? ' · ' + r.cap + ' seats' : ''}</div>` : ''; })()}</div>
         <div><label>Roll No${e.rollManual ? ' (typed)' : ''}</label><input type="text" data-k="rollNo" value="${esc(e.rollNo)}" placeholder="${pl && pl.range ? 'free in ' + pl.range[0] + '–' + pl.range[1] : ''}" autocomplete="off" style="text-transform:uppercase"></div>
       </div>
       <label>Quota</label><select data-k="quota" ${mig ? 'disabled' : ''}>${qopts.map(q => opt(q, e.quota)).join('')}</select>`}
