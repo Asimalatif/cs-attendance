@@ -3293,6 +3293,21 @@ function fillTransform_(rows, C) {
 }
 
 /* ---------- v6.8 health check: the student data (strength sheet + Portal Data) ---------- */
+/** v8.13 reads "Permanent Workload" (S.No | Teacher | Designation | Classes | WORKLOAD under department headings) */
+function workloadCheck_() {
+  var sh = at_ss_().getSheetByName('Permanent Workload'), over = [], under = [];
+  if (!sh || sh.getLastRow() < 3) return { over: over, under: under, note: 'The sheet "Permanent Workload" is empty: run Admin tools > Teacher workload first.' };
+  var V = sh.getRange(1, 1, sh.getLastRow(), 5).getDisplayValues(), dept = '';
+  var limitOf = function (d) { d = String(d || '').toLowerCase(); if (/associate/.test(d)) return 9; if (/assistant/.test(d)) return 12; if (/professor/.test(d)) return 9; if (/lecturer/.test(d)) return 12; return null; };
+  V.forEach(function (r) {
+    if (r[0] && !r[1] && !r[4]) { dept = String(r[0]).replace(/^DEPARTMENT OF\s*/i, ''); return; }
+    var n = Number(String(r[4]).replace(/[^0-9.]/g, '')); if (!r[1] || /^teacher$/i.test(r[1]) || r[4] === '' || isNaN(n)) return;
+    var lim = limitOf(r[2]); if (lim === null) return;
+    var row = { t: r[1] + ' · ' + (r[2] || '') + ' · ' + n + ' (limit ' + lim + ')', r: [r[1], r[2], dept, n, lim + ' (' + (n > lim ? '+' : '') + (n - lim) + ')'] };
+    if (n > lim) over.push(row); else if (n < lim) under.push(row);
+  });
+  return { over: over, under: under, note: '' };
+}
 function studentChecks_(add, A) {
   var book = SpreadsheetApp.openById(USERS_SS_ID), ts = book.getSheetByName(TRANSFORM_SHEET);
   if (!ts || ts.getLastRow() < 2) return;
@@ -3442,6 +3457,15 @@ function studentChecks_(add, A) {
   add('stu_unpaid', 'Unpaid challan', lv(L.unpaid), L.unpaid, 'U- = unpaid challan (P- = paid).' + noP);
   add('stu_father', 'No father name', lv(L.nofather), L.nofather, '');
   add('room', 'Timetable classes without a room', lv(room), room, 'Fill the Room column of the Timetable.', SEC_COLS);
+  // v8.13 permanent teachers' workload against the limit of their designation (from the sheet "Permanent Workload" = last Workload run in Admin tools)
+  try {
+    var WL = workloadCheck_();
+    add('wl_over', 'Permanent teachers over their workload limit', lv(WL.over), WL.over, 'Limits: Lecturer 12, Assistant Professor 12, Associate Professor 9, Professor 9 (per week). From the sheet "Permanent Workload": run Admin tools > Teacher workload again after timetable changes.' + (WL.note ? ' ' + WL.note : ''), ['Teacher', 'Designation', 'Department', 'Workload', 'Limit / difference']);
+    add('wl_under', 'Permanent teachers under their workload limit', lv(WL.under), WL.under, 'Same limits as above; a teacher with fewer periods than her limit can take more classes.', ['Teacher', 'Designation', 'Department', 'Workload', 'Limit / difference']);
+  } catch (e) { add('wl_err', 'Workload check could not run', 'warn', [String(e.message || e)], ''); }
+  // v8.13 Open Quota students on a subsidized (half-fee) seat whose Aggregate is below the subsidized Open Quota cutoff
+  try { var QC = admQuotaCheck_(); add('stu_subq', 'Open Quota on a subsidized (half-fee) seat but Aggregate below the cutoff', lv(QC.items), QC.items, QC.help, ['Roll No', 'Student Name', 'Father Name', 'PCS', 'Detail / Status']); }
+  catch (e) { add('stu_subq_err', 'Subsidized quota check could not run', 'warn', [String(e.message || e)], ''); }
   var days = last && last.at ? 0 : 999;
   if (last && last.at) { var d = new Date(last.at.replace(/(\d+) (\w+) (\d+) .*/, '$2 $1, $3')); if (!isNaN(d)) days = Math.floor((Date.now() - d.getTime()) / 864e5); }
   add('portal', 'UOP portal data', days > 7 ? 'warn' : 'ok', days > 7 ? [last && last.at ? 'Last synced ' + last.at + ' (' + days + ' days ago)' : 'Never synced'] : [], 'Run "JCW Portal Sync" on the portal Students page (College > UOP portal sync).');
