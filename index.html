@@ -6153,7 +6153,7 @@ function adminExtraCards(){
 /* v8.6 seat alerts: empty seats and the next students in line (sent by the Admissions merit lists) */
 let seatAl = null, seatAlAt = 0;
 function alertCard(){
-  if(!seatAl || Date.now() - seatAlAt > 10 * 60000){ seatAlAt = Date.now(); srv({ action:'at_alerts' }, 90000).then(r => { seatAl = r; alRepaint(); }).catch(() => {}); }
+  if(!seatAl || Date.now() - seatAlAt > 10 * 60000){ seatAlAt = Date.now(); srv({ action:'at_alerts' }, 120000).then(r => { seatAl = r; alRepaint(); }).catch(e => { seatAl = { err:e.message || String(e) }; alRepaint(); }); }
   const d = seatAl && seatAl.data, L = d ? d.items || [] : [];
   if(!seatAl) return `<section class="card" id="alCard"><h3>${I.flag} Seat alerts</h3><div class="sub">Reading…</div></section>`;
   const E = L.reduce((t, x) => t + (x.e || 0), 0), B = L.reduce((t, x) => t + (x.b || 0), 0);
@@ -6170,10 +6170,18 @@ function alertCard(){
 /* v8.10 rooms over capacity + new students on the portal who paid the fee (not only the Rs 2,600 registration) */
 function alRepaint(){ [['#alCard', alertCard], ['#rmCard', roomCard], ['#nwCard', freshCard]].forEach(([id, fn]) => { const c = $q(id); if(c){ const t = document.createElement('div'); t.innerHTML = fn(); c.replaceWith(t.firstElementChild); } }); }
 /* v8.11 rooms over capacity: its own card */
+/* why a card has no data: still reading / the server answered with an error / the server code was not updated */
+function alWhy(part){
+  if(!seatAl) return 'Reading…';
+  if(seatAl.err) return '⚠ ' + seatAl.err;
+  if(!seatAl.home) return '⚠ The server does not send this yet: in Apps Script paste admHomeAlerts_ (Admissions.gs) and the "home" lines of at_alerts (AdminTools.gs), then Deploy → New version.';
+  const e = seatAl.home[part]; return e ? '⚠ ' + e : '';
+}
 function roomCard(){
+  if(!seatAl || seatAl.err || !seatAl.home) alertCard();       // starts the reading when this card is opened on its own
   const h = seatAl && seatAl.home, R = h ? h.rooms || [] : null;
   return `<section class="card" id="rmCard"><h3>${I.flag} Rooms over capacity ${R && R.length ? `<span class="ct">${R.length}</span>` : ''}</h3>
-    <div class="sub">${!R ? 'Reading…' : R.length ? R.length + ' section' + (R.length === 1 ? ' has' : 's have') + ' more students than the seats of their room (R # 05/40 = 40 seats; EVENING is the same room).' : '✓ Every section fits in its room.'}</div>
+    <div class="sub">${alWhy('roomErr') && (!R || h.roomErr) ? esc(alWhy('roomErr')) : R.length ? R.length + ' section' + (R.length === 1 ? ' has' : 's have') + ' more students than the seats of their room (R # 05/40 = 40 seats; EVENING is the same room).' : '✓ Every section fits in its room.'}</div>
     ${R && R.length ? R.map(x => `<div class="li"><span class="tx"><b>${esc(x[0])}</b> · ${esc(x[1])}<small style="color:var(--bad);font-weight:700">${x[3]} students in a room for ${x[2]} (${x[3] - x[2]} too many)</small></span></div>`).join('') : ''}
     <div class="acts2"><a class="btn" href="timetable.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Change rooms (timetable)</a><button class="btn" type="button" id="xRmRe">Refresh</button></div></section>`;
 }
@@ -6181,7 +6189,7 @@ function roomCard(){
 function freshCard(){
   const h = seatAl && seatAl.home, F = h ? h.fresh || [] : null;
   return `<section class="card" id="nwCard"><h3>${I.flag} New on the portal, fee paid ${F && F.length ? `<span class="ct">${F.length}</span>` : ''}</h3>
-    <div class="sub">${!F ? 'Reading…' : F.length ? F.length + ' student' + (F.length === 1 ? '' : 's') + ' enrolled on the portal with a paid fee (not only the registration) but not yet in the strength sheet.' : '✓ No new paid student waiting.'} Last portal sync: ${h && h.sync ? esc(h.sync) : 'unknown'}.</div>
+    <div class="sub">${alWhy('freshErr') && (!F || h.freshErr) ? esc(alWhy('freshErr')) : F.length ? F.length + ' student' + (F.length === 1 ? '' : 's') + ' enrolled on the portal with a paid fee (not only the registration) but not yet in the strength sheet.' : '✓ No new paid student waiting.'} Last portal sync: ${h && h.sync ? esc(h.sync) : 'unknown'}.</div>
     ${F && F.length ? F.map(x => `<div class="li"><span class="tx"><b>${esc(x[0])}</b> d/o ${esc(x[1] || '-')}<small>${esc(x[2] || 'program?')} · ${esc(x[3])} · ${esc(x[6] || '')} · paid Rs ${Number(x[5]).toLocaleString('en-PK')} · portal ID ${esc(x[4])}</small></span></div>`).join('') : ''}
     <div class="acts2"><button class="btn primary" type="button" id="xPortalSync" title="Opens the UOP portal in a small window; the sync button there reads the list and the fee of the new students, then the window closes by itself">Sync with the portal now</button>
       <a class="btn" href="admission.html#pnew" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Add them (From portal)</a></div>
