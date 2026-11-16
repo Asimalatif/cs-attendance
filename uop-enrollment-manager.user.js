@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UOP VC - Enrollment Manager
 // @namespace    UOP-JCW
-// @version      3.6
+// @version      3.7
 // @description  From the JCW CSV: set Enrollment#, Reg# (= Enrollment#), Program, Class and Section on each student's edit page (matched by PORTAL ID)
 // @match        https://portal.uop.edu.pk/Student/Students*
 // @grant        none
@@ -777,7 +777,7 @@
     const p = document.createElement("div");
     p.id = "uopEM";
     p.innerHTML = `
-<header id="uopEM_hdr"><span>🎓 UOP Enrollment Manager v3.6 (JCW)</span><span id="uopEM_min">–</span></header>
+<header id="uopEM_hdr"><span>🎓 UOP Enrollment Manager v3.7 (JCW)</span><span id="uopEM_min">–</span></header>
 <div class="b" id="uopEM_body">
   <div class="r"><button class="g" id="uopEM_app">⬇ Load wrong values from JCW app</button><small>or CSV:</small><input type="file" id="uopEM_file" accept=".csv"><small id="uopEM_info"></small></div>
   <div class="r"><small>Edit URL</small><input type="text" id="uopEM_url" style="flex:1"><button class="s" id="uopEM_detect">Detect</button></div>
@@ -862,7 +862,9 @@
       if (j.note) log(j.note, "warn");
       log(rows.length ? rows.length + " student(s) with wrong values on the portal:" : "Nothing to correct: Program, Class, Section and Enroll# on the portal match the strength sheet. ✔", "ok");
       const risky = new Set((j.keep || []).filter((k) => /student name|father/i.test(k[4])).map((k) => String(k[0]).toUpperCase().replace(/\s+/g, "")));
-      rows.forEach((x) => { x.risk = risky.has(String(x.enroll).toUpperCase().replace(/\s+/g, "")); if (x.risk) x.pick = false; });
+      const never = lsGet("uopEM_never", {});
+      rows.forEach((x) => { x.risk = risky.has(String(x.enroll).toUpperCase().replace(/\s+/g, "")); if (x.risk) x.pick = false; x.never = !!never[x.id]; if (x.never) x.pick = false; });
+      (j.keep || []).length && log("✋ lines are only information: the script never changes them.", "dim");
       lsSet(LS.rows, rows); drawPick();
       (j.keep || []).forEach((k) => log("✋ By hand (marks etc.): " + k[0] + " " + k[1] + " — " + k[4] + ": app " + k[5] + ", portal " + k[6], "warn"));
       if (rows.length && auto) { log("Checking each student on the portal first (nothing is saved)…", "dim"); await run(true); log("Check done. Press ▶ Update to correct them on the portal.", "head"); }
@@ -878,9 +880,11 @@
     box.style.display = "";
     box.innerHTML = '<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px"><b>' + n + " of " + rows.length + ' ticked</b><button class="s" id="uopEM_all">Tick all</button><button class="s" id="uopEM_none">Untick all</button><small>Check / Update work only on the ticked students.</small></div>' +
       rows.map((x, i) => '<label style="display:block;padding:3px 2px;border-bottom:1px solid #eee' + (x.risk ? ';background:#fff4e5' : '') + '"><input type="checkbox" data-i="' + i + '"' + (x.pick ? " checked" : "") + "> <b>" + esc(x.id) + "</b> " + esc(x.name) + " — " + esc(x.why) +
-        (x.risk ? ' <b style="color:#b45309">⚠ name / father on the portal is different: may be another student — check by hand first</b>' : "") + "</label>").join("");
-    box.querySelectorAll("input[data-i]").forEach((c) => (c.onchange = () => { rows[+c.dataset.i].pick = c.checked; lsSet(LS.rows, rows); drawPick(); }));
-    $("#uopEM_all").onclick = () => { rows.forEach((x) => (x.pick = true)); lsSet(LS.rows, rows); drawPick(); };
+        (x.risk ? ' <b style="color:#b45309">⚠ name / father on the portal is different: may be another student — check by hand first</b>' : "") +
+        ' <a href="#" data-nv="' + i + '" style="font-size:11px">' + (x.never ? "↺ allow again" : "✕ never change this student") + "</a>" + (x.never ? " <i>(never)</i>" : "") + "</label>").join("");
+    box.querySelectorAll("a[data-nv]").forEach((a) => (a.onclick = (e) => { e.preventDefault(); const x = rows[+a.dataset.nv], nv = lsGet("uopEM_never", {}); x.never = !x.never; if (x.never) { nv[x.id] = 1; x.pick = false; } else delete nv[x.id]; lsSet("uopEM_never", nv); lsSet(LS.rows, rows); drawPick(); }));
+    box.querySelectorAll("input[data-i]").forEach((c) => (c.onchange = () => { if (rows[+c.dataset.i].never) { c.checked = false; return; } rows[+c.dataset.i].pick = c.checked; lsSet(LS.rows, rows); drawPick(); }));
+    $("#uopEM_all").onclick = () => { rows.forEach((x) => (x.pick = !x.never)); lsSet(LS.rows, rows); drawPick(); };
     $("#uopEM_none").onclick = () => { rows.forEach((x) => (x.pick = false)); lsSet(LS.rows, rows); drawPick(); };
   }
 
