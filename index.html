@@ -6157,14 +6157,29 @@ function alertCard(){
   const d = seatAl && seatAl.data, L = d ? d.items || [] : [];
   if(!seatAl) return `<section class="card" id="alCard"><h3>${I.flag} Seat alerts</h3><div class="sub">Reading…</div></section>`;
   const E = L.reduce((t, x) => t + (x.e || 0), 0), B = L.reduce((t, x) => t + (x.b || 0), 0);
-  return `<section class="card" id="alCard"><h3>${I.flag} Seat alerts ${L.length ? `<span class="ct">${L.length}</span>` : ''}</h3>
-    <div class="sub">${!d ? 'Not worked out yet.' : L.length ? L.length + ' quota list' + (L.length === 1 ? '' : 's') + ' need' + (L.length === 1 ? 's' : '') + ' you: ' + E + ' empty seat' + (E === 1 ? '' : 's') + (B ? ', ' + B + ' student' + (B === 1 ? '' : 's') + ' in the wrong place' : '') + '. The number = how many quota lists.' : 'All seats filled.'}</div>
+  const HR = (seatAl.home && seatAl.home.rooms || []).length, HF = (seatAl.home && seatAl.home.fresh || []).length;
+  return `<section class="card" id="alCard"><h3>${I.flag} Seat alerts ${L.length + HR + HF ? `<span class="ct">${L.length + HR + HF}</span>` : ''}</h3>
+    <div class="sub">${HF ? HF + ' new paid student' + (HF === 1 ? '' : 's') + ' on the portal. ' : ''}${HR ? HR + ' room' + (HR === 1 ? '' : 's') + ' over capacity. ' : ''}${!d ? 'Seats not worked out yet.' : L.length ? L.length + ' quota list' + (L.length === 1 ? '' : 's') + ' need' + (L.length === 1 ? 's' : '') + ' you: ' + E + ' empty seat' + (E === 1 ? '' : 's') + (B ? ', ' + B + ' student' + (B === 1 ? '' : 's') + ' in the wrong place' : '') + '. The number = quota lists + rooms over capacity + new paid students.' : 'All seats filled.'}</div>
     ${seatAl.stale ? `<div class="sub" style="color:var(--leave);font-weight:700">Changed since: ${esc(seatAl.stale)}. Open the merit lists to bring the alerts up to date.</div>` : ''}
     ${!d ? '<div class="sub">No alerts yet: open Admissions → Merit lists once.</div>' : !L.length ? '<div class="sub">✓ Every seat with a limit is filled and nobody is in the wrong place.</div>' :
       L.map(x => `<div class="li"><span class="tx"><b>${esc(x.l)} · ${esc(x.q)}</b><small>${x.e ? x.e + ' empty seat' + (x.e === 1 ? '' : 's') + ' of ' + x.s : ''}${x.e && x.b ? ' · ' : ''}${x.b ? x.b + ' in the wrong place' : ''}</small>
         ${x.c && x.c.length ? `<small>Next: ${x.c.map(c => esc(c[0]) + ' (' + esc(c[1]) + ', ' + c[2] + ', ' + esc(c[3]) + ')').join(' · ')}</small>` : x.e ? '<small>No candidate in the list yet.</small>' : ''}</span></div>`).join('')}
     ${d ? `<div class="sub">Worked out ${esc(d.at)}${d.by ? ' (' + esc(d.by) + ')' : ''}.</div>` : ''}
+    ${alertHome()}
     <div class="acts2"><a class="btn primary" href="admission.html#merit" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open the merit lists</a><button class="btn" type="button" id="xAlRe">Refresh</button></div></section>`;
+}
+/* v8.10 rooms over capacity + new students on the portal who paid the fee (not only the Rs 2,600 registration) */
+function alertHome(){
+  const h = seatAl && seatAl.home; if(!h) return '';
+  const R = h.rooms || [], F = h.fresh || [];
+  return `<div style="border-top:1.5px solid var(--line);margin-top:10px;padding-top:8px"><b>Rooms over capacity ${R.length ? `<span class="ct">${R.length}</span>` : ''}</b>
+      ${R.length ? R.slice(0, 12).map(x => `<div class="li"><span class="tx"><b>${esc(x[0])}</b> · ${esc(x[1])}<small style="color:var(--bad);font-weight:700">${x[3]} students in a room for ${x[2]} (${x[3] - x[2]} too many)</small></span></div>`).join('') + (R.length > 12 ? `<div class="sub">… and ${R.length - 12} more</div>` : '') : '<div class="sub">✓ No section has more students than its room has seats.</div>'}
+    </div>
+    <div style="border-top:1.5px solid var(--line);margin-top:10px;padding-top:8px"><b>New on the portal, fee paid ${F.length ? `<span class="ct">${F.length}</span>` : ''}</b>
+      ${F.length ? F.slice(0, 15).map(x => `<div class="li"><span class="tx"><b>${esc(x[0])}</b> d/o ${esc(x[1] || '-')}<small>${esc(x[2] || 'program?')} · ${esc(x[3])} · ${esc(x[6] || '')} · paid Rs ${Number(x[5]).toLocaleString('en-PK')} · portal ID ${esc(x[4])}</small></span></div>`).join('') + (F.length > 15 ? `<div class="sub">… and ${F.length - 15} more</div>` : '') : '<div class="sub">✓ No new paid student waiting to be added.</div>'}
+      <div class="sub">Not yet in the strength sheet; paid challans other than the registration fee. From the last portal sync${h.sync ? ' (' + esc(h.sync) + ')' : ''}: run <b>Quick sync</b> on the portal to see the newest.</div>
+      ${F.length ? '<div class="acts2"><a class="btn" href="admission.html#pnew" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Add them (Admissions › From portal)</a></div>' : ''}
+    </div>`;
 }
 /* SCI TT MORNING ADMIN: timetable editor (morning science sections) + morning classes report, on the home screen */
 function ttmCard(){
