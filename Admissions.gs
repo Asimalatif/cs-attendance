@@ -155,6 +155,7 @@ function admRoute_(user, req) {
     case 'adm_keep_del':  return admKeepDel_(req.roll, req.f);
     case 'adm_fixlist':   return admPortalFixList_();
     case 'adm_migrated':  return admMigrated_();
+    case 'adm_mig_import': return admMigImport_(req.rows || []);
     case 'adm_add_new':   CacheService.getScriptCache().remove('adm_home_al_v1'); return admAddNew_(user, req.items || [], req.override === true);
     case 'adm_fee_receipt': return admFeeReceipt_(user, req);
     case 'adm_oml_get':   return admOmlGet_();
@@ -373,12 +374,28 @@ function admMigrated_() {
       if (rc >= 0) mv.slice(1).forEach(function (r) { var k = admNormRoll_(r[rc]); if (!k) return; listed[k] = 1; if (fc >= 0 && String(r[fc]).trim() && !from[k]) from[k] = String(r[fc]).trim(); });
     }
   } catch (e) {}
+  // v8.18 the board's (BISEP) migration list pasted into the app: matched by student name + father name, 1st and 2nd Year
+  var BZ = admBisepMig_(), bByNF = {}, bByN = {}, bUsed = {};
+  BZ.forEach(function (b, i) { bByNF[admNmK_(b.name) + '|' + admNmK_(b.father)] = i; var kn = admNmK_(b.name); (bByN[kn] = bByN[kn] || []).push(i); });
+  var bisepOf = function (r) {
+    var i = bByNF[admNmK_(r.name) + '|' + admNmK_(r.father)];
+    if (i === undefined) { var c = (bByN[admNmK_(r.name)] || []).filter(function (j) { var f1 = admNmK_(BZ[j].father).slice(0, 5), f2 = admNmK_(r.father).slice(0, 5); return f1 && f1 === f2; }); if (c.length === 1) i = c[0]; }
+    return i === undefined ? null : i;
+  };
   var P = null, byId = {}, byRoll = {};
   try { P = admPortalSheet_(); if (P) P.v.slice(1).forEach(function (r) { var id = P.g(r, 'studentid'), en = P.g(r, 'enrollment'); if (id) byId[id] = r; if (en) byRoll[admNormRoll_(en)] = r; }); } catch (e) {}
   var rows = [], noDate = 0;
   admAll_(admRead_(), set.sections).forEach(function (r) {
-    if (!r.name || !r.roll || !admIsMig_(r.year)) return;
-    var k = admNormRoll_(r.roll), n = admRollNum_(r.roll, M.ROLL_PREFIX), why = [], pr = P ? ((r.id && byId[r.id]) || byRoll[k]) : null;
+    if (!r.name || !r.roll) return;
+    var bi = bisepOf(r), why = [];
+    if (bi !== null) { bUsed[bi] = 1; why.push('BISEP migration list (' + (BZ[bi].status || '?') + ')'); }
+    if (!admIsMig_(r.year)) {                                              // 1st Year: only the board's list can tell
+      if (bi === null) return;
+      rows.push({ roll: r.roll, name: r.name, father: r.father || '', program: r.programName || '', pcs: r.pcs || '', section: r.section || '', metric: r.metric || '', total: r.total || '',
+                  year: r.year || '1st Year', from: BZ[bi].from || '', reg: BZ[bi].reg || '', contact: r.contact || '', status: r.status || '', first: '', why: why.join(' · ') });
+      return;
+    }
+    var k = admNormRoll_(r.roll), n = admRollNum_(r.roll, M.ROLL_PREFIX), pr = P ? ((r.id && byId[r.id]) || byRoll[k]) : null;
     var first = (pr && P.g(pr, 'firstchallandate')) || (pr && P.g(pr, 'feepaiddate')) || r.feepaid || '';
     if (first && dk(first) && dk(first) >= sessK) why.push('no 1st-year payment on the portal (first ' + (pr && P.g(pr, 'firstchallandate') ? 'challan' : 'fee paid') + ' ' + first + ')');
     if (!first) noDate++;
@@ -386,10 +403,32 @@ function admMigrated_() {
     if (listed[k]) why.push('in "Migrated to JCW"');
     if (!why.length) return;
     rows.push({ roll: r.roll, name: r.name, father: r.father || '', program: r.programName || '', pcs: r.pcs || '', section: r.section || '', metric: r.metric || '', total: r.total || '',
-                from: from[k] || '', contact: r.contact || '', status: r.status || '', first: first, why: why.join(' · ') });
+                year: r.year || '2nd Year', from: (bi !== null && BZ[bi].from) || from[k] || '', reg: bi !== null ? BZ[bi].reg : '', contact: r.contact || '', status: r.status || '', first: first, why: why.join(' · ') });
   });
-  rows.sort(function (a, b) { return String(a.roll).localeCompare(String(b.roll), undefined, { numeric: true }); });
-  return { ok: true, rows: rows, at: admNow_(), noDate: noDate };
+  rows.sort(function (a, b) { return String(a.year).localeCompare(String(b.year)) || String(a.roll).localeCompare(String(b.roll), undefined, { numeric: true }); });
+  var missing = BZ.filter(function (b, i) { return !bUsed[i]; });
+  return { ok: true, rows: rows, at: admNow_(), noDate: noDate, bisep: BZ.length, missing: missing };
+}
+/** v8.18 name key for matching: letters only, titles dropped ('Syeda Sara Khan' = 'SYEDA SARA KHAN') */
+function admNmK_(s) { return String(s || '').toUpperCase().replace(/\b(MST|MRS|MS|MISS|DR|SYED|SYEDA|HAFIZA|MUHAMMAD|MOHAMMAD|MUHAMAD|MOHAMMED|M)\b\.?/g, '').replace(/[^A-Z]/g, ''); }
+var ADM_BISEP_SHEET = 'BISEP Migrations';
+function admBisepMig_() {
+  var sh = admBook_().getSheetByName(ADM_BISEP_SHEET); if (!sh || sh.getLastRow() < 2) return [];
+  return sh.getRange(2, 1, sh.getLastRow() - 1, 7).getDisplayValues().filter(function (r) { return r[2]; })
+    .map(function (r) { return { reg: r[0], group: r[1], name: r[2], father: r[3], from: r[4], status: r[5], at: r[6] }; });
+}
+/** v8.18 the "students that want migration to your college" list copied from the BISEP portal: replaces the sheet "BISEP Migrations" */
+function admMigImport_(rows) {
+  rows = (rows || []).filter(function (r) { return r && r.name; }); if (!rows.length) throw new Error('Nothing to save: paste the list from the BISEP portal.');
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    var b = admBook_(), sh = b.getSheetByName(ADM_BISEP_SHEET) || b.insertSheet(ADM_BISEP_SHEET), now = admNow_();
+    sh.clearContents();
+    var V = [['Reg No', 'Group', 'Name', 'Father Name', 'Migrated From', 'Request Status', 'Imported']].concat(rows.map(function (r) {
+      return [String(r.reg || ''), r.group || '', r.name, r.father || '', r.from || '', r.status || '', now]; }));
+    sh.getRange(1, 1, V.length, 7).setNumberFormat('@').setValues(V); sh.setFrozenRows(1);
+    return { ok: true, saved: rows.length };
+  } finally { lock.releaseLock(); }
 }
 function admKeepSheet_() {
   var b = admBook_(), sh = b.getSheetByName(ADM_KEEP_SHEET);
