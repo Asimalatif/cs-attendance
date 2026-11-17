@@ -6475,7 +6475,7 @@ async function runHealth(){
     if(!r.part || r.part === 'all') break;                              // older server: everything came in one go
   }
   show(HC_STEPS.length, 'Done');
-  hc = all; hc.results = hc.results || { at:'', count:0 };
+  hc = all; hc.results = hc.results || { at:'', count:0 }; hcSel = null;
   loadShs(true);
   hcShow();
 }
@@ -6489,7 +6489,10 @@ function hcShow(){
       ${HC_FIX[c.key] ? `<button class="btn small" type="button" data-xhf="${HC_FIX[c.key][0]}">${HC_FIX[c.key][1]}</button>` : ''}
       ${c.key === 'stu_status' ? `<button class="btn small primary" type="button" id="xLeftMove2">Move them to Left Students</button>` : ''}`}</details>`).join('')}
     <div class="sub" style="margin-top:8px">Student result page: ${hc.results.at ? 'updated ' + esc(hc.results.at) + ' (' + hc.results.count + ' students)' : 'not built yet'}. <button class="btn small" type="button" data-xhf="results">Update it now</button></div>
-    <div class="acts"><button class="btn small grow" type="button" data-xhx="*">Everything (Excel)</button><button class="btn small grow" id="xHcTxt">Share as text</button><button class="btn small grow" id="closeDlg">Close</button></div>`);
+    ${(() => { const L = hc.checks.filter(c => c.level !== 'ok' && c.n > 0); if(!hcSel) hcSel = new Set(L.map(c => c.key));
+      return L.length ? `<div class="card" style="margin-top:10px;padding:10px"><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="flex:1">Choose what goes into the Excel file</b><button class="btn small" type="button" id="hcAllOn">Tick all</button><button class="btn small" type="button" id="hcAllOff">Tick none</button></div>
+        ${L.map(c => `<label class="ckrow" style="padding:5px 2px;display:flex;gap:8px;align-items:center"><input type="checkbox" data-hck="${esc(c.key)}"${hcSel.has(c.key) ? ' checked' : ''}> <span style="flex:1">${esc(c.title)}</span><small style="color:var(--muted)">${c.n}</small></label>`).join('')}</div>` : ''; })()}
+    <div class="acts"><button class="btn small grow" type="button" data-xhx="*">Ticked checks (Excel)</button><button class="btn small grow" id="xHcTxt">Share as text</button><button class="btn small grow" id="closeDlg">Close</button></div>`);
 }
 
 const csvQ = v => { const t = String(v == null ? '' : v); return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
@@ -6751,8 +6754,13 @@ function rosCsv(){
   P.offerFile(csvBlob(L), 'Sheets-vs-strength_' + R.mon + '.csv', 'Sheets vs strength sheet · ' + R.label);
 }
 
+let hcSel = null;                                                      // v8.15 the checks ticked for "Ticked checks (Excel)"
+document.addEventListener('change', e => { const c = e.target.closest && e.target.closest('[data-hck]'); if(c && hcSel){ c.checked ? hcSel.add(c.dataset.hck) : hcSel.delete(c.dataset.hck); } });
+document.addEventListener('click', e => { const on = e.target.closest && e.target.closest('#hcAllOn, #hcAllOff'); if(!on || !hc) return;
+  const v = on.id === 'hcAllOn'; document.querySelectorAll('[data-hck]').forEach(x => { x.checked = v; v ? hcSel.add(x.dataset.hck) : hcSel.delete(x.dataset.hck); }); });
 function hcCsv(key){
-  const list = key === '*' ? hc.checks.filter(c => c.level !== 'ok') : hc.checks.filter(c => c.key === key);
+  if(key === '*' && hcSel && !hcSel.size) return toast('Tick at least one check.');
+  const list = key === '*' ? hc.checks.filter(c => c.level !== 'ok' && (!hcSel || hcSel.has(c.key))) : hc.checks.filter(c => c.key === key);
   const colsOf = c => c.cols || ['Roll No', 'Student Name', 'Father Name', 'PCS', 'Detail / Status'];
   const all = []; list.forEach(c => colsOf(c).forEach(h => { if(!all.includes(h)) all.push(h); }));   // "Everything": one column per kind of value
   const L = [['Check'].concat(all)].concat(...list.map(c => { const cs = colsOf(c);
