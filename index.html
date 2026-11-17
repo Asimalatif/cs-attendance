@@ -4494,13 +4494,17 @@ function classPdf(S, q){
 /* ----- PDF: whole college / department / all my sections: summary + one page per section ----- */
 function multiClassPdf(S, q, title){
   if(!S.length) throw new Error('No attendance found for this choice.');
-  const C = P.C, secs = [...new Set(S.map(s => s.cls))].sort((a, b) => a.localeCompare(b, undefined, { numeric:true }));
+  // v8.18 "F.A-1 / F.A-2 Optional Subjects" are A + B sitting together, not sections: listed last, not numbered, not counted
+  const opt = c => /optional/i.test(c);
+  const C = P.C, secs = [...new Set(S.map(s => s.cls))].sort((a, b) => opt(a) - opt(b) || a.localeCompare(b, undefined, { numeric:true })), nReal = secs.filter(c => !opt(c)).length;
   const doc = P.newDoc('landscape'); let Y = P.TOP;
-  Y = P.heading(doc, Y, 'Complete Attendance & Test Report', title + ' · ' + rangeTxt(q) + ' · ' + secs.length + ' section' + (secs.length === 1 ? '' : 's'));
-  Y = classBoxes(doc, Y, S, q);
+  Y = P.heading(doc, Y, 'Complete Attendance & Test Report', title + ' · ' + rangeTxt(q) + ' · ' + nReal + ' section' + (nReal === 1 ? '' : 's'));
+  // the college totals count each student ONCE (her optional-subjects / guest rows joined to her own section)
+  const rolls = [...new Set(S.map(s => s.roll))];
+  Y = classBoxes(doc, Y, rolls.length < S.length ? rolls.flatMap(r => oneStudent(S, r)) : S, q);
   const sum = secs.map(c => { const k = classStats(S.filter(s => s.cls === c), q); return { c, k }; });
   P.table(doc, { startY:Y, head:[['#', 'Section', 'Students', 'Attendance %', 'Students below ' + q.below + '%', 'Monthly tests %']],
-    body:sum.map((x, i) => [i + 1, x.c, x.k.n, x.k.pct == null ? '-' : x.k.pct + '%', x.k.short, x.k.tp == null ? '-' : x.k.tp + '%']),
+    body:sum.map((x, i) => [opt(x.c) ? '–' : i + 1, opt(x.c) ? x.c + ' (A + B together, not a separate section)' : x.c, x.k.n, x.k.pct == null ? '-' : x.k.pct + '%', x.k.short, x.k.tp == null ? '-' : x.k.tp + '%']),
     columnStyles:{ 0:{ halign:'center', cellWidth:10 }, 2:{ halign:'center' }, 3:{ halign:'center' }, 4:{ halign:'center' }, 5:{ halign:'center' } },
     didParseCell:h => { if(h.section !== 'body') return; const k = sum[h.row.index].k;
       if(h.column.index === 3 && k.pct != null && k.pct < q.below) redCell(h, C);
