@@ -2822,221 +2822,49 @@ function generateTeacherWorkloadByStatus() {
       "Writing " + sheetName
     );
 
-    const existing =
-      ss.getSheetByName(sheetName);
-
-    if (existing) {
-      ss.deleteSheet(existing);
+    // v8.15 written in a few big steps (one setValues + grouped formatting) instead of 6 calls per teacher:
+    // the workbook is large and many small writes made Google time out ("Service Spreadsheets timed out")
+    let dest = ss.getSheetByName(sheetName);
+    if (dest) {
+      try { dest.getRange(1, 1, dest.getMaxRows(), dest.getMaxColumns()).breakApart(); } catch (e) {}
+      dest.clear();
+    } else {
+      dest = ss.insertSheet(sheetName);
     }
-
-    const dest =
-      ss.insertSheet(sheetName);
-
-    let row = 1;
-
-    const year =
-      new Date().getFullYear();
-
-    // ==========================================================
-    // TITLE
-    // ==========================================================
-
-    dest
-      .getRange(row, 1, 1, 5)
-      .merge()
-      .setValue(
-        sheetName.toUpperCase() +
-        " – " +
-        year
-      )
-      .setFontWeight("bold")
-      .setFontSize(22)
-      .setFontFamily("Georgia")
-      .setHorizontalAlignment("center")
-      .setVerticalAlignment("middle")
-      .setBackground("#B4C6E7");
-
-    row += 2;
-
-    // ==========================================================
-    // DEPARTMENTS
-    // ==========================================================
-
-    const sortedDepartments =
-      Object.keys(workloadMap).sort();
-
-    for (
-      const dept of sortedDepartments
-    ) {
-
-      // --------------------------------------------------------
-      // Department heading
-      // --------------------------------------------------------
-
-      dest
-        .getRange(row, 1, 1, 5)
-        .merge()
-        .setValue(
-          dept.toString().toUpperCase()
-        )
-        .setFontWeight("bold")
-        .setFontSize(16)
-        .setFontFamily("Georgia")
-        .setBackground("#D9E1F2")
-        .setHorizontalAlignment("center")
-        .setVerticalAlignment("middle");
-
-      row++;
-
-      // --------------------------------------------------------
-      // HEADER
-      // --------------------------------------------------------
-
-      dest
-        .getRange(row, 1, 1, 5)
-        .setValues([
-          [
-            "S.No",
-            "Teacher",
-            "Designation",
-            "Classes",
-            "WORKLOAD"
-          ]
-        ])
-        .setFontWeight("bold")
-        .setFontSize(14)
-        .setFontFamily("Calibri")
-        .setBackground("#F2F2F2")
-        .setHorizontalAlignment("center");
-
-      row++;
-
-      // --------------------------------------------------------
-      // SORT TEACHERS BY S.NO
-      // --------------------------------------------------------
-
-      const teachers =
-        workloadMap[dept];
-
-      const sortedTeachers =
-        Object.entries(
-          teachers
-        ).sort(
-          (a, b) =>
-            a[1].sn -
-            b[1].sn
-        );
-
-      // IMPORTANT:
-      // S.No starts from 1 separately for every department.
+    const year = new Date().getFullYear();
+    const V = [], titleRows = [], deptRows = [], headRows = [], teachRows = [];
+    V.push([sheetName.toUpperCase() + " – " + year, "", "", "", ""]); titleRows.push(1);
+    V.push(["", "", "", "", ""]);
+    Object.keys(workloadMap).sort().forEach(function (dept) {
+      V.push([dept.toString().toUpperCase(), "", "", "", ""]); deptRows.push(V.length);
+      V.push(["S.No", "Teacher", "Designation", "Classes", "WORKLOAD"]); headRows.push(V.length);
+      const sortedTeachers = Object.entries(workloadMap[dept]).sort(function (a, b) { return a[1].sn - b[1].sn; });
       let sno = 1;
-
-      // --------------------------------------------------------
-      // TEACHERS
-      // --------------------------------------------------------
-
-      for (
-        const [teacher, info] of
-        sortedTeachers
-      ) {
-
-        dest
-          .getRange(
-            row,
-            1,
-            1,
-            5
-          )
-          .setValues([
-            [
-              sno,
-
-              teacher,
-
-              info.designation,
-
-              info.classes
-                .map(item => {
-
-                  const formattedDays =
-                    formatCombinedDays(
-                      item.dayValues
-                    );
-
-                  return formattedDays
-                    ? item.className +
-                      " (" +
-                      formattedDays +
-                      ")"
-                    : item.className;
-
-                })
-                .join(", "),
-
-              info.workload
-            ]
-          ])
-          .setFontSize(14)
-          .setFontFamily("Cambria")
-          .setVerticalAlignment("middle");
-
-        // ------------------------------------------------------
-        // BORDER
-        // ------------------------------------------------------
-
-        dest
-          .getRange(
-            row,
-            1,
-            1,
-            5
-          )
-          .setBorder(
-            true,
-            true,
-            true,
-            true,
-            true,
-            true
-          );
-
-        // ------------------------------------------------------
-        // WORKLOAD CENTERED
-        // ------------------------------------------------------
-
-        dest
-          .getRange(row, 5)
-          .setHorizontalAlignment(
-            "center"
-          )
-          .setFontWeight("bold");
-
-        row++;
-
-        sno++;
-      }
-
-      // Space after department
-      row++;
-    }
-
-    // ==========================================================
-    // COLUMN WIDTHS
-    // EXACTLY AS ORIGINAL
-    // ==========================================================
-
+      sortedTeachers.forEach(function (e) {
+        const teacher = e[0], info = e[1];
+        V.push([sno, teacher, info.designation, info.classes.map(function (item) {
+          const d = formatCombinedDays(item.dayValues); return d ? item.className + " (" + d + ")" : item.className;
+        }).join(", "), info.workload]);
+        teachRows.push(V.length); sno++;
+      });
+      V.push(["", "", "", "", ""]);
+    });
+    if (dest.getMaxRows() < V.length) dest.insertRowsAfter(dest.getMaxRows(), V.length - dest.getMaxRows());
+    dest.getRange(1, 1, V.length, 5).setValues(V);
+    const fmt = function (rows, f) { if (rows.length) f(dest.getRangeList(rows.map(function (r) { return "A" + r + ":E" + r; }))); };
+    titleRows.concat(deptRows).forEach(function (r) { dest.getRange(r, 1, 1, 5).merge(); });
+    fmt(titleRows, function (L) { L.setFontWeight("bold").setFontSize(22).setFontFamily("Georgia").setHorizontalAlignment("center").setVerticalAlignment("middle").setBackground("#B4C6E7"); });
+    fmt(deptRows, function (L) { L.setFontWeight("bold").setFontSize(16).setFontFamily("Georgia").setBackground("#D9E1F2").setHorizontalAlignment("center").setVerticalAlignment("middle"); });
+    fmt(headRows, function (L) { L.setFontWeight("bold").setFontSize(14).setFontFamily("Calibri").setBackground("#F2F2F2").setHorizontalAlignment("center"); });
+    fmt(teachRows, function (L) { L.setFontSize(14).setFontFamily("Cambria").setVerticalAlignment("middle").setBorder(true, true, true, true, true, true); });
+    if (teachRows.length) dest.getRangeList(teachRows.map(function (r) { return "E" + r; })).setHorizontalAlignment("center").setFontWeight("bold");
     dest.setColumnWidth(1, 55);
     dest.setColumnWidth(2, 220);
     dest.setColumnWidth(3, 180);
     dest.setColumnWidth(4, 500);
     dest.setColumnWidth(5, 100);
-
-    // ==========================================================
-    // FREEZE
-    // EXACTLY AS ORIGINAL
-    // ==========================================================
-
     dest.setFrozenRows(2);
+    SpreadsheetApp.flush();
   }
 
   // ============================================================
