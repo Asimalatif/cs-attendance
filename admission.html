@@ -840,6 +840,7 @@ function pnHtml(){
           ${!s.progSure ? `<div class="warnp">Check the program: the portal does not say which ${esc((prog(s.program) || {}).classProgram || '')} program.</div>` : ''}
           ${!mig ? omlBadge(pnEntry(s).oml, s) : ''}
           ${!mig && pnSeatFull(s) ? `<div class="warnp" style="color:var(--bad)">⚠ ${esc(pnSeatFull(s))}</div>` : ''}
+          ${subFeeHint(s.challan, e.program, e.year) ? `<div class="warnp" style="color:var(--bad);font-weight:700">⚠ ${esc(subFeeHint(s.challan, e.program, e.year))}</div>` : ''}
           ${!s.quotaSure && !mig ? `<div class="warnp">Portal category "${esc(s.quota)}" is not a known quota: check it.</div>` : ''}
           ${!s.dob && !s.metric ? `<div class="sub">Details (DOB, marks, photo) fill in after the next Full sync.</div>` : ''}</div>
         <div style="display:flex;flex-direction:column;gap:6px"><button class="btn small" type="button" data-det="${esc(s.id)}">Full details</button><button class="btn small" type="button" data-hide="${esc(s.id)}">${hid ? 'Unhide' : 'Hide'}</button></div></div>
@@ -1098,6 +1099,15 @@ function quotaWiseHtml(){
 }
 
 const SUB_FEE = 60000;
+/** v8.17 she paid only the subsidized fee (Rs 60,000) but is put in a non-subsidized Pre-Medical program -> she belongs on a subsidized seat (another quota) */
+function subFeeHint(challan, key, year){
+  const pr = prog(key); if(!pr || pr.classProgram !== 'Pre-Medical' || pr.fee !== 'non' || isMig(year)) return '';
+  const f = feeOf(challan).filter(x => x.amount >= 3000), tot = f.reduce((t, x) => t + x.amount, 0);
+  if(!f.some(x => Math.round(x.amount) === SUB_FEE) || tot >= (SUB_FEE + PM_NON_FEE) / 2) return '';
+  const sub = ((init && init.programs) || []).find(p => p.classProgram === 'Pre-Medical' && p.fee === 'sub');
+  return 'She paid the SUBSIDIZED fee (Rs ' + SUB_FEE.toLocaleString('en-PK') + ') but is put in ' + pr.label + ' (non-subsidized). A student who pays the subsidized fee with an Aggregate below the Open Quota cutoff is from another quota (UoP employee, sports, O-Level, minority …): put her on a subsidized seat' + (sub ? ' in ' + sub.label : '') + ' and update her quota when you know it.';
+}
+const subFeeWhy = o => { const h = subFeeHint(o.challan, o.key, o.year); return h ? `<div style="color:var(--bad);font-weight:600;font-size:12px;margin-top:2px">⚠ ${esc(h)}</div>` : ''; };
 /** Pre-Medical students in a non-subsidized program whose challan is Rs 60,000 (the subsidized fee) */
 function wrongFee(){
   if(!idx) return [];
@@ -1113,7 +1123,7 @@ const stuAgg = o => { const a = typeof mlAgg === 'function' ? mlAgg(o) : Number(
 function stuTable(list, extra){
   // v8.5: + quota, matric marks, HQ, Aggregate and MeritNo
   return `<div style="max-height:55vh;overflow:auto;margin-top:8px"><table><thead><tr><th>#</th><th>Enroll#</th><th>Student</th><th>Section</th><th>Room</th>${extra ? '<th>' + extra.h + '</th>' : ''}<th>Quota</th><th>Obtained / Total</th><th>HQ</th><th>Aggregate</th><th>MeritNo</th><th>Fee</th></tr></thead><tbody>
-    ${list.map((o, i) => { const f = feeOf(o.challan); return `<tr><td>${i + 1}</td><td class="nw">${esc(o.roll || '–')}</td><td>${esc(o.name)}<div class="sub">d/o ${esc(o.father || '-')}</div>${fxWhy(o)}</td><td class="nw">${esc(o.pcs)}</td><td class="nw">${esc(o.room || '–')}</td>${extra ? '<td>' + esc(extra.v(o)) + '</td>' : ''}<td>${esc(o.quota || '–')}</td><td class="nw">${esc(stuMarks(o))}</td><td>${esc(o.hq || '–')}</td><td class="nw"><b>${esc(stuAgg(o))}</b></td><td class="n">${esc(o.meritNo || '–')}</td><td class="sub">${f.length ? f.map(x => (x.paid ? 'Paid ' : 'Unpaid ') + money(x.amount)).join(', ') : '–'}</td></tr>`; }).join('') || '<tr><td colspan="12" class="sub">Nobody.</td></tr>'}</tbody></table></div>`;
+    ${list.map((o, i) => { const f = feeOf(o.challan); return `<tr><td>${i + 1}</td><td class="nw">${esc(o.roll || '–')}</td><td>${esc(o.name)}<div class="sub">d/o ${esc(o.father || '-')}</div>${fxWhy(o)}${subFeeWhy(o)}</td><td class="nw">${esc(o.pcs)}</td><td class="nw">${esc(o.room || '–')}</td>${extra ? '<td>' + esc(extra.v(o)) + '</td>' : ''}<td>${esc(o.quota || '–')}</td><td class="nw">${esc(stuMarks(o))}</td><td>${esc(o.hq || '–')}</td><td class="nw"><b>${esc(stuAgg(o))}</b></td><td class="n">${esc(o.meritNo || '–')}</td><td class="sub">${f.length ? f.map(x => (x.paid ? 'Paid ' : 'Unpaid ') + money(x.amount)).join(', ') : '–'}</td></tr>`; }).join('') || '<tr><td colspan="12" class="sub">Nobody.</td></tr>'}</tbody></table></div>`;
 }
 function listText(title, list){ return title + '\n\n' + list.map((o, i) => (i + 1) + '. ' + (o.roll || '-') + ' ' + o.name + ' d/o ' + (o.father || '-') + ' (' + o.pcs + (o.room ? ', room ' + o.room : '') + ') · ' + (o.quota || 'no quota') + ' · ' + stuMarks(o) + (/^y/i.test(o.hq || '') ? ' · HQ' : '') + ' · Agg ' + stuAgg(o) + (o.meritNo ? ' · Merit ' + o.meritNo : '')).join('\n'); }
 function listDlg(title, sub, list, extra){
