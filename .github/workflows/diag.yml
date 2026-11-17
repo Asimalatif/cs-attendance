@@ -14,13 +14,9 @@ jobs:
         run: printf '%s' "$CLASPRC" > ~/.clasprc.json
       - run: |
           mkdir /tmp/l && cd /tmp/l && clasp clone "$(node -p "require('$GITHUB_WORKSPACE/.clasp.json').scriptId")" --rootDir . >/dev/null
-          echo "== files"; ls -la
-          echo "== syntax"; for f in *.js; do cp "$f" /tmp/x.js; node --check /tmp/x.js >/dev/null 2>/tmp/e || { echo "BAD: $f"; head -5 /tmp/e; }; done
-          echo "== dup const/let/class across files"
-          grep -HnE '^(const|let|class) +[A-Za-z_$][A-Za-z0-9_$]*' *.js | sed -E 's/^([^:]*):([0-9]+):(const|let|class) +([A-Za-z_$][A-Za-z0-9_$]*).*/\4\t\1:\2/' | sort > /tmp/d
-          cut -f1 /tmp/d | uniq -d | while read n; do grep -P "^$n\t" /tmp/d; done
-          echo "== var/function name clashes between kept files and repo files (last one wins)"
-          for f in *.js; do grep -oE '^(function +[A-Za-z_$][A-Za-z0-9_$]*|var +[A-Za-z_$][A-Za-z0-9_$]*)' "$f" | awk '{print $2}' | sed "s|$|\t$f|"; done | sort > /tmp/fn
-          cut -f1 /tmp/fn | uniq -d | while read n; do echo "$n: $(grep -P "^$n\t" /tmp/fn | cut -f2 | tr '\n' ' ')"; done | head -60
-          echo "== kept-file heads"; for f in "API_URL.js" "College Reports.js" "ALL SHEETS LINK.js" "MOVE OCTOBER SHEETS.js" "add new admissions.js" "Dialog box- sync attend MT.js"; do echo "--- $f"; head -c 400 "$f"; echo; done
-          echo "== manifest"; cat appsscript.json
+          echo "== load simulation in clasp order"
+          ls *.js | LC_ALL=C sort | tr '\n' '|'; echo
+          IFS=$'\n'; node $GITHUB_WORKSPACE/.github/sim.js $(ls *.js | LC_ALL=C sort)
+          echo "== Dialog head"; head -c 1500 "Dialog box- sync attend MT.js"
+          echo; echo "== top-level non-function lines in kept files"
+          for f in "ALL SHEETS LINK.js" "API_URL.js" "College Reports.js" "MOVE OCTOBER SHEETS.js" "add new admissions.js" "Dialog box- sync attend MT.js" "Certificate.js"; do echo "--- $f"; grep -nE '^[A-Za-z_$]' "$f" | grep -vE '^[0-9]+:(function|var [A-Za-z_$]+ *= *(\x27|"|[0-9{\[]))' | head -15; done
