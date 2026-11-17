@@ -4353,12 +4353,12 @@ function aggregate(rows){
   rows.forEach(r => r.st.forEach(x => {
     const k = x[0] + '|' + r.cls, s = S[k] = S[k] || { roll:x[0], name:x[1], cls:r.cls, guest:'', subs:{} };
     if(x[6]) s.guest = x[6];
-    const g = s.subs[r.sub] = s.subs[r.sub] || { sub:r.sub, teacher:r.teacher, months:{}, p:0, d:0, ms:0, mtT:0, abs:0 };
+    const g = s.subs[r.sub] = s.subs[r.sub] || { sub:r.sub, teacher:r.teacher, months:{}, p:0, d:0, ms:0, mtT:0, abs:0, nt:0 };
     const off = !!x[5], mv = x[4];
     g.months[r.mon] = { p:Number(x[2]) || 0, d:Number(x[3]) || 0, mt:mv, mtT:r.mt, off };
     if(off) return;
     g.p += Number(x[2]) || 0; g.d += Number(x[3]) || 0;
-    if(r.mt && mv !== '' && mv != null){ g.mtT += r.mt; if(mv === 'A') g.abs++; else g.ms += Number(mv) || 0; }
+    if(r.mt && mv !== '' && mv != null){ g.mtT += r.mt; g.nt++; if(mv === 'A') g.abs++; else g.ms += Number(mv) || 0; }
   }));
   return Object.values(S).map(s => {
     Object.values(s.subs).forEach(g => {
@@ -4437,7 +4437,7 @@ function classTable(doc, S, q, Y, label){
     body = S.map((s, i) => [i + 1, s.roll, s.name + (s.guest ? ' (Guest)' : '')]
       .concat(subs.map(x => { const g = s.subs[x]; return !g ? '' : g.off ? 'left' : !g.d ? '-' : g.p + '/' + g.d; }),
         [q.lv ? (s.lv ? String(s.lv) : '-') : '-', (q.lv ? s.pctL : s.pct) == null ? '-' : (q.lv ? s.pctL : s.pct) + '%'],
-        subs.map(x => { const g = s.subs[x]; return !g || g.off || !g.mtT ? '' : g.ms + '/' + g.mtT; }),
+        subs.map(x => { const g = s.subs[x]; return !g || g.off || !g.mtT ? '' : g.abs && g.abs === g.nt ? 'A' : g.ms + '/' + g.mtT + (g.abs ? ' (A×' + g.abs + ')' : ''); }),   // v8.18 absent in the test = A, not 0
         [s.tp == null ? '-' : s.tp + '%']));
     const avg = x => { let p = 0, d = 0; S.forEach(s => { const g = s.subs[x]; if(g && !g.off){ p += g.p; d += g.d; } }); return d ? pct2(p, d) + '%' : '-'; };
     const tavg = x => { let a = 0, t = 0; S.forEach(s => { const g = s.subs[x]; if(g && !g.off){ a += g.ms; t += g.mtT; } }); return t ? pct2(a, t) + '%' : '-'; };
@@ -4457,9 +4457,9 @@ function classTable(doc, S, q, Y, label){
       if(h.row.index === n - 1){ h.cell.styles.fontStyle = 'bold'; h.cell.styles.fillColor = [234, 238, 246]; return; }
       const t = types[h.column.index], v = String(h.cell.raw == null ? '' : h.cell.raw);
       if(v === 'left'){ h.cell.styles.textColor = [150, 156, 168]; h.cell.styles.fontStyle = 'italic'; return; }
-      const fr = /^(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)$/.exec(v), fp = fr && +fr[2] ? +fr[1] / +fr[2] * 100 : null;   // "20/24" -> 83.3
+      const fr = /^(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)(?:\s|$)/.exec(v), fp = fr && +fr[2] ? +fr[1] / +fr[2] * 100 : null;   // "20/24" -> 83.3
       if(t === 'att' && ((/%$/.test(v) && parseFloat(v) < q.below) || (fp != null && fp < q.below))) redCell(h, C);
-      if((t === 'tp' && ((/%$/.test(v) && parseFloat(v) < 50) || (fp != null && fp < 50))) || (t === 'mt' && v === 'A')) redCell(h, C);
+      if((t === 'tp' && ((/%$/.test(v) && parseFloat(v) < 50) || (fp != null && fp < 50) || v === 'A')) || (t === 'mt' && v === 'A')) redCell(h, C);
       if(t === 'lv' && v && v !== '-'){ h.cell.styles.textColor = C.AMB || [161, 98, 7]; h.cell.styles.fontStyle = 'bold'; }
     } });
   return doc.lastAutoTable.finalY + 4;
@@ -4477,7 +4477,7 @@ function classBoxes(doc, Y, S, q){
     { l:'Students below ' + q.below + '%', v:k.short, c:k.short ? C.RED : C.INK, bg:k.short ? C.REDBG : C.SOFT },
     { l:'Monthly tests', v:k.tp == null ? '-' : k.tp + '%' }]) + 4;
 }
-const classLegend = q => 'Attendance % = lectures attended / lectures held from ' + rangeTxt(q) + '. Only P counts. Red = below ' + q.below + '% (tests: below 50% or A = absent). "left" = student changed subject.' +
+const classLegend = q => 'Attendance % = lectures attended / lectures held from ' + rangeTxt(q) + '. Only P counts. Red = below ' + q.below + '% (tests: below 50% or A = absent; a test cell shows A when she missed every test, "(A×2)" when she missed 2 of them; a missed test counts as 0 in the %). "left" = student changed subject.' +
   (q.lv ? ' Leaves = approved leave days (Leave In-Charge); Overall % (with leaves) adds each month\'s leave days to the lectures attended in every subject held that month, never more than the lectures held.' : '') +
   ' Monthly tests from the "<Month> - MONTHLY TEST" workbooks.';
 function classPdf(S, q){
