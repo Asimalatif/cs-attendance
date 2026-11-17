@@ -4282,12 +4282,33 @@ async function rpMtBook(mon){
   const list = r && r.ok ? r.students || [] : [];
   rpMtCache[mon] = { at:Date.now(), list }; return list;
 }
+/* v8.14 a guest in a section report: the months she was marked only in her HOME section (before she came as a guest)
+   are taken from the home section's sheet of the same subject, so the report covers every month of the range */
+async function addGuestHome(rows, q){
+  const G = {};                                                        // home section -> { rollKey: { roll, name, subs:Set } }
+  rows.forEach(r => r.st.forEach(x => { if(!x[6]) return; const h = G[x[6]] = G[x[6]] || {}, k = rkey(x[0]); (h[k] = h[k] || { roll:x[0], name:x[1], subs:new Set() }).subs.add(subK(r.sub)); }));
+  if(!Object.keys(G).length) return rows;
+  rows = rows.map(r => Object.assign({}, r, { st:r.st.slice() }));
+  const have = new Set(); rows.forEach(r => r.st.forEach(x => have.add(rkey(x[0]) + '|' + subK(r.sub) + '|' + r.mon)));
+  for(const home of Object.keys(G)){
+    let hr = []; try{ hr = await getRows({ from:q.from, to:q.to, cls:home }); }catch(e){ continue; }
+    hr.forEach(h => h.st.forEach(x => { const g = G[home][rkey(x[0])], sk = subK(h.sub);
+      if(!g || !g.subs.has(sk) || have.has(rkey(x[0]) + '|' + sk + '|' + h.mon)) return;
+      have.add(rkey(x[0]) + '|' + sk + '|' + h.mon);
+      const y = x.slice(); y[6] = home;
+      let t = rows.find(r => r.mon === h.mon && subK(r.sub) === sk && normC(r.cls) === normC(q.cls));
+      if(!t){ t = { cls:q.cls, sub:h.sub, teacher:h.teacher || '', mon:h.mon, mt:h.mt, st:[] }; rows.push(t); }
+      t.st.push(y); }));
+  }
+  return rows;
+}
 async function addMtMarks(rows, q){
   if(!navigator.onLine) return rows;
   rows = rows.map(r => Object.assign({}, r, { st:r.st.slice() }));     // never change the cached rows
+  const guestR = new Set(); rows.forEach(r => r.st.forEach(x => { if(x[6]) guestR.add(rkey(x[0])); }));   // v8.14: a guest's marks are under her home section
   for(const mon of monthsIn({ from:q.from || 'SEPT', to:q.to || SEAS[seasNow()] })){
     let list; try{ list = await rpMtBook(mon); }catch(e){ continue; }
-    list = list.filter(x => (!q.roll || rkey(x[0]) === rkey(q.roll)) && (!q.cls || normC(x[2]) === normC(q.cls) || /optional/i.test(q.cls)));
+    list = list.filter(x => (!q.roll || rkey(x[0]) === rkey(q.roll)) && (!q.cls || normC(x[2]) === normC(q.cls) || /optional/i.test(q.cls) || guestR.has(rkey(x[0]))));
     if(!list.length) continue;
     const bySub = {}; rows.filter(r => r.mon === mon).forEach(r => { (bySub[subK(r.sub)] = bySub[subK(r.sub)] || []).push(r); });
     const extra = {};
@@ -4298,7 +4319,7 @@ async function addMtMarks(rows, q){
       if(hit){
         const i = hit.st.findIndex(x => rkey(x[0]) === rk), x = hit.st[i].slice(); x[4] = val; hit.st[i] = x;
         hit.mt = Math.max(Number(hit.mt) || 0, max);
-      } else {                                                         // a subject with no attendance row this month
+      } else if(q.cls && normC(cls) !== normC(q.cls) && !/optional/i.test(q.cls)){ /* a guest's other subjects stay in her home section */ } else {   // a subject with no attendance row this month
         const k = normC(cls) + '|' + subK(sub) + '|' + max, r = extra[k] = extra[k] || { cls, sub:String(sub).toUpperCase(), teacher:'', mon, mt:max, st:[] };
         r.st.push([roll, name, 0, 0, val, 0, '']);
       }
@@ -4646,6 +4667,7 @@ async function rpCreate(kind, preset){
     let rows = await getRows(fq);
     if(q.only) rows = rows.filter(r => q.only.includes(r.cls) || q.only.some(c => /optional/i.test(r.cls) && String(r.cls).indexOf(String(c).split(' ')[0]) === 0));
     if(!rows.length) throw new Error('No attendance found for this choice' + (scope ? '. If the server was just updated, run rebuildAttendanceIndex once.' : '.'));
+    if(q.type === 'class' && fq.cls){ toast('Reading guests\' home sections…'); rows = await addGuestHome(rows, fq); }
     toast('Reading the monthly test workbooks…');
     rows = await addMtMarks(rows, fq);
     const S = aggregate(rows);

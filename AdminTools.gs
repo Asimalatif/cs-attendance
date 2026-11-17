@@ -74,6 +74,8 @@ function atRoute_(user, req) {
       case 'at_savestu':  return { ok: true, data: at_saveStudent_(req) };
       case 'at_roomtags': return { ok: true, data: at_roomTags_() };
       case 'at_run':      return { ok: true, data: at_run_(req) };
+      case 'at_desig':    return { ok: true, data: at_desigList_() };
+      case 'at_desig_save': if (!admin) return { ok: false, error: 'Only the admin can change a designation.' }; return { ok: true, data: at_desigSave_(req.teacher, req.designation) };
     }
     return { ok: false, error: 'UNKNOWN_ACTION' };
   } catch (e) {
@@ -82,6 +84,50 @@ function atRoute_(user, req) {
 }
 
 /** current session, e.g. 2026-27 (the one the admin set on the Shortage page, else from today's date) */
+/* ---------- v8.14 teachers' designations (promotion): DropdownData is the source; the same teacher is also changed in
+   Timetable, Science Timetable, ARTS TIMETABLE and Users wherever those sheets have a Teacher and a Designation column ---------- */
+var AT_DESIG_SHEETS = ['DropdownData', 'Timetable', 'Science Timetable', 'ARTS TIMETABLE', 'Users'];
+function at_desigHead_(v) {
+  for (var i = 0; i < Math.min(6, v.length); i++) {
+    var h = v[i].map(function (x) { return String(x).trim().toLowerCase(); }), t = h.indexOf('teacher'), d = h.indexOf('designation');
+    if (t >= 0 && d >= 0) return { row: i, t: t, d: d, s: h.indexOf('status'), dep: h.indexOf('department') };
+  }
+  return null;
+}
+function at_desigList_() {
+  var sh = at_ss_().getSheetByName('DropdownData'); if (!sh) throw new Error("Sheet 'DropdownData' not found.");
+  var v = sh.getDataRange().getDisplayValues(), H = at_desigHead_(v); if (!H) throw new Error('DropdownData has no Teacher / Designation columns.');
+  var by = {};
+  for (var i = H.row + 1; i < v.length; i++) {
+    var t = String(v[i][H.t]).trim(); if (!t) continue; var k = t.toUpperCase().replace(/\s+/g, ' ');
+    if (!by[k]) by[k] = { teacher: t, designation: '', status: '', dept: '' };
+    var o = by[k]; if (!o.designation) o.designation = String(v[i][H.d]).trim();
+    if (!o.status && H.s >= 0) o.status = String(v[i][H.s]).trim(); if (!o.dept && H.dep >= 0) o.dept = String(v[i][H.dep]).trim();
+  }
+  return { teachers: Object.keys(by).sort().map(function (k) { return by[k]; }) };
+}
+function at_desigSave_(teacher, designation) {
+  var tk = String(teacher || '').trim().toUpperCase().replace(/\s+/g, ' '), ds = String(designation || '').trim();
+  if (!tk || !ds) throw new Error('Choose the teacher and the new designation.');
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    var ss = at_ss_(), out = [];
+    AT_DESIG_SHEETS.forEach(function (nm) {
+      var sh = ss.getSheetByName(nm); if (!sh || sh.getLastRow() < 2) return;
+      var v = sh.getDataRange().getValues(), H = at_desigHead_(v); if (!H) return;
+      var n = 0;
+      for (var i = H.row + 1; i < v.length; i++) {
+        if (String(v[i][H.t]).trim().toUpperCase().replace(/\s+/g, ' ') !== tk) continue;
+        if (String(v[i][H.d]).trim() === ds) continue;
+        sh.getRange(i + 1, H.d + 1).setValue(ds); n++;
+      }
+      if (n) out.push(nm + ': ' + n + ' row' + (n === 1 ? '' : 's'));
+    });
+    try { ntt_ddDrop_(); } catch (e) {}
+    try { cacheClear_('tt_att3'); } catch (e) {}
+    return { teacher: tk, designation: ds, changed: out };
+  } finally { lock.releaseLock(); }
+}
 function at_session_() {
   try { return gtSession_(); } catch (e) {}
   var d = new Date(), y = d.getMonth() >= 7 ? d.getFullYear() : d.getFullYear() - 1;

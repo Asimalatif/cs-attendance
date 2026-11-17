@@ -154,6 +154,7 @@ function admRoute_(user, req) {
     case 'adm_keep_list': return admKeepList_();
     case 'adm_keep_del':  return admKeepDel_(req.roll, req.f);
     case 'adm_fixlist':   return admPortalFixList_();
+    case 'adm_migrated':  return admMigrated_();
     case 'adm_add_new':   CacheService.getScriptCache().remove('adm_home_al_v1'); return admAddNew_(user, req.items || [], req.override === true);
     case 'adm_fee_receipt': return admFeeReceipt_(user, req);
     case 'adm_oml_get':   return admOmlGet_();
@@ -336,6 +337,21 @@ function admQuotaCheck_() {
       r: [x.r.roll, x.r.name, x.r.father || '', x.r.pcs || '', 'Aggregate ' + x.a + ' below the ' + p.label + ' Open Quota cutoff ' + cut + ': another quota? (employee, sports, O-Level, minority …) else full-fee seat'] }); });
   });
   return { items: items, help: 'She is in Open Quota on a subsidized seat (half fee) but her Aggregate is below the last subsidized Open Quota seat. Check her real quota (UoP employee, sports, O-Level, minority, disabled, FATA …) on the portal / admission form; if she really is Open Quota, she belongs on the full-fee (Self Morning) seat. ' + parts.join(' · ') };
+}
+/** v8.14 students who migrated INTO Jinnah College (2nd Year, Enroll# in the migration range) + the college they came from (Admission Log) */
+function admMigrated_() {
+  var set = admSettings_(), M = ADM_CFG.MIGRATION, from = {};
+  try {
+    var lg = admLogSheet_(), v = lg.getLastRow() > 1 ? lg.getRange(2, 1, lg.getLastRow() - 1, 6).getDisplayValues() : [];
+    v.forEach(function (r) { var m = String(r[5]).match(/migrated from ([^,(]+)/i); if (m) from[admS_(r[3]).toUpperCase()] = m[1].trim(); });
+  } catch (e) {}
+  var rows = admAll_(admRead_(), set.sections).filter(function (r) {
+    var n = admRollNum_(r.roll, M.ROLL_PREFIX); return r.name && admIsMig_(r.year) && n !== null && n >= M.ROLL_START && n <= M.ROLL_END;
+  }).map(function (r) {
+    return { roll: r.roll, name: r.name, father: r.father || '', program: r.programName || '', pcs: r.pcs || '', section: r.section || '', metric: r.metric || '', total: r.total || '',
+             from: from[admS_(r.roll).toUpperCase()] || '', contact: r.contact || '', status: r.status || '' };
+  }).sort(function (a, b) { return (admRollNum_(a.roll, M.ROLL_PREFIX) || 0) - (admRollNum_(b.roll, M.ROLL_PREFIX) || 0); });
+  return { ok: true, rows: rows, at: admNow_() };
 }
 function admKeepSheet_() {
   var b = admBook_(), sh = b.getSheetByName(ADM_KEEP_SHEET);

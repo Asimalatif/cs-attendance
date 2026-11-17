@@ -183,6 +183,13 @@ table.tt td.tt-miss{background:#FDECEA!important}table.tt td.tt-miss .tt-t{color
         <button class="btn out" data-k="work" data-f="xlsx" disabled>Excel</button>
       </div>
     </div>
+    <div class="card" style="margin-top:12px">
+      <h2>Teachers' designations (promotion)</h2>
+      <div class="note" style="margin:6px 0 10px">When a teacher is promoted, change her designation here. It is saved in <b>DropdownData</b> and also in <b>Timetable</b>, <b>Science Timetable</b>, <b>ARTS TIMETABLE</b> and <b>Users</b> wherever she is listed. Then press <b>Generate workload</b> again so the workload sheets and the health check use the new limit (Lecturer 12 · Assistant Professor 12 · Associate Professor 9 · Professor 6 · Principal 4–6 periods a week).</div>
+      <div class="bar" style="margin:0"><input id="dgQ" type="search" placeholder="Search teacher or department" style="flex:1;min-width:180px"><button class="btn" id="dgLoad">Load teachers</button></div>
+      <div class="scroll" id="dgBox" style="margin-top:8px"></div>
+    </div>
+    <datalist id="dgList"><option>Lecturer</option><option>Assistant Professor</option><option>Associate Professor</option><option>Professor</option><option>Professor (Principal)</option></datalist>
     <div class="sec hidden" id="workOut"><h3><span>Workload</span><span class="stabs" id="workTabs" style="margin:0"></span></h3><div class="scroll" id="workBox"></div></div>
   </section>
 
@@ -422,6 +429,27 @@ $('autoRun').onclick = () => {
 $('autoLoad').onclick = () => loadSheets('auto', [META ? META.auto.target : 'AutoTimetable']);
 $('workRun').onclick = () => run('work', { tool:'workload' }, 'Calculating the workload of every teacher…');
 $('workXlsx').onclick = () => run('work', { tool:'workloadxlsx' }, 'Saving the workload Excel in Drive…');
+/* v8.14 teachers' designations */
+let DG = null;
+function dgDraw(){
+  const q = $('dgQ').value.trim().toLowerCase(), L = (DG || []).filter(t => !q || (t.teacher + ' ' + t.dept + ' ' + t.designation).toLowerCase().includes(q));
+  $('dgBox').innerHTML = !DG ? '' : '<table><thead><tr><th>#</th><th>Teacher</th><th>Department</th><th>Status</th><th>Designation</th><th></th></tr></thead><tbody>' +
+    L.map((t, i) => '<tr><td>' + (i + 1) + '</td><td><b>' + esc(t.teacher) + '</b></td><td>' + esc(t.dept) + '</td><td>' + esc(t.status) + '</td>' +
+      '<td><input list="dgList" value="' + esc(t.designation) + '" data-dg="' + esc(t.teacher) + '" style="min-width:190px"></td>' +
+      '<td><button class="btn adm" data-dgs="' + esc(t.teacher) + '"' + (META && META.admin ? '' : ' disabled title="Only the admin"') + '>Save</button></td></tr>').join('') + '</tbody></table>';
+  $('dgBox').querySelectorAll('[data-dgs]').forEach(b => b.onclick = () => {
+    const t = b.dataset.dgs, inp = [...$('dgBox').querySelectorAll('[data-dg]')].find(x => x.dataset.dg === t), v = inp.value.trim();
+    if(!v) return status('Type the designation.', 'err');
+    if(!confirm('Change the designation of ' + t + ' to "' + v + '"?')) return;
+    busy(b, 'Saving the designation…', async () => {
+      const r = (await JCW.api({ action:'at_desig_save', teacher:t, designation:v }, 120000)).data;
+      const o = DG.find(x => x.teacher === t); if(o) o.designation = v; dgDraw();
+      status('✔ ' + esc(t) + ' is now <b>' + esc(v) + '</b>' + (r.changed.length ? ' · changed in ' + esc(r.changed.join(', ')) : ' · it was already saved') + '. Press <b>Generate workload</b> to update the workload sheets and the health check.', 'ok');
+    });
+  });
+}
+$('dgQ').oninput = dgDraw;
+$('dgLoad').onclick = () => busy(null, 'Reading the teachers…', async () => { DG = (await JCW.api({ action:'at_desig' }, 120000)).data.teachers; dgDraw(); status(''); });
 $('workLoad').onclick = () => loadSheets('work', META ? META.workloadSheets : ['Permanent Workload', 'Morning Visiting Workload', 'Evening Visiting Workload']);
 $('meritRun').onclick = () => run('merit', { tool:'merit' }, 'Calculating the stopping merit…');
 $('meritLoad').onclick = () => loadSheets('merit', ['Stopping Merit']);
