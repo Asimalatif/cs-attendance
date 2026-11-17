@@ -340,19 +340,42 @@ function admQuotaCheck_() {
   return { items: items, help: 'She is in Open Quota on a subsidized seat (half fee) but her Aggregate is below the last subsidized Open Quota seat. Check her real quota (UoP employee, sports, O-Level, minority, disabled, FATA …) on the portal / admission form; if she really is Open Quota, she belongs on the full-fee (Self Morning) seat. ' + parts.join(' · ') };
 }
 /** v8.14 students who migrated INTO Jinnah College (2nd Year, Enroll# in the migration range) + the college they came from (Admission Log) */
+/** v8.15 students who migrated INTO Jinnah College (2nd Year). A student counts when ANY of these is true:
+ *  her Enroll# is in the migration range · she is listed in the sheet "Migrated to JCW" · she is in 2nd Year now but
+ *  was not in last year's strength sheet "Transform-ALL-COLLEGE-STRENGTH 2025". The college she came from: Admission Log / "Migrated to JCW". */
 function admMigrated_() {
-  var set = admSettings_(), M = ADM_CFG.MIGRATION, from = {};
+  var set = admSettings_(), M = ADM_CFG.MIGRATION, from = {}, listed = {}, book = admBook_();
+  var rollCol = function (head) { var c = -1; head.forEach(function (h, j) { if (c < 0 && /^(enroll(ment)?(no)?|rollno|enrollmentno)$/.test(admH_(h))) c = j; }); return c; };
   try {
     var lg = admLogSheet_(), v = lg.getLastRow() > 1 ? lg.getRange(2, 1, lg.getLastRow() - 1, 6).getDisplayValues() : [];
-    v.forEach(function (r) { var m = String(r[5]).match(/migrated from ([^,(]+)/i); if (m) from[admS_(r[3]).toUpperCase()] = m[1].trim(); });
+    v.forEach(function (r) { var m = String(r[5]).match(/migrated from ([^,(]+)/i); if (m) from[admNormRoll_(r[3])] = m[1].trim(); });
   } catch (e) {}
-  var rows = admAll_(admRead_(), set.sections).filter(function (r) {
-    var n = admRollNum_(r.roll, M.ROLL_PREFIX); return r.name && admIsMig_(r.year) && n !== null && n >= M.ROLL_START && n <= M.ROLL_END;
-  }).map(function (r) {
-    return { roll: r.roll, name: r.name, father: r.father || '', program: r.programName || '', pcs: r.pcs || '', section: r.section || '', metric: r.metric || '', total: r.total || '',
-             from: from[admS_(r.roll).toUpperCase()] || '', contact: r.contact || '', status: r.status || '' };
-  }).sort(function (a, b) { return (admRollNum_(a.roll, M.ROLL_PREFIX) || 0) - (admRollNum_(b.roll, M.ROLL_PREFIX) || 0); });
-  return { ok: true, rows: rows, at: admNow_() };
+  try {
+    var ms = book.getSheetByName('Migrated to JCW');
+    if (ms && ms.getLastRow() > 1) {
+      var mv = ms.getDataRange().getDisplayValues(), rc = rollCol(mv[0]), fc = -1;
+      mv[0].forEach(function (h, j) { if (fc < 0 && /(from|college|institute|previous)/i.test(String(h)) && j !== rc) fc = j; });
+      if (rc >= 0) mv.slice(1).forEach(function (r) { var k = admNormRoll_(r[rc]); if (!k) return; listed[k] = 1; if (fc >= 0 && String(r[fc]).trim() && !from[k]) from[k] = String(r[fc]).trim(); });
+    }
+  } catch (e) {}
+  var last = null;
+  try {
+    var ls = book.getSheetByName('Transform-ALL-COLLEGE-STRENGTH 2025');
+    if (ls && ls.getLastRow() > 1) { var lv = ls.getDataRange().getDisplayValues(), lc = rollCol(lv[0]); if (lc >= 0) { last = {}; lv.slice(1).forEach(function (r) { var k = admNormRoll_(r[lc]); if (k) last[k] = 1; }); } }
+  } catch (e) {}
+  var rows = [];
+  admAll_(admRead_(), set.sections).forEach(function (r) {
+    if (!r.name || !r.roll || !admIsMig_(r.year)) return;
+    var k = admNormRoll_(r.roll), n = admRollNum_(r.roll, M.ROLL_PREFIX), why = [];
+    if (n !== null && n >= M.ROLL_START && n <= M.ROLL_END) why.push('Enroll# in the migration range');
+    if (listed[k]) why.push('in "Migrated to JCW"');
+    if (last && !last[k]) why.push('not in last year\'s strength sheet');
+    if (!why.length) return;
+    rows.push({ roll: r.roll, name: r.name, father: r.father || '', program: r.programName || '', pcs: r.pcs || '', section: r.section || '', metric: r.metric || '', total: r.total || '',
+                from: from[k] || '', contact: r.contact || '', status: r.status || '', why: why.join(' · ') });
+  });
+  rows.sort(function (a, b) { return String(a.roll).localeCompare(String(b.roll), undefined, { numeric: true }); });
+  return { ok: true, rows: rows, at: admNow_(), lastYear: !!last };
 }
 function admKeepSheet_() {
   var b = admBook_(), sh = b.getSheetByName(ADM_KEEP_SHEET);
