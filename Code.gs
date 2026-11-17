@@ -3323,19 +3323,19 @@ function fillTransform_(rows, C) {
 function workloadCheck_() {
   var sh = at_ss_().getSheetByName('Permanent Workload'), over = [], under = [];
   if (!sh || sh.getLastRow() < 3) return { over: over, under: under, note: 'The sheet "Permanent Workload" is empty: run Admin tools > Teacher workload first.' };
-  var V = sh.getRange(1, 1, sh.getLastRow(), 5).getDisplayValues(), dept = '', UD = {};
+  var V = sh.getRange(1, 1, sh.getLastRow(), 5).getDisplayValues(), dept = '', UD = {}, seenN = 0;
   try { UD = at_usersDesig_(); } catch (e) {}                          // v8.15: the Users sheet's designation wins over the workload sheet's
   var limitOf = function (d) { d = String(d || '').toLowerCase(); if (/principal/.test(d)) return [4, 6]; if (/associate/.test(d)) return [9, 9]; if (/assistant/.test(d)) return [12, 12]; if (/professor/.test(d)) return [6, 6]; if (/lecturer/.test(d)) return [12, 12]; return null; };
   V.forEach(function (r) {
     if (r[0] && !r[1] && !r[4]) { dept = String(r[0]).replace(/^DEPARTMENT OF\s*/i, ''); return; }
     var n = Number(String(r[4]).replace(/[^0-9.]/g, '')); if (!r[1] || /^teacher$/i.test(r[1]) || r[4] === '' || isNaN(n)) return;
     var des = UD[at_nameKey_(r[1])]; if (des) r = [r[0], r[1], des, r[3], r[4]];
-    var lim = limitOf(r[2]); if (lim === null) return;
+    var lim = limitOf(r[2]); seenN++; if (lim === null) return;
     var lt = lim[0] === lim[1] ? String(lim[0]) : lim[0] + '–' + lim[1], df = n > lim[1] ? n - lim[1] : n - lim[0];
     var row = { t: r[1] + ' · ' + (r[2] || '') + ' · ' + n + ' (limit ' + lt + ')', r: [r[1], r[2], dept, n, lt + ' (' + (df > 0 ? '+' : '') + df + ')'] };
     if (n > lim[1]) over.push(row); else if (n < lim[0]) under.push(row);
   });
-  return { over: over, under: under, note: '' };
+  return { over: over, under: under, n: seenN, note: seenN ? '' : 'No teacher could be read from the sheet "Permanent Workload" (' + (sh.getLastRow() - 1) + ' rows): run Admin tools > Workload > Generate workload again and wait until it says Done.' };
 }
 function studentChecks_(add, A) {
   var book = SpreadsheetApp.openById(USERS_SS_ID), ts = book.getSheetByName(TRANSFORM_SHEET);
@@ -3491,6 +3491,7 @@ function studentChecks_(add, A) {
     var WL = workloadCheck_();
     add('wl_over', 'Permanent teachers over their workload limit', lv(WL.over), WL.over, 'Limits per week: Lecturer 12, Assistant Professor 12, Associate Professor 9, Professor 6, Principal 4–6. Designations come from DropdownData (Admin tools > Workload > Teachers\' designations). From the sheet "Permanent Workload": run Admin tools > Teacher workload again after timetable changes.' + (WL.note ? ' ' + WL.note : ''), ['Teacher', 'Designation', 'Department', 'Workload', 'Limit / difference']);
     add('wl_under', 'Permanent teachers under their workload limit', lv(WL.under), WL.under, 'Same limits as above; a teacher with fewer periods than her limit can take more classes.', ['Teacher', 'Designation', 'Department', 'Workload', 'Limit / difference']);
+    if (WL.note) add('wl_note', 'Workload check: no workload to read', 'warn', [WL.note], 'The over / under lists above are empty because of this, not because every teacher is within her limit.');
   } catch (e) { add('wl_err', 'Workload check could not run', 'warn', [String(e.message || e)], ''); }
   // v8.13 Open Quota students on a subsidized (half-fee) seat whose Aggregate is below the subsidized Open Quota cutoff
   try { var QC = admQuotaCheck_(); add('stu_subq', 'Open Quota on a subsidized (half-fee) seat but Aggregate below the cutoff', lv(QC.items), QC.items, QC.help, ['Roll No', 'Student Name', 'Father Name', 'PCS', 'Detail / Status']); }
