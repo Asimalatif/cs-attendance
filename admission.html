@@ -1149,7 +1149,7 @@ async function fxLoad(show){
     const r = await api({ action:'adm_fixlist' }, 180000);
     if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'The server needs the new Admissions.gs (admPortalFixList_): paste it and Deploy a New version.' : r.error);
     const map = {}; (r.rows || []).forEach(x => { map[fxRoll(x.enroll)] = x; });
-    FX = { rows:r.rows || [], keep:r.keep || [], note:r.note || '', at:r.at || '', map };
+    FX = { rows:r.rows || [], keep:r.keep || [], note:r.note || '', at:r.at || '', synced:r.synced || '', map };
   }catch(e){ fxErr = e.message || String(e); }
   fxBusy = false;
   const b = $('#fb'); if(b){ const n = FX ? FX.rows.length : 0; b.textContent = n; b.classList.toggle('hidden', !n); }
@@ -1161,7 +1161,7 @@ function fxHtml(){
   const list = fxF ? rows.filter(x => fxKind(x.why).includes(fxF)) : rows;
   const hl = w => esc(w).replace(/(Program[^;]*)/, '<b style="color:var(--bad)">$1</b>');
   return `<section class="card"><h3>Wrong on the UOP portal</h3>
-    <div class="sub">Students whose <b>Program, Class, Section, Enroll# or Matric / O-Level marks</b> on the portal are different from the strength sheet (the strength sheet is taken as right). A wrong Program on the portal gives her the wrong subjects. Read from the last portal sync${FX && FX.at ? ' · checked ' + esc(FX.at) : ''}.</div>
+    <div class="sub">Students whose <b>Program, Class, Section, Enroll# or Matric / O-Level marks</b> on the portal are different from the strength sheet (the strength sheet is taken as right). A wrong Program on the portal gives her the wrong subjects. Read from the last portal sync${FX && FX.synced ? ': <b>' + esc(FX.synced) + '</b>' : ''}${FX && FX.at ? ' · checked ' + esc(FX.at) : ''}. If a student you corrected is still here after a newer sync, the portal still has the old value: press <b>Open ↗</b> and look at her record.</div>
     ${fxErr ? `<div class="err">${esc(fxErr)}</div>` : ''}${FX && FX.note ? `<div class="warnp">${esc(FX.note)}</div>` : ''}
     <div class="acts" style="margin-top:8px;flex-wrap:wrap">
       <button class="btn small${fxF ? '' : ' primary'}" data-fx="">All ${rows.length}</button>

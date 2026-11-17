@@ -320,7 +320,8 @@ function admPortalFixList_() {
     if (why.length) out.push({ id: r.id || P.g(pr, 'studentid'), enroll: r.roll, program: r.programName, cls: r.year, section: r.section, name: r.name, father: r.father, obt: fixM ? String(mo) : '', tot: fixM ? String(mt) : '', why: why.join('; ') });
   });
   var keep = []; try { keep = admKeepList_().rows.filter(function (x) { return !/^(subjects|metric|total)$/.test(x[3]); }); } catch (e) {}
-  return { ok: true, rows: out, keep: keep, at: admNow_() };
+  var syn = ''; try { syn = (JSON.parse(PropertiesService.getScriptProperties().getProperty('portalLast') || '{}') || {}); syn = syn.at ? syn.at + ' (' + (syn.mode || 'full') + ' sync, ' + syn.rows + ' students)' : ''; } catch (e) { syn = ''; }
+  return { ok: true, rows: out, keep: keep, at: admNow_(), synced: syn };
 }
 /** v8.13 health check: Open Quota students of a subsidized program that has a full-fee twin (Pre-Medical Open (S) / Self Morning)
  *  whose Aggregate is below the last subsidized Open Quota seat: on Open Quota she belongs on the full-fee seat, or she is really in another quota. */
