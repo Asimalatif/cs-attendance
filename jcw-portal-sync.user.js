@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         JCW Portal Sync
 // @namespace    jcw-attendance
-// @version      1.11
+// @version      1.12
 // @description  Reads Jinnah College students from the UOP portal (read-only) and sends them to the JCW attendance system: fills only the empty cells of Transform-ALL-COLLEGE-STRENGTH, lists cancelled / migrated / disenrolled / transferred students for Left Students (moved only when you press the button) and feeds the health check.
 // @match        https://portal.uop.edu.pk/Student/Students*
 // @match        https://portal.uop.edu.pk/student/students*
@@ -238,6 +238,11 @@
         if (!paidKey || key < paidKey) { paidKey = key; paidOn = show; } }
       return (paid ? 'P' : 'U') + '-' + amt.toFixed(2); }).filter(Boolean).join(', ');
     challans.paidOn = paidOn;
+    // v1.12 the date of her FIRST challan of any kind (a migrated student has none from 1st Year)
+    let firstKey = '', firstShow = '';
+    recs.forEach(r => { const ck = Object.keys(r).find(k => /created/i.test(k)); const d = ck ? clean(String(r[ck] || '')) : ''; const m = d.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/); if (!m) return;
+      const key = m[3] + m[2].padStart(2, '0') + m[1].padStart(2, '0'); if (!firstKey || key < firstKey) { firstKey = key; firstShow = m[1].padStart(2, '0') + '/' + m[2].padStart(2, '0') + '/' + m[3]; } });
+    challans.first = firstShow;
     return txtOut;
   }
   function courses(html) {
@@ -285,7 +290,7 @@
     } else warn.push('no edit link');
     if (it.id) {
       try { Object.assign(row, qualification(await post('/Student/StudentQualificationPartail', { Id: it.id, ProgramId: programId(eh) || '0' }))); } catch (e) { if (e.message === 'LOGIN') throw e; warn.push('qualification'); }
-      try { row['Challan Details'] = challans(await post('/Student/GetStudentFeeChallans', { PageNumber: '1', SearchName: '', SortOrder: '1', PageSize: '500', StudentId: it.id })); row['Fee Paid Date'] = challans.paidOn || ''; } catch (e) { if (e.message === 'LOGIN') throw e; warn.push('challans'); }
+      try { row['Challan Details'] = challans(await post('/Student/GetStudentFeeChallans', { PageNumber: '1', SearchName: '', SortOrder: '1', PageSize: '500', StudentId: it.id })); row['Fee Paid Date'] = challans.paidOn || ''; row['First Challan Date'] = challans.first || ''; } catch (e) { if (e.message === 'LOGIN') throw e; warn.push('challans'); }
     }
     const cu = it.links.find(l => /^courses$/i.test(l.text)) || it.links.find(l => /courses/i.test(l.text)) || it.links.find(l => /courses/i.test(l.href));
     if (cu) { try { Object.assign(row, courses(await getText(cu.href))); } catch (e) { if (e.message === 'LOGIN') throw e; warn.push('courses'); } }
