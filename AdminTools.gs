@@ -86,6 +86,15 @@ function atRoute_(user, req) {
 /** current session, e.g. 2026-27 (the one the admin set on the Shortage page, else from today's date) */
 /* ---------- v8.14 teachers' designations (promotion): DropdownData is the source; the same teacher is also changed in
    Timetable, Science Timetable, ARTS TIMETABLE and Users wherever those sheets have a Teacher and a Designation column ---------- */
+/** v8.15 'DR. SADIA KHALIL' / 'Dr Sadia Khalil' -> 'SADIAKHALIL' (titles and dots ignored) */
+function at_nameKey_(n) { return String(n || '').toUpperCase().replace(/\b(DR|MS|MRS|MISS|PROF|MR)\b\.?/g, '').replace(/[^A-Z]/g, ''); }
+/** v8.15 teacher -> designation from the Users sheet (the place where a promotion is written) */
+function at_usersDesig_() {
+  var sh = SpreadsheetApp.openById(AT_CFG.SS_ID).getSheetByName('Users'), out = {}; if (!sh || sh.getLastRow() < 2) return out;
+  var v = sh.getDataRange().getDisplayValues(), H = at_desigHead_(v); if (!H) return out;
+  for (var i = H.row + 1; i < v.length; i++) { var k = at_nameKey_(v[i][H.t]), d = String(v[i][H.d]).trim(); if (k && d && !/^it staff$/i.test(d)) out[k] = d; }
+  return out;
+}
 var AT_DESIG_SHEETS = ['DropdownData', 'Timetable', 'Science Timetable', 'ARTS TIMETABLE', 'Users'];
 function at_desigHead_(v) {
   for (var i = 0; i < Math.min(6, v.length); i++) {
@@ -94,6 +103,7 @@ function at_desigHead_(v) {
   }
   return null;
 }
+var AT_UD_ = null; function at_usersDesig_C_(t) { if (!AT_UD_) { try { AT_UD_ = at_usersDesig_(); } catch (e) { AT_UD_ = {}; } } return AT_UD_[at_nameKey_(t)] || ''; }
 function at_desigList_() {
   var sh = at_ss_().getSheetByName('DropdownData'); if (!sh) throw new Error("Sheet 'DropdownData' not found.");
   var v = sh.getDataRange().getDisplayValues(), H = at_desigHead_(v); if (!H) throw new Error('DropdownData has no Teacher / Designation columns.');
@@ -101,7 +111,7 @@ function at_desigList_() {
   for (var i = H.row + 1; i < v.length; i++) {
     var t = String(v[i][H.t]).trim(); if (!t) continue; var k = t.toUpperCase().replace(/\s+/g, ' ');
     if (!by[k]) by[k] = { teacher: t, designation: '', status: '', dept: '' };
-    var o = by[k]; if (!o.designation) o.designation = String(v[i][H.d]).trim();
+    var o = by[k]; if (!o.designation) o.designation = at_usersDesig_C_(t) || String(v[i][H.d]).trim();
     if (!o.status && H.s >= 0) o.status = String(v[i][H.s]).trim(); if (!o.dept && H.dep >= 0) o.dept = String(v[i][H.dep]).trim();
   }
   return { teachers: Object.keys(by).sort().map(function (k) { return by[k]; }) };
@@ -1090,6 +1100,12 @@ function generateTeacherWorkloadByStatus() {
       );
     }
   }
+
+  // v8.15 the designation in the Users sheet wins (that is where a promotion is written)
+  try {
+    const UD = at_usersDesig_();
+    Object.keys(teacherInfoMap).forEach(function (t) { const d = UD[at_nameKey_(t)]; if (d) teacherInfoMap[t].designation = d; });
+  } catch (e) { Logger.log('Users designations not read: ' + e.message); }
 
   Logger.log(
     "Teachers loaded: " +
