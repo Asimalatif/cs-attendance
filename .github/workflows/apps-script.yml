@@ -35,30 +35,55 @@ jobs:
           if [ -z "$CLASPRC" ]; then echo "::error::CLASPRC_JSON secret is missing"; exit 1; fi
           printf '%s' "$CLASPRC" > ~/.clasprc.json
 
-      - name: Safety check (never delete files that exist only in Apps Script)
+      - name: Build push folder (repo backend files + keep everything else already in Apps Script)
         run: |
           SCRIPT_ID=$(node -p "require('./.clasp.json').scriptId")
           REPO=$PWD
-          mkdir -p /tmp/live && cd /tmp/live
-          clasp clone "$SCRIPT_ID" --rootDir . > /dev/null
-          # Keep the live manifest (time zone, scopes, web app settings) if the repo has none
-          if [ ! -f "$REPO/appsscript.json" ]; then cp appsscript.json "$REPO/appsscript.json"; fi
-          missing=0
+          mkdir -p /tmp/live /tmp/push
+          (cd /tmp/live && clasp clone "$SCRIPT_ID" --rootDir . > /dev/null)
+          rm -f /tmp/live/.clasp.json
+          # 1) backend files from the repo (these replace their copies in Apps Script)
+          for f in "$REPO"/*.gs; do
+            [ "$(basename "$f")" = "backend-patch.gs" ] && continue
+            cp "$f" /tmp/push/
+          done
+          if [ -f "$REPO/appsscript.json" ]; then cp "$REPO/appsscript.json" /tmp/push/; else cp /tmp/live/appsscript.json /tmp/push/; fi
+          echo "## Apps Script push" >> $GITHUB_STEP_SUMMARY
+          echo "Updated from repo: $(cd /tmp/push && ls *.gs | sed 's/\.gs$//' | tr '\n' ' ')" >> $GITHUB_STEP_SUMMARY
+          # 2) keep every file that exists only in Apps Script
           while IFS= read -r -d '' f; do
-            rel="${f#./}"
-            case "$rel" in .clasp.json|appsscript.json) continue ;; esac
-            name="${rel%.*}"
-            if [ ! -f "$REPO/$name.gs" ] || [ "$name" = "backend-patch" ]; then
-              echo "::error::'$rel' exists in Apps Script but not in the repo. Add it to the repo (as $name.gs) or delete it in the editor, then re-run."
-              missing=1
+            rel="${f#./}"; [ "$rel" = "appsscript.json" ] && continue
+            name="${rel%.*}"; ext="${rel##*.}"
+            [ -f "/tmp/push/$name.gs" ] && continue            # same name in repo -> repo version wins
+            if [ "$ext" != "html" ]; then
+              m=$(cd /tmp/push && ls | grep -ixF "$name.gs" || true)
+              if [ -n "$m" ] && [ ! -f "/tmp/live/${m%.gs}.js" ]; then
+                echo "- '$name' replaced by repo file '${m%.gs}' (same name, different capitals)" >> $GITHUB_STEP_SUMMARY
+                continue
+              fi
+              dest="/tmp/push/$name.gs"
+            else
+              dest="/tmp/push/$rel"
             fi
-          done < <(find . -type f -print0)
-          exit $missing
+            mkdir -p "$(dirname "$dest")"; cp "/tmp/live/$rel" "$dest"
+            echo "- kept as is: '$rel'" >> $GITHUB_STEP_SUMMARY
+          done < <(cd /tmp/live && find . -type f -print0)
+          printf '{"scriptId":"%s","rootDir":".","fileExtension":"gs"}' "$SCRIPT_ID" > /tmp/push/.clasp.json
+
+      - name: Backup of Apps Script before this push (download from the run page)
+        uses: actions/upload-artifact@v4
+        with:
+          name: apps-script-backup-${{ github.run_number }}
+          path: /tmp/live
+          retention-days: 30
+          include-hidden-files: true
 
       - name: Push code
+        working-directory: /tmp/push
         run: clasp push --force
 
       - name: Update live web app deployment
+        working-directory: /tmp/push
         env:
           DEPLOYMENT_ID: ${{ secrets.DEPLOYMENT_ID }}
         run: |
