@@ -3494,7 +3494,7 @@ function studentChecks_(add, A) {
     if (WL.note) add('wl_note', 'Workload check: no workload to read', 'warn', [WL.note], 'The over / under lists above are empty because of this, not because every teacher is within her limit.');
   } catch (e) { add('wl_err', 'Workload check could not run', 'warn', [String(e.message || e)], ''); }
   // v8.13 Open Quota students on a subsidized (half-fee) seat whose Aggregate is below the subsidized Open Quota cutoff
-  try { var QC = admQuotaCheck_(); add('stu_subq', 'Open Quota on a subsidized (half-fee) seat but Aggregate below the cutoff', lv(QC.items), QC.items, QC.help, ['Roll No', 'Student Name', 'Father Name', 'PCS', 'Detail / Status']); }
+  try { var QC = admQuotaCheck_(); add('stu_subq', 'Quota to check: subsidized fee in a non-subsidized program, or Open Quota below the subsidized cutoff', lv(QC.items), QC.items, QC.help, ['Roll No', 'Student Name', 'Father Name', 'PCS', 'Detail / Status']); }
   catch (e) { add('stu_subq_err', 'Subsidized quota check could not run', 'warn', [String(e.message || e)], ''); }
   var days = last && last.at ? 0 : 999;
   if (last && last.at) { var d = new Date(last.at.replace(/(\d+) (\w+) (\d+) .*/, '$2 $1, $3')); if (!isNaN(d)) days = Math.floor((Date.now() - d.getTime()) / 864e5); }

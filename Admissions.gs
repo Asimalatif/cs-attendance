@@ -327,6 +327,18 @@ function admPortalFixList_() {
  *  whose Aggregate is below the last subsidized Open Quota seat: on Open Quota she belongs on the full-fee seat, or she is really in another quota. */
 function admQuotaCheck_() {
   var set = admSettings_(), recs = admAll_(admRead_(), set.sections), items = [], OQ = admQ_(ADM_CFG.OPEN_QUOTA), parts = [];
+  // v8.17 a 1st Year student in a NON-subsidized Pre-Medical program whose challans (paid + unpaid, registration left out) come to only
+  // the subsidized fee (Rs 60,000): she paid the subsidized fee, so she belongs on a subsidized seat, most likely in another quota
+  var SUBF = 60000, NONF = 120000, subKey = {};
+  ADM_CFG.PROGRAMS.forEach(function (p) { if (p.fee === 'sub') subKey[p.classProgram] = p; });
+  recs.forEach(function (r) {
+    var p = ADM_CFG.PROGRAMS.filter(function (q) { return q.key === r.key; })[0]; if (!p || p.fee !== 'non' || !subKey[p.classProgram] || admIsMig_(r.year) || !r.name) return;
+    var f = String(r.challan || '').split(',').map(function (x) { var m = x.trim().match(/^([PU])-?([\d.]+)/i); return m ? { paid: /p/i.test(m[1]), a: Number(m[2]) } : null; }).filter(function (x) { return x && x.a >= 3000; });
+    var tot = f.reduce(function (t, x) { return t + x.a; }, 0);
+    if (!f.some(function (x) { return Math.round(x.a) === SUBF; }) || tot >= (SUBF + NONF) / 2) return;
+    items.push({ t: r.roll + ' · ' + r.name + ' · ' + p.label + ' · paid the subsidized fee',
+      r: [r.roll, r.name, r.father || '', r.pcs || '', 'In ' + p.label + ' (' + (r.quota || 'no quota') + ') but her fee is the SUBSIDIZED Rs 60,000: put her on a subsidized seat in ' + subKey[p.classProgram].label + '; her real quota is probably not Open (ask her and update it)'] });
+  });
   ADM_CFG.PROGRAMS.filter(function (p) { return p.fee === 'sub' && ADM_CFG.PROGRAMS.some(function (q) { return q.fee === 'non' && q.program === p.program; }); }).forEach(function (p) {
     var seats = Number((set.seats[p.key] || {})[OQ]); if (!seats) return;
     var L = recs.filter(function (r) { return r.key === p.key && !admIsMig_(r.year) && admQ_(r.quota) === OQ && r.name; }).map(function (r) {
@@ -337,7 +349,7 @@ function admQuotaCheck_() {
     L.slice(seats).forEach(function (x) { if (x.a < cut) items.push({ t: x.r.roll + ' · ' + x.r.name + ' · Aggregate ' + x.a + ' < cutoff ' + cut,
       r: [x.r.roll, x.r.name, x.r.father || '', x.r.pcs || '', 'Aggregate ' + x.a + ' below the ' + p.label + ' Open Quota cutoff ' + cut + ': another quota? (employee, sports, O-Level, minority …) else full-fee seat'] }); });
   });
-  return { items: items, help: 'She is in Open Quota on a subsidized seat (half fee) but her Aggregate is below the last subsidized Open Quota seat. Check her real quota (UoP employee, sports, O-Level, minority, disabled, FATA …) on the portal / admission form; if she really is Open Quota, she belongs on the full-fee (Self Morning) seat. ' + parts.join(' · ') };
+  return { items: items, help: 'Two kinds of student are listed. (1) She paid the SUBSIDIZED fee (Rs 60,000) but sits in a non-subsidized program: move her to the subsidized program; her quota is probably not Open (UoP employee, sports, O-Level, minority …): ask her and update it. (2) She is in Open Quota on a subsidized seat (half fee) but her Aggregate is below the last subsidized Open Quota seat. Check her real quota (UoP employee, sports, O-Level, minority, disabled, FATA …) on the portal / admission form; if she really is Open Quota, she belongs on the full-fee (Self Morning) seat. ' + parts.join(' · ') };
 }
 /** v8.14 students who migrated INTO Jinnah College (2nd Year, Enroll# in the migration range) + the college they came from (Admission Log) */
 /** v8.16 students who migrated INTO Jinnah College (2nd Year). The test: she has NO 1st-year payment on the UOP portal:
@@ -345,8 +357,9 @@ function admQuotaCheck_() {
  *  migration range, or listed in the sheet "Migrated to JCW". The college she came from: Admission Log / "Migrated to JCW". */
 function admMigrated_() {
   var set = admSettings_(), M = ADM_CFG.MIGRATION, from = {}, listed = {}, book = admBook_();
-  var now = new Date(), sess = now.getMonth() >= 5 ? now.getFullYear() : now.getFullYear() - 1;      // admissions of this session start in summer
-  var yr = function (d) { var m = String(d || '').match(/(\d{4})/); return m ? Number(m[1]) : 0; };
+  var now = new Date(), sessY = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1, sessK = sessY + '0801';   // v8.17 a session's admissions start on 1 August
+  var dk = function (d) { var s = String(d || ''), m = s.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/); if (m) return m[3] + ('0' + m[2]).slice(-2) + ('0' + m[1]).slice(-2);
+    m = s.match(/(\d{4})-(\d{2})-(\d{2})/); return m ? m[1] + m[2] + m[3] : ''; };
   var rollCol = function (head) { var c = -1; head.forEach(function (h, j) { if (c < 0 && /^(enroll(ment)?(no)?|rollno|enrollmentno)$/.test(admH_(h))) c = j; }); return c; };
   try {
     var lg = admLogSheet_(), v = lg.getLastRow() > 1 ? lg.getRange(2, 1, lg.getLastRow() - 1, 6).getDisplayValues() : [];
@@ -367,7 +380,7 @@ function admMigrated_() {
     if (!r.name || !r.roll || !admIsMig_(r.year)) return;
     var k = admNormRoll_(r.roll), n = admRollNum_(r.roll, M.ROLL_PREFIX), why = [], pr = P ? ((r.id && byId[r.id]) || byRoll[k]) : null;
     var first = (pr && P.g(pr, 'firstchallandate')) || (pr && P.g(pr, 'feepaiddate')) || r.feepaid || '';
-    if (first && yr(first) >= sess) why.push('no 1st-year payment on the portal (first ' + (pr && P.g(pr, 'firstchallandate') ? 'challan' : 'fee paid') + ' ' + first + ')');
+    if (first && dk(first) && dk(first) >= sessK) why.push('no 1st-year payment on the portal (first ' + (pr && P.g(pr, 'firstchallandate') ? 'challan' : 'fee paid') + ' ' + first + ')');
     if (!first) noDate++;
     if (n !== null && n >= M.ROLL_START && n <= M.ROLL_END) why.push('Enroll# in the migration range');
     if (listed[k]) why.push('in "Migrated to JCW"');
