@@ -340,11 +340,13 @@ function admQuotaCheck_() {
   return { items: items, help: 'She is in Open Quota on a subsidized seat (half fee) but her Aggregate is below the last subsidized Open Quota seat. Check her real quota (UoP employee, sports, O-Level, minority, disabled, FATA …) on the portal / admission form; if she really is Open Quota, she belongs on the full-fee (Self Morning) seat. ' + parts.join(' · ') };
 }
 /** v8.14 students who migrated INTO Jinnah College (2nd Year, Enroll# in the migration range) + the college they came from (Admission Log) */
-/** v8.15 students who migrated INTO Jinnah College (2nd Year). A student counts when ANY of these is true:
- *  her Enroll# is in the migration range · she is listed in the sheet "Migrated to JCW" · she is in 2nd Year now but
- *  was not in last year's strength sheet "Transform-ALL-COLLEGE-STRENGTH 2025". The college she came from: Admission Log / "Migrated to JCW". */
+/** v8.16 students who migrated INTO Jinnah College (2nd Year). The test: she has NO 1st-year payment on the UOP portal:
+ *  her first fee challan (or, before sync 1.12, her first paid fee) is from THIS admission year. Also counted: Enroll# in the
+ *  migration range, or listed in the sheet "Migrated to JCW". The college she came from: Admission Log / "Migrated to JCW". */
 function admMigrated_() {
   var set = admSettings_(), M = ADM_CFG.MIGRATION, from = {}, listed = {}, book = admBook_();
+  var now = new Date(), sess = now.getMonth() >= 5 ? now.getFullYear() : now.getFullYear() - 1;      // admissions of this session start in summer
+  var yr = function (d) { var m = String(d || '').match(/(\d{4})/); return m ? Number(m[1]) : 0; };
   var rollCol = function (head) { var c = -1; head.forEach(function (h, j) { if (c < 0 && /^(enroll(ment)?(no)?|rollno|enrollmentno)$/.test(admH_(h))) c = j; }); return c; };
   try {
     var lg = admLogSheet_(), v = lg.getLastRow() > 1 ? lg.getRange(2, 1, lg.getLastRow() - 1, 6).getDisplayValues() : [];
@@ -358,24 +360,23 @@ function admMigrated_() {
       if (rc >= 0) mv.slice(1).forEach(function (r) { var k = admNormRoll_(r[rc]); if (!k) return; listed[k] = 1; if (fc >= 0 && String(r[fc]).trim() && !from[k]) from[k] = String(r[fc]).trim(); });
     }
   } catch (e) {}
-  var last = null;
-  try {
-    var ls = book.getSheetByName('Transform-ALL-COLLEGE-STRENGTH 2025');
-    if (ls && ls.getLastRow() > 1) { var lv = ls.getDataRange().getDisplayValues(), lc = rollCol(lv[0]); if (lc >= 0) { last = {}; lv.slice(1).forEach(function (r) { var k = admNormRoll_(r[lc]); if (k) last[k] = 1; }); } }
-  } catch (e) {}
-  var rows = [];
+  var P = null, byId = {}, byRoll = {};
+  try { P = admPortalSheet_(); if (P) P.v.slice(1).forEach(function (r) { var id = P.g(r, 'studentid'), en = P.g(r, 'enrollment'); if (id) byId[id] = r; if (en) byRoll[admNormRoll_(en)] = r; }); } catch (e) {}
+  var rows = [], noDate = 0;
   admAll_(admRead_(), set.sections).forEach(function (r) {
     if (!r.name || !r.roll || !admIsMig_(r.year)) return;
-    var k = admNormRoll_(r.roll), n = admRollNum_(r.roll, M.ROLL_PREFIX), why = [];
+    var k = admNormRoll_(r.roll), n = admRollNum_(r.roll, M.ROLL_PREFIX), why = [], pr = P ? ((r.id && byId[r.id]) || byRoll[k]) : null;
+    var first = (pr && P.g(pr, 'firstchallandate')) || (pr && P.g(pr, 'feepaiddate')) || r.feepaid || '';
+    if (first && yr(first) >= sess) why.push('no 1st-year payment on the portal (first ' + (pr && P.g(pr, 'firstchallandate') ? 'challan' : 'fee paid') + ' ' + first + ')');
+    if (!first) noDate++;
     if (n !== null && n >= M.ROLL_START && n <= M.ROLL_END) why.push('Enroll# in the migration range');
     if (listed[k]) why.push('in "Migrated to JCW"');
-    if (last && !last[k]) why.push('not in last year\'s strength sheet');
     if (!why.length) return;
     rows.push({ roll: r.roll, name: r.name, father: r.father || '', program: r.programName || '', pcs: r.pcs || '', section: r.section || '', metric: r.metric || '', total: r.total || '',
-                from: from[k] || '', contact: r.contact || '', status: r.status || '', why: why.join(' · ') });
+                from: from[k] || '', contact: r.contact || '', status: r.status || '', first: first, why: why.join(' · ') });
   });
   rows.sort(function (a, b) { return String(a.roll).localeCompare(String(b.roll), undefined, { numeric: true }); });
-  return { ok: true, rows: rows, at: admNow_(), lastYear: !!last };
+  return { ok: true, rows: rows, at: admNow_(), noDate: noDate };
 }
 function admKeepSheet_() {
   var b = admBook_(), sh = b.getSheetByName(ADM_KEEP_SHEET);
