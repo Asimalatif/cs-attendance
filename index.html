@@ -4143,7 +4143,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-11-18 v8.21 F.A optional subjects: 4 + 3 columns';
+const APP_BUILD = '2026-11-18 v8.22 F.A subjects from strength sheet, N/R';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4452,16 +4452,17 @@ function classTable(doc, S, q, Y, label){
     const optS = all.filter(isOpt), subs = all.filter(x => !isOpt(x));
     const K = optS.length ? Math.max(...S.map(s => optS.filter(x => s.subs[x]).length)) : 0, slots = [...Array(K).keys()];
     const myOpt = s => optS.filter(x => s.subs[x]), sn = x => abbrSub(String(x).toUpperCase());
-    const attTx = g => !g ? '' : g.off ? 'left' : !g.d ? '-' : g.p + '/' + g.d;
-    const mtTx = g => !g || g.off || !g.mtT ? '' : g.abs && g.abs === g.nt ? 'A' : g.ms + '/' + g.mtT + (g.abs ? ' (A×' + g.abs + ')' : '');   // v8.18 absent in the test = A, not 0
-    const slotTx = (s, j, f) => { const x = myOpt(s)[j]; if(!x) return ''; const t = f(s.subs[x]); return t === 'left' ? sn(x) + ' left' : sn(x) + (t ? ' ' + t : ''); };
+    // v8.22 F.A student (s.fa): a subject of hers with no attendance / no test marks received = N/R (blue)
+    const attTx = (g, s) => !g ? '' : g.off ? 'left' : !g.d ? (s && s.fa ? 'N/R' : '-') : g.p + '/' + g.d;
+    const mtTx = (g, s) => !g || g.off ? '' : !g.mtT ? (s && s.fa ? 'N/R' : '') : g.abs && g.abs === g.nt ? 'A' : g.ms + '/' + g.mtT + (g.abs ? ' (A×' + g.abs + ')' : '');   // v8.18 absent in the test = A, not 0
+    const slotTx = (s, j, f) => { const x = myOpt(s)[j]; if(!x) return ''; const t = f(s.subs[x], s); return t === 'left' ? sn(x) + ' left' : t === 'N/R' ? sn(x) + '-N/R' : sn(x) + (t ? ' ' + t : ''); };
     head = [[{ content:'', colSpan:3 }, { content:'Attendance (attended / held)', colSpan:subs.length + K + 2 }, { content:'Monthly tests (obtained / total)', colSpan:subs.length + K + 1 }],
       ['#', 'Roll No', 'Student Name'].concat(subs.map(abbr), slots.map(j => 'Opt. ' + (j + 1)), ['Leaves', q.lv ? 'Overall %\n(with leaves)' : 'Overall %'], subs.map(abbr), slots.map(j => 'Opt. ' + (j + 1)), ['Avg %'])];
     types.push('', '', ''); subs.concat(slots).forEach(() => types.push('att')); types.push('lv', 'att'); subs.concat(slots).forEach(() => types.push('tp')); types.push('tp');
     body = S.map((s, i) => [i + 1, s.roll, s.name + (s.guest ? ' (Guest)' : '')]
-      .concat(subs.map(x => attTx(s.subs[x])), slots.map(j => slotTx(s, j, attTx)),
+      .concat(subs.map(x => attTx(s.subs[x], s)), slots.map(j => slotTx(s, j, attTx)),
         [q.lv ? (s.lv ? String(s.lv) : '-') : '-', (q.lv ? s.pctL : s.pct) == null ? '-' : (q.lv ? s.pctL : s.pct) + '%'],
-        subs.map(x => mtTx(s.subs[x])), slots.map(j => slotTx(s, j, mtTx)),
+        subs.map(x => mtTx(s.subs[x], s)), slots.map(j => slotTx(s, j, mtTx)),
         [s.tp == null ? '-' : s.tp + '%']));
     const avg = x => { let p = 0, d = 0; S.forEach(s => { const g = s.subs[x]; if(g && !g.off){ p += g.p; d += g.d; } }); return d ? pct2(p, d) + '%' : '-'; };
     const tavg = x => { let a = 0, t = 0; S.forEach(s => { const g = s.subs[x]; if(g && !g.off){ a += g.ms; t += g.mtT; } }); return t ? pct2(a, t) + '%' : '-'; };
@@ -4482,6 +4483,7 @@ function classTable(doc, S, q, Y, label){
       const t = types[h.column.index], v = String(h.cell.raw == null ? '' : h.cell.raw);
       if(v === 'left'){ h.cell.styles.textColor = [150, 156, 168]; h.cell.styles.fontStyle = 'italic'; return; }
       if(/ left$/.test(v)){ h.cell.styles.textColor = [150, 156, 168]; h.cell.styles.fontStyle = 'italic'; return; }
+      if(/N\/R$/.test(v)){ h.cell.styles.textColor = [29, 78, 216]; h.cell.styles.fillColor = [219, 234, 254]; h.cell.styles.fontStyle = 'bold'; return; }   // v8.22 not received
       const fr = /(?:^|\s)(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)(?:\s|$)/.exec(v), fp = fr && +fr[2] ? +fr[1] / +fr[2] * 100 : null;   // "20/24" or "Eco 20/24" -> 83.3
       const ab = v === 'A' || / A$/.test(v);
       if(t === 'att' && ((/%$/.test(v) && parseFloat(v) < q.below) || (fp != null && fp < q.below))) redCell(h, C);
@@ -4506,7 +4508,7 @@ function classBoxes(doc, Y, S, q){
 const classLegend = (q, S) => 'Attendance % = lectures attended / lectures held from ' + rangeTxt(q) + '. Only P counts. Red = below ' + q.below + '% (tests: below 50% or A = absent; a test cell shows A when she missed every test, "(A×2)" when she missed 2 of them; a missed test counts as 0 in the %). "left" = student changed subject.' +
   (q.lv ? ' Leaves = approved leave days (Leave In-Charge); Overall % (with leaves) adds each month\'s leave days to the lectures attended in every subject held that month, never more than the lectures held.' : '') +
   ' Monthly tests from the "<Month> - MONTHLY TEST" workbooks.' +
-  (S && S.some(s => /optional/i.test(s.cls) || Object.values(s.subs).some(g => g.opt)) ? ' Opt. 1, 2, 3 = the student\'s own optional subjects (short name, then attended / held or marks); her compulsory and optional subjects are in one row.' : '');
+  (S && S.some(s => /optional/i.test(s.cls) || Object.values(s.subs).some(g => g.opt)) ? ' Opt. 1, 2, 3 = the student\'s own optional subjects (short name, then attended / held or marks); her compulsory and optional subjects are in one row. N/R (blue) = not received: the subject is hers in the strength sheet (SUB1–SUB7) but no attendance or no test marks came in for it.' : '');
 function classPdf(S, q){
   if(!S.length) throw new Error('No students found for this choice.');
   const doc = P.newDoc('landscape'); let Y = P.TOP;
@@ -4713,6 +4715,28 @@ function joinOptional(S){
   });
   return out;
 }
+/** v8.22 F.A students: every subject of SUB1–SUB7 in Transform-ALL-COLLEGE-STRENGTH is in her row; a subject with no attendance /
+ *  no test marks received is shown as N/R (blue). s.fa = true marks her row. */
+let faSubCache = null;
+async function addFaSubjects(S){
+  if(!faSubCache || Date.now() - faSubCache.at > 10 * 60e3){
+    try{ const r = await api({ action:'fa_subjects' }, 120000); if(r && r.ok) faSubCache = { at:Date.now(), map:Object.fromEntries((r.list || []).map(x => [rkey(x[0]), x[2]])) }; }
+    catch(e){ toast('The F.A subjects could not be read from the strength sheet, so N/R is shown only where the sheets have the subject.'); }
+  }
+  const M = faSubCache ? faSubCache.map : {};
+  S.forEach(s => {
+    if(!/^F\.?\s*A\b/i.test(s.cls) || s.guest) return;
+    s.fa = true;
+    const want = M[rkey(s.roll)]; if(!want) return;
+    const have = Object.keys(s.subs), keys = want.map(subK), used = new Set();
+    want.forEach((w, i) => {                                            // exact name first, then the same first 4 letters (ISL. ELE ~ ISLAMIYAT ELECTIVE)
+      let k = have.find(h => !used.has(h) && subK(h) === keys[i]);
+      if(!k) k = have.find(h => !used.has(h) && !keys.includes(subK(h)) && subK(h).slice(0, 4) === keys[i].slice(0, 4));
+      if(k){ used.add(k); return; }
+      s.subs[w] = { sub:w, teacher:'', months:{}, p:0, d:0, ms:0, mtT:0, abs:0, nt:0, pct:null, tp:null, off:false, opt:true, nr:true };
+    });
+  });
+}
 /** one student may come back under two sections (guest in one subject): join them into one report, home section first */
 function oneStudent(S, roll){
   const list = S.filter(s => s.roll === roll); if(list.length < 2) return list;
@@ -4748,7 +4772,7 @@ async function rpCreate(kind, preset){
     toast('Reading the monthly test workbooks…');
     rows = await addMtMarks(rows, fa ? Object.assign({}, fq, { rolls:mine }) : fq);
     let S = aggregate(rows);
-    if(q.type === 'class' || q.type === 'college') S = joinOptional(S);
+    if(q.type === 'class' || q.type === 'college'){ S = joinOptional(S); if(S.some(s => /^F\.?\s*A\b/i.test(s.cls))){ toast('Reading the F.A subjects (strength sheet)…'); await addFaSubjects(S); } }
     if(q.type === 'class' || q.type === 'college'){ toast('Reading approved leaves…'); q.lv = await addLeaves(S, q); }
     if(kind === 'csv'){
       const r = q.type === 'shortage' ? shortageCsv(S, q) : detailCsv(rows, q);
