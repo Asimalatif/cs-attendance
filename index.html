@@ -4143,7 +4143,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-11-18 v8.24 college summary at the end';
+const APP_BUILD = '2026-11-18 v8.25 test columns in teal';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4470,6 +4470,7 @@ function classTable(doc, S, q, Y, label){
     body.push(['', '', 'Class average'].concat(subs.map(avg), slots.map(() => ''), [q.lv && L2 ? String(L2) : '', D2 ? pct2(P2, D2) + '%' : '-'], subs.map(tavg), slots.map(() => ''), ['']));
   }
   const n = body.length;
+  const tst = new Set(types.map((t, i) => t === 'mt' || t === 'tp' ? i : -1).filter(i => i >= 0)), tst0 = tst.size ? Math.min(...tst) : -1;   // v8.25 test columns
   const p0 = doc.internal.getNumberOfPages();
   P.table(doc, { startY:Y, margin:{ top:P.TOP + (label ? 7 : 0), left:10, right:10, bottom:18 },
     didDrawPage:d => { if(label && doc.internal.getCurrentPageInfo().pageNumber > p0){ doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(107, 52, 35); doc.text(label + '  (continued)', 10, P.TOP + 3); } },
@@ -4477,9 +4478,14 @@ function classTable(doc, S, q, Y, label){
     headStyles:{ fillColor:C.NAVY, textColor:[255, 255, 255], fontStyle:'bold', halign:'center', valign:'middle', fontSize:6.6, cellPadding:1 },
     head, body,
     columnStyles:{ 0:{ cellWidth:7 }, 1:{ cellWidth:23, halign:'left' }, 2:{ cellWidth:40, halign:'left' } },
+    // v8.25 monthly test columns: dark teal heading, light teal cells, a thick line where they start (attendance stays brown / white)
+    didDrawCell:h => { if(h.column.index !== tst0 || tst0 < 0) return; doc.setDrawColor(22, 78, 99); doc.setLineWidth(0.7); doc.line(h.cell.x, h.cell.y, h.cell.x, h.cell.y + h.cell.height); },
     didParseCell:h => {
+      const isT = tst.has(h.column.index);
+      if(h.section === 'head'){ if(isT) h.cell.styles.fillColor = [22, 78, 99]; return; }
       if(h.section !== 'body') return;
-      if(h.row.index === n - 1){ h.cell.styles.fontStyle = 'bold'; h.cell.styles.fillColor = [234, 238, 246]; return; }
+      if(h.row.index === n - 1){ h.cell.styles.fontStyle = 'bold'; h.cell.styles.fillColor = isT ? [214, 232, 238] : [234, 238, 246]; return; }
+      if(isT) h.cell.styles.fillColor = [236, 245, 248];
       const t = types[h.column.index], v = String(h.cell.raw == null ? '' : h.cell.raw);
       if(v === 'left'){ h.cell.styles.textColor = [150, 156, 168]; h.cell.styles.fontStyle = 'italic'; return; }
       if(/ left$/.test(v)){ h.cell.styles.textColor = [150, 156, 168]; h.cell.styles.fontStyle = 'italic'; return; }
