@@ -573,7 +573,7 @@ async function fullPdf(c){
   const F2 = F.fields.map(x => kk(x) === 'metricrollno' && !x[1] ? [x[0], val('matricrollno') || '—'] : x);
   const L1 = F2.filter(x => x[1] !== '' && !SKIP.has(kk(x)) && !/^https?:\/\//.test(x[1])).sort((a, b) => (kk(b) === 'studentname') - (kk(a) === 'studentname'));
   // v8.32 after Quota: DOB, MATRIC ROLL NO, Obtained Marks, Total Marks, then the rest; Metric RollNo only when it differs from MATRIC ROLL NO
-  const L0 = L1.filter(x => !(kk(x) === 'metricrollno' && x[1] === val('matricrollno'))), NEXT = ['dob', 'matricrollno', 'obtainedmarks', 'totalmarks'];
+  const L0 = L1.filter(x => !(kk(x) === 'metricrollno' && x[1] === val('matricrollno'))), NEXT = ['dob', 'matricrollno', 'obtainedmarks', 'totalmarks', 'board', 'passingyear'];
   const qi = L0.findIndex(x => kk(x) === 'quota'), head0 = L0.slice(0, qi + 1).filter(x => !NEXT.includes(kk(x)));
   const L = head0.concat(NEXT.map(k => L0.find(x => kk(x) === k)).filter(Boolean), L0.filter(x => !head0.includes(x) && !NEXT.includes(kk(x)))), body = [];
   for(let i = 0; i < L.length; i += 2) body.push([L[i][0], L[i][1], L[i + 1] ? L[i + 1][0] : '', L[i + 1] ? L[i + 1][1] : '']);
@@ -843,6 +843,13 @@ function pnSuggest(){
   });
   pnSave();
 }
+/* v8.33 "Sync with portal": opens the portal (Quick sync runs by itself in the JCW Portal Sync panel), then reads the fresh copy */
+function pnPortalSync(){
+  const w = window.open('https://portal.uop.edu.pk/Student/Students#jcw-sync', 'jcwPortalSync', 'width=560,height=720');
+  if(!w) return toast('Allow pop-ups for this site, then press the button again.', 5000);
+  toast('Quick sync started in a small window (log in to the portal there if it asks). The list is checked again when it finishes.', 6000);
+}
+window.addEventListener('message', e => { if(e.data && e.data.jcwSync === 'done'){ toast('Portal sync finished: checking for new students…'); setTimeout(() => pnLoad(true), 1500); } });
 async function pnLoad(show){
   if(!online() || !user || pnLoading) return;
   pnLoading = true; if(tab === 'pnew') render();
@@ -908,11 +915,11 @@ function pnHtml(){
     ${pnew.note ? `<div class="seat near">${esc(pnew.note)}</div>` : ''}
     <div class="hint"><b>Suggested Roll No</b>: the next free numbers of her program's range, in the order the portal admitted them (an Enrollment# already on the portal is kept). <b>Suggested section</b>: a section of her program whose room still has free seats (room size from its name, e.g. R # 05/40 = 40 seats; R # 05/40 (EVENING) is the same room), the one in the <b>biggest room</b> first, then the most free seats ("Optional Subjects" is never suggested). Change any of them; the rest re-arrange.</div>
   </section>`;
-  if(!pnew.list.length) return head + `<div class="card"><h2>Nobody new</h2><div class="sub">Everyone Enrolled on the portal is already in the strength sheet.</div><div class="acts"><button class="btn" type="button" id="pnRef" ${online() && !pnLoading ? '' : 'disabled'}>${pnLoading ? 'Checking…' : 'Check again'}</button></div></div>`;
+  if(!pnew.list.length) return head + `<div class="card"><h2>Nobody new</h2><div class="sub">Everyone Enrolled on the portal is already in the strength sheet.</div><div class="acts"><button class="btn primary" type="button" id="pnSync" ${online() && !pnLoading ? '' : 'disabled'}>Sync with portal, then check</button><button class="btn" type="button" id="pnRef" ${online() && !pnLoading ? '' : 'disabled'}>${pnLoading ? 'Checking…' : 'Check again (last synced copy)'}</button></div></div>`;
   const bar = `<div class="stickbar"><div class="acts">
       <button class="btn small" type="button" id="pnAll">${on.length === list.filter(s => !pnHide.includes(s.id)).length ? 'Untick all' : 'Tick all'}</button>
       <button class="btn small" type="button" id="pnRe">Suggest again</button>
-      <button class="btn small" type="button" id="pnRef" ${online() && !pnLoading ? '' : 'disabled'}>${pnLoading ? 'Checking…' : 'Refresh'}</button>
+      <button class="btn small" type="button" id="pnSync" ${online() && !pnLoading ? '' : 'disabled'}>Sync with portal</button><button class="btn small" type="button" id="pnRef" ${online() && !pnLoading ? '' : 'disabled'}>${pnLoading ? 'Checking…' : 'Refresh'}</button>
       <button class="btn primary" type="button" id="pnAdd" ${on.length && online() && !pnBusy ? '' : 'disabled'}>${pnBusy ? 'Adding…' : 'Add ' + on.length + ' to strength sheet'}</button></div>
     <div class="hint">${Object.keys(by).map(k => esc(k) + ' ' + by[k]).join(' · ') || 'Nobody ticked.'}${hiddenN ? ` · <a href="#" id="pnSh">${pnShowHidden ? 'hide' : 'show'} ${hiddenN} hidden</a>` : ''}</div></div>`;
   const cards = list.map(s => {
@@ -949,6 +956,7 @@ function pnHtml(){
 }
 function wirePn(){
   const R = $('#pnRef'); if(R) R.onclick = () => pnLoad(true);
+  const SY = $('#pnSync'); if(SY) SY.onclick = pnPortalSync;
   const A = $('#pnAll'); if(A) A.onclick = () => { const vis = pnList().filter(s => !pnHide.includes(s.id)), all = vis.every(s => pnEntry(s).on); vis.forEach(s => pnEntry(s).on = !all); pnSuggest(); render(); };
   const S = $('#pnRe'); if(S) S.onclick = () => { pnList().forEach(s => { const e = pnEntry(s); e.rollManual = false; e.secManual = false; }); pnSuggest(); render(); toast('Roll numbers and sections suggested again'); };
   const H = $('#pnSh'); if(H) H.onclick = ev => { ev.preventDefault(); pnShowHidden = !pnShowHidden; render(); };
