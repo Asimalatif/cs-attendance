@@ -33,7 +33,8 @@ var SVC_SUBS = {
     { k: 'merit', label: 'Merit lists (confirm, last date, alerts)',tab: 'merit', acts: ['adm_oml_get', 'adm_oml_save', 'adm_oml_confirm', 'adm_portal_quota', 'adm_alerts_save', 'adm_last_date'] },
     { k: 'fix',   label: 'Wrong on portal list',                    tab: 'fix',   acts: ['adm_fixlist'] },
     { k: 'sset',  label: 'Seat settings (change seats, migrated)',  tab: 'sset',  acts: ['adm_seats_save', 'adm_migrated', 'adm_mig_import'] },
-    { k: 'wait',  label: 'Waiting (saves kept on the phone)',       tab: 'wait',  acts: [] }
+    { k: 'wait',  label: 'Waiting (saves kept on the phone)',       tab: 'wait',  acts: [] },
+    { k: 'slips', label: 'Slips & quick edit (change quota, section, Enroll#, program, subjects)', tab: 'slips', acts: ['at_meta', 'at_strength', 'at_savestu'] }
   ],
   idcards: [
     { k: 'print',    label: 'Make & print ID cards (PDF), mark printed', acts: ['idc_mark', 'idc_white_put'] },
@@ -109,7 +110,8 @@ function svcParse_(txt) {
   });
   return out;
 }
-var SVC_ALSO = { idc_white_get: 'admission', pc_prepare: 'board' };   // a page that also calls one action of another module
+var SVC_ALSO = { idc_white_get: 'admission', pc_prepare: 'board',
+  at_meta: 'admission', at_strength: 'admission', at_savestu: 'admission' };   // v8.38 Admissions → Slips & quick edit (admintools.html?only=slips)   // a page that also calls one action of another module
 /** the services that open a request: 'idc_list' -> ['idcards'] ([] = no service, normal rules) */
 function svcForAction_(a) {
   a = String(a || ''); var out = [];
