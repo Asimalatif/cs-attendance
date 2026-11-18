@@ -164,7 +164,7 @@ function doPost(e) {
     if (req.action === 'overview_low') return json_(overviewLow_(user));
     if (req.action === 'overview_today') return json_(overviewToday_(user));
     if (req.action === 'report_data')  return json_(reportData_(user, req));
-    if (req.action === 'fa_subjects')  return json_(faSubjects_());     // v8.22 F.A students' subjects (SUB1-SUB7 of the strength sheet) for the reports
+    if (req.action === 'fa_subjects')  return json_(faSubjects_(req.all === true));   // v8.22/v8.23 students' subjects (SUB1-SUB7) + Left Students' rolls for the reports
     if (req.action === 'reg_opts')     return json_(regOpts_(user));
     if (req.action === 'reg_find')     return json_(regFind_(user, req.q));
     if (req.action === 'reg_plan')     return json_(regPlan_(user, req));
@@ -679,11 +679,19 @@ function getMaster_() {
   return M;
 }
 
-/** v8.22 [[roll, class-sec, [SUBJECTS]]] of every F.A student in Transform-ALL-COLLEGE-STRENGTH (reports show a missing subject as N/R) */
-function faSubjects_() {
-  var out = [];
-  getMaster_().rows.forEach(function (r) { if (/^F\.?\s*A\b/i.test(String(r[2] || '')) && r[3].length) out.push([r[0], r[2], r[3]]); });
-  return { ok: true, list: out };
+/** v8.22 [[roll, class-sec, [SUBJECTS]]] of the students in Transform-ALL-COLLEGE-STRENGTH (all = every student, else F.A only; reports show a
+ *  missing subject as N/R) + v8.23 left: Enroll# of every student in the "Left Students" sheet (left out of the reports) */
+function faSubjects_(all) {
+  var out = [], left = [];
+  getMaster_().rows.forEach(function (r) { if ((all || /^F\.?\s*A\b/i.test(String(r[2] || ''))) && r[3].length) out.push([r[0], r[2], r[3]]); });
+  try {
+    var sh = SpreadsheetApp.openById(USERS_SS_ID).getSheetByName(LEFT_SHEET);
+    if (sh && sh.getLastRow() > 1) {
+      var v = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getValues(), ec = pickCol_(headIdx_(v[0]), ENROLL_HEADS.map(norm_));
+      if (ec >= 0) for (var i = 1; i < v.length; i++) { var e = String(v[i][ec] || '').trim(); if (e) left.push(e); }
+    }
+  } catch (e) {}
+  return { ok: true, list: out, left: left };
 }
 
 function enrollNum_(e) {
