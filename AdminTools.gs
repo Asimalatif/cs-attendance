@@ -69,6 +69,7 @@ function atRoute_(user, req) {
       case 'at_mfee':     return { ok: true, data: at_mfeeSave_(req.fees) };
       case 'at_sheet':    return { ok: true, data: { sheets: at_readMany_(req.names || [req.name]) } };
       case 'at_strength': return { ok: true, data: at_strength_() };
+      case 'at_progopts': return { ok: true, data: at_progOpts_() };   // v8.39 quotas (seat settings) and subjects per program for Edit student
       case 'at_save':     return { ok: true, data: at_save_(req) };
       case 'at_fillroom': return { ok: true, data: { message: fillRoomFromTimetableIntoAllSheets() } };
       case 'at_savestu':  return { ok: true, data: at_saveStudent_(req) };
@@ -6836,3 +6837,25 @@ function normalizeSectionForRoom_(value) {
     .toUpperCase();
 }
 var SM_MERGES_ = [];   // v7.6.1 stopping merit: [first output row, number of tied students]
+
+/** v8.39 for the Edit student dropdowns: per program of the strength sheet ("F.A (JCW)"), the quotas of the seat settings
+ *  (Admissions → Seats, shared pools included) and the subjects of the Admissions setup, by class (1st / 2nd Year) */
+function at_progOpts_() {
+  var I = admInit_(), out = {};
+  var keyProg = {}; I.programs.forEach(function (p) { keyProg[p.key] = p.program; });
+  var add = function (prog) { return out[prog] = out[prog] || { quotas: [], years: {} }; };
+  I.seats.programs.forEach(function (sp) {
+    var o = add(keyProg[sp.key]);
+    sp.quotas.forEach(function (q) { if (o.quotas.indexOf(q.name) < 0) o.quotas.push(q.name); });
+  });
+  I.seats.pools.forEach(function (pl) { pl.members.forEach(function (m) { var o = add(keyProg[m.key]); if (o.quotas.indexOf(pl.quota) < 0) o.quotas.push(pl.quota); }); });
+  Object.keys(I.subjects || {}).forEach(function (k) {
+    var o = add(keyProg[k]);
+    Object.keys(I.subjects[k]).forEach(function (yr) {
+      var S = I.subjects[k][yr], y = o.years[yr] = o.years[yr] || { compulsory: [], optional: [] };
+      (S.compulsory || []).forEach(function (x, i) { y.compulsory[i] = y.compulsory[i] || x; });
+      (S.groups || []).forEach(function (g) { (g.subjects || []).forEach(function (x) { if (y.optional.indexOf(x) < 0) y.optional.push(x); }); });
+    });
+  });
+  return out;
+}

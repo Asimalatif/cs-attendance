@@ -696,14 +696,15 @@ function edLists(level){                                            // level: 'p
   const f = $('edForm'), R = STU.rows, K = !level, v = k => f.elements[k].value;
   const one = (k, list) => { if(!K && !v(k) && list.length === 1) edSet(k, list[0]); };   // only one choice: take it
   if(!level) edFill('p', edUniq(R.map(r => r.p)), K);
-  const inP = R.filter(r => r.p === v('p'));
-  if(!level || level === 'p'){ const q = edUniq(inP.map(r => r.q)), c = edUniq(inP.map(r => r.c)); edFill('q', q, K); edFill('c', c, K); one('c', c); }
+  const inP = R.filter(r => r.p === v('p')), PO = (PROGOPT || {})[v('p')];   // v8.39 PO: quotas of the seat settings, subjects of the Admissions setup
+  if(!level || level === 'p'){ const q = PO && PO.quotas.length ? PO.quotas.slice() : edUniq(inP.map(r => r.q)), c = edUniq(inP.map(r => r.c)); edFill('q', q, K); edFill('c', c, K); one('c', c); }
   const inPC = inP.filter(r => !v('c') || r.c === v('c'));
   if(level !== 's'){ const sl = edUniq(inPC.map(r => r.s)); edFill('s', sl, K); one('s', sl); }
   const pcs = edUniq(inPC.filter(r => !v('s') || r.s === v('s')).map(r => r.pcs)); edFill('pcs', pcs, K); one('pcs', pcs);
   if(level !== 's'){
-    const opt = edUniq(inPC.flatMap(r => (r.sub || []).slice(4)));
-    for(let i = 0; i < 7; i++) edFill('sub' + i, i < 4 ? edUniq(inPC.map(r => (r.sub || [])[i])) : opt, K);
+    const Y = PO && PO.years ? PO.years[v('c')] || PO.years['1st Year'] : null;
+    const opt = edUniq(inPC.flatMap(r => (r.sub || []).slice(4)).concat(Y ? Y.optional : []));
+    for(let i = 0; i < 7; i++) edFill('sub' + i, i < 4 ? edUniq(inPC.map(r => (r.sub || [])[i]).concat(Y && Y.compulsory[i] ? [Y.compulsory[i]] : [])) : opt, K);
   }
 }
 ['p', 'c', 's'].forEach(k => { $('edForm').elements[k].addEventListener('change', () => { edLists(k); if(k === 'p') fillCombo(); }); });
@@ -712,10 +713,13 @@ $('edForm').addEventListener('change', e => {
   const v = (prompt('Type the value for ' + (sel.closest('label') ? sel.closest('label').firstChild.textContent.trim() : 'this box') + ':') || '').trim();
   edSet(sel.name, v || ''); if(['p', 'c', 's'].includes(sel.name)) edLists(sel.name);
 });
+let PROGOPT = null;                                                 // v8.39 read once: { 'F.A (JCW)': { quotas, years:{ '1st Year':{ compulsory, optional } } } }
+async function loadProgOpt(){ if(PROGOPT) return; try{ PROGOPT = (await JCW.api({ action:'at_progopts' }, 120000)).data || {}; }catch(e){ PROGOPT = {}; } }
 /* edit one student -> Transform-ALL-COLLEGE-STRENGTH */
 let ED = null;
-$('slBox').addEventListener('click', e => {
+$('slBox').addEventListener('click', async e => {
   const b = e.target.closest('[data-ed]'); if(!b) return;
+  if(!PROGOPT){ b.disabled = true; JCW.toast('Reading the quotas and subjects of each program…'); await loadProgOpt(); b.disabled = false; }
   ED = STU.rows.find(r => r.row === +b.dataset.ed); if(!ED) return;
   const f = $('edForm');
   ['e', 'n', 'f'].forEach(k => { f.elements[k].value = ED[k] || ''; });
