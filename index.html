@@ -4143,7 +4143,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-11-18 v8.26 N/R for tests in every class';
+const APP_BUILD = '2026-11-18 v8.28 F.A optional subjects from strength sheet';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4448,10 +4448,12 @@ function classTable(doc, S, q, Y, label){
     // v8.21 a subject most students of the section have (English, Urdu, Islamiyat, Mutalia Quran) is always its own column; the rest go to Opt. 1–3
     const cnt = {}; S.forEach(s => Object.keys(s.subs).forEach(x => { cnt[x] = (cnt[x] || 0) + 1; }));
     const hasOpt = S.some(s => /optional/i.test(s.cls) || Object.values(s.subs).some(g => g.opt));
-    const isOpt = x => hasOpt && cnt[x] <= S.length / 2;
+    const faSec = S.some(s => s.fa) || (S.length && S.every(s => /^F\.?\s*A\b/i.test(s.cls)));   // v8.28 F.A: compulsory by name, optional = the rest (strength sheet)
+    const isOpt = x => faSec ? !faComp(x) : hasOpt && cnt[x] <= S.length / 2;
     const optS = all.filter(isOpt), subs = all.filter(x => !isOpt(x));
-    const K = optS.length ? Math.max(...S.map(s => optS.filter(x => s.subs[x]).length)) : 0, slots = [...Array(K).keys()];
-    const myOpt = s => optS.filter(x => s.subs[x]), sn = x => abbrSub(String(x).toUpperCase());
+    const myOpt0 = s => s.optList ? s.optList.filter(x => s.subs[x]) : optS.filter(x => s.subs[x]);
+    const K = optS.length ? Math.max(...S.map(s => myOpt0(s).length)) : 0, slots = [...Array(K).keys()];
+    const myOpt = myOpt0, sn = x => abbrSub(String(x).toUpperCase());
     // v8.22/v8.23 a subject of hers (strength sheet) with no attendance received = N/R (blue); F.A (s.fa): also no test marks
     const attTx = (g, s) => !g ? '' : g.off ? 'left' : !g.d ? (s && s.tr ? 'N/R' : '-') : g.p + '/' + g.d;
     const mtTx = (g, s) => !g || g.off ? '' : !g.mtT ? (s && s.tr ? 'N/R' : '') : g.abs && g.abs === g.nt ? 'A' : g.ms + '/' + g.mtT + (g.abs ? ' (A×' + g.abs + ')' : '');   // v8.18 absent in the test = A, not 0
@@ -4739,15 +4741,24 @@ function addTrSubjects(S, T){
     if(s.guest || /optional/i.test(s.cls)) return;
     const want = T.map[rkey(s.roll)]; if(!want) return;
     s.tr = true; s.fa = /^F\.?\s*A\b/i.test(s.cls);
-    const have = Object.keys(s.subs), keys = want.map(subK), used = new Set();
+    const have = Object.keys(s.subs), keys = want.map(subK), used = new Set(), trK = [];
     want.forEach((w, i) => {                                            // exact name first, then the same first 4 letters (ISL. ELE ~ ISLAMIYAT ELECTIVE)
       let k = have.find(h => !used.has(h) && subK(h) === keys[i]);
       if(!k) k = have.find(h => !used.has(h) && !keys.includes(subK(h)) && subK(h).slice(0, 4) === keys[i].slice(0, 4));
-      if(k){ used.add(k); return; }
+      if(k){ used.add(k); trK.push(k); return; }
       s.subs[w] = { sub:w, teacher:'', months:{}, p:0, d:0, ms:0, mtT:0, abs:0, nt:0, pct:null, tp:null, off:false, opt:s.fa, nr:true };
+      used.add(w); trK.push(w);
     });
+    if(s.fa){                                                           // v8.28 F.A: her optional subjects are the ones in the strength sheet, nothing else
+      s.optList = trK.filter(k => !faComp(k));
+      Object.keys(s.subs).forEach(k => { if(!used.has(k) && !faComp(k)) delete s.subs[k]; });
+      sumStu(s);
+    }
   });
 }
+/** v8.28 F.A compulsory subjects (1st year: English, Urdu, Islamiyat, Mutalia Quran; 2nd year: Pakistan Studies, Tarjuma-tul-Quran) */
+const FA_COMP = new Set(['ENGLISH', 'URDU', 'ISLAMIYAT', 'ISLAMIAT', 'ISLAMICSTUDIES', 'MUTALIAQURAN', 'MUTALAQURAN', 'PAKISTANSTUDIES', 'PAKSTUDIES', 'TARJUMATULQURAN', 'TARJAMATULQURAN', 'TARJUMAQURAN']);
+const faComp = x => FA_COMP.has(subK(x));
 /** one student may come back under two sections (guest in one subject): join them into one report, home section first */
 function oneStudent(S, roll){
   const list = S.filter(s => s.roll === roll); if(list.length < 2) return list;
