@@ -567,7 +567,7 @@ async function fullPdf(c){
   else { doc.setFontSize(8); doc.setTextColor(120); doc.text('No photo', px + pw / 2, py + ph / 2, { align:'center' }); doc.setTextColor(0); }
   doc.setDrawColor(0); doc.setLineWidth(0.4); doc.line(14, 52, W - 14, 52);
   // v8.29 left out: S.No, picture links, the parts of Program/Class/Section, Appeared in, GroupOnly, and every empty field
-  const SKIP = new Set(['sno', 'picurl', 'photo', 'program', 'class', 'section', 'pcs', 'appearedin', 'grouponly', 'meritno']);   // v8.30 Program/Class/Section stays a row; no MeritNo
+  const SKIP = new Set(['sno', 'picurl', 'photo', 'program', 'class', 'section', 'pcs', 'appearedin', 'grouponly', 'meritno', 'aggregate', 'percentage', 'reg', 'batch']);   // v8.30 Program/Class/Section stays a row; no MeritNo
   const kk = x => x[0].toLowerCase().replace(/[^a-z0-9]/g, '');
   // v8.31 Metric RollNo always shown (empty: the MATRIC ROLL NO of the portal); Student Name first, then Enroll#
   const F2 = F.fields.map(x => kk(x) === 'metricrollno' && !x[1] ? [x[0], val('matricrollno') || '—'] : x);
