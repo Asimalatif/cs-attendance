@@ -111,7 +111,7 @@ function svcParse_(txt) {
   return out;
 }
 var SVC_ALSO = { idc_white_get: 'admission', pc_prepare: 'board',
-  at_meta: 'admission', at_strength: 'admission', at_savestu: 'admission' };   // v8.38 Admissions → Slips & quick edit (admintools.html?only=slips)   // a page that also calls one action of another module
+  at_meta: 'admission', at_strength: 'admission', at_savestu: 'admission', at_progopts: 'admission' };   // v8.38 Admissions → Slips & quick edit (admintools.html?only=slips)   // a page that also calls one action of another module
 /** the services that open a request: 'idc_list' -> ['idcards'] ([] = no service, normal rules) */
 function svcForAction_(a) {
   a = String(a || ''); var out = [];
