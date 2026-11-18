@@ -752,6 +752,7 @@ const store = {
 let mode = store.get('mode', 'att'), panelHidden = store.get('phide', false), mtDraft = { total:'', marks:{} };
 let user = store.get('user', ''), pass = store.get('pass', ''), teacher = store.get('teacher', ''), isAdmin = store.get('admin', false);
 let svc = store.get('svc', []);   // v8.19 services the admin switched on for this login (Logins & services page)
+const svcHid = k => !isAdmin && (svc || []).includes('hide' + k);   // v8.35 screens the admin switched off for this login / role (att, mt, gt, dt)
 const setSvc = a => { a = Array.isArray(a) ? a : []; const ch = a.join() !== (svc || []).join(); svc = a; store.set('svc', a); return ch; };
 let sheets = store.get('sheets', []), data = store.get('data', {}), queue = store.get('queue', []), confirms = store.get('confirms', {});
 // reports to the Chief Proctor: rq = reports waiting to reach the server, myReports = reports already on the server, cps = Chief Proctors (CP1 / CP2)
@@ -3381,7 +3382,7 @@ function lowList(mode, list){
 
 /* ---------- header + navigation ---------- */
 function navHtml(){
-  const tabs = [['home', I.home, 'Home'], ['att', I.att, 'Attendance'], ['reports', I.doc, 'Reports']];
+  const tabs = [['home', I.home, 'Home'], svcHid('att') ? null : ['att', I.att, 'Attendance'], ['reports', I.doc, 'Reports']].filter(Boolean);
   if(scope) tabs.push(['admin', I.col, scope === 'all' ? 'College' : 'Dept.']);
   return `<nav class="vtabs" aria-label="Screens">${tabs.map(t => `<button type="button" data-view="${t[0]}" class="${appView === t[0] ? 'on' : ''}" ${appView === t[0] ? 'aria-current="page"' : ''}>${t[1]}<span>${t[2]}</span></button>`).join('')}</nav>`;
 }
@@ -3471,7 +3472,8 @@ function mtCard(cur){
 let exTab = store.get('exTab', '');
 function examsCard(cur){
   const g = gtCard(), d = dtCard(), m = cur.length ? mtCard(cur) : null;
-  const tabs = [m ? ['mt', 'Monthly test', m] : null, ['gt', 'Grand test', g], ['dt', 'Detention', d]].filter(Boolean);
+  const tabs = [m && !svcHid('mt') ? ['mt', 'Monthly test', m] : null, svcHid('gt') ? null : ['gt', 'Grand test', g], svcHid('dt') ? null : ['dt', 'Detention', d]].filter(Boolean);
+  if(!tabs.length) return '';                                          // v8.35 every test screen switched off
   let t = tabs.find(x => x[0] === exTab) ? exTab : (g.open ? 'gt' : d.open ? 'dt' : tabs[0][0]);
   const cur2 = tabs.find(x => x[0] === t);
   return `<section class="card" id="exCard"><h3>${I.doc} Tests &amp; exams ${t === 'mt' ? `<span class="tdate">${esc(MONTHS[monIdx(mtMon)] || '')}</span>` : cur2[2].pill}</h3>
@@ -3541,10 +3543,10 @@ function renderHome(){
   if(college && !cur.length) h += college;
   if(isTTM) h += ttmCard();
   if(isTTM || (isAdmin && scope === 'all')) h += alertCard() + roomCard() + freshCard();
-  if(!cur.length && !college) h += `<section class="card"><h3>${I.cal} Today <span class="tdate">${esc(fmtDate(now, { weekday:'short', day:'numeric', month:'short' }))}</span></h3><div class="empty">No classes are assigned to you in the timetable yet. Ask the admin.</div></section>`;
+  if(!cur.length && !college && !svcHid('att')) h += `<section class="card"><h3>${I.cal} Today <span class="tdate">${esc(fmtDate(now, { weekday:'short', day:'numeric', month:'short' }))}</span></h3><div class="empty">No classes are assigned to you in the timetable yet. Ask the admin.</div></section>`;
 
   /* Today: one compact line per class: period + start time | class (room, practical, now) | status */
-  if(cur.length) h += `<section class="card today"><h3>${I.cal} Today <span class="tdate">${esc(fmtDate(now, { weekday:'short', day:'numeric', month:'short' }))}</span><span class="ct ${total && doneN === total && !sun ? 'okc' : ''}">${esc(head)}</span></h3>
+  if(cur.length && !svcHid('att')) h += `<section class="card today"><h3>${I.cal} Today <span class="tdate">${esc(fmtDate(now, { weekday:'short', day:'numeric', month:'short' }))}</span><span class="ct ${total && doneN === total && !sun ? 'okc' : ''}">${esc(head)}</span></h3>
     ${sun || !total ? '' : `<span class="mbar"><i class="${doneN === total ? '' : 'mid'}" style="width:${pc}%"></i></span>`}
     ${items.map(x => {
       const k = x.done ? 'done' : x.note ? 'note' : sun ? 'idle' : 'pend', t = planRange(x.plan), pr = x.plan.some(q => q.kind === 'Practical');
@@ -4143,7 +4145,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-11-18 v8.28 F.A optional subjects from strength sheet';
+const APP_BUILD = '2026-11-18 v8.35 screens per role / login';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -7061,7 +7063,7 @@ async function checkScope(){
       const ttChanged = setTT(r);
       if(!!r.cp !== isCP){ isCP = !!r.cp; store.set('isCP', isCP); if(appView !== 'att') rerender(); }
       if(!!r.ttm !== isTTM){ isTTM = !!r.ttm; store.set('isTTM', isTTM); if(appView !== 'att') rerender(); }
-      if(r.svc && setSvc(r.svc) && appView === 'home') rerender();
+      if(r.svc && setSvc(r.svc)){ if(appView === 'att' && svcHid('att')) appView = 'home'; if(appView !== 'att') rerender(); }
       if(ttChanged){ if(appView === 'att') renderMain(); else rerender(); }
       const was = scope; scope = r.view || ''; store.set('scope', scope);
       if(was !== scope){ if(!scope && appView === 'admin') appView = 'home'; if(appView !== 'att') rerender(); }
@@ -7079,6 +7081,7 @@ window.renderMain = function(){
     appView = 'home'; prof = null;
   }
   setTimeout(checkScope, 0);
+  if(appView === 'att' && svcHid('att')) appView = 'home';             // v8.35 Attendance switched off for this login
   document.body.dataset.screen = appView;
   const enter = lastView !== appView, force = forceNext; forceNext = false;
   const app = $q('#app');
