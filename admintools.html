@@ -97,7 +97,7 @@ dialog#edDlg{border:0;border-radius:18px;padding:18px;width:min(560px,94vw);box-
 dialog#edDlg::backdrop{background:rgba(43,25,18,.45)}
 .edgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.edgrid .w2{grid-column:span 2}
 .edgrid label{display:flex;flex-direction:column;font-size:12px;font-weight:700;color:var(--muted);gap:3px}
-.edgrid input{height:38px;border:1.5px solid var(--line);border-radius:10px;padding:0 10px;background:var(--surface);color:var(--ink);font-weight:600}
+.edgrid input,.edgrid select{height:38px;border:1.5px solid var(--line);border-radius:10px;padding:0 10px;background:var(--surface);color:var(--ink);font-weight:600}
 .olist{margin-bottom:14px}
 .olist h3{margin:0;padding:10px 14px;font-size:15px}
 .olist .bandr{background:var(--surface2);color:var(--brown);font-weight:800;text-align:center;padding:6px;border-top:1px solid var(--line)}
@@ -312,18 +312,18 @@ table.tt td.tt-miss{background:#FDECEA!important}table.tt td.tt-miss .tt-t{color
     <div class="meta" id="edMeta" style="color:var(--muted);font-size:12.5px;margin-bottom:10px"></div>
     <div class="edgrid">
       <label>Enroll# (Roll#)<input name="e"></label>
-      <label>Category (quota)<input name="q"></label>
+      <label>Category (quota)<select name="q"></select></label>
       <label class="w2">Student name<input name="n"></label>
       <label class="w2">Father name<input name="f"></label>
-      <label>Program<input name="p"></label>
-      <label>Class<input name="c"></label>
-      <label>Section<input name="s"></label>
-      <label>PCS<input name="pcs"></label>
+      <label>Program<select name="p"></select></label>
+      <label>Class<select name="c"></select></label>
+      <label>Section<select name="s"></select></label>
+      <label>PCS<select name="pcs"></select></label>
       <label class="w2 hidden" id="edComboL">Optional subjects (F.A combinations)<select id="edCombo" style="height:38px;border:1.5px solid var(--line);border-radius:10px;padding:0 8px;background:var(--surface);color:var(--ink);font-weight:600"></select></label>
-      <label>Sub1<input name="sub0"></label><label>Sub2<input name="sub1"></label>
-      <label>Sub3<input name="sub2"></label><label>Sub4<input name="sub3"></label>
-      <label>Sub5<input name="sub4"></label><label>Sub6<input name="sub5"></label>
-      <label>Sub7<input name="sub6"></label>
+      <label>Sub1<select name="sub0"></select></label><label>Sub2<select name="sub1"></select></label>
+      <label>Sub3<select name="sub2"></select></label><label>Sub4<select name="sub3"></select></label>
+      <label>Sub5<select name="sub4"></select></label><label>Sub6<select name="sub5"></select></label>
+      <label>Sub7<select name="sub6"></select></label>
     </div>
     <div class="status" id="edSt" style="margin:10px 0 0"></div>
     <div class="bar" style="margin:12px 0 0;justify-content:flex-end">
@@ -670,17 +670,53 @@ $('edCombo').onchange = () => {
   const c = faCombos()[+$('edCombo').value]; if(!c) return;
   const f = $('edForm'), cur = []; for(let i = 0; i < 7; i++) cur.push(f.elements['sub' + i].value.trim());
   const comp = cur.filter(x => x && isComp(x)), next = comp.concat([...c]).slice(0, 7);
-  for(let i = 0; i < 7; i++) f.elements['sub' + i].value = next[i] || '';
+  for(let i = 0; i < 7; i++) edSet('sub' + i, next[i] || '');
 };
 
+/* v8.37 dropdowns of the edit dialog, from the students already in the sheet: the chosen program's quotas, classes,
+   sections, PCS and subjects. "Other…" lets you type a value that is not in the list. */
+const edUniq = a => [...new Set(a.map(x => String(x || '').trim()).filter(Boolean))].sort((x, y) => x.localeCompare(y, undefined, { numeric:true }));
+function edSet(name, v){
+  const sel = $('edForm').elements[name]; v = String(v || '').trim();
+  if(v && ![...sel.options].some(o => o.value === v)) sel.insertBefore(new Option(v + '  (current)', v), sel.options[1] || null);
+  sel.value = v;
+}
+function edFill(name, list, keep){                                  // keep = keep the current value even when not in the list (opening the dialog)
+  const sel = $('edForm').elements[name]; let cur = String(sel.value || '').trim(); if(cur === '__other' || (!keep && !list.includes(cur))) cur = '';
+  sel.innerHTML = '<option value="">—</option>' + list.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('') + '<option value="__other">Other… (type)</option>';
+  edSet(name, cur);
+}
+function edLists(level){                                            // level: 'p' (program changed), 'c' (class), 's' (section), '' (open)
+  const f = $('edForm'), R = STU.rows, K = !level, v = k => f.elements[k].value;
+  const one = (k, list) => { if(!K && !v(k) && list.length === 1) edSet(k, list[0]); };   // only one choice: take it
+  if(!level) edFill('p', edUniq(R.map(r => r.p)), K);
+  const inP = R.filter(r => r.p === v('p'));
+  if(!level || level === 'p'){ const q = edUniq(inP.map(r => r.q)), c = edUniq(inP.map(r => r.c)); edFill('q', q, K); edFill('c', c, K); one('c', c); }
+  const inPC = inP.filter(r => !v('c') || r.c === v('c'));
+  if(level !== 's'){ const sl = edUniq(inPC.map(r => r.s)); edFill('s', sl, K); one('s', sl); }
+  const pcs = edUniq(inPC.filter(r => !v('s') || r.s === v('s')).map(r => r.pcs)); edFill('pcs', pcs, K); one('pcs', pcs);
+  if(level !== 's'){
+    const opt = edUniq(inPC.flatMap(r => (r.sub || []).slice(4)));
+    for(let i = 0; i < 7; i++) edFill('sub' + i, i < 4 ? edUniq(inPC.map(r => (r.sub || [])[i])) : opt, K);
+  }
+}
+['p', 'c', 's'].forEach(k => { $('edForm').elements[k].addEventListener('change', () => { edLists(k); if(k === 'p') fillCombo(); }); });
+$('edForm').addEventListener('change', e => {
+  const sel = e.target; if(sel.tagName !== 'SELECT' || sel.value !== '__other') return;
+  const v = (prompt('Type the value for ' + (sel.closest('label') ? sel.closest('label').firstChild.textContent.trim() : 'this box') + ':') || '').trim();
+  edSet(sel.name, v || ''); if(['p', 'c', 's'].includes(sel.name)) edLists(sel.name);
+});
 /* edit one student -> Transform-ALL-COLLEGE-STRENGTH */
 let ED = null;
 $('slBox').addEventListener('click', e => {
   const b = e.target.closest('[data-ed]'); if(!b) return;
   ED = STU.rows.find(r => r.row === +b.dataset.ed); if(!ED) return;
   const f = $('edForm');
-  ['e', 'q', 'n', 'f', 'p', 'c', 's', 'pcs'].forEach(k => { f.elements[k].value = ED[k] || ''; });
-  for(let i = 0; i < 7; i++) f.elements['sub' + i].value = (ED.sub || [])[i] || '';
+  ['e', 'n', 'f'].forEach(k => { f.elements[k].value = ED[k] || ''; });
+  ['p', 'c', 's'].forEach(k => edSet(k, ED[k] || ''));               // v8.37 dropdowns (their own value first, then the lists)
+  edLists('');
+  ['p', 'q', 'c', 's', 'pcs'].forEach(k => edSet(k, ED[k] || ''));
+  for(let i = 0; i < 7; i++) edSet('sub' + i, (ED.sub || [])[i] || '');
   $('edMeta').textContent = 'Transform-ALL-COLLEGE-STRENGTH · row ' + ED.row;
   fillCombo();
   $('edSt').className = 'status'; $('edSave').disabled = false;
