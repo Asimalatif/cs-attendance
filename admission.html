@@ -216,6 +216,7 @@ dialog{border:1.5px solid var(--line);box-shadow:var(--shadow2)}
     <button role="tab" data-tab="fix" aria-selected="false">Wrong on portal<span class="badge hidden" id="fb">0</span></button>
     <button role="tab" data-tab="sset" aria-selected="false">Seat settings</button>
     <button role="tab" data-tab="wait" aria-selected="false">Waiting<span class="badge hidden" id="qb">0</span></button>
+    <button role="tab" data-tab="slips" aria-selected="false">Slips &amp; quick edit</button>
   </nav>
 </div></header>
 <main id="main"></main>
@@ -249,7 +250,7 @@ async function idbSet(k, v){ try{ const db = await idb(); await new Promise((res
 let init = ls.get('adm_init', null);          // programs, sections, seats, subjects, rooms (from the server)
 let idx = null;                               // { cols, rows, at }
 let queue = ls.get('adm_q', []);              // saves waiting for the server
-let tab = /^#(form|pnew|find|seats|merit|fix|sset|wait)$/.test(location.hash) ? location.hash.slice(1) : 'form', form = null, lastDone = null, syncing = false, nextRoll = {}, searchQ = '', fatal = '';
+let tab = /^#(form|pnew|find|seats|merit|fix|sset|wait|slips)$/.test(location.hash) ? location.hash.slice(1) : 'form', form = null, lastDone = null, syncing = false, nextRoll = {}, searchQ = '', fatal = '';
 let pnew = ls.get('adm_pnew', null);          // students Enrolled on the portal but not yet in Transform (adm_new)
 let pnSel = ls.get('adm_pn_sel', {});         // portal ID -> { on, program, year, section, rollNo, quota, rollManual, secManual }
 let pnHide = ls.get('adm_pn_hide', []);       // portal IDs you chose to hide
@@ -388,7 +389,7 @@ function paintBadge(){ const b = $('#qb'); b.textContent = queue.length; b.class
 /* v8.36 parts of the Admissions service given to this login (Logins & services); the admin / principal have every part */
 const subOk = k => { if(ls.get('admin', false) === true) return true; const t = ls.get('svc', []) || []; if(!t.includes('admission')) return true;
   const mine = t.filter(x => x.indexOf('admission.') === 0); return !mine.length || mine.includes('admission.' + k); };
-const TAB_SUB = { form:'new', find:'edit', pnew:'portal', seats:'seats', merit:'merit', fix:'fix', sset:'sset', wait:'wait' };
+const TAB_SUB = { form:'new', find:'edit', pnew:'portal', seats:'seats', merit:'merit', fix:'fix', sset:'sset', wait:'wait', slips:'slips' };
 const tabOk = t => subOk(TAB_SUB[t] || t);
 document.querySelectorAll('nav button[data-tab]').forEach(b => { if(!tabOk(b.dataset.tab)) b.style.display = 'none'; });
 function setTab(t){
@@ -407,6 +408,10 @@ function render(){
   if(!init){ m.innerHTML = fatal ? `<div class="err">${esc(fatal)}</div>` : `<div class="card"><h2>Getting ready…</h2><div class="sub">${online() ? 'Downloading programs, sections, seats and the student list. This happens once; after that the page works without internet.' : 'This phone has not downloaded the admission lists yet. Connect to the internet once, then it works offline.'}</div></div>`; return; }
   const top = fatal ? `<div class="err">${esc(fatal)}</div>` : '';
   if(!tabOk(tab) && !(tab === 'form' && form && form.ctx)){ const t2 = Object.keys(TAB_SUB).find(tabOk); if(t2 && t2 !== tab){ setTab(t2); return; } }
+  if(tab === 'slips'){                                               // v8.38 the Admission slips tool of Admin tools: list, slips PDF, Edit with dropdowns
+    if(!m.querySelector('#slipFrame')) m.innerHTML = top + `<div class="card" style="padding:0;overflow:hidden"><iframe id="slipFrame" src="admintools.html?only=slips#slips" title="Slips &amp; quick edit" style="display:block;width:100%;height:calc(100vh - 170px);min-height:560px;border:0;background:var(--surface)"></iframe></div>`;
+    return;
+  }
   if(tab === 'form' && !subOk('new') && !(form && form.ctx)) m.innerHTML = top + '<div class="card"><h2>New admissions are not given to your login</h2><div class="sub">Use <b>Find &amp; edit</b> to open a student, or ask the admin.</div></div>';
   else if(tab === 'form') m.innerHTML = top + formHtml();
   else if(tab === 'find') m.innerHTML = top + findHtml();

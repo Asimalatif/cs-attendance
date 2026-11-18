@@ -363,6 +363,12 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
   try{ history.replaceState(null, '', '#' + b.dataset.t); }catch(e){}
 });
 
+/* v8.38 ?only=slips: just the Admission slips tool (shown inside Admissions → Slips & quick edit) */
+const ONLY = new URLSearchParams(location.search).get('only');
+if(ONLY === 'slips'){
+  document.head.insertAdjacentHTML('beforeend', '<style>header,.links,#tabs{display:none!important}.wrap{padding-top:10px}</style>');
+  document.querySelectorAll('section[data-p]').forEach(s => s.classList.toggle('hidden', s.dataset.p !== 'slips'));
+}
 /* ---------- start ---------- */
 async function start(){
   status('Loading…');
@@ -383,7 +389,7 @@ async function start(){
       let T = []; try{ T = JSON.parse(localStorage.getItem('csa2_svc') || '[]') || []; }catch(e){}
       const isAdm = (() => { try{ return JSON.parse(localStorage.getItem('csa2_admin') || 'false') === true; }catch(e){ return false; } })();
       const mine = T.filter(x => x.indexOf('admintools.') === 0).map(x => x.slice(11));
-      if(!isAdm && T.includes('admintools') && mine.length){
+      if(!ONLY && !isAdm && T.includes('admintools') && mine.length){
         document.querySelectorAll('#tabs button').forEach(b => { if(!mine.includes(b.dataset.t)) b.classList.add('hidden'); else if(b.dataset.t === 'morning') b.classList.remove('hidden'); });
         const first = document.querySelector('#tabs button:not(.hidden)'); if(first) setTimeout(() => first.click(), 0);
       }
@@ -394,7 +400,7 @@ async function start(){
     chipToggle($('autoProgs'));
     $('autoStream').value = META.auto.streamLabel || 'F.SC';
     $('autoSession').value = META.session || '';
-    const t = (location.hash || '').slice(1); const tb = document.querySelector('#tabs button[data-t="' + t + '"]'); if(tb) tb.click();
+    const t = ONLY === 'slips' ? 'slips' : (location.hash || '').slice(1); const tb = document.querySelector('#tabs button[data-t="' + t + '"]'); if(tb) tb.click();
   }catch(e){ status(esc(e.message), 'err'); }
 }
 function chipToggle(box){ box.addEventListener('change', e => { const l = e.target.closest('label'); if(l) l.classList.toggle('on', e.target.checked); }); }
