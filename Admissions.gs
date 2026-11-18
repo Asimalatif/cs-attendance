@@ -135,6 +135,7 @@ function admRoute_(user, req) {
   switch (String(req.action)) {
     case 'adm_init':      return admInit_();
     case 'adm_index':     return admIndex_();
+    case 'adm_full':      return admFull_(req.roll, req.sno, req.photo !== false);   // v8.27 the whole Transform row + photo (edit form, record PDF)
     case 'adm_left':      return admLeftAll_();
     case 'adm_seats_get': return admSeatsGet_();
     case 'adm_alerts_save': {                                // v8.6: seat alerts for the home screen (worked out by the merit lists on the phone)
@@ -826,6 +827,20 @@ function admInit_() {
   };
 }
 function admPack_(rec) { return ADM_INDEX.map(function (k) { return rec[k] == null ? '' : String(rec[k]); }); }
+/** v8.27 every column of one student's row in Transform-ALL-COLLEGE-STRENGTH (sheet order) + her photo as a data URL */
+function admFull_(roll, sno, withPhoto) {
+  var T = admRead_(), r0 = admS_(roll).toUpperCase(), s0 = admS_(sno), hit = -1;
+  for (var i = 0; i < T.rows.length; i++) {
+    var r = T.rows[i];
+    if (r0 ? admCell_(T, r, 'enroll').toUpperCase() === r0 : (s0 && admCell_(T, r, 'sno') === s0)) { hit = i; break; }
+  }
+  if (hit < 0) return { ok: false, error: 'This student is not in ' + ADM_CFG.SHEET + ' any more.' };
+  var row = T.rows[hit], fields = [];
+  T.head.forEach(function (h, j) { var k = admS_(h); if (k) fields.push([k, admS_(row[j])]); });
+  var photo = '', pic = admCell_(T, row, 'picurl') || admCell_(T, row, 'photo');
+  if (withPhoto && pic) { try { photo = idcPhotos_([{ roll: 'x', pic: pic }]).photos.x || ''; } catch (e) { photo = ''; } }   // IdCards.gs: Drive photo -> data URL
+  return { ok: true, row: hit + 2, fields: fields, photo: photo, pic: pic, at: admNow_() };
+}
 function admIndex_() {
   var set = admSettings_(), T = admRead_();
   return { ok: true, cols: ADM_INDEX, rows: admAll_(T, set.sections).map(admPack_), at: admNow_() };

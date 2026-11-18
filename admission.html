@@ -430,7 +430,7 @@ function formHtml(){
   const secList = secs.indexOf(f.section) < 0 && f.section ? secs.concat([f.section]) : secs;
   return `
   ${lastDone && !f.ctx ? `<div class="done">Saved: ${esc(lastDone.name)}<big>${esc(lastDone.roll || 'Roll No on upload')}</big>${esc(lastDone.where)}</div>` : ''}
-  ${f.ctx ? `<div class="editbar"><span>Editing <b>${esc(f.ctx.origName)}</b> · ${esc(f.ctx.roll || 'no Enroll#')}<br><small>Only what you change is written; the portal-sync columns stay as they are.</small></span><button class="btn small" type="button" id="xEditOff">Stop editing</button></div>` : ''}
+  ${f.ctx ? `<div class="editbar">${fullPhoto(f.ctx)}<span style="flex:1">Editing <b>${esc(f.ctx.origName)}</b> · ${esc(f.ctx.roll || 'no Enroll#')}<br><small>Only what you change is written; the portal-sync columns stay as they are.</small></span><button class="btn small" type="button" id="xEditOff">Stop editing</button></div><div id="fullRec">${fullHtml(f.ctx)}</div>` : ''}
   ${f.qid ? `<div class="editbar"><span>Fixing a save that is waiting on this phone.</span></div>` : ''}
   <section class="card">
     <h2>Class</h2>
@@ -504,7 +504,88 @@ function readForm(){
   const r = v('#fRoll'); if(r !== undefined){ if(f.ctx) f.rollNo = r.trim(); else { f.rollManual = !!r.trim(); f.rollNo = r.trim(); } }
   document.querySelectorAll('[data-sub]').forEach(e => f.subjects[+e.dataset.sub] = e.value.toUpperCase());
 }
+/* ---------- v8.27 complete record of the student being edited: every column of her Transform row, photo, record PDF ---------- */
+const fullCache = {}, fullKey = c => (c.roll || '') + '|' + (c.sno || '');
+let fullOpen = true;
+function fullPhoto(c){
+  const F = fullCache[fullKey(c)], src = F && F.photo ? F.photo : '';
+  return src ? `<img src="${esc(src)}" alt="" style="width:64px;height:80px;object-fit:cover;border-radius:8px;border:1.5px solid var(--line);flex:none">`
+    : `<span style="width:64px;height:80px;border-radius:8px;border:1.5px dashed var(--line);display:inline-flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted);flex:none;text-align:center">${F && !F.busy ? 'No photo' : 'Photo…'}</span>`;
+}
+function fullHtml(c){
+  const F = fullCache[fullKey(c)];
+  if(!F || F.busy) return `<section class="card"><div class="sub">${online() ? 'Reading her complete record from the strength sheet…' : 'Her complete record needs internet.'}</div></section>`;
+  if(F.err) return `<section class="card"><div class="err">${esc(F.err)}</div><button class="btn small" type="button" id="xFullRe">Try again</button></section>`;
+  const L = F.fields.filter(x => x[1] !== '');
+  return `<details class="card" id="fullDet" ${fullOpen ? 'open' : ''}><summary style="cursor:pointer;font-weight:800">Complete record · ${L.length} of ${F.fields.length} columns filled <small style="font-weight:500;color:var(--muted)">(row ${F.row} of the strength sheet)</small></summary>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px">
+      ${F.photo ? `<img src="${esc(F.photo)}" alt="Photo" style="width:120px;height:150px;object-fit:cover;border-radius:10px;border:1.5px solid var(--line)">` : `<div style="width:120px;height:150px;border-radius:10px;border:1.5px dashed var(--line);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px">No photo</div>`}
+      <div style="flex:1;min-width:240px;display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:4px 14px;font-size:13px">
+        ${F.fields.map(x => `<div style="border-bottom:1px solid var(--line);padding:3px 0;overflow-wrap:anywhere"><small style="display:block;color:var(--muted);font-size:11px;font-weight:700">${esc(x[0])}</small>${x[1] ? (/^https?:\/\//.test(x[1]) ? `<a href="${esc(x[1])}" target="_blank" rel="noopener">open</a>` : esc(x[1])) : '<span style="color:var(--muted)">—</span>'}</div>`).join('')}
+      </div></div>
+    <div class="acts" style="margin-top:10px"><button class="btn primary" type="button" id="xFullPdf">Download record PDF</button><button class="btn small" type="button" id="xFullRe" ${online() ? '' : 'disabled'}>Refresh</button></div>
+    <div class="hint">Shows the saved row. Save your changes first, then Refresh, to see them here and in the PDF.</div></details>`;
+}
+async function loadFull(c, force){
+  const k = fullKey(c); if(!force && fullCache[k] && !fullCache[k].err) return;
+  if(!online()){ return; }
+  fullCache[k] = { busy:true };
+  try{ const r = await api({ action:'adm_full', roll:c.roll, sno:c.sno }); fullCache[k] = { fields:r.fields || [], photo:r.photo || '', row:r.row, at:r.at }; }
+  catch(e){ fullCache[k] = { err:'Complete record not read: ' + (e.message || e) }; }
+  if(tab === 'form' && form.ctx && fullKey(form.ctx) === k) paintFull();
+}
+function paintFull(){
+  const box = $('#fullRec'), bar = document.querySelector('.editbar'); if(!box || !form.ctx) return;
+  box.innerHTML = fullHtml(form.ctx);
+  if(bar && bar.firstElementChild) bar.firstElementChild.outerHTML = fullPhoto(form.ctx);
+  wireFull();
+}
+function wireFull(){
+  const d = $('#fullDet'); if(d) d.ontoggle = () => { fullOpen = d.open; };
+  const re = $('#xFullRe'); if(re) re.onclick = () => { loadFull(form.ctx, true); paintFull(); };
+  const pd = $('#xFullPdf'); if(pd) pd.onclick = () => fullPdf(form.ctx).catch(e => toast('PDF not made: ' + (e.message || e)));
+}
+/** photo -> JPEG data URL + size (jsPDF reads JPEG / PNG only) */
+function toJpeg(src){
+  return new Promise(ok => { const im = new Image(); im.onload = () => { try{ const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight;
+    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0); ok({ url:c.toDataURL('image/jpeg', 0.85), w:c.width, h:c.height }); }catch(e){ ok(null); } };
+    im.onerror = () => ok(null); im.src = src; });
+}
+/** the record PDF: black text, thin grey lines, no colour fills (low ink) */
+async function fullPdf(c){
+  const F = fullCache[fullKey(c)]; if(!F || !F.fields) return toast('The record is not read yet.');
+  if(!(window.jspdf && window.jspdf.jsPDF)) await mlLoadJs('jspdf.umd.min.js');
+  if(!window.jspdf.jsPDF.API.autoTable) await mlLoadJs('jspdf.plugin.autotable.min.js');
+  const doc = new window.jspdf.jsPDF({ unit:'mm', format:'a4' }), W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  const val = n => { const x = F.fields.find(f => f[0].toLowerCase().replace(/[^a-z0-9]/g, '') === n); return x ? x[1] : ''; };
+  const name = val('studentname') || c.origName || '', roll = val('enroll') || c.roll || '';
+  doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.text('JINNAH COLLEGE FOR WOMEN', 14, 18);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.text('University of Peshawar', 14, 23.5);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(12.5); doc.text('Student Admission Record', 14, 32);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5); doc.text(name + (roll ? '  ·  ' + roll : ''), 14, 38);
+  const pw = 30, ph = 37.5, px = W - 14 - pw, py = 12;
+  doc.setDrawColor(150); doc.setLineWidth(0.3); doc.rect(px, py, pw, ph);
+  const im = F.photo ? await toJpeg(F.photo) : null;
+  if(im){ const r = Math.min(pw / im.w, ph / im.h), w = im.w * r, h = im.h * r; doc.addImage(im.url, 'JPEG', px + (pw - w) / 2, py + (ph - h) / 2, w, h); }
+  else { doc.setFontSize(8); doc.setTextColor(120); doc.text('No photo', px + pw / 2, py + ph / 2, { align:'center' }); doc.setTextColor(0); }
+  doc.setDrawColor(0); doc.setLineWidth(0.4); doc.line(14, 52, W - 14, 52);
+  const L = F.fields.map(x => [x[0], /^https?:\/\//.test(x[1]) ? (x[1].length > 60 ? x[1].slice(0, 57) + '…' : x[1]) : x[1] || '—']), body = [];
+  for(let i = 0; i < L.length; i += 2) body.push([L[i][0], L[i][1], L[i + 1] ? L[i + 1][0] : '', L[i + 1] ? L[i + 1][1] : '']);
+  doc.autoTable({ startY:56, theme:'grid', body, margin:{ left:14, right:14, bottom:22 },
+    styles:{ font:'helvetica', fontSize:8.6, cellPadding:1.6, textColor:[0, 0, 0], lineColor:[170, 170, 170], lineWidth:0.15, valign:'top', overflow:'linebreak' },
+    columnStyles:{ 0:{ fontStyle:'bold', cellWidth:34 }, 1:{ cellWidth:57 }, 2:{ fontStyle:'bold', cellWidth:34 }, 3:{ cellWidth:57 } } });
+  let y = doc.lastAutoTable.finalY + 22; if(y > H - 28){ doc.addPage(); y = 40; }
+  doc.setFontSize(9); doc.setDrawColor(0); [['Admission In-Charge', 14], ['Principal', W - 14 - 55]].forEach(([t, x]) => { doc.line(x, y, x + 55, y); doc.text(t, x + 27.5, y + 4.5, { align:'center' }); });
+  const n = doc.internal.getNumberOfPages(), when = new Date().toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  for(let i = 1; i <= n; i++){ doc.setPage(i); doc.setFontSize(7.5); doc.setTextColor(90);
+    doc.text('From Transform-ALL-COLLEGE-STRENGTH (row ' + F.row + ') · printed ' + when + ' by ' + (ls.get('teacher', '') || user), 14, H - 10); doc.text('Page ' + i + ' of ' + n, W - 14, H - 10, { align:'right' }); }
+  const file = 'Admission_record_' + String(name || 'student').replace(/[^\w]+/g, '_') + (roll ? '_' + roll.replace(/[^\w-]+/g, '') : '') + '.pdf';
+  const blob = doc.output('blob');
+  if(window.JCWOUT && window.JCWOUT.offer) return window.JCWOUT.offer({ blob, name:file, title:'Admission record ' + name });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file; document.body.appendChild(a); a.click(); a.remove();
+}
 function wireForm(){
+  if(form.ctx){ wireFull(); loadFull(form.ctx); }
   const sl = $('#subList'); const all = new Set();
   Object.values(init.subjects).forEach(y => Object.values(y).forEach(s => { s.compulsory.forEach(x => all.add(x)); s.groups.forEach(g => g.subjects.forEach(x => all.add(x))); }));
   sl.innerHTML = [...all].sort().map(x => `<option value="${esc(x)}">`).join('');
