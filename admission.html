@@ -571,7 +571,11 @@ async function fullPdf(c){
   const kk = x => x[0].toLowerCase().replace(/[^a-z0-9]/g, '');
   // v8.31 Metric RollNo always shown (empty: the MATRIC ROLL NO of the portal); Student Name first, then Enroll#
   const F2 = F.fields.map(x => kk(x) === 'metricrollno' && !x[1] ? [x[0], val('matricrollno') || '—'] : x);
-  const L = F2.filter(x => x[1] !== '' && !SKIP.has(kk(x)) && !/^https?:\/\//.test(x[1])).sort((a, b) => (kk(b) === 'studentname') - (kk(a) === 'studentname')), body = [];
+  const L1 = F2.filter(x => x[1] !== '' && !SKIP.has(kk(x)) && !/^https?:\/\//.test(x[1])).sort((a, b) => (kk(b) === 'studentname') - (kk(a) === 'studentname'));
+  // v8.32 after Quota: DOB, MATRIC ROLL NO, Obtained Marks, Total Marks, then the rest; Metric RollNo only when it differs from MATRIC ROLL NO
+  const L0 = L1.filter(x => !(kk(x) === 'metricrollno' && x[1] === val('matricrollno'))), NEXT = ['dob', 'matricrollno', 'obtainedmarks', 'totalmarks'];
+  const qi = L0.findIndex(x => kk(x) === 'quota'), head0 = L0.slice(0, qi + 1).filter(x => !NEXT.includes(kk(x)));
+  const L = head0.concat(NEXT.map(k => L0.find(x => kk(x) === k)).filter(Boolean), L0.filter(x => !head0.includes(x) && !NEXT.includes(kk(x)))), body = [];
   for(let i = 0; i < L.length; i += 2) body.push([L[i][0], L[i][1], L[i + 1] ? L[i + 1][0] : '', L[i + 1] ? L[i + 1][1] : '']);
   doc.autoTable({ startY:56, theme:'grid', body, margin:{ left:14, right:14, bottom:22 },
     styles:{ font:'helvetica', fontSize:8.6, cellPadding:1.6, textColor:[0, 0, 0], lineColor:[170, 170, 170], lineWidth:0.15, valign:'top', overflow:'linebreak' },
