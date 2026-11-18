@@ -91,7 +91,7 @@ async function pdfLib(){ if(!window.pdfjsLib){ await loadScript(PDFJS); } window
 function render(){
   const m = $('#main');
   if(!user || !pass){ m.innerHTML = `<div class="card"><h2>Sign in first</h2><div class="sub">Open the attendance app and sign in with the admin login, then come back.</div><div class="acts"><a class="btn pri" href="./" style="display:inline-flex;align-items:center;text-decoration:none">Open the app</a></div></div>`; return; }
-  if(ls.get('admin', false) !== true){ m.innerHTML = `<div class="card"><h2>Admin only</h2><div class="sub">Board results are saved by the admin.</div><div class="acts"><a class="btn pri" href="./" style="display:inline-flex;align-items:center;text-decoration:none">Back to the app</a></div></div>`; return; }
+  if(!(ls.get('admin', false) === true || (ls.get('svc', []) || []).indexOf('board') >= 0)){ m.innerHTML = `<div class="card"><h2>Admin only</h2><div class="sub">Board results are saved by the admin.</div><div class="acts"><a class="btn pri" href="./" style="display:inline-flex;align-items:center;text-decoration:none">Back to the app</a></div></div>`; return; }
   const F = S.fin, st = F && F.stats;
   m.innerHTML = `
   <section class="card"><h2>1. Choose the gazette</h2>

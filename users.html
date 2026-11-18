@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<script src="inksaver.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#6B3423">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<title>JCW Logins &amp; services</title>
+<style>
+:root{--bg:#F7EDEA;--surface:#fff;--surface2:#FBEDEA;--ink:#2B1912;--muted:#7C6159;--line:#E2C0B8;--brown:#6B3423;--brown2:#8A4A35;
+  --pos:#0E8A5F;--pos-bg:#E3F4EC;--neg:#C0392B;--neg-bg:#FDE3E1;--mid:#B4740E;--mid-bg:#FFF2DA;--shadow:0 1px 2px rgba(74,36,24,.06),0 4px 16px rgba(74,36,24,.07)}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;padding-bottom:40px}
+button,select,input{font:inherit;color:inherit}
+header{position:sticky;top:0;z-index:10;background:linear-gradient(120deg,#4A2418,#8A4A35);color:#fff;padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px;display:flex;align-items:center;gap:10px}
+header h1{margin:0;font-size:18px}header small{display:block;opacity:.8;font-size:12px}header .sp{flex:1}
+.tb{height:36px;border-radius:999px;border:0;background:rgba(255,255,255,.15);color:#fff;font-weight:700;padding:0 14px;text-decoration:none;display:inline-flex;align-items:center;font-size:13px}
+.wrap{max-width:1040px;margin:0 auto;padding:16px 12px}
+.sec{background:var(--surface);border:1.5px solid var(--line);border-top:5px solid var(--brown);border-radius:18px;margin-bottom:14px;box-shadow:var(--shadow);padding:14px}
+.sec h2{margin:0 0 6px;font-size:17px}
+.sub{color:var(--muted);font-size:13px}
+.btn{height:42px;padding:0 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-weight:800;cursor:pointer;white-space:nowrap}
+.btn.p{background:linear-gradient(180deg,#8A4A35,#6B3423);border-color:#6B3423;color:#fff}
+.btn.sm{height:34px;padding:0 10px;font-size:13px;border-radius:10px}
+.btn:disabled{opacity:.45;cursor:default}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+.tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.tools input,.tools select{height:42px;border:1.5px solid var(--line);border-radius:12px;padding:0 10px;background:#fff}
+.tools input{flex:1;min-width:200px}
+.u{border:1.5px solid var(--line);border-radius:14px;padding:10px 12px;margin-top:10px;background:#fff}
+.u.off{background:#f6f1f0;opacity:.85}
+.u .top{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.u .nm{flex:1;min-width:200px}.u .nm b{font-size:15px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.chip{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:3px 10px;font-size:12.5px;font-weight:700;cursor:pointer;color:var(--muted)}
+.chip.on{background:var(--pos-bg);border-color:var(--pos);color:var(--pos)}
+.chip:disabled{cursor:default}
+.pill{display:inline-block;border-radius:20px;padding:1px 9px;font-size:12px;font-weight:700;margin-left:4px}
+.pill.ok{background:var(--pos-bg);color:var(--pos)}.pill.no{background:var(--neg-bg);color:var(--neg)}.pill.mid{background:var(--mid-bg);color:var(--mid)}
+.note{border-radius:12px;padding:10px 12px;margin:10px 0;font-size:13px}
+.note.bad{background:var(--neg-bg);color:var(--neg)}.note.ok{background:var(--pos-bg);color:var(--pos)}.note.mid{background:var(--mid-bg);color:var(--mid)}
+dialog{border:0;border-radius:18px;padding:18px;max-width:620px;width:94vw;box-shadow:0 20px 60px rgba(43,25,18,.35)}dialog::backdrop{background:rgba(43,25,18,.5)}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}
+.form label{display:block;font-size:13px;font-weight:700}
+.form input,.form select{display:block;width:100%;height:40px;border:1.5px solid var(--line);border-radius:10px;padding:0 10px;margin-top:3px;font-weight:400;background:#fff}
+.form .w{grid-column:1 / -1}
+label.ck{display:flex;gap:8px;align-items:flex-start;margin:5px 0;font-size:13.5px;font-weight:400}label.ck input{width:18px;height:18px;margin-top:2px;accent-color:var(--brown);flex:none}
+label.ck small{display:block;color:var(--muted)}
+@media(max-width:560px){.form{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><div><h1>Logins &amp; services</h1><small id="hSub">Users sheet · main admin only</small></div><span class="sp"></span><a class="tb" href="index.html">← App</a></header>
+<div class="wrap" id="app"><div class="sec">Loading…</div></div>
+<dialog id="dlg"><div id="dlgIn"></div></dialog>
+<script src="jcwkit.js"></script>
+<script>
+'use strict';
+const $ = s => document.querySelector(s), esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const lsg = (k, d) => { try{ const v = localStorage.getItem('csa2_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } };
+const api = (p, ms) => JCW.api(p, ms || 120000);
+const S = { d:null, err:'', msg:'', q:'', f:'', busy:false };
+const ROLES0 = ['TEACHER', 'HOD', 'PRINCIPAL', 'COMPUTER ASSISTANT', 'CLERK', 'DS ADMIN', 'LEAVE IN-CHARGE'];
+
+async function load(){
+  try{ S.d = await api({ action:'usr_list' }); S.err = ''; }
+  catch(e){ S.err = /does not know/.test(e.message) ? 'The server is not updated yet (Users.gs). Wait a minute after the update, then reload.' : e.message; }
+  render();
+}
+const svcLabel = k => { const s = (S.d.services || []).find(x => x.key === k); return s ? s.label : k; };
+function shown(){
+  const q = S.q.toLowerCase().split(/\s+/).filter(Boolean);
+  return S.d.rows.filter(r => {
+    if(S.f === 'svc' && !r.svc.length) return false;
+    if(S.f === 'off' && !r.blocked) return false;
+    if(S.f && S.f !== 'svc' && S.f !== 'off' && r.role.toUpperCase() !== S.f) return false;
+    const t = [r.teacher, r.username, r.role, r.dept, r.desig, r.svc.map(svcLabel).join(' ')].join(' ').toLowerCase();
+    return q.every(w => t.includes(w));
+  });
+}
+function render(){
+  const D = S.d;
+  if(lsg('admin', false) !== true){ $('#app').innerHTML = '<div class="sec"><h2>Main admin only</h2><div class="sub">Sign in to the attendance app with the main admin login, then come back here.</div><div class="acts"><a class="btn p" href="index.html" style="display:inline-flex;align-items:center;text-decoration:none">Open the app</a></div></div>'; return; }
+  if(!D){ $('#app').innerHTML = `<div class="sec">${S.err ? `<div class="note bad">${esc(S.err)}</div><div class="acts"><button class="btn" onclick="load()">Try again</button></div>` : 'Loading…'}</div>`; return; }
+  const L = shown(), withSvc = D.rows.filter(r => r.svc.length).length, off = D.rows.filter(r => r.blocked).length;
+  $('#hSub').textContent = D.rows.length + ' logins · ' + withSvc + ' with services' + (off ? ' · ' + off + ' switched off' : '');
+  $('#app').innerHTML = `
+  ${S.err ? `<div class="note bad">${esc(S.err)}</div>` : ''}${S.msg ? `<div class="note ok">${esc(S.msg)}</div>` : ''}
+  <section class="sec"><h2>Logins</h2>
+    <div class="sub">Every login of the Users sheet. <b>Add a login</b> for a new person (e.g. a computer assistant), then tap the <b>services</b> under a name to switch them on (green) or off. A service opens that page for the login, with the same power as the admin <i>on that page only</i>. Teachers still see their own classes from the timetable as before.${D.has.svc ? '' : ' The <b>Services</b> column is added to the Users sheet the first time you save.'}</div>
+    <div class="acts"><button class="btn p" id="add">+ Add a login</button></div>
+    <div class="tools" style="margin-top:10px"><input id="q" type="search" placeholder="Search name, username, role, service" value="${esc(S.q)}" autocomplete="off" autocapitalize="none" spellcheck="false">
+      <select id="f"><option value="">All logins</option><option value="svc" ${S.f === 'svc' ? 'selected' : ''}>With services</option><option value="off" ${S.f === 'off' ? 'selected' : ''}>Switched off</option>
+        ${(D.roles || []).map(r => `<option value="${esc(r.toUpperCase())}" ${S.f === r.toUpperCase() ? 'selected' : ''}>Role: ${esc(r)}</option>`).join('')}</select></div>
+    <div id="list">${L.map(card).join('') || '<div class="sub" style="margin-top:10px">No login matches.</div>'}</div>
+  </section>`;
+  $('#add').onclick = () => edit(null);
+  $('#q').oninput = e => { S.q = e.target.value; $('#list').innerHTML = shown().map(card).join('') || '<div class="sub" style="margin-top:10px">No login matches.</div>'; wire(); };
+  $('#f').onchange = e => { S.f = e.target.value; render(); };
+  wire();
+}
+function card(r){
+  const i = S.d.rows.indexOf(r);
+  return `<div class="u ${r.blocked ? 'off' : ''}"><div class="top"><div class="nm"><b>${esc(r.teacher || '(no name)')}</b>${r.admin ? '<span class="pill ok">main admin</span>' : ''}${r.blocked ? '<span class="pill no">login off</span>' : ''}${!r.hasPass && !r.admin ? '<span class="pill mid">no password</span>' : ''}
+      <div class="sub">${esc(r.username || 'no username')}${r.role ? ' · ' + esc(r.role) : ''}${r.dept ? ' · ' + esc(r.dept) : ''}${r.desig ? ' · ' + esc(r.desig) : ''}${r.status ? ' · ' + esc(r.status) : ''} · row ${r.row}</div></div>
+    <button class="btn sm" data-ed="${i}">Edit</button>${r.admin ? '' : `<button class="btn sm" data-off="${i}" ${S.busy ? 'disabled' : ''}>${r.blocked ? 'Switch login on' : 'Switch login off'}</button>`}</div>
+    ${r.admin ? '<div class="sub" style="margin-top:6px">Has every service.</div>' : `<div class="chips">${S.d.services.map(s => `<button type="button" class="chip ${r.svc.includes(s.key) ? 'on' : ''}" data-sv="${i}|${s.key}" title="${esc(s.about)}" ${S.busy ? 'disabled' : ''}>${r.svc.includes(s.key) ? '✓ ' : ''}${esc(s.label)}</button>`).join('')}</div>`}</div>`;
+}
+function wire(){
+  document.querySelectorAll('[data-ed]').forEach(b => b.onclick = () => edit(S.d.rows[+b.dataset.ed]));
+  document.querySelectorAll('[data-sv]').forEach(b => b.onclick = () => { const [i, k] = b.dataset.sv.split('|'), r = S.d.rows[+i];
+    setSvc(r, r.svc.includes(k) ? r.svc.filter(x => x !== k) : r.svc.concat([k]), r.blocked, (r.svc.includes(k) ? svcLabel(k) + ' switched off' : svcLabel(k) + ' switched on') + ' for ' + (r.teacher || r.username) + '.'); });
+  document.querySelectorAll('[data-off]').forEach(b => b.onclick = () => { const r = S.d.rows[+b.dataset.off];
+    if(!r.blocked && !confirm('Switch off the login of ' + (r.teacher || r.username) + '? She will not be able to sign in until you switch it on again.')) return;
+    setSvc(r, r.svc, !r.blocked, 'Login of ' + (r.teacher || r.username) + (r.blocked ? ' switched on.' : ' switched off.')); });
+}
+async function setSvc(r, svc, blocked, msg){
+  S.busy = true; S.msg = ''; S.err = ''; render();
+  try{ const x = await api({ action:'usr_set', row:r.row, oldUser:r.username, svc, blocked }); r.svc = x.svc; r.blocked = x.blocked; S.msg = msg + ' It works at her next sign-in or within 10 minutes.'; S.d.has.svc = true; }
+  catch(e){ S.err = e.message; }
+  S.busy = false; render();
+}
+function dl(id, list){ return `<datalist id="${id}">${[...new Set(list)].map(x => `<option value="${esc(x)}">`).join('')}</datalist>`; }
+function edit(r){
+  const D = S.d, n = !r; r = r || { teacher:'', username:'', desig:'', dept:'', contact:'', role:'COMPUTER ASSISTANT', status:'', svc:[], blocked:false };
+  $('#dlgIn').innerHTML = `<h2 style="margin:0 0 4px">${n ? 'Add a login' : 'Change login'}</h2><div class="sub">${n ? 'A new row is added at the end of the Users sheet.' : 'Row ' + r.row + ' of the Users sheet. Only the boxes below are changed.'}</div>
+    <div class="form" style="margin-top:10px">
+      <label class="w">Name (as in the timetable for a teacher)<input id="eT" value="${esc(r.teacher)}" placeholder="e.g. Ms. Sana Gul" maxlength="80"></label>
+      <label>Username (to sign in)<input id="eU" value="${esc(r.username)}" placeholder="e.g. computer1" autocapitalize="none" spellcheck="false" maxlength="80" ${r.admin ? 'readonly' : ''}></label>
+      <label>${n ? 'Password' : 'New password (empty = keep)'}<input id="eP" type="text" autocomplete="new-password" autocapitalize="none" spellcheck="false" placeholder="${n ? 'at least 4 characters' : 'leave empty to keep it'}" maxlength="60"></label>
+      ${D.has.role ? `<label>Role<input id="eR" list="dlR" value="${esc(r.role)}" placeholder="e.g. COMPUTER ASSISTANT"></label>${dl('dlR', ROLES0.concat(D.roles || []))}` : ''}
+      ${D.has.dept ? `<label>Department<input id="eD" list="dlD" value="${esc(r.dept)}"></label>${dl('dlD', D.depts || [])}` : ''}
+      ${D.has.desig ? `<label>Designation<input id="eG" list="dlG" value="${esc(r.desig)}"></label>${dl('dlG', D.desigs || [])}` : ''}
+      ${D.has.contact ? `<label>Contact (WhatsApp)<input id="eC" value="${esc(r.contact)}" inputmode="tel" placeholder="03xx xxxxxxx"></label>` : ''}
+      ${D.has.status ? `<label>Status<input id="eS" list="dlS" value="${esc(r.status)}" placeholder="e.g. Permanent, Visiting"></label>${dl('dlS', ['Permanent', 'Visiting'])}` : ''}
+    </div>
+    ${r.admin ? '' : `<div style="margin-top:12px"><b>Services</b> <span class="sub">(pages this login may open)</span>
+      ${D.services.map(s => `<label class="ck"><input type="checkbox" data-es="${s.key}" ${r.svc.includes(s.key) ? 'checked' : ''}><span><b>${esc(s.label)}</b><small>${esc(s.about)}</small></span></label>`).join('')}
+      <label class="ck" style="margin-top:8px"><input type="checkbox" id="eB" ${r.blocked ? 'checked' : ''}><span><b>Login switched off</b><small>She cannot sign in (nothing is deleted).</small></span></label></div>`}
+    <div id="eErr"></div>
+    <div class="acts"><button class="btn p" id="eGo">${n ? 'Add login' : 'Save'}</button><button class="btn" id="eNo">Cancel</button></div>`;
+  const d = $('#dlg'); d.showModal();
+  $('#eNo').onclick = () => d.close();
+  $('#eGo').onclick = async () => {
+    const v = id => { const e = $(id); return e ? e.value.trim() : undefined; };
+    const rec = { teacher:v('#eT'), username:v('#eU'), role:v('#eR'), dept:v('#eD'), desig:v('#eG'), contact:v('#eC'), status:v('#eS'),
+      svc:[...document.querySelectorAll('[data-es]')].filter(x => x.checked).map(x => x.dataset.es), blocked:!!($('#eB') && $('#eB').checked) };
+    if(r.admin){ rec.svc = []; rec.blocked = false; }
+    const np = v('#eP');
+    if(!rec.teacher || !rec.username) return $('#eErr').innerHTML = '<div class="note bad">Type the name and the username.</div>';
+    if(n && (!np || np.length < 4)) return $('#eErr').innerHTML = '<div class="note bad">Type a password of at least 4 characters.</div>';
+    $('#eGo').disabled = true; $('#eErr').innerHTML = '<div class="sub">Saving…</div>';
+    try{
+      const x = await api({ action:'usr_save', row:n ? 0 : r.row, oldUser:n ? '' : r.username, rec, newPass:np || '' });
+      d.close(); S.msg = (n ? 'Login added (row ' + x.row + '): ' : 'Saved: ') + rec.teacher + ' · ' + rec.username + (np ? ' · password ' + (n ? 'set' : 'changed') : '') + '.'; await load();
+    }catch(e){ $('#eErr').innerHTML = `<div class="note bad">${esc(e.message)}</div>`; $('#eGo').disabled = false; }
+  };
+}
+render(); if(lsg('admin', false) === true) load();
+</script>
+</body>
+</html>

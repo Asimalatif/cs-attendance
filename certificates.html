@@ -218,7 +218,7 @@ function findAuto(){
 function render(){
   const m = $('#main');
   if(!user || !pass){ m.innerHTML = `<div class="card"><h2>Sign in first</h2><div class="sub">Open the attendance app and sign in with the admin login, then come back.</div><div class="acts"><a class="btn pri" href="./">Open the app</a></div></div>`; return; }
-  if(ls.get('admin', false) !== true){ m.innerHTML = `<div class="card"><h2>Admin only</h2><div class="sub">Certificates are made by the admin.</div><div class="acts"><a class="btn pri" href="./">Back to the app</a></div></div>`; return; }
+  if(!(ls.get('admin', false) === true || (ls.get('svc', []) || []).indexOf('certificates') >= 0)){ m.innerHTML = `<div class="card"><h2>Admin only</h2><div class="sub">Certificates are made by the admin.</div><div class="acts"><a class="btn pri" href="./">Back to the app</a></div></div>`; return; }
   const D = S.data, c = D ? counts() : null;
   m.innerHTML = `
   <section class="card"><h2>Result sheet</h2>
@@ -572,7 +572,7 @@ document.addEventListener('click', async e => {
 });
 $('#ed').addEventListener('click', e => { if(e.target.id === 'ed'){ E = null; paintEd(); paintStats(); } });
 render();
-if(user && pass && ls.get('admin', false) === true){ loadSheets(); if(S.sheet) run(qs.get('prepare') === '1' ? 'prep' : 'load'); }
+if(user && pass && (ls.get('admin', false) === true || (ls.get('svc', []) || []).indexOf('certificates') >= 0)){ loadSheets(); if(S.sheet) run(qs.get('prepare') === '1' ? 'prep' : 'load'); }
 </script>
 </body>
 </html>
