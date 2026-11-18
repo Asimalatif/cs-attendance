@@ -164,6 +164,7 @@ function doPost(e) {
     if (req.action === 'overview_low') return json_(overviewLow_(user));
     if (req.action === 'overview_today') return json_(overviewToday_(user));
     if (req.action === 'report_data')  return json_(reportData_(user, req));
+    if (req.action === 'fa_subjects')  return json_(faSubjects_());     // v8.22 F.A students' subjects (SUB1-SUB7 of the strength sheet) for the reports
     if (req.action === 'reg_opts')     return json_(regOpts_(user));
     if (req.action === 'reg_find')     return json_(regFind_(user, req.q));
     if (req.action === 'reg_plan')     return json_(regPlan_(user, req));
@@ -676,6 +677,13 @@ function getMaster_() {
   }
   cachePutBig_('master_att3', M);
   return M;
+}
+
+/** v8.22 [[roll, class-sec, [SUBJECTS]]] of every F.A student in Transform-ALL-COLLEGE-STRENGTH (reports show a missing subject as N/R) */
+function faSubjects_() {
+  var out = [];
+  getMaster_().rows.forEach(function (r) { if (/^F\.?\s*A\b/i.test(String(r[2] || '')) && r[3].length) out.push([r[0], r[2], r[3]]); });
+  return { ok: true, list: out };
 }
 
 function enrollNum_(e) {
