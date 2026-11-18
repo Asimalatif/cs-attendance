@@ -4143,7 +4143,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-11-18 v8.19 logins & services, F.A one row';
+const APP_BUILD = '2026-11-18 v8.21 F.A optional subjects: 4 + 3 columns';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4445,7 +4445,10 @@ function classTable(doc, S, q, Y, label){
   } else {
     // v8.19 F.A optional subjects: one column per compulsory subject, then "Opt. 1, 2, 3" (each student's own optional subjects, short name + figure)
     const all = [...new Set(S.flatMap(s => Object.keys(s.subs)))].sort();
-    const isOpt = x => S.some(s => s.subs[x] && (s.subs[x].opt || /optional/i.test(s.cls)));
+    // v8.21 a subject most students of the section have (English, Urdu, Islamiyat, Mutalia Quran) is always its own column; the rest go to Opt. 1–3
+    const cnt = {}; S.forEach(s => Object.keys(s.subs).forEach(x => { cnt[x] = (cnt[x] || 0) + 1; }));
+    const hasOpt = S.some(s => /optional/i.test(s.cls) || Object.values(s.subs).some(g => g.opt));
+    const isOpt = x => hasOpt && cnt[x] <= S.length / 2;
     const optS = all.filter(isOpt), subs = all.filter(x => !isOpt(x));
     const K = optS.length ? Math.max(...S.map(s => optS.filter(x => s.subs[x]).length)) : 0, slots = [...Array(K).keys()];
     const myOpt = s => optS.filter(x => s.subs[x]), sn = x => abbrSub(String(x).toUpperCase());
@@ -4671,18 +4674,42 @@ function ewCard(){
 }
 /** v8.19 F.A-1 / F.A-2: a student's "Optional Subjects" row is joined to her own section's row (A or B), so she is ONE row with
  *  her compulsory and optional subjects (g.opt = true). If her own section is not in the report, the optional row stays. */
+/** v8.21 the same subject under two spellings (attendance sheet vs test workbook) or in both rows: ONE subject, month by month */
+function mergeSub(a, g){
+  Object.keys(g.months).forEach(m => { const x = g.months[m], y = a.months[m];
+    if(!y){ a.months[m] = x; return; }
+    const att = (x.d || 0) > (y.d || 0) ? x : y, hasMt = v => v.mt !== '' && v.mt != null && v.mtT;
+    const mt = hasMt(y) ? y : hasMt(x) ? x : y;
+    a.months[m] = { p:att.p, d:att.d, mt:mt.mt, mtT:mt.mtT, off:!!(x.off && y.off) }; });
+  a.p = a.d = a.ms = a.mtT = a.abs = a.nt = 0;
+  Object.values(a.months).forEach(x => { if(x.off) return; a.p += x.p || 0; a.d += x.d || 0;
+    if(x.mtT && x.mt !== '' && x.mt != null){ a.mtT += x.mtT; a.nt++; if(x.mt === 'A') a.abs++; else a.ms += Number(x.mt) || 0; } });
+  a.off = !!(a.off && g.off); a.opt = !!(a.opt || g.opt);
+  a.pct = pct2(a.p, a.d); a.tp = a.mtT ? pct2(a.ms, a.mtT) : null;
+  return a;
+}
+function addSub(h, k, g){
+  const hk = Object.keys(h.subs).find(x => subK(x) === subK(k));
+  if(!hk){ h.subs[k] = g; return; }
+  if(h.subs[hk] === g) return;
+  h.subs[hk] = mergeSub(Object.assign({}, h.subs[hk], { months:Object.assign({}, h.subs[hk].months) }), g);
+}
+function sumStu(h){
+  const live = Object.values(h.subs).filter(g => !g.off);
+  h.p = live.reduce((a, g) => a + g.p, 0); h.d = live.reduce((a, g) => a + g.d, 0); h.pct = pct2(h.p, h.d);
+  h.ms = live.reduce((a, g) => a + g.ms, 0); h.mtT = live.reduce((a, g) => a + g.mtT, 0); h.tp = h.mtT ? pct2(h.ms, h.mtT) : null;
+}
 function joinOptional(S){
   const opt = s => /optional/i.test(s.cls);
+  S.forEach(s => { const subs = s.subs; s.subs = {}; Object.keys(subs).forEach(k => addSub(s, k, subs[k])); sumStu(s); });   // v8.21 one subject = one column
   if(!S.some(opt) || !S.some(s => !opt(s))) return S;
   const home = {}; S.forEach(s => { if(!opt(s) && !s.guest && !home[s.roll]) home[s.roll] = s; });
   const out = [];
   S.forEach(s => {
     const h = opt(s) ? home[s.roll] : null;
     if(!h){ out.push(s); return; }
-    Object.keys(s.subs).forEach(k => { const a = h.subs[k], g = s.subs[k]; g.opt = true; if(!a || (a.off && !g.off)) h.subs[k] = g; });
-    const live = Object.values(h.subs).filter(g => !g.off);
-    h.p = live.reduce((a, g) => a + g.p, 0); h.d = live.reduce((a, g) => a + g.d, 0); h.pct = pct2(h.p, h.d);
-    h.ms = live.reduce((a, g) => a + g.ms, 0); h.mtT = live.reduce((a, g) => a + g.mtT, 0); h.tp = h.mtT ? pct2(h.ms, h.mtT) : null;
+    Object.keys(s.subs).forEach(k => { const g = s.subs[k]; g.opt = true; addSub(h, k, g); });
+    sumStu(h);
   });
   return out;
 }
