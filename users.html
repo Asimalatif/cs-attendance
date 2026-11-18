@@ -96,7 +96,7 @@ function render(){
   $('#app').innerHTML = `
   ${S.err ? `<div class="note bad">${esc(S.err)}</div>` : ''}${S.msg ? `<div class="note ok">${esc(S.msg)}</div>` : ''}
   <section class="sec"><h2>Logins</h2>
-    <div class="sub">Every login of the Users sheet. <b>Edit</b> sets what a person can do: <b>role</b> (teacher, HOD, principal …), <b>Chief Proctor</b>, <b>timetable editing</b> and <b>services</b>. <b>Add a login</b> for a new person (e.g. a computer assistant), then tap the <b>services</b> under a name to switch them on (green) or off. A service opens that page for the login, with the same power as the admin <i>on that page only</i>. Teachers still see their own classes from the timetable as before.${D.has.svc ? '' : ' The <b>Services</b> column is added to the Users sheet the first time you save.'}</div>
+    <div class="sub">Every login of the Users sheet. <b>Edit</b> sets what a person can do: <b>role</b> (teacher, HOD, principal …), <b>Chief Proctor</b>, <b>timetable editing</b> and <b>services</b>. <b>Add a login</b> for a new person (e.g. a computer assistant), then tap the <b>services</b> under a name to switch them on (green) or off. To give only <b>some parts</b> of a service, tap <b>Edit</b> and tick the parts under it. A service opens that page for the login, with the same power as the admin <i>on that page only</i>. Teachers still see their own classes from the timetable as before.${D.has.svc ? '' : ' The <b>Services</b> column is added to the Users sheet the first time you save.'}</div>
     <div class="acts"><button class="btn p" id="add">+ Add a login</button></div>
     <div class="tools" style="margin-top:10px"><input id="q" type="search" placeholder="Search name, username, role, service" value="${esc(S.q)}" autocomplete="off" autocapitalize="none" spellcheck="false">
       <select id="f"><option value="">All logins</option><option value="svc" ${S.f === 'svc' ? 'selected' : ''}>With services</option><option value="off" ${S.f === 'off' ? 'selected' : ''}>Switched off</option><option value="cp" ${S.f === 'cp' ? 'selected' : ''}>Chief Proctors</option><option value="tt" ${S.f === 'tt' ? 'selected' : ''}>Timetable editors</option>
@@ -111,6 +111,8 @@ function render(){
   wire();
 }
 /** v8.35 screens hidden for this login: her own switches + her role's rule */
+/** "(3 of 8 parts)" when only some parts of a service are given */
+function partTxt(r, s){ const n = (s.subs || []).length, m = r.svc.filter(t => t.indexOf(s.key + '.') === 0).length; return r.svc.includes(s.key) && n && m ? ' (' + m + ' of ' + n + ' parts)' : ''; }
 function hidOf(r){ const D = S.d, rr = (D.roleHide || {})[String(r.role || '').toUpperCase()] || [];
   return (D.screens || []).filter(x => r.svc.includes('hide' + x.key) || rr.includes(x.key)).map(x => x.label + (rr.includes(x.key) && !r.svc.includes('hide' + x.key) ? ' (role)' : '')); }
 /* v8.35 screens hidden by ROLE: one rule for everyone with that role (Users sheet Role column) */
@@ -137,12 +139,12 @@ function card(r){
   return `<div class="u ${r.blocked ? 'off' : ''}"><div class="top"><div class="nm"><b>${esc(r.teacher || '(no name)')}</b>${r.admin ? '<span class="pill ok">main admin</span>' : ''}${r.blocked ? '<span class="pill no">login off</span>' : ''}${!r.hasPass && !r.admin ? '<span class="pill mid">no password</span>' : ''}${r.cp ? `<span class="pill ok">Chief Proctor ${esc(r.cp)}</span>` : ''}${r.tt ? `<span class="pill mid">Timetable: ${esc(r.tt)}</span>` : ''}${hidOf(r).length ? `<span class="pill no">Hidden: ${esc(hidOf(r).join(', '))}</span>` : ''}
       <div class="sub">${esc(r.username || 'no username')}${r.role ? ' · ' + esc(r.role) : ''}${r.dept ? ' · ' + esc(r.dept) : ''}${r.desig ? ' · ' + esc(r.desig) : ''}${r.status ? ' · ' + esc(r.status) : ''} · row ${r.row}</div></div>
     <button class="btn sm" data-ed="${i}">Edit</button>${r.admin ? '' : `<button class="btn sm" data-off="${i}" ${S.busy ? 'disabled' : ''}>${r.blocked ? 'Switch login on' : 'Switch login off'}</button>`}</div>
-    ${r.admin ? '<div class="sub" style="margin-top:6px">Has every service.</div>' : `<div class="chips">${S.d.services.map(s => `<button type="button" class="chip ${r.svc.includes(s.key) ? 'on' : ''}" data-sv="${i}|${s.key}" title="${esc(s.about)}" ${S.busy ? 'disabled' : ''}>${r.svc.includes(s.key) ? '✓ ' : ''}${esc(s.label)}</button>`).join('')}</div>`}</div>`;
+    ${r.admin ? '<div class="sub" style="margin-top:6px">Has every service.</div>' : `<div class="chips">${S.d.services.map(s => `<button type="button" class="chip ${r.svc.includes(s.key) ? 'on' : ''}" data-sv="${i}|${s.key}" title="${esc(s.about)}" ${S.busy ? 'disabled' : ''}>${r.svc.includes(s.key) ? '✓ ' : ''}${esc(s.label)}${partTxt(r, s)}</button>`).join('')}</div>`}</div>`;
 }
 function wire(){
   document.querySelectorAll('[data-ed]').forEach(b => b.onclick = () => edit(S.d.rows[+b.dataset.ed]));
   document.querySelectorAll('[data-sv]').forEach(b => b.onclick = () => { const [i, k] = b.dataset.sv.split('|'), r = S.d.rows[+i];
-    setSvc(r, r.svc.includes(k) ? r.svc.filter(x => x !== k) : r.svc.concat([k]), r.blocked, (r.svc.includes(k) ? svcLabel(k) + ' switched off' : svcLabel(k) + ' switched on') + ' for ' + (r.teacher || r.username) + '.'); });
+    setSvc(r, r.svc.includes(k) ? r.svc.filter(x => x !== k && x.indexOf(k + '.') !== 0) : r.svc.concat([k]), r.blocked, (r.svc.includes(k) ? svcLabel(k) + ' switched off' : svcLabel(k) + ' switched on') + ' for ' + (r.teacher || r.username) + '.'); });
   document.querySelectorAll('[data-off]').forEach(b => b.onclick = () => { const r = S.d.rows[+b.dataset.off];
     if(!r.blocked && !confirm('Switch off the login of ' + (r.teacher || r.username) + '? She will not be able to sign in until you switch it on again.')) return;
     setSvc(r, r.svc, !r.blocked, 'Login of ' + (r.teacher || r.username) + (r.blocked ? ' switched on.' : ' switched off.')); });
@@ -152,6 +154,18 @@ async function setSvc(r, svc, blocked, msg){
   try{ const x = await api({ action:'usr_set', row:r.row, oldUser:r.username, svc, blocked }); r.svc = x.svc; r.blocked = x.blocked; S.msg = msg + ' It works at her next sign-in or within 10 minutes.'; S.d.has.svc = true; }
   catch(e){ S.err = e.message; }
   S.busy = false; render();
+}
+/** v8.36 the Services cell from the dialog: a service with every part ticked = the whole service (no parts written); null = a ticked service with no part */
+function subSvc(){
+  const out = [];
+  for(const c of document.querySelectorAll('#dlgIn [data-es]')){
+    if(!c.checked) continue; out.push(c.dataset.es);
+    const subs = [...document.querySelectorAll(`#dlgIn [data-sub^="${c.dataset.es}."]`)]; if(!subs.length) continue;
+    const on = subs.filter(x => x.checked).map(x => x.dataset.sub);
+    if(!on.length) return null;
+    if(on.length < subs.length) out.push(...on);
+  }
+  return out;
 }
 function dl(id, list){ return `<datalist id="${id}">${[...new Set(list)].map(x => `<option value="${esc(x)}">`).join('')}</datalist>`; }
 function edit(r){
@@ -173,20 +187,28 @@ function edit(r){
       ${D.has.tt ? `<label>Timetable editor<select id="eTT">${opts(D.ttList, r.tt)}</select><small class="sub" id="eTTa">${esc(about(D.ttList, r.tt))}</small></label>` : ''}
       </div></div>
     <div style="margin-top:12px"><b>Services</b> <span class="sub">(pages this login may open)</span>
-      ${D.services.map(s => `<label class="ck"><input type="checkbox" data-es="${s.key}" ${r.svc.includes(s.key) ? 'checked' : ''}><span><b>${esc(s.label)}</b><small>${esc(s.about)}</small></span></label>`).join('')}
+      ${D.services.map(s => { const on = r.svc.includes(s.key), part = r.svc.filter(t => t.indexOf(s.key + '.') === 0);
+        return `<label class="ck"><input type="checkbox" data-es="${s.key}" ${on ? 'checked' : ''}><span><b>${esc(s.label)}</b><small>${esc(s.about)}</small></span></label>
+        ${(s.subs || []).length ? `<div class="subs" data-for="${s.key}" style="margin:0 0 6px 30px;padding:4px 10px;border-left:3px solid var(--line);${on ? '' : 'display:none'}">
+          <div class="sub" style="font-size:12px">Parts of ${esc(s.label)} <button type="button" class="lnk" data-all="${s.key}" style="border:0;background:none;color:var(--brown);font-weight:700;cursor:pointer;font-size:12px">all</button>·<button type="button" class="lnk" data-none="${s.key}" style="border:0;background:none;color:var(--brown);font-weight:700;cursor:pointer;font-size:12px">none</button></div>
+          ${s.subs.map(x => `<label class="ck" style="margin:2px 0"><input type="checkbox" data-sub="${s.key}.${x.k}" ${!part.length || part.includes(s.key + '.' + x.k) ? 'checked' : ''}><span>${esc(x.label)}</span></label>`).join('')}</div>` : ''}`; }).join('')}
       <div style="margin-top:12px"><b>Screens to hide</b> <span class="sub">(only for this login; role rules are at the bottom of the page)</span></div>
       ${(D.screens || []).map(x => `<label class="ck"><input type="checkbox" data-es="hide${x.key}" ${r.svc.includes('hide' + x.key) ? 'checked' : ''}><span><b>Hide ${esc(x.label)}</b></span></label>`).join('')}
       <label class="ck" style="margin-top:8px"><input type="checkbox" id="eB" ${r.blocked ? 'checked' : ''}><span><b>Login switched off</b><small>She cannot sign in (nothing is deleted).</small></span></label></div>`}
     <div id="eErr"></div>
     <div class="acts"><button class="btn p" id="eGo">${n ? 'Add login' : 'Save'}</button><button class="btn" id="eNo">Cancel</button></div>`;
   const d = $('#dlg'); d.showModal();
+  document.querySelectorAll('#dlgIn [data-es]').forEach(c => c.onchange = () => { const b = document.querySelector(`#dlgIn .subs[data-for="${c.dataset.es}"]`); if(b) b.style.display = c.checked ? '' : 'none'; });
+  document.querySelectorAll('#dlgIn [data-all],#dlgIn [data-none]').forEach(b => b.onclick = () => { const k = b.dataset.all || b.dataset.none;
+    document.querySelectorAll(`#dlgIn [data-sub^="${k}."]`).forEach(c => { c.checked = !!b.dataset.all; }); });
   if($('#eR')) $('#eR').onchange = e => { $('#eRa').textContent = about(D.roleList, e.target.value); };
   if($('#eTT')) $('#eTT').onchange = e => { $('#eTTa').textContent = about(D.ttList, e.target.value); };
   $('#eNo').onclick = () => d.close();
   $('#eGo').onclick = async () => {
     const v = id => { const e = $(id); return e ? e.value.trim() : undefined; };
     const rec = { teacher:v('#eT'), username:v('#eU'), role:v('#eR'), dept:v('#eD'), desig:v('#eG'), contact:v('#eC'), status:v('#eS'), cp:v('#eCP'), tt:v('#eTT'),
-      svc:[...document.querySelectorAll('[data-es]')].filter(x => x.checked).map(x => x.dataset.es), blocked:!!($('#eB') && $('#eB').checked) };
+      svc:subSvc(), blocked:!!($('#eB') && $('#eB').checked) };
+    if(rec.svc === null) return $('#eErr').innerHTML = '<div class="note bad">A ticked service needs at least one of its parts. Untick the service or tick a part.</div>';
     if(r.admin){ rec.svc = []; rec.blocked = false; }
     const np = v('#eP');
     if(!rec.teacher || !rec.username) return $('#eErr').innerHTML = '<div class="note bad">Type the name and the username.</div>';

@@ -102,7 +102,14 @@ function doPost(e) {
   var user = authenticate_(req.username, req.password);
   if (!user) return json_({ ok: false, error: 'BAD_LOGIN' });
   GRANT_ = null;                                                          // v8.19 services (Users.gs): this login may use this module
-  try { if (svcForAction_(req.action).some(function (k) { return (user.svc || []).indexOf(k) >= 0; })) GRANT_ = String(user.username).trim().toLowerCase(); } catch (eG) { GRANT_ = null; }
+  try {
+    var svks = svcForAction_(req.action).filter(function (k) { return (user.svc || []).indexOf(k) >= 0; });
+    if (svks.length) {
+      var deny = svks.map(function (k) { return svcSubDeny_(user, k, req); });         // v8.36 parts of a service (Users.gs SVC_SUBS)
+      if (deny.every(function (d) { return d; })) return json_({ ok: false, error: 'Your login does not have this part: ' + deny[0] + '. Ask the admin to tick it in Logins & services.' });
+      GRANT_ = String(user.username).trim().toLowerCase();
+    }
+  } catch (eG) { GRANT_ = null; }
   // v8.13 load test (loadtest.html): admin only; everything is written into the COPY of a month workbook, never the real ones
   if (req.test === true || req.action === 'test_setup') {
     try {
