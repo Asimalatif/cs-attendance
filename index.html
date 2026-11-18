@@ -4143,7 +4143,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-11-18 v8.23 left students out, N/R every class';
+const APP_BUILD = '2026-11-18 v8.24 college summary at the end';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4527,7 +4527,15 @@ function multiClassPdf(S, q, title){
   // v8.18 "F.A-1 / F.A-2 Optional Subjects" are A + B sitting together, not sections: listed last, not numbered, not counted
   const opt = c => /optional/i.test(c);
   const C = P.C, secs = [...new Set(S.map(s => s.cls))].sort((a, b) => opt(a) - opt(b) || a.localeCompare(b, undefined, { numeric:true })), nReal = secs.filter(c => !opt(c)).length;
-  const doc = P.newDoc('landscape'); let Y = P.TOP;
+  const doc = P.newDoc('landscape');
+  secs.forEach((c, i) => {
+    if(i) doc.addPage(); let y = P.TOP;
+    const part = S.filter(s => s.cls === c);
+    y = P.heading(doc, y, c, 'All subjects · ' + rangeTxt(q));
+    y = classTable(doc, part, Object.assign({}, q, { sub:'' }), y, c + ' · All subjects · ' + rangeTxt(q));
+    P.smallNote(doc, y, classLegend(q, part));
+  });
+  doc.addPage(); let Y = P.TOP;                                        // v8.24 the summary comes at the END, after every section
   Y = P.heading(doc, Y, 'Complete Attendance & Test Report', title + ' · ' + rangeTxt(q) + ' · ' + nReal + ' section' + (nReal === 1 ? '' : 's'));
   // the college totals count each student ONCE (her optional-subjects / guest rows joined to her own section)
   const rolls = [...new Set(S.map(s => s.roll))];
@@ -4539,13 +4547,6 @@ function multiClassPdf(S, q, title){
     didParseCell:h => { if(h.section !== 'body') return; const k = sum[h.row.index].k;
       if(h.column.index === 3 && k.pct != null && k.pct < q.below) redCell(h, C);
       if(h.column.index === 4 && k.short) h.cell.styles.textColor = C.RED; } });
-  secs.forEach(c => {
-    doc.addPage(); let y = P.TOP;
-    const part = S.filter(s => s.cls === c);
-    y = P.heading(doc, y, c, 'All subjects · ' + rangeTxt(q));
-    y = classTable(doc, part, Object.assign({}, q, { sub:'' }), y, c + ' · All subjects · ' + rangeTxt(q));
-    P.smallNote(doc, y, classLegend(q, part));
-  });
   P.finalize(doc);
   return { doc, title:'Complete attendance report', file:'Complete_' + P.safe(title) + '_' + q.from + '-' + q.to + '.pdf' };
 }
