@@ -820,7 +820,7 @@ function ago(at){ if(!at) return ''; const m = Math.round((Date.now() - new Date
 function render(){
   const m = $('#main');
   if(!user || !pass){ m.innerHTML = `<div class="card"><h2>Sign in first</h2><div class="sub">Open the attendance app and sign in with the admin login, then come back.</div><div class="acts"><a class="btn pri" href="./" style="display:inline-flex;align-items:center;text-decoration:none">Open the app</a></div></div>`; return; }
-  if(ls.get('admin', false) !== true){ m.innerHTML = `<div class="card"><h2>Admin only</h2><div class="sub">Student ID cards are made by the admin.</div></div>`; return; }
+  if(!(ls.get('admin', false) === true || (ls.get('svc', []) || []).indexOf('idcards') >= 0)){ m.innerHTML = `<div class="card"><h2>Admin only</h2><div class="sub">Student ID cards are made by the admin.</div></div>`; return; }
   if(!S.list){ m.innerHTML = `<div class="card"><h2>Loading students…</h2><div class="sub">${S.loading ? 'Reading Transform-ALL-COLLEGE-STRENGTH (once; then kept on this device).' : ''}</div>${S.err ? `<div class="note bad">${esc(S.err)}</div><div class="acts"><button class="btn pri" id="re">Try again</button></div>` : ''}</div>`; if($('#re')) $('#re').onclick = () => load(true); return; }
   const f = S.f, all = S.list, list = filtered(), sel = chosen(), shown = list.slice(0, 300);
   const secs = uniq(all.filter(st => !f.program || st.program === f.program).map(st => ({ s: st.pcs || st.section })), 's');
@@ -1048,7 +1048,7 @@ function render(){
   $('#cClr').onclick = async () => { if(!confirm('Forget all photos kept on this device? They will be read from Drive again when needed.')) return; await DB.clear().catch(() => {}); META = {}; CARDPIC.clear(); render(); };
   fillPreviews();
 }
-render(); if(user && pass && ls.get('admin', false) === true) load(false);
+render(); if(user && pass && (ls.get('admin', false) === true || (ls.get('svc', []) || []).indexOf('idcards') >= 0)) load(false);
 </script>
 </body>
 </html>

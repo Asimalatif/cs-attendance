@@ -751,6 +751,8 @@ const store = {
 };
 let mode = store.get('mode', 'att'), panelHidden = store.get('phide', false), mtDraft = { total:'', marks:{} };
 let user = store.get('user', ''), pass = store.get('pass', ''), teacher = store.get('teacher', ''), isAdmin = store.get('admin', false);
+let svc = store.get('svc', []);   // v8.19 services the admin switched on for this login (Logins & services page)
+const setSvc = a => { a = Array.isArray(a) ? a : []; const ch = a.join() !== (svc || []).join(); svc = a; store.set('svc', a); return ch; };
 let sheets = store.get('sheets', []), data = store.get('data', {}), queue = store.get('queue', []), confirms = store.get('confirms', {});
 // reports to the Chief Proctor: rq = reports waiting to reach the server, myReports = reports already on the server, cps = Chief Proctors (CP1 / CP2)
 let rq = store.get('rq', []), myReports = store.get('myrep', []), cps = store.get('cps', []), repBusy = false;
@@ -945,7 +947,7 @@ async function refreshAll(){
   try{
     const s = await api({ action:'sheets' });
     if(!s.ok){ if(s.error === 'BAD_LOGIN') return signOut('Your username or password was changed. Sign in again.'); throw new Error(s.error); }
-    sheets = s.sheets; teacher = s.teacher || teacher; isAdmin = !!s.admin;
+    sheets = s.sheets; teacher = s.teacher || teacher; isAdmin = !!s.admin; if(s.svc) setSvc(s.svc);
     store.set('sheets', sheets); store.set('teacher', teacher); store.set('admin', isAdmin);
     if(s.proctors){ cps = s.proctors; store.set('cps', cps); }   // the Chief Proctors (CP1 / CP2) a teacher can report to
     ensureSel(); const cur = entry();
@@ -1400,7 +1402,7 @@ async function login(){
       store.set('data', data); store.set('queue', queue); store.set('confirms', confirms);
       rq = []; store.set('rq', rq); myReports = []; store.set('myrep', myReports);
     }
-    teacher = r.teacher || ''; isAdmin = !!r.admin; sheets = r.sheets || [];
+    teacher = r.teacher || ''; isAdmin = !!r.admin; sheets = r.sheets || []; setSvc(r.svc || []);
     cps = r.proctors || []; store.set('cps', cps);
     store.set('user', user); store.set('pass', pass); store.set('lastUser', user); store.set('teacher', teacher); store.set('admin', isAdmin); store.set('sheets', sheets);
     ensureSel(); loadDraft(); render(); refreshAll(); syncRemarks(); syncReports(); loadMyReports();
@@ -1414,7 +1416,7 @@ async function signOut(msg){
     else toast('Saved in sheet. Signed out.');
   }
   user = ''; pass = ''; store.set('user', ''); store.set('pass', ''); store.set('cts', null); store.set('lvOp', false);   // private contacts never stay after sign-out
-  if(!msg){ queue = []; data = {}; sheets = []; teacher = ''; isAdmin = false; confirms = {}; ['queue','data','sheets','confirms'].forEach(k => store.set(k, k === 'queue' || k === 'sheets' ? [] : {})); store.set('teacher', ''); store.set('admin', false);
+  if(!msg){ queue = []; data = {}; sheets = []; teacher = ''; isAdmin = false; confirms = {}; ['queue','data','sheets','confirms'].forEach(k => store.set(k, k === 'queue' || k === 'sheets' ? [] : {})); store.set('teacher', ''); store.set('admin', false); setSvc([]);
     rq = []; store.set('rq', []); myReports = []; store.set('myrep', []); cps = []; store.set('cps', []); }
   renderLogin(msg);
 }
@@ -3557,6 +3559,7 @@ function renderHome(){
 
   if(cur.length || scope) h += examsCard(cur);
   if(isAdmin || store.get('lvOp', false)) h += leaveCard();
+  if(!isAdmin && svc && svc.length) h += svcCard();
   h += searchCard();
 
   if(cur.length){
@@ -3593,6 +3596,16 @@ function findCard(){
 function lowRow(x){
   const r = lowMode === 'week' ? x.w : x.c;
   return `<button class="li" type="button" data-xprof="${esc(x.s.roll)}" data-xcls="${esc(x.e.cls)}"><span class="av">${esc(initials(x.s.name))}</span><span class="tx"><b>${esc(x.s.name)}</b><small>${esc(x.e.cls)} · ${esc(titleCase(x.e.sub))} · ${r.p}/${r.den} lectures</small></span><span class="pill ${tone(r.pct)}">${r.pct}%</span></button>`;
+}
+/* v8.19 services the admin switched on for this login (e.g. a computer assistant): one button per page */
+const SVC_PAGES = { admission:['Admissions', 'admission.html'], idcards:['Student ID (chest) cards', 'idcards.html'], certificates:['Provisional certificates', 'certificates.html'],
+  board:['Board results', 'board.html'], duties:['Exam duty lists', 'duties.html'], collegereports:['College reports', 'reports.html'], shortage:['Attendance shortage', 'shortage.html'],
+  leaves:['Approved leaves', 'leaves.html'], recordsummary:['Marked-Missed entries', 'recordsummary.html'], admintools:['Admin tools', 'admintools.html'] };
+function svcCard(){
+  const L = svc.filter(k => SVC_PAGES[k] && !(k === 'leaves' && store.get('lvOp', false)));
+  if(!L.length) return '';
+  return `<section class="card"><h3>${I.doc} My services</h3><div class="sub">Pages the admin opened for your login.</div>
+    <div class="acts2" style="flex-wrap:wrap">${L.map(k => `<a class="btn primary" href="${SVC_PAGES[k][1]}" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">${esc(SVC_PAGES[k][0])}</a>`).join('')}</div></section>`;
 }
 /* Approved leaves (Admin + Leave In-Charge): its own page, works offline, saves to ApprovedLeavesStore */
 function leaveCard(){
@@ -4130,7 +4143,7 @@ window.openSync = function(){
    A phone or laptop may keep opening an old saved copy of the app after a new index.html is put on GitHub.
    Each time the app opens online it reads the newest index.html (bypassing every cache); when its version
    differs, the saved copies are replaced and the app reloads once with the new version. */
-const APP_BUILD = '2026-11-01 v8.4 gazette reader fixed';
+const APP_BUILD = '2026-11-18 v8.19 logins & services, F.A one row';
 async function checkUpdate(manual){
   if(!navigator.onLine) return manual && toast('No internet. Try again when online.');
   try{
@@ -4308,7 +4321,7 @@ async function addMtMarks(rows, q){
   const guestR = new Set(); rows.forEach(r => r.st.forEach(x => { if(x[6]) guestR.add(rkey(x[0])); }));   // v8.14: a guest's marks are under her home section
   for(const mon of monthsIn({ from:q.from || 'SEPT', to:q.to || SEAS[seasNow()] })){
     let list; try{ list = await rpMtBook(mon); }catch(e){ continue; }
-    list = list.filter(x => (!q.roll || rkey(x[0]) === rkey(q.roll)) && (!q.cls || normC(x[2]) === normC(q.cls) || /optional/i.test(q.cls) || guestR.has(rkey(x[0]))));
+    list = list.filter(x => (!q.roll || rkey(x[0]) === rkey(q.roll)) && (!q.cls || normC(x[2]) === normC(q.cls) || /optional/i.test(q.cls) || guestR.has(rkey(x[0])) || (q.rolls && q.rolls.has(rkey(x[0])))));
     if(!list.length) continue;
     const bySub = {}; rows.filter(r => r.mon === mon).forEach(r => { (bySub[subK(r.sub)] = bySub[subK(r.sub)] || []).push(r); });
     const extra = {};
@@ -4319,7 +4332,7 @@ async function addMtMarks(rows, q){
       if(hit){
         const i = hit.st.findIndex(x => rkey(x[0]) === rk), x = hit.st[i].slice(); x[4] = val; hit.st[i] = x;
         hit.mt = Math.max(Number(hit.mt) || 0, max);
-      } else if(q.cls && normC(cls) !== normC(q.cls) && !/optional/i.test(q.cls)){ /* a guest's other subjects stay in her home section */ } else {   // a subject with no attendance row this month
+      } else if(q.cls && normC(cls) !== normC(q.cls) && !/optional/i.test(q.cls) && !(q.rolls && /optional/i.test(cls))){ /* a guest's other subjects stay in her home section */ } else {   // a subject with no attendance row this month
         const k = normC(cls) + '|' + subK(sub) + '|' + max, r = extra[k] = extra[k] || { cls, sub:String(sub).toUpperCase(), teacher:'', mon, mt:max, st:[] };
         r.st.push([roll, name, 0, 0, val, 0, '']);
       }
@@ -4430,19 +4443,27 @@ function classTable(doc, S, q, Y, label){
     let P2 = 0, D2 = 0; list.forEach(s => { const g = s.subs[q.sub]; if(!g.off){ P2 += g.p; D2 += g.d; } });
     body.push(['', '', 'Class average'].concat(tot, [P2 + ' / ' + D2, D2 ? pct2(P2, D2) + '%' : '-'], mons.map(() => ''), ['']));
   } else {
-    const subs = [...new Set(S.flatMap(s => Object.keys(s.subs)))].sort();
-    head = [[{ content:'', colSpan:3 }, { content:'Attendance (attended / held)', colSpan:subs.length + 2 }, { content:'Monthly tests (obtained / total)', colSpan:subs.length + 1 }],
-      ['#', 'Roll No', 'Student Name'].concat(subs.map(abbr), ['Leaves', q.lv ? 'Overall %\n(with leaves)' : 'Overall %'], subs.map(abbr), ['Avg %'])];
-    types.push('', '', ''); subs.forEach(() => types.push('att')); types.push('lv', 'att'); subs.forEach(() => types.push('tp')); types.push('tp');
+    // v8.19 F.A optional subjects: one column per compulsory subject, then "Opt. 1, 2, 3" (each student's own optional subjects, short name + figure)
+    const all = [...new Set(S.flatMap(s => Object.keys(s.subs)))].sort();
+    const isOpt = x => S.some(s => s.subs[x] && (s.subs[x].opt || /optional/i.test(s.cls)));
+    const optS = all.filter(isOpt), subs = all.filter(x => !isOpt(x));
+    const K = optS.length ? Math.max(...S.map(s => optS.filter(x => s.subs[x]).length)) : 0, slots = [...Array(K).keys()];
+    const myOpt = s => optS.filter(x => s.subs[x]), sn = x => abbrSub(String(x).toUpperCase());
+    const attTx = g => !g ? '' : g.off ? 'left' : !g.d ? '-' : g.p + '/' + g.d;
+    const mtTx = g => !g || g.off || !g.mtT ? '' : g.abs && g.abs === g.nt ? 'A' : g.ms + '/' + g.mtT + (g.abs ? ' (A×' + g.abs + ')' : '');   // v8.18 absent in the test = A, not 0
+    const slotTx = (s, j, f) => { const x = myOpt(s)[j]; if(!x) return ''; const t = f(s.subs[x]); return t === 'left' ? sn(x) + ' left' : sn(x) + (t ? ' ' + t : ''); };
+    head = [[{ content:'', colSpan:3 }, { content:'Attendance (attended / held)', colSpan:subs.length + K + 2 }, { content:'Monthly tests (obtained / total)', colSpan:subs.length + K + 1 }],
+      ['#', 'Roll No', 'Student Name'].concat(subs.map(abbr), slots.map(j => 'Opt. ' + (j + 1)), ['Leaves', q.lv ? 'Overall %\n(with leaves)' : 'Overall %'], subs.map(abbr), slots.map(j => 'Opt. ' + (j + 1)), ['Avg %'])];
+    types.push('', '', ''); subs.concat(slots).forEach(() => types.push('att')); types.push('lv', 'att'); subs.concat(slots).forEach(() => types.push('tp')); types.push('tp');
     body = S.map((s, i) => [i + 1, s.roll, s.name + (s.guest ? ' (Guest)' : '')]
-      .concat(subs.map(x => { const g = s.subs[x]; return !g ? '' : g.off ? 'left' : !g.d ? '-' : g.p + '/' + g.d; }),
+      .concat(subs.map(x => attTx(s.subs[x])), slots.map(j => slotTx(s, j, attTx)),
         [q.lv ? (s.lv ? String(s.lv) : '-') : '-', (q.lv ? s.pctL : s.pct) == null ? '-' : (q.lv ? s.pctL : s.pct) + '%'],
-        subs.map(x => { const g = s.subs[x]; return !g || g.off || !g.mtT ? '' : g.abs && g.abs === g.nt ? 'A' : g.ms + '/' + g.mtT + (g.abs ? ' (A×' + g.abs + ')' : ''); }),   // v8.18 absent in the test = A, not 0
+        subs.map(x => mtTx(s.subs[x])), slots.map(j => slotTx(s, j, mtTx)),
         [s.tp == null ? '-' : s.tp + '%']));
     const avg = x => { let p = 0, d = 0; S.forEach(s => { const g = s.subs[x]; if(g && !g.off){ p += g.p; d += g.d; } }); return d ? pct2(p, d) + '%' : '-'; };
     const tavg = x => { let a = 0, t = 0; S.forEach(s => { const g = s.subs[x]; if(g && !g.off){ a += g.ms; t += g.mtT; } }); return t ? pct2(a, t) + '%' : '-'; };
     let P2 = 0, D2 = 0, L2 = 0; S.forEach(s => { P2 += q.lv ? s.pL || 0 : s.p; D2 += s.d; L2 += s.lv || 0; });
-    body.push(['', '', 'Class average'].concat(subs.map(avg), [q.lv && L2 ? String(L2) : '', D2 ? pct2(P2, D2) + '%' : '-'], subs.map(tavg), ['']));
+    body.push(['', '', 'Class average'].concat(subs.map(avg), slots.map(() => ''), [q.lv && L2 ? String(L2) : '', D2 ? pct2(P2, D2) + '%' : '-'], subs.map(tavg), slots.map(() => ''), ['']));
   }
   const n = body.length;
   const p0 = doc.internal.getNumberOfPages();
@@ -4457,9 +4478,11 @@ function classTable(doc, S, q, Y, label){
       if(h.row.index === n - 1){ h.cell.styles.fontStyle = 'bold'; h.cell.styles.fillColor = [234, 238, 246]; return; }
       const t = types[h.column.index], v = String(h.cell.raw == null ? '' : h.cell.raw);
       if(v === 'left'){ h.cell.styles.textColor = [150, 156, 168]; h.cell.styles.fontStyle = 'italic'; return; }
-      const fr = /^(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)(?:\s|$)/.exec(v), fp = fr && +fr[2] ? +fr[1] / +fr[2] * 100 : null;   // "20/24" -> 83.3
+      if(/ left$/.test(v)){ h.cell.styles.textColor = [150, 156, 168]; h.cell.styles.fontStyle = 'italic'; return; }
+      const fr = /(?:^|\s)(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)(?:\s|$)/.exec(v), fp = fr && +fr[2] ? +fr[1] / +fr[2] * 100 : null;   // "20/24" or "Eco 20/24" -> 83.3
+      const ab = v === 'A' || / A$/.test(v);
       if(t === 'att' && ((/%$/.test(v) && parseFloat(v) < q.below) || (fp != null && fp < q.below))) redCell(h, C);
-      if((t === 'tp' && ((/%$/.test(v) && parseFloat(v) < 50) || (fp != null && fp < 50) || v === 'A')) || (t === 'mt' && v === 'A')) redCell(h, C);
+      if((t === 'tp' && ((/%$/.test(v) && parseFloat(v) < 50) || (fp != null && fp < 50) || ab)) || (t === 'mt' && ab)) redCell(h, C);
       if(t === 'lv' && v && v !== '-'){ h.cell.styles.textColor = C.AMB || [161, 98, 7]; h.cell.styles.fontStyle = 'bold'; }
     } });
   return doc.lastAutoTable.finalY + 4;
@@ -4477,16 +4500,17 @@ function classBoxes(doc, Y, S, q){
     { l:'Students below ' + q.below + '%', v:k.short, c:k.short ? C.RED : C.INK, bg:k.short ? C.REDBG : C.SOFT },
     { l:'Monthly tests', v:k.tp == null ? '-' : k.tp + '%' }]) + 4;
 }
-const classLegend = q => 'Attendance % = lectures attended / lectures held from ' + rangeTxt(q) + '. Only P counts. Red = below ' + q.below + '% (tests: below 50% or A = absent; a test cell shows A when she missed every test, "(A×2)" when she missed 2 of them; a missed test counts as 0 in the %). "left" = student changed subject.' +
+const classLegend = (q, S) => 'Attendance % = lectures attended / lectures held from ' + rangeTxt(q) + '. Only P counts. Red = below ' + q.below + '% (tests: below 50% or A = absent; a test cell shows A when she missed every test, "(A×2)" when she missed 2 of them; a missed test counts as 0 in the %). "left" = student changed subject.' +
   (q.lv ? ' Leaves = approved leave days (Leave In-Charge); Overall % (with leaves) adds each month\'s leave days to the lectures attended in every subject held that month, never more than the lectures held.' : '') +
-  ' Monthly tests from the "<Month> - MONTHLY TEST" workbooks.';
+  ' Monthly tests from the "<Month> - MONTHLY TEST" workbooks.' +
+  (S && S.some(s => /optional/i.test(s.cls) || Object.values(s.subs).some(g => g.opt)) ? ' Opt. 1, 2, 3 = the student\'s own optional subjects (short name, then attended / held or marks); her compulsory and optional subjects are in one row.' : '');
 function classPdf(S, q){
   if(!S.length) throw new Error('No students found for this choice.');
   const doc = P.newDoc('landscape'); let Y = P.TOP;
   Y = P.heading(doc, Y, 'Class Attendance & Test Report', q.cls + ' · ' + (q.sub ? titleCase(q.sub) : 'All subjects') + ' · ' + rangeTxt(q));
   Y = classBoxes(doc, Y, S, q);
   Y = classTable(doc, S, q, Y, q.cls + ' · ' + (q.sub ? titleCase(q.sub) : 'All subjects') + ' · ' + rangeTxt(q));
-  Y = P.smallNote(doc, Y, classLegend(q));
+  Y = P.smallNote(doc, Y, classLegend(q, S));
   P.signatures(doc, Y, ['Subject Teacher', 'HOD', 'Principal']);
   P.finalize(doc);
   return { doc, title:'Class report ' + q.cls, file:'Class_' + P.safe(q.cls) + '_' + (q.sub ? P.safe(titleCase(q.sub)) : 'All-subjects') + '_' + q.from + '-' + q.to + '.pdf' };
@@ -4514,7 +4538,7 @@ function multiClassPdf(S, q, title){
     const part = S.filter(s => s.cls === c);
     y = P.heading(doc, y, c, 'All subjects · ' + rangeTxt(q));
     y = classTable(doc, part, Object.assign({}, q, { sub:'' }), y, c + ' · All subjects · ' + rangeTxt(q));
-    P.smallNote(doc, y, classLegend(q));
+    P.smallNote(doc, y, classLegend(q, part));
   });
   P.finalize(doc);
   return { doc, title:'Complete attendance report', file:'Complete_' + P.safe(title) + '_' + q.from + '-' + q.to + '.pdf' };
@@ -4645,6 +4669,23 @@ function ewCard(){
     <div class="sub">${scope === 'all' || isCP ? 'Whole college' : scope ? esc(allLabel()) : 'Your lectures'}: students who were present in one lecture but absent (or marked B) in another on the same day. Day, week, month and whole session; by section, subject, class and more. PDF, CSV and WhatsApp.</div>
     <div class="acts2"><a class="btn primary" id="xBunk" href="bunkers.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Bunkers</a></div></section>`;
 }
+/** v8.19 F.A-1 / F.A-2: a student's "Optional Subjects" row is joined to her own section's row (A or B), so she is ONE row with
+ *  her compulsory and optional subjects (g.opt = true). If her own section is not in the report, the optional row stays. */
+function joinOptional(S){
+  const opt = s => /optional/i.test(s.cls);
+  if(!S.some(opt) || !S.some(s => !opt(s))) return S;
+  const home = {}; S.forEach(s => { if(!opt(s) && !s.guest && !home[s.roll]) home[s.roll] = s; });
+  const out = [];
+  S.forEach(s => {
+    const h = opt(s) ? home[s.roll] : null;
+    if(!h){ out.push(s); return; }
+    Object.keys(s.subs).forEach(k => { const a = h.subs[k], g = s.subs[k]; g.opt = true; if(!a || (a.off && !g.off)) h.subs[k] = g; });
+    const live = Object.values(h.subs).filter(g => !g.off);
+    h.p = live.reduce((a, g) => a + g.p, 0); h.d = live.reduce((a, g) => a + g.d, 0); h.pct = pct2(h.p, h.d);
+    h.ms = live.reduce((a, g) => a + g.ms, 0); h.mtT = live.reduce((a, g) => a + g.mtT, 0); h.tp = h.mtT ? pct2(h.ms, h.mtT) : null;
+  });
+  return out;
+}
 /** one student may come back under two sections (guest in one subject): join them into one report, home section first */
 function oneStudent(S, roll){
   const list = S.filter(s => s.roll === roll); if(list.length < 2) return list;
@@ -4672,9 +4713,15 @@ async function rpCreate(kind, preset){
     if(q.only) rows = rows.filter(r => q.only.includes(r.cls) || q.only.some(c => /optional/i.test(r.cls) && String(r.cls).indexOf(String(c).split(' ')[0]) === 0));
     if(!rows.length) throw new Error('No attendance found for this choice' + (scope ? '. If the server was just updated, run rebuildAttendanceIndex once.' : '.'));
     if(q.type === 'class' && fq.cls){ toast('Reading guests\' home sections…'); rows = await addGuestHome(rows, fq); }
+    const fa = q.type === 'class' && !fq.sub && /^(F\.A-[12])\s+[AB]$/i.exec(fq.cls || '');   // v8.19 a F.A-1 A / B report also shows its students' optional subjects
+    const mine = fa ? new Set(rows.flatMap(r => r.st.map(x => rkey(x[0])))) : null;
+    if(fa){ try{ toast('Reading the optional subjects…');
+      const ox = await getRows({ from:fq.from, to:fq.to, cls:fa[1] + ' Optional Subjects' });
+      rows = rows.concat(ox.map(r => Object.assign({}, r, { st:r.st.filter(x => mine.has(rkey(x[0]))) })).filter(r => r.st.length)); }catch(e){} }
     toast('Reading the monthly test workbooks…');
-    rows = await addMtMarks(rows, fq);
-    const S = aggregate(rows);
+    rows = await addMtMarks(rows, fa ? Object.assign({}, fq, { rolls:mine }) : fq);
+    let S = aggregate(rows);
+    if(q.type === 'class' || q.type === 'college') S = joinOptional(S);
     if(q.type === 'class' || q.type === 'college'){ toast('Reading approved leaves…'); q.lv = await addLeaves(S, q); }
     if(kind === 'csv'){
       const r = q.type === 'shortage' ? shortageCsv(S, q) : detailCsv(rows, q);
@@ -6164,7 +6211,9 @@ function adminExtraCards(){
       <div class="sub">Auto timetable sheet, teacher workload (permanent, morning visiting, evening visiting + Drive Excel), stopping merit, admission slips (4 per page), orientation lists (all programs or chosen sections), filling rooms from the timetable and the morning classes report (subsidized / non-subsidized, fee, sections). Every PDF and Excel in the app's own style.</div>
       <div class="acts2"><a class="btn primary" href="admintools.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Admin tools</a></div></section><section class="card"><h3>${I.doc} Backups &amp; new session</h3>
       <div class="sub">One-tap backup of every workbook of the software into a dated Drive folder (<i>JCW session 2026-27 complete backup …</i>), open or restore earlier backups (password + typed confirmation), and get everything ready for a new session: backup, 2nd Year out, 1st Year becomes 2nd Year, sheets emptied.</div>
-      <div class="acts2"><a class="btn primary" href="system.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Backups &amp; new session</a></div></section><section class="card"><h3>${I.check} System health check</h3>
+      <div class="acts2"><a class="btn primary" href="system.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Backups &amp; new session</a></div></section><section class="card"><h3>${I.doc} Logins &amp; services</h3>
+      <div class="sub">Add a new login (e.g. a computer assistant) or change one in the Users sheet: name, username, password, role, department. Switch services on or off for each login (admissions, ID / chest cards, certificates, duty lists, reports …) and switch a login off.</div>
+      <div class="acts2"><a class="btn primary" href="users.html" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Logins &amp; services</a></div></section><section class="card"><h3>${I.check} System health check</h3>
       <div class="sub">Finds problems before they stop the work: duplicate roll numbers, students without subjects or class, timetable teachers without a login, classes with no students, sections with no attendance this month, missing sheets and automatic jobs that are off.</div>
       <div class="acts2"><button class="btn primary" type="button" id="xHc">${I.check}Run health check</button></div></section>
     <section class="card"><h3>${I.doc} Student result page</h3>
@@ -6936,6 +6985,7 @@ async function checkScope(){
       const ttChanged = setTT(r);
       if(!!r.cp !== isCP){ isCP = !!r.cp; store.set('isCP', isCP); if(appView !== 'att') rerender(); }
       if(!!r.ttm !== isTTM){ isTTM = !!r.ttm; store.set('isTTM', isTTM); if(appView !== 'att') rerender(); }
+      if(r.svc && setSvc(r.svc) && appView === 'home') rerender();
       if(ttChanged){ if(appView === 'att') renderMain(); else rerender(); }
       const was = scope; scope = r.view || ''; store.set('scope', scope);
       if(was !== scope){ if(!scope && appView === 'admin') appView = 'home'; if(appView !== 'att') rerender(); }

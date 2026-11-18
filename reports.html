@@ -178,7 +178,7 @@ const API = 'https://script.google.com/macros/s/AKfycbzl-DwgASIhf-pIGYi9D3M-CGOm
 const $ = id => document.getElementById(id);
 const esc = s => String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ls = { get(k, d){ try{ const v = localStorage.getItem('csa2_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } } };
-const user = ls.get('user', ''), pass = ls.get('pass', ''), isAdmin = ls.get('admin', false) === true;
+const user = ls.get('user', ''), pass = ls.get('pass', ''), isAdmin = ls.get('admin', false) === true || (ls.get('svc', []) || []).indexOf('collegereports') >= 0;   // v8.19 or the College reports service
 const urls = {}, charts = {}, done = new Set();
 let META = { sessions: null, columns: [] };
 

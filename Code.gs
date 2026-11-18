@@ -36,7 +36,7 @@ var SEASON       = ['SEPT', 'OCT', 'NOV', 'DEC', 'JAN'];
 var SEASON_MONTH = { SEPT: 8, OCT: 9, NOV: 10, DEC: 11, JAN: 0 };
 var MONTH_NAMES  = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
 var CACHE_TTL    = 600;
-var CACHE_KEYS   = ['users_att2', 'tt_att3', 'master_att3', 'ptimes'];
+var CACHE_KEYS   = ['users_att3', 'tt_att3', 'master_att3', 'ptimes'];
 
 // Big workbook settings
 var SPARE_ROWS = 2;          // empty rows kept under the last student (so a teacher can still add a line by hand)
@@ -101,6 +101,8 @@ function doPost(e) {
 
   var user = authenticate_(req.username, req.password);
   if (!user) return json_({ ok: false, error: 'BAD_LOGIN' });
+  GRANT_ = null;                                                          // v8.19 services (Users.gs): this login may use this module
+  try { if (svcForAction_(req.action).some(function (k) { return (user.svc || []).indexOf(k) >= 0; })) GRANT_ = String(user.username).trim().toLowerCase(); } catch (eG) { GRANT_ = null; }
   // v8.13 load test (loadtest.html): admin only; everything is written into the COPY of a month workbook, never the real ones
   if (req.test === true || req.action === 'test_setup') {
     try {
@@ -131,6 +133,7 @@ function doPost(e) {
     try { var res = {}; try { res = JSON.parse(out.getContent()); } catch (e1) {} actLog_(user, req, res); } catch (e2) {}
     return out;
   }
+  if (/^usr_/.test(String(req.action || ''))) return json_(usrRoute_(user, req));   // v8.19 Users.gs: logins & services (admin)
   if (/^adm_/.test(String(req.action || ''))) return json_(admRoute_(user, req));
      if (/^gt_/.test(String(req.action || ''))) return json_(gtRoute_(user, req));
         if (/^bk_/.test(String(req.action || ''))) return json_(bkRoute_(user, req));
@@ -154,7 +157,7 @@ function doPost(e) {
                 
   try {
     if (req.action === 'sheets') {
-  return json_({ ok: true, teacher: user.teacher, admin: isAdmin_(user), sheets: listSheets_(user), proctors: getProctors_(), view: scopeName_(user) });
+  return json_({ ok: true, teacher: user.teacher, admin: isAdmin_(user), sheets: listSheets_(user), proctors: getProctors_(), view: scopeName_(user), svc: svcMine_(user) });
 }
     if (req.action === 'whoami')       return json_(whoami_(user));
     if (req.action === 'overview')     return json_(overview_(user));
@@ -392,8 +395,12 @@ function colLetter_(n) {
   return s;
 }
 
+/** v8.19 GRANT_ = the login whose service (Users sheet "Services" column) opens the module of THIS request, e.g. a computer
+ *  assistant with "idcards" uses the ID cards module like the admin. Set in doPost for that module's actions only. */
+var GRANT_ = null;
 function isAdmin_(user) {
-  return String(user.username).trim().toLowerCase() === ADMIN_USER;
+  var u = String(user && user.username || '').trim().toLowerCase();
+  return u === ADMIN_USER || (!!GRANT_ && u === GRANT_);
 }
 
 /** True when a Roll No cell note marks the student as disabled (left the subject). */
@@ -482,7 +489,7 @@ function cacheClear_(k) {
 
 /** Run this by hand after you change the Timetable, Users or the strength sheet. */
 function clearAppCaches() {
-  CACHE_KEYS.concat(['master_att', 'users_att', 'tt_att', 'tt_att2', 'users_full']).forEach(cacheClear_);
+  CACHE_KEYS.concat(['master_att', 'users_att', 'users_att2', 'tt_att', 'tt_att2', 'users_full']).forEach(cacheClear_);
     SEASON.forEach(function (t) { cacheClear_('ll2_' + t); });
 }
 
@@ -509,20 +516,20 @@ function usersTable_() {
 }
 
 function getUsers_() {
-  var rows = cacheGetBig_('users_att2');
+  var rows = cacheGetBig_('users_att3');
   if (rows) return rows;
   var sh = SpreadsheetApp.openById(USERS_SS_ID).getSheetByName('Users');
   if (!sh) throw new Error('Users sheet not found');
   var d = sh.getDataRange().getValues();
-  var iRole = usersCol_(d[0], 'role', 8), iDept = usersCol_(d[0], 'department', 3);
+  var iRole = usersCol_(d[0], 'role', 8), iDept = usersCol_(d[0], 'department', 3), iSvc = usersCol_(d[0], 'services', -1);
   rows = [];
   for (var i = 1; i < d.length; i++) {
     if (!d[i][4]) continue;
-    // teacher, username, password, role, department
+    // teacher, username, password, role, department, services (v8.19 "Services" column: "admission, idcards" / "blocked")
     rows.push([String(d[i][0]).trim(), String(d[i][4]).trim(), String(d[i][5]),
-               String(d[i][iRole] || '').trim(), String(d[i][iDept] || '').trim()]);
+               String(d[i][iRole] || '').trim(), String(d[i][iDept] || '').trim(), iSvc >= 0 ? String(d[i][iSvc] || '').trim() : '']);
   }
-  cachePutBig_('users_att2', rows);
+  cachePutBig_('users_att3', rows);
   return rows;
 }
 
@@ -532,7 +539,9 @@ function authenticate_(username, password) {
   var rows = getUsers_();
   for (var i = 0; i < rows.length; i++) {
     if (rows[i][1].toLowerCase() === u && rows[i][2] === String(password)) {
-      return { teacher: rows[i][0], username: rows[i][1], password: rows[i][2], role: rows[i][3] || '', dept: rows[i][4] || '' };
+      var svc = svcParse_(rows[i][5]);                                    // v8.19 services switched on for this login (Users.gs)
+      if (svc.indexOf('blocked') >= 0 && u !== ADMIN_USER) return null;   // login switched off on the Logins & services page
+      return { teacher: rows[i][0], username: rows[i][1], password: rows[i][2], role: rows[i][3] || '', dept: rows[i][4] || '', svc: svc };
     }
   }
   return null;
@@ -546,7 +555,7 @@ function changePassword_(user, oldPass, newPass) {
   for (var i = 1; i < d.length; i++) {
     if (String(d[i][4]).trim().toLowerCase() === user.username.toLowerCase()) {
       sh.getRange(i + 1, 6).setValue(String(newPass));
-      cacheClear_('users_att2'); cacheClear_('users_full');
+      cacheClear_('users_att2'); cacheClear_('users_att3'); cacheClear_('users_full');
       return { ok: true };
     }
   }
@@ -2223,7 +2232,7 @@ function scopeOf_(user) {
 }
 function scopeName_(user) { var s = scopeOf_(user); return s ? (s.all ? 'all' : 'dept') : ''; }
 function whoami_(user) {
-  var s = scopeOf_(user), out = { ok: true, view: scopeName_(user), dept: s && !s.all ? user.dept : '' };
+  var s = scopeOf_(user), out = { ok: true, view: scopeName_(user), dept: s && !s.all ? user.dept : '', svc: svcMine_(user) };
   try { out.cp = isCP_(user); } catch (e) { out.cp = false; }
   try { out.ttm = typeof at_mornOk_ === 'function' && !!at_mornOk_(user); } catch (e) { out.ttm = false; }   // SCI TT MORNING ADMIN: timetable editor + morning classes
   try { out.tt = myTimetable_(user); } catch (e) { out.tt = []; }

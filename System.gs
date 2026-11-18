@@ -240,7 +240,7 @@ function sysSnapRestore_(user, req) {
     if (dst.getMaxColumns() < C) dst.insertColumnsAfter(dst.getMaxColumns(), C - dst.getMaxColumns());
     dst.getRange(1, 1, R, C).setValues(v);
     SpreadsheetApp.flush();
-    ['users_att2', 'users_full', 'master_att3'].forEach(function (k) { try { cacheClear_(k); } catch (e) {} });
+    ['users_att2', 'users_att3', 'users_full', 'master_att3'].forEach(function (k) { try { cacheClear_(k); } catch (e) {} });
     try { CacheService.getScriptCache().remove('adm_set_v1'); } catch (e) {}
     return { ok: true, rows: R, sheet: s.sheet, safety: safety.name };
   } finally { lock.releaseLock(); }
