@@ -46,6 +46,7 @@ header h1{margin:0;font-size:18px}header small{display:block;opacity:.8;font-siz
 dialog{border:0;border-radius:18px;padding:18px;max-width:620px;width:94vw;box-shadow:0 20px 60px rgba(43,25,18,.35)}dialog::backdrop{background:rgba(43,25,18,.5)}
 .form{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}
 .form label{display:block;font-size:13px;font-weight:700}
+.form label small{display:block;font-weight:400;margin-top:2px;font-size:12px}
 .form input,.form select{display:block;width:100%;height:40px;border:1.5px solid var(--line);border-radius:10px;padding:0 10px;margin-top:3px;font-weight:400;background:#fff}
 .form .w{grid-column:1 / -1}
 label.ck{display:flex;gap:8px;align-items:flex-start;margin:5px 0;font-size:13.5px;font-weight:400}label.ck input{width:18px;height:18px;margin-top:2px;accent-color:var(--brown);flex:none}
@@ -64,7 +65,9 @@ const $ = s => document.querySelector(s), esc = s => String(s == null ? '' : s).
 const lsg = (k, d) => { try{ const v = localStorage.getItem('csa2_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } };
 const api = (p, ms) => JCW.api(p, ms || 120000);
 const S = { d:null, err:'', msg:'', q:'', f:'', busy:false };
-const ROLES0 = ['TEACHER', 'HOD', 'PRINCIPAL', 'COMPUTER ASSISTANT', 'CLERK', 'DS ADMIN', 'LEAVE IN-CHARGE'];
+const opts = (list, cur) => { const L = list.slice(); if(cur && !L.some(x => x.v === cur.toUpperCase())) L.push({ v:cur.toUpperCase(), about:'(as written in the Users sheet)' });
+  return L.map(x => `<option value="${esc(x.v)}" ${x.v === String(cur || '').toUpperCase() ? 'selected' : ''}>${esc(x.v || 'None')}</option>`).join(''); };
+const about = (list, v) => { const x = list.find(y => y.v === String(v || '').toUpperCase()); return x ? x.about : ''; };
 
 async function load(){
   try{ S.d = await api({ action:'usr_list' }); S.err = ''; }
@@ -77,8 +80,10 @@ function shown(){
   return S.d.rows.filter(r => {
     if(S.f === 'svc' && !r.svc.length) return false;
     if(S.f === 'off' && !r.blocked) return false;
-    if(S.f && S.f !== 'svc' && S.f !== 'off' && r.role.toUpperCase() !== S.f) return false;
-    const t = [r.teacher, r.username, r.role, r.dept, r.desig, r.svc.map(svcLabel).join(' ')].join(' ').toLowerCase();
+    if(S.f === 'cp' && !r.cp) return false;
+    if(S.f === 'tt' && !r.tt) return false;
+    if(S.f && !['svc', 'off', 'cp', 'tt'].includes(S.f) && r.role.toUpperCase() !== S.f) return false;
+    const t = [r.teacher, r.username, r.role, r.dept, r.desig, r.cp ? 'chief proctor ' + r.cp : '', r.tt, r.svc.map(svcLabel).join(' ')].join(' ').toLowerCase();
     return q.every(w => t.includes(w));
   });
 }
@@ -91,10 +96,10 @@ function render(){
   $('#app').innerHTML = `
   ${S.err ? `<div class="note bad">${esc(S.err)}</div>` : ''}${S.msg ? `<div class="note ok">${esc(S.msg)}</div>` : ''}
   <section class="sec"><h2>Logins</h2>
-    <div class="sub">Every login of the Users sheet. <b>Add a login</b> for a new person (e.g. a computer assistant), then tap the <b>services</b> under a name to switch them on (green) or off. A service opens that page for the login, with the same power as the admin <i>on that page only</i>. Teachers still see their own classes from the timetable as before.${D.has.svc ? '' : ' The <b>Services</b> column is added to the Users sheet the first time you save.'}</div>
+    <div class="sub">Every login of the Users sheet. <b>Edit</b> sets what a person can do: <b>role</b> (teacher, HOD, principal …), <b>Chief Proctor</b>, <b>timetable editing</b> and <b>services</b>. <b>Add a login</b> for a new person (e.g. a computer assistant), then tap the <b>services</b> under a name to switch them on (green) or off. A service opens that page for the login, with the same power as the admin <i>on that page only</i>. Teachers still see their own classes from the timetable as before.${D.has.svc ? '' : ' The <b>Services</b> column is added to the Users sheet the first time you save.'}</div>
     <div class="acts"><button class="btn p" id="add">+ Add a login</button></div>
     <div class="tools" style="margin-top:10px"><input id="q" type="search" placeholder="Search name, username, role, service" value="${esc(S.q)}" autocomplete="off" autocapitalize="none" spellcheck="false">
-      <select id="f"><option value="">All logins</option><option value="svc" ${S.f === 'svc' ? 'selected' : ''}>With services</option><option value="off" ${S.f === 'off' ? 'selected' : ''}>Switched off</option>
+      <select id="f"><option value="">All logins</option><option value="svc" ${S.f === 'svc' ? 'selected' : ''}>With services</option><option value="off" ${S.f === 'off' ? 'selected' : ''}>Switched off</option><option value="cp" ${S.f === 'cp' ? 'selected' : ''}>Chief Proctors</option><option value="tt" ${S.f === 'tt' ? 'selected' : ''}>Timetable editors</option>
         ${(D.roles || []).map(r => `<option value="${esc(r.toUpperCase())}" ${S.f === r.toUpperCase() ? 'selected' : ''}>Role: ${esc(r)}</option>`).join('')}</select></div>
     <div id="list">${L.map(card).join('') || '<div class="sub" style="margin-top:10px">No login matches.</div>'}</div>
   </section>`;
@@ -105,7 +110,7 @@ function render(){
 }
 function card(r){
   const i = S.d.rows.indexOf(r);
-  return `<div class="u ${r.blocked ? 'off' : ''}"><div class="top"><div class="nm"><b>${esc(r.teacher || '(no name)')}</b>${r.admin ? '<span class="pill ok">main admin</span>' : ''}${r.blocked ? '<span class="pill no">login off</span>' : ''}${!r.hasPass && !r.admin ? '<span class="pill mid">no password</span>' : ''}
+  return `<div class="u ${r.blocked ? 'off' : ''}"><div class="top"><div class="nm"><b>${esc(r.teacher || '(no name)')}</b>${r.admin ? '<span class="pill ok">main admin</span>' : ''}${r.blocked ? '<span class="pill no">login off</span>' : ''}${!r.hasPass && !r.admin ? '<span class="pill mid">no password</span>' : ''}${r.cp ? `<span class="pill ok">Chief Proctor ${esc(r.cp)}</span>` : ''}${r.tt ? `<span class="pill mid">Timetable: ${esc(r.tt)}</span>` : ''}
       <div class="sub">${esc(r.username || 'no username')}${r.role ? ' · ' + esc(r.role) : ''}${r.dept ? ' · ' + esc(r.dept) : ''}${r.desig ? ' · ' + esc(r.desig) : ''}${r.status ? ' · ' + esc(r.status) : ''} · row ${r.row}</div></div>
     <button class="btn sm" data-ed="${i}">Edit</button>${r.admin ? '' : `<button class="btn sm" data-off="${i}" ${S.busy ? 'disabled' : ''}>${r.blocked ? 'Switch login on' : 'Switch login off'}</button>`}</div>
     ${r.admin ? '<div class="sub" style="margin-top:6px">Has every service.</div>' : `<div class="chips">${S.d.services.map(s => `<button type="button" class="chip ${r.svc.includes(s.key) ? 'on' : ''}" data-sv="${i}|${s.key}" title="${esc(s.about)}" ${S.busy ? 'disabled' : ''}>${r.svc.includes(s.key) ? '✓ ' : ''}${esc(s.label)}</button>`).join('')}</div>`}</div>`;
@@ -132,22 +137,29 @@ function edit(r){
       <label class="w">Name (as in the timetable for a teacher)<input id="eT" value="${esc(r.teacher)}" placeholder="e.g. Ms. Sana Gul" maxlength="80"></label>
       <label>Username (to sign in)<input id="eU" value="${esc(r.username)}" placeholder="e.g. computer1" autocapitalize="none" spellcheck="false" maxlength="80" ${r.admin ? 'readonly' : ''}></label>
       <label>${n ? 'Password' : 'New password (empty = keep)'}<input id="eP" type="text" autocomplete="new-password" autocapitalize="none" spellcheck="false" placeholder="${n ? 'at least 4 characters' : 'leave empty to keep it'}" maxlength="60"></label>
-      ${D.has.role ? `<label>Role<input id="eR" list="dlR" value="${esc(r.role)}" placeholder="e.g. COMPUTER ASSISTANT"></label>${dl('dlR', ROLES0.concat(D.roles || []))}` : ''}
       ${D.has.dept ? `<label>Department<input id="eD" list="dlD" value="${esc(r.dept)}"></label>${dl('dlD', D.depts || [])}` : ''}
       ${D.has.desig ? `<label>Designation<input id="eG" list="dlG" value="${esc(r.desig)}"></label>${dl('dlG', D.desigs || [])}` : ''}
       ${D.has.contact ? `<label>Contact (WhatsApp)<input id="eC" value="${esc(r.contact)}" inputmode="tel" placeholder="03xx xxxxxxx"></label>` : ''}
       ${D.has.status ? `<label>Status<input id="eS" list="dlS" value="${esc(r.status)}" placeholder="e.g. Permanent, Visiting"></label>${dl('dlS', ['Permanent', 'Visiting'])}` : ''}
     </div>
-    ${r.admin ? '' : `<div style="margin-top:12px"><b>Services</b> <span class="sub">(pages this login may open)</span>
+    ${r.admin ? '' : `<div style="margin-top:12px"><b>Facilities</b>
+      <div class="form" style="margin-top:6px">
+      ${D.has.role ? `<label class="w">Role (what she sees)<select id="eR">${opts(D.roleList, r.role)}</select><small class="sub" id="eRa">${esc(about(D.roleList, r.role))}</small></label>` : ''}
+      ${D.has.cp ? `<label>Chief Proctor<select id="eCP">${opts([{ v:'', about:'' }, { v:'CP1' }, { v:'CP2' }, { v:'CP3' }, { v:'CP4' }, { v:'CP' }], r.cp)}</select><small class="sub">Gets teachers' discipline reports, bunkers, substitutions for every department, student search and marked-missed entries.</small></label>` : ''}
+      ${D.has.tt ? `<label>Timetable editor<select id="eTT">${opts(D.ttList, r.tt)}</select><small class="sub" id="eTTa">${esc(about(D.ttList, r.tt))}</small></label>` : ''}
+      </div></div>
+    <div style="margin-top:12px"><b>Services</b> <span class="sub">(pages this login may open)</span>
       ${D.services.map(s => `<label class="ck"><input type="checkbox" data-es="${s.key}" ${r.svc.includes(s.key) ? 'checked' : ''}><span><b>${esc(s.label)}</b><small>${esc(s.about)}</small></span></label>`).join('')}
       <label class="ck" style="margin-top:8px"><input type="checkbox" id="eB" ${r.blocked ? 'checked' : ''}><span><b>Login switched off</b><small>She cannot sign in (nothing is deleted).</small></span></label></div>`}
     <div id="eErr"></div>
     <div class="acts"><button class="btn p" id="eGo">${n ? 'Add login' : 'Save'}</button><button class="btn" id="eNo">Cancel</button></div>`;
   const d = $('#dlg'); d.showModal();
+  if($('#eR')) $('#eR').onchange = e => { $('#eRa').textContent = about(D.roleList, e.target.value); };
+  if($('#eTT')) $('#eTT').onchange = e => { $('#eTTa').textContent = about(D.ttList, e.target.value); };
   $('#eNo').onclick = () => d.close();
   $('#eGo').onclick = async () => {
     const v = id => { const e = $(id); return e ? e.value.trim() : undefined; };
-    const rec = { teacher:v('#eT'), username:v('#eU'), role:v('#eR'), dept:v('#eD'), desig:v('#eG'), contact:v('#eC'), status:v('#eS'),
+    const rec = { teacher:v('#eT'), username:v('#eU'), role:v('#eR'), dept:v('#eD'), desig:v('#eG'), contact:v('#eC'), status:v('#eS'), cp:v('#eCP'), tt:v('#eTT'),
       svc:[...document.querySelectorAll('[data-es]')].filter(x => x.checked).map(x => x.dataset.es), blocked:!!($('#eB') && $('#eB').checked) };
     if(r.admin){ rec.svc = []; rec.blocked = false; }
     const np = v('#eP');
