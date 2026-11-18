@@ -20,14 +20,90 @@ var SVC_LIST = [
   { key: 'admintools',     prefix: 'at_',  page: 'admintools.html',    label: 'Admin tools',              about: 'Admission slips, orientation lists, room tags, workload, stopping merit.' }
 ];
 var USR_HEAD = 'Services';
+/* v8.36 SUB-SERVICES: parts of a service that can be given one by one ("admission.new", "admission.edit" … in the Services column).
+   A service with none of its parts listed = the whole service (as before). acts = the server actions only that part may use
+   ("adm_save:new" = adm_save without ctx, "at_run:merit" = at_run with tool merit); every other action of the module stays open
+   (reading lists, settings the page needs). tab = the page tab hidden when the part is not given. */
+var SVC_SUBS = {
+  admission: [
+    { k: 'new',   label: 'New admission (New tab)',                 tab: 'form',  acts: ['adm_save:new', 'adm_check:new', 'adm_next_roll', 'adm_fee_receipt'] },
+    { k: 'edit',  label: 'Find & edit an admission, record PDF',    tab: 'find',  acts: ['adm_save:edit', 'adm_check:edit', 'adm_full'] },
+    { k: 'portal',label: 'From portal: add new portal students, update from portal', tab: 'pnew', acts: ['adm_new', 'adm_add_new', 'adm_refresh', 'adm_keep_list', 'adm_keep_save', 'adm_portal'] },
+    { k: 'seats', label: 'Seats (view)',                            tab: 'seats', acts: [] },
+    { k: 'merit', label: 'Merit lists (confirm, last date, alerts)',tab: 'merit', acts: ['adm_oml_get', 'adm_oml_save', 'adm_oml_confirm', 'adm_portal_quota', 'adm_alerts_save', 'adm_last_date'] },
+    { k: 'fix',   label: 'Wrong on portal list',                    tab: 'fix',   acts: ['adm_fixlist'] },
+    { k: 'sset',  label: 'Seat settings (change seats, migrated)',  tab: 'sset',  acts: ['adm_seats_save', 'adm_migrated', 'adm_mig_import'] },
+    { k: 'wait',  label: 'Waiting (saves kept on the phone)',       tab: 'wait',  acts: [] }
+  ],
+  idcards: [
+    { k: 'print',    label: 'Make & print ID cards (PDF), mark printed', acts: ['idc_mark', 'idc_white_put'] },
+    { k: 'photos',   label: 'Fix / add photos',                          acts: ['idc_photo_save'] },
+    { k: 'requests', label: 'Students\' correction requests (approve / reject)', acts: ['idc_reqs', 'idc_req_do', 'idc_check_set'] },
+    { k: 'settings', label: 'Card settings & principal signature',       acts: ['idc_settings', 'idc_sign'] }
+  ],
+  certificates: [
+    { k: 'print',  label: 'Print certificates (PDF / Drive)',             acts: ['pc_pdf'] },
+    { k: 'edit',   label: 'Correct a student',                            acts: ['pc_save'] },
+    { k: 'strike', label: 'Strike off left students',                     acts: ['pc_strike', 'pc_strikes'] },
+    { k: 'link',   label: 'Fill Enroll#, DOB and grade (link)',           acts: ['pc_link'] }
+  ],
+  board: [
+    { k: 'save',    label: 'Read a gazette PDF and save the result sheet', acts: ['br_begin', 'br_rows', 'br_finish'] },
+    { k: 'prepare', label: 'Prepare provisional certificates from a result', acts: ['pc_prepare'] }
+  ],
+  duties: [
+    { k: 'make',   label: 'Make duty lists, PDFs, Google Sheet',          acts: ['dut_sheet', 'dut_students', 'dut_stu_cols', 'dut_stu_subj'] },
+    { k: 'save',   label: 'Save lists and name fixes on the server',      acts: ['dut_save', 'dut_names_save', 'dut_fix_save'] },
+    { k: 'delete', label: 'Delete saved lists',                           acts: ['dut_delete'] }
+  ],
+  collegereports: [
+    { k: 'run',      label: 'Make reports, Excel downloads',              acts: ['rpt_run', 'rpt_xlsx', 'rpt_xlsx_all'] },
+    { k: 'sessions', label: 'Change the sessions list',                   acts: ['rpt_sessions'] }
+  ],
+  shortage: [
+    { k: 'view',     label: 'See and print shortage cases',               acts: ['shr_month'] },
+    { k: 'save',     label: 'Save the list to the month workbook',        acts: ['shr_write'] },
+    { k: 'settings', label: 'Session and default threshold',              acts: ['shr_cfg_set'] }
+  ],
+  leaves: [
+    { k: 'view',  label: 'See leaves, records and reports',               acts: ['lv_attendance'] },
+    { k: 'enter', label: 'Enter / change approved leaves',                acts: ['lv_sync'] }
+  ],
+  recordsummary: [],
+  admintools: [
+    { k: 'auto',    label: 'Auto timetable',                 tab: 'auto',    acts: ['at_run:auto', 'at_sheet'] },
+    { k: 'work',    label: 'Teacher workload, designations', tab: 'work',    acts: ['at_run:workload', 'at_run:workloadxlsx', 'at_desig', 'at_desig_save'] },
+    { k: 'merit',   label: 'Stopping merit',                 tab: 'merit',   acts: ['at_run:merit'] },
+    { k: 'slips',   label: 'Admission slips (and editing them)', tab: 'slips', acts: ['at_savestu'] },
+    { k: 'orient',  label: 'Orientation lists',              tab: 'orient',  acts: [] },
+    { k: 'tags',    label: 'Room tags',                      tab: 'tags',    acts: ['at_roomtags'] },
+    { k: 'morning', label: 'Morning classes report and fees',tab: 'morning', acts: ['at_morning', 'at_mfee'] }
+  ]
+};
+/** the action key used in SVC_SUBS for this request */
+function svcActKey_(req) {
+  var a = String(req.action || '');
+  if (a === 'adm_save' || a === 'adm_check') return a + (req.ctx ? ':edit' : ':new');
+  if (a === 'at_run') return 'at_run:' + String(req.tool || '');
+  return a;
+}
+/** null = allowed; else the label of the part this login was not given */
+function svcSubDeny_(user, key, req) {
+  var subs = SVC_SUBS[key] || [], mine = (user.svc || []).filter(function (t) { return t.indexOf(key + '.') === 0; });
+  if (!mine.length || !subs.length) return null;                                  // no parts listed = the whole service
+  var ak = svcActKey_(req), owners = subs.filter(function (x) { return x.acts.indexOf(ak) >= 0; });
+  if (!owners.length) return null;                                                // an action every part needs
+  return owners.some(function (x) { return mine.indexOf(key + '.' + x.k) >= 0; }) ? null : owners.map(function (x) { return x.label; }).join(' / ');
+}
 
 /** "admission, ID cards ; blocked" -> ['admission', 'idcards', 'blocked'] (only known keys) */
 function svcParse_(txt) {
   var ok = { blocked: true }; SVC_LIST.forEach(function (s) { ok[s.key] = true; });
   USR_SCREENS.forEach(function (x) { ok['hide' + x.key] = true; });   // v8.35 screens switched off for this login
+  Object.keys(SVC_SUBS).forEach(function (k) { SVC_SUBS[k].forEach(function (x) { ok[k + '.' + x.k] = true; }); });   // v8.36 parts of a service
   var out = [];
   String(txt || '').toLowerCase().split(/[,;|\n]+/).forEach(function (w) {
-    w = w.replace(/[^a-z]/g, '');
+    w = w.replace(/[^a-z.]/g, '');
     if (w === 'chestcards' || w === 'idcard') w = 'idcards';
     if (ok[w] && out.indexOf(w) < 0) out.push(w);
   });
@@ -137,7 +213,7 @@ function usrList_() {
     if (o.role) roles[o.role] = 1; if (o.dept) depts[o.dept] = 1; if (o.desig) desigs[o.desig] = 1;
     rows.push(o);
   });
-  return { ok: true, rows: rows, services: SVC_LIST.map(function (s) { return { key: s.key, label: s.label, about: s.about, page: s.page }; }),
+  return { ok: true, rows: rows, services: SVC_LIST.map(function (s) { return { key: s.key, label: s.label, about: s.about, page: s.page, subs: (SVC_SUBS[s.key] || []).map(function (x) { return { k: x.k, label: x.label }; }) }; }),
            roles: Object.keys(roles).sort(), depts: Object.keys(depts).sort(), desigs: Object.keys(desigs).sort(), roleList: USR_ROLES, ttList: USR_TT, screens: USR_SCREENS, roleHide: usrRoleHide_(),
            has: { desig: c.desig >= 0, dept: c.dept >= 0, contact: c.contact >= 0, role: c.role >= 0, status: c.status >= 0, svc: c.svc >= 0, cp: c.cp >= 0, tt: c.tt >= 0 } };
 }

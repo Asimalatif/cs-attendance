@@ -385,7 +385,14 @@ function paintNet(){
 }
 function paintBadge(){ const b = $('#qb'); b.textContent = queue.length; b.classList.toggle('hidden', !queue.length);
   const n = pnList().length, p = $('#pb'); p.textContent = n; p.classList.toggle('hidden', !n); paintNet(); }
+/* v8.36 parts of the Admissions service given to this login (Logins & services); the admin / principal have every part */
+const subOk = k => { if(ls.get('admin', false) === true) return true; const t = ls.get('svc', []) || []; if(!t.includes('admission')) return true;
+  const mine = t.filter(x => x.indexOf('admission.') === 0); return !mine.length || mine.includes('admission.' + k); };
+const TAB_SUB = { form:'new', find:'edit', pnew:'portal', seats:'seats', merit:'merit', fix:'fix', sset:'sset', wait:'wait' };
+const tabOk = t => subOk(TAB_SUB[t] || t);
+document.querySelectorAll('nav button[data-tab]').forEach(b => { if(!tabOk(b.dataset.tab)) b.style.display = 'none'; });
 function setTab(t){
+  if(!tabOk(t) && !(t === 'form' && form && form.ctx)) t = Object.keys(TAB_SUB).find(tabOk) || t;
   tab = t;
   document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t ? 'true' : 'false'));
   if(t === 'form' && !form) form = blankForm();
@@ -393,13 +400,15 @@ function setTab(t){
 }
 function render(){
   paintBadge();
-  $('#bar').classList.toggle('hidden', tab !== 'form' || !init);
+  $('#bar').classList.toggle('hidden', tab !== 'form' || !init || (!subOk('new') && !(form && form.ctx)));
   const m = $('#main');
   if(!user || !pass){ m.innerHTML = `<div class="card"><h2>Sign in first</h2><div class="sub">Open the attendance app, sign in with your admin login, then come back to this page.</div><p><a class="btn primary" href="./" style="display:inline-flex;align-items:center;text-decoration:none">Open the attendance app</a></p></div>`; return; }
   if(!(ls.get('admin', false) === true || (ls.get('svc', []) || []).indexOf('admission') >= 0)){ m.innerHTML = `<div class="card"><h2>Admin only</h2><div class="sub">Admissions are made by the admin. You are signed in as ${esc(user)}, which is not the admin login.</div><p><a class="btn primary" href="./" style="display:inline-flex;align-items:center;text-decoration:none">Back to the attendance app</a></p></div>`; return; }
   if(!init){ m.innerHTML = fatal ? `<div class="err">${esc(fatal)}</div>` : `<div class="card"><h2>Getting ready…</h2><div class="sub">${online() ? 'Downloading programs, sections, seats and the student list. This happens once; after that the page works without internet.' : 'This phone has not downloaded the admission lists yet. Connect to the internet once, then it works offline.'}</div></div>`; return; }
   const top = fatal ? `<div class="err">${esc(fatal)}</div>` : '';
-  if(tab === 'form') m.innerHTML = top + formHtml();
+  if(!tabOk(tab) && !(tab === 'form' && form && form.ctx)){ const t2 = Object.keys(TAB_SUB).find(tabOk); if(t2 && t2 !== tab){ setTab(t2); return; } }
+  if(tab === 'form' && !subOk('new') && !(form && form.ctx)) m.innerHTML = top + '<div class="card"><h2>New admissions are not given to your login</h2><div class="sub">Use <b>Find &amp; edit</b> to open a student, or ask the admin.</div></div>';
+  else if(tab === 'form') m.innerHTML = top + formHtml();
   else if(tab === 'find') m.innerHTML = top + findHtml();
   else if(tab === 'pnew') m.innerHTML = top + pnHtml() + rfHtml();
   else if(tab === 'seats') m.innerHTML = top + seatsHtml();

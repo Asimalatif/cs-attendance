@@ -1100,7 +1100,11 @@ async function askNotify(){
 }
 
 /* ================= VIEWS ================= */
+/* v8.36 parts of the Approved leaves service: without "enter" the login only sees records, today's list, reports and contacts */
+function lvEnterOk(){ try{ if(JSON.parse(localStorage.getItem('csa2_admin') || 'false') === true) return true; const T = JSON.parse(localStorage.getItem('csa2_svc') || '[]') || [];
+  if(!T.includes('leaves')) return true; const m = T.filter(x => x.indexOf('leaves.') === 0); return !m.length || m.includes('leaves.enter'); }catch(e){ return true; } }
 function setView(v){
+  if(!lvEnterOk()){ document.querySelectorAll('[data-v="entry"],[data-v="batch"],[data-v="class"]').forEach(b => { b.style.display = 'none'; }); if(['entry', 'batch', 'class'].includes(v)) v = 'records'; }
   view = v;
   ['entry','batch','records','class','contacts','reports','log'].forEach(x => $(x + 'View').classList.toggle('hidden', x !== v));
   document.querySelectorAll('#tabs .tab').forEach(t => t.classList.toggle('on', t.dataset.v === v));

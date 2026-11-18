@@ -379,6 +379,15 @@ async function start(){
       $('sub').textContent = 'Workload · room tags · morning classes'; status('');
       const t = (location.hash || '').slice(1); (document.querySelector('#tabs button[data-t="' + (mine.includes(t) ? t : 'morning') + '"]') || $('mcTab')).click(); return;
     }
+    { /* v8.36 parts of the Admin tools service given to this login (Logins & services) */
+      let T = []; try{ T = JSON.parse(localStorage.getItem('csa2_svc') || '[]') || []; }catch(e){}
+      const isAdm = (() => { try{ return JSON.parse(localStorage.getItem('csa2_admin') || 'false') === true; }catch(e){ return false; } })();
+      const mine = T.filter(x => x.indexOf('admintools.') === 0).map(x => x.slice(11));
+      if(!isAdm && T.includes('admintools') && mine.length){
+        document.querySelectorAll('#tabs button').forEach(b => { if(!mine.includes(b.dataset.t)) b.classList.add('hidden'); else if(b.dataset.t === 'morning') b.classList.remove('hidden'); });
+        const first = document.querySelector('#tabs button:not(.hidden)'); if(first) setTimeout(() => first.click(), 0);
+      }
+    }
     const ticked = new Set(META.auto.programs);
     $('autoProgs').innerHTML = (META.programs.length ? META.programs : META.auto.programs).map(p =>
       `<label class="${ticked.has(p) ? 'on' : ''}"><input type="checkbox" value="${esc(p)}" ${ticked.has(p) ? 'checked' : ''}>${esc(p)}</label>`).join('');
