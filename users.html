@@ -102,15 +102,39 @@ function render(){
       <select id="f"><option value="">All logins</option><option value="svc" ${S.f === 'svc' ? 'selected' : ''}>With services</option><option value="off" ${S.f === 'off' ? 'selected' : ''}>Switched off</option><option value="cp" ${S.f === 'cp' ? 'selected' : ''}>Chief Proctors</option><option value="tt" ${S.f === 'tt' ? 'selected' : ''}>Timetable editors</option>
         ${(D.roles || []).map(r => `<option value="${esc(r.toUpperCase())}" ${S.f === r.toUpperCase() ? 'selected' : ''}>Role: ${esc(r)}</option>`).join('')}</select></div>
     <div id="list">${L.map(card).join('') || '<div class="sub" style="margin-top:10px">No login matches.</div>'}</div>
-  </section>`;
+  </section>
+  ${roleHtml()}`;
+  wireRoles();
   $('#add').onclick = () => edit(null);
   $('#q').oninput = e => { S.q = e.target.value; $('#list').innerHTML = shown().map(card).join('') || '<div class="sub" style="margin-top:10px">No login matches.</div>'; wire(); };
   $('#f').onchange = e => { S.f = e.target.value; render(); };
   wire();
 }
+/** v8.35 screens hidden for this login: her own switches + her role's rule */
+function hidOf(r){ const D = S.d, rr = (D.roleHide || {})[String(r.role || '').toUpperCase()] || [];
+  return (D.screens || []).filter(x => r.svc.includes('hide' + x.key) || rr.includes(x.key)).map(x => x.label + (rr.includes(x.key) && !r.svc.includes('hide' + x.key) ? ' (role)' : '')); }
+/* v8.35 screens hidden by ROLE: one rule for everyone with that role (Users sheet Role column) */
+function roleHtml(){
+  const D = S.d, rules = D.roleHide || {}, roles = [...new Set((D.roleList || []).map(x => x.v).concat((D.roles || []).map(x => x.toUpperCase()), Object.keys(rules)))].filter(Boolean).sort();
+  return `<section class="sec"><h2>Screens by role</h2>
+    <div class="sub">Tick what to <b>hide</b> for everyone with that role in the app (Attendance tab, and the Monthly test, Grand test and Detention tabs of Tests &amp; exams). A login's own "Screens to hide" (Edit) are added to her role's. The admin always sees everything. Works at their next sign-in or within 10 minutes.</div>
+    <div style="overflow:auto;margin-top:8px"><table style="border-collapse:collapse;width:100%;font-size:13px"><thead><tr><th style="text-align:left;padding:6px;border-bottom:1.5px solid var(--line)">Role</th>${(D.screens || []).map(x => `<th style="padding:6px;border-bottom:1.5px solid var(--line)">Hide ${esc(x.label)}</th>`).join('')}</tr></thead>
+      <tbody>${roles.map(r => `<tr><td style="padding:6px;border-bottom:1px solid var(--line)"><b>${esc(r)}</b> <span class="sub">(${D.rows.filter(u => u.role.toUpperCase() === r).length})</span></td>${(D.screens || []).map(x => `<td style="text-align:center;border-bottom:1px solid var(--line)"><input type="checkbox" style="width:18px;height:18px;accent-color:var(--brown)" data-rh="${esc(r)}|${x.key}" ${(rules[r] || []).includes(x.key) ? 'checked' : ''}></td>`).join('')}</tr>`).join('')}</tbody></table></div>
+    <div class="acts"><button class="btn p" id="rhSave" ${S.busy ? 'disabled' : ''}>Save role rules</button></div></section>`;
+}
+function wireRoles(){
+  const b = $('#rhSave'); if(!b) return;
+  b.onclick = async () => {
+    const rules = {}; document.querySelectorAll('[data-rh]').forEach(c => { if(!c.checked) return; const [r, k] = c.dataset.rh.split('|'); (rules[r] = rules[r] || []).push(k); });
+    S.busy = true; S.err = ''; S.msg = ''; render();
+    try{ const x = await api({ action:'usr_role_set', rules }); S.d.roleHide = x.rules; S.msg = 'Role rules saved. They work at the next sign-in or within 10 minutes.'; }
+    catch(e){ S.err = e.message; }
+    S.busy = false; render(); window.scrollTo(0, 0);
+  };
+}
 function card(r){
   const i = S.d.rows.indexOf(r);
-  return `<div class="u ${r.blocked ? 'off' : ''}"><div class="top"><div class="nm"><b>${esc(r.teacher || '(no name)')}</b>${r.admin ? '<span class="pill ok">main admin</span>' : ''}${r.blocked ? '<span class="pill no">login off</span>' : ''}${!r.hasPass && !r.admin ? '<span class="pill mid">no password</span>' : ''}${r.cp ? `<span class="pill ok">Chief Proctor ${esc(r.cp)}</span>` : ''}${r.tt ? `<span class="pill mid">Timetable: ${esc(r.tt)}</span>` : ''}
+  return `<div class="u ${r.blocked ? 'off' : ''}"><div class="top"><div class="nm"><b>${esc(r.teacher || '(no name)')}</b>${r.admin ? '<span class="pill ok">main admin</span>' : ''}${r.blocked ? '<span class="pill no">login off</span>' : ''}${!r.hasPass && !r.admin ? '<span class="pill mid">no password</span>' : ''}${r.cp ? `<span class="pill ok">Chief Proctor ${esc(r.cp)}</span>` : ''}${r.tt ? `<span class="pill mid">Timetable: ${esc(r.tt)}</span>` : ''}${hidOf(r).length ? `<span class="pill no">Hidden: ${esc(hidOf(r).join(', '))}</span>` : ''}
       <div class="sub">${esc(r.username || 'no username')}${r.role ? ' · ' + esc(r.role) : ''}${r.dept ? ' · ' + esc(r.dept) : ''}${r.desig ? ' · ' + esc(r.desig) : ''}${r.status ? ' · ' + esc(r.status) : ''} · row ${r.row}</div></div>
     <button class="btn sm" data-ed="${i}">Edit</button>${r.admin ? '' : `<button class="btn sm" data-off="${i}" ${S.busy ? 'disabled' : ''}>${r.blocked ? 'Switch login on' : 'Switch login off'}</button>`}</div>
     ${r.admin ? '<div class="sub" style="margin-top:6px">Has every service.</div>' : `<div class="chips">${S.d.services.map(s => `<button type="button" class="chip ${r.svc.includes(s.key) ? 'on' : ''}" data-sv="${i}|${s.key}" title="${esc(s.about)}" ${S.busy ? 'disabled' : ''}>${r.svc.includes(s.key) ? '✓ ' : ''}${esc(s.label)}</button>`).join('')}</div>`}</div>`;
@@ -150,6 +174,8 @@ function edit(r){
       </div></div>
     <div style="margin-top:12px"><b>Services</b> <span class="sub">(pages this login may open)</span>
       ${D.services.map(s => `<label class="ck"><input type="checkbox" data-es="${s.key}" ${r.svc.includes(s.key) ? 'checked' : ''}><span><b>${esc(s.label)}</b><small>${esc(s.about)}</small></span></label>`).join('')}
+      <div style="margin-top:12px"><b>Screens to hide</b> <span class="sub">(only for this login; role rules are at the bottom of the page)</span></div>
+      ${(D.screens || []).map(x => `<label class="ck"><input type="checkbox" data-es="hide${x.key}" ${r.svc.includes('hide' + x.key) ? 'checked' : ''}><span><b>Hide ${esc(x.label)}</b></span></label>`).join('')}
       <label class="ck" style="margin-top:8px"><input type="checkbox" id="eB" ${r.blocked ? 'checked' : ''}><span><b>Login switched off</b><small>She cannot sign in (nothing is deleted).</small></span></label></div>`}
     <div id="eErr"></div>
     <div class="acts"><button class="btn p" id="eGo">${n ? 'Add login' : 'Save'}</button><button class="btn" id="eNo">Cancel</button></div>`;

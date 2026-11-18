@@ -24,6 +24,7 @@ var USR_HEAD = 'Services';
 /** "admission, ID cards ; blocked" -> ['admission', 'idcards', 'blocked'] (only known keys) */
 function svcParse_(txt) {
   var ok = { blocked: true }; SVC_LIST.forEach(function (s) { ok[s.key] = true; });
+  USR_SCREENS.forEach(function (x) { ok['hide' + x.key] = true; });   // v8.35 screens switched off for this login
   var out = [];
   String(txt || '').toLowerCase().split(/[,;|\n]+/).forEach(function (w) {
     w = w.replace(/[^a-z]/g, '');
@@ -40,10 +41,20 @@ function svcForAction_(a) {
   if (SVC_ALSO[a]) out.push(SVC_ALSO[a]);
   return out;
 }
-/** the services this login can open (for the app's home screen): the admin has them all anyway */
+/** v8.35 screens of the app that can be switched off per login or per role */
+var USR_SCREENS = [
+  { key: 'att', label: 'Attendance tab' }, { key: 'mt', label: 'Monthly test' },
+  { key: 'gt', label: 'Grand test' }, { key: 'dt', label: 'Detention' }
+];
+var USR_ROLE_PROP = 'USR_ROLE_HIDE';
+function usrRoleHide_() { try { return JSON.parse(PropertiesService.getScriptProperties().getProperty(USR_ROLE_PROP) || '{}') || {}; } catch (e) { return {}; } }
+/** the services this login can open + 'hideatt' … for the screens switched off (her own + her role's); the admin has everything */
 function svcMine_(user) {
   if (String(user.username || '').trim().toLowerCase() === ADMIN_USER) return [];
-  return (user.svc || []).filter(function (k) { return k !== 'blocked'; });
+  var out = (user.svc || []).filter(function (k) { return k !== 'blocked'; });
+  var rh = usrRoleHide_()[String(user.role || '').trim().toUpperCase()] || [];
+  rh.forEach(function (k) { if (out.indexOf('hide' + k) < 0) out.push('hide' + k); });
+  return out;
 }
 
 function usrRoute_(user, req) {
@@ -53,6 +64,12 @@ function usrRoute_(user, req) {
       case 'usr_list': return usrList_();
       case 'usr_save': return usrSave_(req);
       case 'usr_set':  return usrSet_(req);
+      case 'usr_role_set': {                                            // v8.35 { ROLE: ['att', 'mt', 'gt', 'dt'] }
+        var keys = USR_SCREENS.map(function (x) { return x.key; }), clean = {};
+        Object.keys(req.rules || {}).forEach(function (r) { var L = (req.rules[r] || []).filter(function (k) { return keys.indexOf(k) >= 0; }); var R = String(r).trim().toUpperCase(); if (R && L.length) clean[R] = L; });
+        PropertiesService.getScriptProperties().setProperty(USR_ROLE_PROP, JSON.stringify(clean));
+        return { ok: true, rules: clean };
+      }
     }
     return { ok: false, error: 'UNKNOWN_ACTION' };
   } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
@@ -121,7 +138,7 @@ function usrList_() {
     rows.push(o);
   });
   return { ok: true, rows: rows, services: SVC_LIST.map(function (s) { return { key: s.key, label: s.label, about: s.about, page: s.page }; }),
-           roles: Object.keys(roles).sort(), depts: Object.keys(depts).sort(), desigs: Object.keys(desigs).sort(), roleList: USR_ROLES, ttList: USR_TT,
+           roles: Object.keys(roles).sort(), depts: Object.keys(depts).sort(), desigs: Object.keys(desigs).sort(), roleList: USR_ROLES, ttList: USR_TT, screens: USR_SCREENS, roleHide: usrRoleHide_(),
            has: { desig: c.desig >= 0, dept: c.dept >= 0, contact: c.contact >= 0, role: c.role >= 0, status: c.status >= 0, svc: c.svc >= 0, cp: c.cp >= 0, tt: c.tt >= 0 } };
 }
 
