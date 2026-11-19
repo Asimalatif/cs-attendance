@@ -223,7 +223,7 @@ function detectYear(list){
 }
 const year = () => Number(CFG.year) || S.detected || detectYear(S.list);
 const validOf = y => CFG.valid[y] || ('31-08-' + (Number(y) + 2));
-const signOf = y => SIGNS[y] || (String(y) === '2026' ? 'idcard/principal-sign.png' : '');
+const signOf = y => SIGNS[y] || '';
 function sessionOf(){ const y = year(); return { label: y + '-' + String(y + 2).slice(-2), valid: validOf(y) }; }
 function cardData(st, photo){
   const e = EDIT[st.roll] || {}, mp = CFG.map[progKey(st.program)] || {}, ses = sessionOf();
