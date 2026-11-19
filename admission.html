@@ -1489,18 +1489,20 @@ function bzHtml(){
         <td>${ph ? `<img src="${ph.data}" alt="" style="width:66px;height:88px;object-fit:cover;border-radius:6px;border:1px solid var(--line)">` : '<span class="sub">—</span>'}${ph && ph.saved ? '<div class="sub" style="color:var(--good);font-weight:700">saved</div>' : ''}</td>
         <td class="nw">${esc(x.s.roll)}<div class="sub">${esc(x.s.pcs)}</div></td><td>${esc(x.s.name)}<div class="sub">d/o ${esc(x.s.father)}</div></td><td>${esc(x.b.sno)}<div class="sub">page ${x.b.page}</div></td></tr>`; }).join('') || '<tr><td colspan="5" class="sub">✓ Every matched student has a picture.</td></tr>'}</tbody></table>`
     : bzF === 'nf'
-    ? `<table><thead><tr><th>Board S.No</th><th>Group</th><th>Student (as in the board report)</th><th>DOB</th><th>Mobile #</th><th>Pre: Rec</th></tr></thead><tbody>
-      ${BZ.nf.map(x => `<tr><td>${esc(x.b.sno)}<div class="sub">page ${x.b.page}</div></td><td>${esc(x.b.group)}</td><td>${esc(x.b.name)}<div class="sub">d/o ${esc(x.b.father)}${x.b.mroll ? ' · Matric ' + esc(x.b.mroll + '/' + x.b.myear) : ''}${x.many ? ' · ' + x.many + ' students with this name + father: open her in Find &amp; edit' : ''}</div></td><td class="nw">${esc(bzD(x.b.dob))}</td><td class="nw">${esc(x.b.mobile)}</td><td class="nw">${esc(x.b.prerec)}</td></tr>`).join('')}</tbody></table>`
+    ? `<table><thead><tr><th>Board S.No</th><th>Group</th><th>Student (as in the board report)</th><th>DOB</th><th>Mobile #</th><th>Pre: Rec</th><th>Left Students sheet</th></tr></thead><tbody>
+      ${BZ.nf.map(x => { const l = bzLeft(x.b); return `<tr${l ? '' : ' style="background:var(--bad-bg)"'}><td>${esc(x.b.sno)}<div class="sub">page ${x.b.page}</div></td><td>${esc(x.b.group)}</td><td>${esc(x.b.name)}<div class="sub">d/o ${esc(x.b.father)}${x.b.mroll ? ' · Matric ' + esc(x.b.mroll + '/' + x.b.myear) : ''}${x.many ? ' · ' + x.many + ' students with this name + father: open her in Find &amp; edit' : ''}</div></td><td class="nw">${esc(bzD(x.b.dob))}</td><td class="nw">${esc(x.b.mobile)}</td><td class="nw">${esc(x.b.prerec)}</td>
+        <td>${l ? `<b style="color:var(--good)">Left</b><div class="sub">${esc(bzLeftTxt(l).replace(/^Left Students: /, ''))}</div>` : !LEFT || leftBusy ? '<span class="sub">reading…</span>' : '<b style="color:var(--bad)">Not found</b><div class="sub">in neither sheet</div>'}</td></tr>`; }).join('')}</tbody></table>`
     : bzF === 'miss'
-    ? `<table><thead><tr><th>Enroll#</th><th>Student (strength sheet)</th><th>Section</th><th>DOB</th><th>Mobile #</th></tr></thead><tbody>
-      ${BZ.miss.map(o => `<tr><td class="nw">${esc(o.roll)}</td><td>${esc(o.name)}<div class="sub">d/o ${esc(o.father)}</div></td><td class="nw">${esc(o.pcs)}</td><td class="nw">${esc(bzD(o.dob))}</td><td class="nw">${esc(o.contact)}</td></tr>`).join('')}</tbody></table>`
+    ? `<table><thead><tr><th>Enroll#</th><th>Student (strength sheet)</th><th>Section</th><th>DOB</th><th>Mobile #</th><th>Left Students sheet</th></tr></thead><tbody>
+      ${BZ.miss.map(o => { const l = mlLeftOf(o); return `<tr><td class="nw">${esc(o.roll)}</td><td>${esc(o.name)}<div class="sub">d/o ${esc(o.father)}</div></td><td class="nw">${esc(o.pcs)}</td><td class="nw">${esc(bzD(o.dob))}</td><td class="nw">${esc(o.contact)}</td>
+        <td>${l ? `<b style="color:var(--good)">Left</b><div class="sub">${esc([l.pcs, l._st === 'MIGRATED' ? 'migrated' : (l.status || 'cancelled'), l.left ? 'left ' + l.left : ''].filter(Boolean).join(' · '))}: still in the strength sheet</div>` : '<span class="sub">—</span>'}</td></tr>`; }).join('')}</tbody></table>`
     : `<table><thead><tr><th>Board S.No</th><th>Enroll#</th><th>Student</th><th>DOB: sheet → board</th><th>Mobile #: sheet → board</th><th>Matric Roll No / year: sheet → board</th><th>Subjects</th></tr></thead><tbody>
       ${L.map(x => `<tr${x.how === 'near' ? ' style="background:var(--mid-bg)"' : ''}><td>${esc(x.b.sno)}<div class="sub">page ${x.b.page}</div></td><td class="nw">${esc(x.s.roll)}<div class="sub">${esc(x.s.pcs)}</div></td>
         <td>${esc(x.s.name)}<div class="sub">d/o ${esc(x.s.father)}</div>${x.how === 'near' ? `<div class="sub" style="color:var(--mid);font-weight:700">Board: ${esc(x.b.name)} d/o ${esc(x.b.father)} (${Math.round(x.sc * 100)}% alike: is it her? then tick)</div>` : x.how === 'roll' ? `<div class="sub" style="color:var(--mid);font-weight:700">Board: ${esc(x.b.name)} d/o ${esc(x.b.father)} (same Matric Roll No + year, name spelled differently)</div>` : ''}</td>
         <td>${dobCell(x)}</td><td>${mobCell(x)}</td><td>${rollCell(x)}</td><td>${subCell(x)}</td></tr>`).join('') || '<tr><td colspan="7" class="sub">✓ Nothing different here.</td></tr>'}</tbody></table>`;
   return head + `<section class="card">
     <div class="acts" style="flex-wrap:wrap">${fb('diff', 'All differences', BZ.list.length)}${fb('dob', 'DOB', nDob)}${fb('mob', 'Mobile #', nMob)}${fb('roll', 'Matric Roll No / year', nRoll)}${fb('sub', 'Subjects', nSub)}${fb('pic', 'Picture missing', BZ.nopic.length)}${fb('near', 'Name spelled differently', nNear)}${fb('nf', 'Not in strength sheet', BZ.nf.length)}${fb('miss', 'Not in board report', BZ.miss.length)}</div>
-    ${bzF === 'nf' ? '<div class="sub" style="margin-top:6px">In the board report but no student with this name + father name in the strength sheet (left the college, or the name is spelled very differently).</div>' : bzF === 'miss' ? `<div class="sub" style="margin-top:6px">${esc(bzYear)} students of the strength sheet who are <b>not</b> in this board report: check that they are registered with the board.</div>` : ''}
+    ${bzF === 'nf' ? `<div class="sub" style="margin-top:6px">In the board report but no student with this name + father name in the strength sheet. Each one is looked up in the <b>Left Students</b> sheet too${LEFT && !leftBusy ? `: <b>${BZ.nf.filter(x => bzLeft(x.b)).length}</b> left the college, <b style="color:var(--bad)">${BZ.nf.filter(x => !bzLeft(x.b)).length}</b> found in neither sheet (red)` : ' (reading…)'}${LEFT && LEFT.err ? ' — Left Students sheet: ' + esc(LEFT.err) : ''}.</div>` : bzF === 'miss' ? `<div class="sub" style="margin-top:6px">${esc(bzYear)} students of the strength sheet who are <b>not</b> in this board report: check that they are registered with the board.</div>` : ''}
     <div style="max-height:62vh;overflow:auto;margin-top:8px">${body}</div>
     ${bzF === 'nf' || bzF === 'miss' || bzF === 'pic' ? '' : `<div class="acts" style="margin-top:10px;flex-wrap:wrap"><button class="btn small" id="bzAllD">Tick all DOB</button><button class="btn small" id="bzAllM">Tick all mobile #</button><button class="btn small" id="bzAllR">Tick all Matric Roll No / year</button><button class="btn small" id="bzNone">Untick all</button></div>`}
     <div class="acts" style="margin-top:10px"><button class="btn" id="bzSubSave" ${bzBusy ? 'disabled' : ''}>Save board subjects in column "BISE Subjects" (${BZ.rows.filter(b => b.subjects).length ? (BZ.subN || 0) : 0})</button></div>
@@ -1554,6 +1556,16 @@ function bzPicSave(){
     idbSet('index', idx);
     bzBusy = ''; bzMsg = ok + ' pictures saved (Drive + Pic URL)' + (skip.length ? '; ' + skip.length + ' skipped (' + skip.slice(0, 3).join('; ') + ')' : '') + '.'; render(); };
 }
+/** a board student who is not in the strength sheet: is she in the Left Students sheet? (name + father, Matric Roll No, or a close spelling) */
+function bzLeft(b){
+  if(!LEFT || !LEFT.rows.length) return null;
+  const k = bzC(b.name) + '|' + bzC(b.father), mr = String(b.mroll || '').replace(/^0+/, '');
+  let hit = LEFT.rows.find(o => bzC(o.name) + '|' + bzC(o.father) === k) || (mr && LEFT.rows.find(o => String(o.mroll || '').replace(/\D/g, '').replace(/^0+/, '') === mr));
+  if(hit) return { o:hit, how:'' };
+  let best = null, bs = 0; LEFT.rows.forEach(o => { const n = bzDice(bzC(b.name), bzC(o.name)), f = bzDice(bzC(b.father), bzC(o.father)); if(n >= .75 && f >= .7 && (n + f) / 2 > bs){ bs = (n + f) / 2; best = o; } });
+  return best && bs >= .82 ? { o:best, how:Math.round(bs * 100) + '% alike' } : null;
+}
+const bzLeftTxt = l => l ? 'Left Students: ' + [l.o.roll, l.o.name + ' d/o ' + l.o.father, l.o.pcs, l.o._st === 'MIGRATED' ? 'migrated' : (l.o.status || 'cancelled'), l.o.left ? 'left ' + l.o.left : '', l.how].filter(Boolean).join(' · ') : '';
 /** the board's subject codes, as printed, into the column "BISE Subjects" of Transform (made at the end when missing) for every matched student */
 function bzSaveSubjects(){
   const items = [];
@@ -1570,6 +1582,7 @@ function bzSaveSubjects(){
     bzBusy = ''; render(); };
 }
 function wireBz(){
+  if(!LEFT && !leftBusy && online()) loadLeft();
   const y = $('#bzYear'); if(y) y.onchange = () => { bzYear = y.value; if(BZ) bzCheck(BZ.rows); render(); };
   const f = $('#bzFile'); if(f) f.onchange = async () => {
     const file = f.files[0]; if(!file) return;
@@ -1598,10 +1611,10 @@ function wireBz(){
   const ps = $('#bzPicSave'); if(ps) ps.onclick = bzPicSave;
   document.querySelectorAll('[data-bzpic]').forEach(c => c.onchange = () => { BZ.pics[c.dataset.bzpic].on = c.checked; const b = $('#bzPicSave'); if(b){ b.textContent = 'Save ' + bzPicN() + ' pictures'; b.disabled = !bzPicN(); } });
   const o = $('#bzOut'); if(o) o.onclick = () => { if(!window.JCWOUT || !BZ) return toast('Reload the page once.');
-    if(bzF === 'nf') return JCWOUT.list({ title:'In the board report, not in the strength sheet', sub:BZ.nf.length + ' students · ' + (BZ.file || ''), head:['Board S.No', 'Group', 'Student Name', 'Father Name', 'DOB', 'Mobile #', 'Pre: Rec', 'Subjects'],
-      rows:BZ.nf.map(x => [x.b.sno, x.b.group, x.b.name, x.b.father, bzD(x.b.dob), x.b.mobile, x.b.prerec, x.b.subjects]), file:'Board check - not in strength sheet' });
-    if(bzF === 'miss') return JCWOUT.list({ title:'Not in the board registration report (' + bzYear + ')', sub:BZ.miss.length + ' students · ' + (BZ.file || ''), head:['#', 'Enroll#', 'Student Name', 'Father Name', 'Section', 'DOB', 'Mobile #'],
-      rows:BZ.miss.map((s, i) => [i + 1, s.roll, s.name, s.father, s.pcs, bzD(s.dob), s.contact]), file:'Board check - not in board report' });
+    if(bzF === 'nf') return JCWOUT.list({ title:'In the board report, not in the strength sheet', sub:BZ.nf.length + ' students · ' + (BZ.file || ''), head:['Board S.No', 'Group', 'Student Name', 'Father Name', 'DOB', 'Mobile #', 'Pre: Rec', 'Subjects', 'Left Students sheet'],
+      rows:BZ.nf.map(x => [x.b.sno, x.b.group, x.b.name, x.b.father, bzD(x.b.dob), x.b.mobile, x.b.prerec, x.b.subjects, bzLeftTxt(bzLeft(x.b)).replace(/^Left Students: /, 'Left: ') || 'NOT FOUND in either sheet']), file:'Board check - not in strength sheet' });
+    if(bzF === 'miss') return JCWOUT.list({ title:'Not in the board registration report (' + bzYear + ')', sub:BZ.miss.length + ' students · ' + (BZ.file || ''), head:['#', 'Enroll#', 'Student Name', 'Father Name', 'Section', 'DOB', 'Mobile #', 'Left Students sheet'],
+      rows:BZ.miss.map((s, i) => [i + 1, s.roll, s.name, s.father, s.pcs, bzD(s.dob), s.contact, mlLeftOf(s) ? 'Left (still in strength sheet)' : '']), file:'Board check - not in board report' });
     const L = bzList();
     JCWOUT.list({ title:'Board registration check', sub:L.length + ' students · ' + (BZ.file || ''), head:['Board S.No', 'Enroll#', 'Student Name', 'Father Name', 'Section', 'DOB (sheet)', 'DOB (board)', 'Mobile # (sheet)', 'Mobile # (board)', 'Matric Roll/Year (sheet)', 'Matric Roll/Year (board)', 'Subjects: board has, sheet not', 'Subjects: sheet has, board not'],
       rows:L.map(x => [x.b.sno, x.s.roll, x.s.name, x.s.father, x.s.pcs, bzD(x.s.dob), x.dobDiff ? bzD(x.b.dob) : 'same', x.s.contact || '', x.mobDiff ? x.b.mobile : 'same',
@@ -1711,7 +1724,7 @@ async function loadLeft(){ if(LEFT || leftBusy) return; leftBusy = true;
     const h = r.head.map(x => String(x).toLowerCase().replace(/[^a-z0-9#]/g, '')), col = names => { for(const n of names){ const k = h.indexOf(n); if(k >= 0) return k; } return -1; };
     const C = { roll:col(['enroll#', 'enrollment#', 'enrollmentno', 'enrollno', 'rollno']), name:col(['studentname', 'name']), father:col(['fathername']), program:col(['program']), cls:col(['class']),
       pcs:col(['pcs', 'section']), quota:col(['quota']), hq:col(['hq', 'hafiz', 'hafizquran']), metric:col(['obtainedmarks', 'obtained', 'metric', 'marks']), total:col(['totalmarks', 'total']),
-      aggregate:col(['aggregate', 'agg']), dob:col(['dob', 'dateofbirth']), status:col(['portalstatus', 'status']), left:col(['leftinmonth', 'leftin', 'leftdate', 'date']), challan:col(['challandetails', 'challan']) };
+      aggregate:col(['aggregate', 'agg']), dob:col(['dob', 'dateofbirth']), status:col(['portalstatus', 'status']), left:col(['leftinmonth', 'leftin', 'leftdate', 'date']), challan:col(['challandetails', 'challan']), mroll:col(['matricrollno', 'metricrollno']) };
     const g = (row, i) => i >= 0 ? String(row[i] || '').trim() : '';
     LEFT = { rows:r.rows.map(row => { const o = {}; Object.keys(C).forEach(k => o[k] = g(row, C[k])); o._st = /migrat/i.test(o.status || row.join(' ')) ? 'MIGRATED' : 'CANCELLED'; return o; }), err:'' };
     LEFT.by = new Map(LEFT.rows.filter(o => o.roll).map(o => [nroll(o.roll), o]));
