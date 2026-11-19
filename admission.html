@@ -214,6 +214,7 @@ dialog{border:1.5px solid var(--line);box-shadow:var(--shadow2)}
     <button role="tab" data-tab="seats" aria-selected="false">Seats</button>
     <button role="tab" data-tab="merit" aria-selected="false">Merit lists</button>
     <button role="tab" data-tab="fix" aria-selected="false">Wrong on portal<span class="badge hidden" id="fb">0</span></button>
+    <button role="tab" data-tab="bise" aria-selected="false">Board check</button>
     <button role="tab" data-tab="sset" aria-selected="false">Seat settings</button>
     <button role="tab" data-tab="wait" aria-selected="false">Waiting<span class="badge hidden" id="qb">0</span></button>
     <button role="tab" data-tab="slips" aria-selected="false">Slips &amp; quick edit</button>
@@ -250,7 +251,7 @@ async function idbSet(k, v){ try{ const db = await idb(); await new Promise((res
 let init = ls.get('adm_init', null);          // programs, sections, seats, subjects, rooms (from the server)
 let idx = null;                               // { cols, rows, at }
 let queue = ls.get('adm_q', []);              // saves waiting for the server
-let tab = /^#(form|pnew|find|seats|merit|fix|sset|wait|slips)$/.test(location.hash) ? location.hash.slice(1) : 'form', form = null, lastDone = null, syncing = false, nextRoll = {}, searchQ = '', fatal = '';
+let tab = /^#(form|pnew|find|seats|merit|fix|bise|sset|wait|slips)$/.test(location.hash) ? location.hash.slice(1) : 'form', form = null, lastDone = null, syncing = false, nextRoll = {}, searchQ = '', fatal = '';
 let pnew = ls.get('adm_pnew', null);          // students Enrolled on the portal but not yet in Transform (adm_new)
 let pnSel = ls.get('adm_pn_sel', {});         // portal ID -> { on, program, year, section, rollNo, quota, rollManual, secManual }
 let pnHide = ls.get('adm_pn_hide', []);       // portal IDs you chose to hide
@@ -389,7 +390,7 @@ function paintBadge(){ const b = $('#qb'); b.textContent = queue.length; b.class
 /* v8.36 parts of the Admissions service given to this login (Logins & services); the admin / principal have every part */
 const subOk = k => { if(ls.get('admin', false) === true) return true; const t = ls.get('svc', []) || []; if(!t.includes('admission')) return true;
   const mine = t.filter(x => x.indexOf('admission.') === 0); return !mine.length || mine.includes('admission.' + k); };
-const TAB_SUB = { form:'new', find:'edit', pnew:'portal', seats:'seats', merit:'merit', fix:'fix', sset:'sset', wait:'wait', slips:'slips' };
+const TAB_SUB = { form:'new', find:'edit', pnew:'portal', seats:'seats', merit:'merit', fix:'fix', bise:'bise', sset:'sset', wait:'wait', slips:'slips' };
 const tabOk = t => subOk(TAB_SUB[t] || t);
 document.querySelectorAll('nav button[data-tab]').forEach(b => { if(!tabOk(b.dataset.tab)) b.style.display = 'none'; });
 function setTab(t){
@@ -419,6 +420,7 @@ function render(){
   else if(tab === 'seats') m.innerHTML = top + seatsHtml();
   else if(tab === 'merit') m.innerHTML = top + mlHtml();
   else if(tab === 'fix') m.innerHTML = top + fxHtml();
+  else if(tab === 'bise') m.innerHTML = top + bzHtml();
   else if(tab === 'sset') m.innerHTML = top + ssHtml();
   else m.innerHTML = top + waitHtml();
   if(tab === 'form') wireForm();
@@ -428,6 +430,7 @@ function render(){
   if(tab === 'seats') wireSeats();
   if(tab === 'merit') wireMl();
   if(tab === 'fix') wireFx();
+  if(tab === 'bise') wireBz();
   if(tab === 'sset') wireSs();
 }
 const opt = (v, cur, label) => `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(label == null ? v : label)}</option>`;
@@ -1305,6 +1308,327 @@ function wireFx(){
     const L = fxF ? FX.rows.filter(x => fxKind(x.why).includes(fxF)) : FX.rows;
     JCWOUT.list({ title:'Wrong on the UOP portal' + (fxF ? ' · ' + fxF : ''), sub:L.length + ' students', head:['#', 'Portal ID', 'Enroll#', 'Student Name', 'Father Name', 'Section', 'Wrong on the portal → correct'],
       rows:L.map((x, i) => [i + 1, x.id, x.enroll, x.name, x.father || '', x.section || '', x.why]), file:'Wrong on the UOP portal' }); };
+}
+/* ---------- v8.40 Board check: DOB and mobile # in the BISE "Registration Report for College Record" (draft PDF) vs the strength sheet.
+   Students are matched by name + father name (then by a close spelling, never ticked by itself). Nothing is written until you tick rows
+   and press "Replace in Transform"; the server re-checks that the sheet still has the value you saw. ---------- */
+let BZ_M = [], BZ_DOC = null, BZ = null, bzBusy = '', bzErr = '', bzMsg = '', bzSel = {}, bzF = 'diff', bzYear = '1st Year';
+const BZ_GROUP = { 'pre-medical':['Pre Medical Open', 'Self Morning Medical', 'Evening Pre Medical'], 'pre-engineering':['Pre Engg'], 'general / computer science':['FCS'], 'humanities':['FA'] };
+const BZ_MON = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
+const bzC = s => String(s || '').toUpperCase().replace(/\bM[OU]H[AU]MM[AE]D\b/g, 'MUHAMMAD').replace(/[^A-Z]/g, '');
+const bzKey = o => o.roll || ('#' + o.sno);
+function bzDice(a, b){
+  if(a === b) return 1; if(a.length < 2 || b.length < 2) return 0;
+  const m = new Map(); for(let i = 0; i < a.length - 1; i++){ const g = a.substr(i, 2); m.set(g, (m.get(g) || 0) + 1); }
+  let n = 0; for(let i = 0; i < b.length - 1; i++){ const g = b.substr(i, 2), c = m.get(g); if(c){ n++; m.set(g, c - 1); } }
+  return 2 * n / (a.length + b.length - 2);
+}
+function bzYmd(v){
+  const s = String(v || '').trim(), p = x => String(x).padStart(2, '0'); let m;
+  if((m = s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/))) return m[1] + '-' + p(m[2]) + '-' + p(m[3]);
+  if((m = s.match(/^(\d{1,2})[\/\-. ](\d{1,2})[\/\-. ](\d{4})/))) return m[3] + '-' + p(m[2]) + '-' + p(m[1]);
+  if((m = s.match(/^(\d{1,2})[\/\-. ]([A-Za-z]{3})[A-Za-z]*[\/\-., ]+(\d{4})/)) && BZ_MON[m[2].toLowerCase()]) return m[3] + '-' + p(BZ_MON[m[2].toLowerCase()]) + '-' + p(m[1]);
+  return s;
+}
+const bzD = v => { const m = bzYmd(v).match(/^(\d{4})-(\d\d)-(\d\d)$/); return m ? m[3] + '/' + m[2] + '/' + m[1] : String(v || ''); };
+/** board mobile: '0333-6833827' is complete; '9233-3333003' is a +92 number that the board's print cut to 11 digits (one digit lost) */
+function bzMob(s){ const d = String(s || '').replace(/\D/g, '');
+  if(/^03\d{9}$/.test(d)) return { full:d, part:d.slice(1) };
+  if(/^923\d{8}$/.test(d)) return { full:'', part:d.slice(2) };
+  return { full:'', part:d }; }
+const bzT = s => { let d = String(s || '').replace(/\D/g, ''); if(/^92\d{10}$/.test(d)) d = '0' + d.slice(2); if(/^3\d{9}$/.test(d)) d = '0' + d; return d; };
+const bzFmtMob = d => /^03\d{9}$/.test(d) ? d.slice(0, 4) + '-' + d.slice(4) : d;
+/* board subject codes -> strength-sheet names (first = the name used in the sheet; the rest are also accepted). (E/M) English medium, (U/M) Urdu medium */
+const BZ_SUBJ = { E:['ENGLISH'], U:['URDU'], IE:['ISLAMIYAT', 'ISLAMIAT'], MQH:['MUTALIA QURAN', 'MUTALA QURAN', 'MUTALIA E QURAN'], PH:['PHYSICS'], CH:['CHEMISTRY'],
+  BIO:['BOTANY', 'ZOOLOGY', 'BIOLOGY'], M:['MATHEMATICS', 'MATHS', 'MATH'], CS:['COMPUTER SCIENCE', 'COMPUTER'], ETHN:['ETHICS'], PC:['PAKISTANI CULTURE', 'PAKISTAN CULTURE'],
+  ECO:['ECONOMICS'], EA:['ENGLISH ADVANCE', 'ENGLISH ADVANCED', 'ENGLISH ELECTIVE'], SG:['SOCIOLOGY'], GEO:['GEOGRAPHY'], PSY:['PSYCHOLOGY'], PHIL:['LOGIC', 'PHILOSOPHY'],
+  IH:['HISTORY', 'ISLAMIC HISTORY'], IS:['ISLAMIYAT ELECTIVE', 'ISLAMIAT ELECTIVE', 'ISLAMIC STUDIES'], UA:['URDU ADVANCE', 'URDU ADVANCED', 'URDU ELECTIVE'], STAT:['STATISTICS'],
+  GM:['GENERAL MATHEMATICS', 'GENERAL MATH'], CIV:['CIVICS'], AR:['ARABIC'], PA:['PASHTO'], PS:['PAK-STUDIES', 'PAKISTAN STUDIES', 'PAK STUDIES'], ZOO:['ZOOLOGY'] };
+const bzH = s => String(s || '').toUpperCase().replace(/[^A-Z]/g, '');
+/** 'E-I,U-I,IE (U/M),…' -> [{ code, name, alias }] ; BIO is BOTANY in the 1st year, ZOOLOGY in the 2nd */
+function bzSubs(str){
+  return String(str || '').split(',').map(x => x.trim()).filter(Boolean).map(code => {
+    const k = code.replace(/\(.*?\)/g, '').trim().split('-')[0].toUpperCase(), al = BZ_SUBJ[k];
+    let name = al ? al[0] : code; if(k === 'BIO' && bzYear === '2nd Year') name = 'ZOOLOGY';
+    return { code, name, alias:al ? al.map(bzH) : [bzH(code)] };
+  });
+}
+/** board subjects vs the sheet's SUB1..SUB7: { miss: board subjects not in the sheet, extra: sheet subjects the board does not have } */
+function bzSubDiff(o, str){
+  const left = [1, 2, 3, 4, 5, 6, 7].map(i => String(o['s' + i] || '').trim()).filter(Boolean), miss = [];
+  bzSubs(str).forEach(b => { const i = left.findIndex(t => b.alias.includes(bzH(t))); if(i >= 0) left.splice(i, 1); else miss.push(b.name + ' (' + b.code + ')'); });
+  return { miss, extra:left };
+}
+/** same number? a cut board number counts as the same when it is her number with one digit missing */
+function bzSameMob(t, m){
+  if(m.full) return t === m.full;
+  const t10 = t.replace(/^0/, ''); if(!m.part || t10.length !== m.part.length + 1) return false;
+  for(let k = 0; k < t10.length; k++) if(t10.slice(0, k) + t10.slice(k + 1) === m.part) return true;
+  return false;
+}
+/* the board report's table -> students. items per page: { s, x, y, w }; columns from the header row (S.NO … MOBILE # … PRE: REC) */
+function bzParse(pages){
+  const out = [];
+  pages.forEach((it, pi) => {
+    const H = {}; it.forEach(i => { const u = i.s.trim().toUpperCase(); if(['S.NO', 'GROUP', 'GENDER', 'NAME', 'FATHER NAME', 'BIRTH', 'MOBILE #', 'PRE: REC', 'SUBJECTS', 'PHOTO'].includes(u)) H[u] = i.x + i.w / 2; });
+    if(['S.NO', 'GROUP', 'GENDER', 'NAME', 'FATHER NAME', 'BIRTH', 'MOBILE #', 'PRE: REC', 'SUBJECTS'].some(k => H[k] == null)) return;
+    const hy = Math.min(...it.filter(i => /^(S\.NO|NAME|BIRTH)$/i.test(i.s.trim())).map(i => i.y));
+    const body = it.filter(i => i.y < hy - 2 && !/^Page \d+ of \d+$/i.test(i.s.trim()));
+    const mid = (a, b) => (H[a] + H[b]) / 2;
+    const anchors = body.filter(i => /^\d{1,5}$/.test(i.s.trim()) && i.x + i.w / 2 < mid('S.NO', 'GROUP'));
+    const cut = [['grp', mid('GROUP', 'GENDER')], ['', mid('GENDER', 'NAME')], ['name', mid('NAME', 'FATHER NAME')], ['father', mid('FATHER NAME', 'BIRTH')],
+      ['dob', mid('BIRTH', 'MOBILE #')], ['mob', mid('MOBILE #', 'PRE: REC')], ['pre', mid('PRE: REC', 'SUBJECTS')], ['subj', H['PHOTO'] != null ? mid('SUBJECTS', 'PHOTO') : 1e9]];
+    const rows = anchors.map(a => ({ sno:a.s.trim(), y:a.y, c:{ grp:[], name:[], father:[], dob:[], mob:[], pre:[], subj:[] } }));
+    body.forEach(i => {
+      if(anchors.includes(i)) return;
+      const cx = i.x + i.w / 2, col = cut.find(c => cx < c[1]); if(!col || !col[0]) return;
+      let best = null, bd = 1e9; rows.forEach(r => { const d = Math.abs(r.y - i.y); if(d < bd){ bd = d; best = r; } });
+      if(best && bd < 30) best.c[col[0]].push(i);
+    });
+    rows.forEach(r => {
+      const j = (k, sep = ' ') => r.c[k].sort((a, b) => b.y - a.y || a.x - b.x).map(i => i.s.trim()).join(sep).replace(/\s+/g, ' ').trim();
+      const pre = j('pre'), pm = pre.match(/^(\d+)\s*\/\s*([A-Z])\s*\/\s*(\d{4})\s*(.*)$/i) || [];
+      out.push({ sno:r.sno, group:j('grp'), name:j('name'), father:j('father'), dob:(j('dob').match(/\d{4}-\d{2}-\d{2}/) || [''])[0], mobile:j('mob').replace(/[^\d-]/g, ''), prerec:pre,
+        mroll:pm[1] || '', exam:pm[2] ? (pm[2].toUpperCase() === 'S' ? 'Supplementary' : 'Annual') : '', myear:pm[3] || '', mboard:pm[1] ? (pm[4] || 'BISE Peshawar').trim() : '',
+        subjects:j('subj', '').replace(/\s*,\s*/g, ',').replace(/\s*\(/g, ' ('), page:pi + 1, ay:r.y, px:H['PHOTO'] != null ? mid('SUBJECTS', 'PHOTO') : 600 });
+    });
+  });
+  return out;
+}
+async function bzRead(file){
+  if(!window.pdfjsLib){ await new Promise((ok, no) => { const x = document.createElement('script'); x.src = PDFJS + 'pdf.min.js'; x.onload = ok; x.onerror = () => no(new Error('Could not load the PDF reader (internet?)')); document.head.appendChild(x); });
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js'; }
+  const doc = await window.pdfjsLib.getDocument({ data:new Uint8Array(await file.arrayBuffer()) }).promise, pages = [];
+  BZ_DOC = doc;
+  for(let p = 1; p <= doc.numPages; p++){
+    const tc = await (await doc.getPage(p)).getTextContent();
+    pages.push(tc.items.filter(i => i.str && i.str.trim()).map(i => ({ s:i.str, x:i.transform[4], y:i.transform[5], w:i.width })));
+    bzBusy = 'Reading ' + file.name + ': page ' + p + ' of ' + doc.numPages; const b = $('#bzBusy'); if(b) b.textContent = bzBusy;
+  }
+  return bzParse(pages);
+}
+/** board rows -> strength-sheet students of the chosen class */
+function bzCheck(rows){
+  const st = idx.rows.map(recOf).filter(o => o.name && (bzYear === '2nd Year' ? isMig(o.year) : !isMig(o.year)));
+  const grpOk = (b, o) => { const g = BZ_GROUP[String(b.group).toLowerCase()]; return !g || g.includes(o.key); };
+  const by = new Map(); st.forEach(o => { const k = bzC(o.name) + '|' + bzC(o.father); (by.get(k) || by.set(k, []).get(k)).push(o); });
+  const used = new Set(), M = rows.map(b => {
+    let c = (by.get(bzC(b.name) + '|' + bzC(b.father)) || []).filter(o => !used.has(bzKey(o)));
+    if(c.length > 1){ const g = c.filter(o => grpOk(b, o)); if(g.length) c = g; }
+    if(c.length === 1){ used.add(bzKey(c[0])); return { b, s:c[0], how:'exact' }; }
+    return { b, s:null, many:c.length };
+  });
+  const bm = new Map(); st.forEach(o => { const r = String(o.matricRoll || '').replace(/\D/g, ''); if(r) (bm.get(r + '|' + o.passYear) || bm.set(r + '|' + o.passYear, []).get(r + '|' + o.passYear)).push(o); });
+  M.filter(x => !x.s && x.b.mroll).forEach(x => {                    // same Matric Roll No + passing year = the same girl, even if the name is spelled differently
+    const c = (bm.get(x.b.mroll + '|' + x.b.myear) || []).filter(o => !used.has(bzKey(o)));
+    if(c.length === 1){ used.add(bzKey(c[0])); x.s = c[0]; x.how = 'roll'; }
+  });
+  M.filter(x => !x.s && !x.many).forEach(x => {                      // close spelling: name and father both close, clearly the best one
+    const bn = bzC(x.b.name), bf = bzC(x.b.father); let best = null, bs = 0, second = 0;
+    st.forEach(o => { if(used.has(bzKey(o))) return; const n = bzDice(bn, bzC(o.name)), f = bzDice(bf, bzC(o.father)); if(n < .7 || f < .6) return;
+      const sc = (n + f) / 2 + (grpOk(x.b, o) ? .03 : -.1); if(sc > bs){ second = bs; bs = sc; best = o; } else if(sc > second) second = sc; });
+    if(best && bs >= .8 && bs - second > .05){ used.add(bzKey(best)); x.s = best; x.how = 'near'; x.sc = Math.min(.99, bs); }
+  });
+  const list = [];
+  M.forEach(x => { if(!x.s) return;
+    const t = bzT(x.s.contact), m = bzMob(x.b.mobile);
+    x.dobDiff = !!x.b.dob && bzYmd(x.s.dob) !== x.b.dob;
+    x.mobDiff = !!(m.full || m.part) && !bzSameMob(t, m);
+    x.mobFix = x.mobDiff && !!m.full; x.mobNew = m.full;
+    x.rollDiff = !!x.b.mroll && String(x.s.matricRoll || '').replace(/\D/g, '').replace(/^0+/, '') !== x.b.mroll.replace(/^0+/, '');
+    x.yearDiff = !!x.b.myear && String(x.s.passYear || '').trim() !== x.b.myear;
+    x.sub = bzSubDiff(x.s, x.b.subjects); x.subDiff = !!(x.b.subjects && (x.sub.miss.length || x.sub.extra.length));
+    if(x.dobDiff || x.mobDiff || x.rollDiff || x.yearDiff || x.subDiff || x.how !== 'exact') list.push(x);
+  });
+  bzSel = {}; list.forEach(x => { if(x.how === 'near' || !x.s.roll) return; const r = x.s.roll;
+    if(x.dobDiff) bzSel[r + '|dob'] = true; if(x.mobFix) bzSel[r + '|contact'] = true; if(x.rollDiff) bzSel[r + '|matricRoll'] = true; if(x.yearDiff) bzSel[r + '|passYear'] = true; });
+  BZ_M = M;
+  const noPic = s => !String(s.pic || '').trim() || /^(null|n\/?a|-|0)$/i.test(String(s.pic).trim());
+  const oldPh = BZ && BZ.pics || {};
+  const pics = {}; M.forEach(x => { if(x.s && x.s.roll && x.how !== 'near' && noPic(x.s) && oldPh[x.s.roll]) pics[x.s.roll] = oldPh[x.s.roll]; });
+  const subN = M.filter(x => x.s && x.s.roll && x.b.subjects && x.how !== 'near').length;
+  BZ = Object.assign(BZ || {}, { pics, nopic:M.filter(x => x.s && x.s.roll && x.how !== 'near' && noPic(x.s)), rows, list, subN, matched:M.filter(x => x.s).length, nf:M.filter(x => !x.s), miss:st.filter(o => !used.has(bzKey(o))) });
+}
+const bzCount = () => Object.keys(bzSel).filter(k => bzSel[k]).length;
+function bzList(){
+  if(!BZ) return [];
+  if(bzF === 'dob') return BZ.list.filter(x => x.dobDiff);
+  if(bzF === 'mob') return BZ.list.filter(x => x.mobDiff);
+  if(bzF === 'near') return BZ.list.filter(x => x.how !== 'exact');
+  if(bzF === 'roll') return BZ.list.filter(x => x.rollDiff || x.yearDiff);
+  if(bzF === 'sub') return BZ.list.filter(x => x.subDiff);
+  return BZ.list;
+}
+function bzHtml(){
+  const head = `<section class="card"><h3>Board registration check (DOB, mobile #, Matric Roll No, subjects)</h3>
+    <div class="sub">Upload the BISE Peshawar <b>Registration Report for College Record</b> (the draft PDF). Every student in it is matched with the strength sheet by name + father name, and her <b>date of birth</b>, <b>mobile #</b>, <b>Matric Roll No + passing year</b> (Pre: Rec, e.g. 103901/A/2026) and <b>subjects</b> are compared. Students without a picture can get theirs from the board PDF. <b>Nothing is changed</b> until you tick rows and press <b>Replace in Transform</b>; every change is written in the Admission Log (old → new).</div>
+    <div class="g2" style="margin-top:10px;align-items:end">
+      <div><label for="bzYear">Class in the report</label><select id="bzYear">${['1st Year', '2nd Year'].map(y => `<option${y === bzYear ? ' selected' : ''}>${y}</option>`).join('')}</select></div>
+      <div><label class="btn primary" style="display:flex;align-items:center;justify-content:center;cursor:pointer">${BZ ? 'Choose another PDF' : 'Choose the board PDF'}<input type="file" id="bzFile" accept="application/pdf,.pdf" hidden></label></div>
+    </div>
+    ${bzBusy ? `<div class="sub" id="bzBusy" style="margin-top:8px">${esc(bzBusy)}</div>` : ''}${bzErr ? `<div class="err" style="margin-top:8px">${esc(bzErr)}</div>` : ''}${bzMsg ? `<div class="sub" style="margin-top:8px;color:var(--good);font-weight:700">${esc(bzMsg)}</div>` : ''}
+    ${BZ ? `<div class="sub" style="margin-top:8px"><b>${esc(BZ.file || '')}</b>: ${BZ.rows.length} students in the report · ${BZ.matched} found in the strength sheet (${esc(bzYear)}).</div>` : ''}</section>`;
+  if(!BZ) return head;
+  const L = bzList(), nDob = BZ.list.filter(x => x.dobDiff).length, nMob = BZ.list.filter(x => x.mobDiff).length, nNear = BZ.list.filter(x => x.how !== 'exact').length, nRoll = BZ.list.filter(x => x.rollDiff || x.yearDiff).length, nSub = BZ.list.filter(x => x.subDiff).length, n = bzCount();
+  const fb = (k, t, c) => `<button class="btn small${bzF === k ? ' primary' : ''}" data-bzf="${k}">${t} ${c}</button>`;
+  const ck = (x, f) => x.s.roll ? `<input type="checkbox" data-bz="${esc(x.s.roll + '|' + f)}"${bzSel[x.s.roll + '|' + f] ? ' checked' : ''} style="width:20px;min-height:20px;vertical-align:middle">` : '';
+  const dobCell = x => x.dobDiff ? `<label class="nw">${ck(x, 'dob')} ${esc(bzD(x.s.dob) || '(empty)')} → <b>${esc(bzD(x.b.dob))}</b></label>` : '<span class="sub">same</span>';
+  const rollCell = x => [x.rollDiff ? `<label class="nw">${ck(x, 'matricRoll')} ${esc(x.s.matricRoll || '(empty)')} → <b>${esc(x.b.mroll)}</b></label>` : '',
+      x.yearDiff ? `<label class="nw">${ck(x, 'passYear')} year ${esc(x.s.passYear || '(empty)')} → <b>${esc(x.b.myear)}</b></label>` : ''].filter(Boolean).join('<br>') || '<span class="sub">same</span>';
+  const subCell = x => !x.subDiff ? '<span class="sub">same</span>' : (x.sub.miss.length ? `<div>Board has, sheet not: <b>${esc(x.sub.miss.join(', '))}</b></div>` : '') +
+      (x.sub.extra.length ? `<div>Sheet has, board not: <b>${esc(x.sub.extra.join(', '))}</b></div>` : '') + `<div class="sub">${esc(x.b.subjects)}</div>`;
+  const mobCell = x => !x.mobDiff ? '<span class="sub">same</span>' : x.mobFix
+    ? `<label class="nw">${ck(x, 'contact')} ${esc(x.s.contact || '(empty)')} → <b>${esc(bzFmtMob(x.mobNew))}</b></label>`
+    : `<span class="nw">${esc(x.s.contact || '(empty)')} ≠ <b>${esc(x.b.mobile)}</b></span><div class="sub">Board printed it as +92 with a digit cut off: check by hand</div>`;
+  const body = bzF === 'pic'
+    ? `<div class="sub">Students with no picture in the strength sheet (Pic URL empty). Press <b>Get pictures from the board PDF</b>: her photo is cut from the board report and shown here. Nothing is saved until you press <b>Save pictures</b>.</div>
+      <div class="acts" style="margin-top:8px;flex-wrap:wrap"><button class="btn" id="bzPicGet" ${bzBusy || !BZ.nopic.length ? 'disabled' : ''}>Get pictures from the board PDF</button>
+        <button class="btn primary" id="bzPicSave" ${bzBusy || !bzPicN() ? 'disabled' : ''}>Save ${bzPicN()} pictures</button></div>
+      <table style="margin-top:8px"><thead><tr><th></th><th>Picture (board)</th><th>Enroll#</th><th>Student</th><th>Board S.No</th></tr></thead><tbody>
+      ${BZ.nopic.map(x => { const ph = BZ.pics[x.s.roll]; return `<tr><td>${ph ? `<input type="checkbox" data-bzpic="${esc(x.s.roll)}"${ph.on ? ' checked' : ''} style="width:20px;min-height:20px">` : ''}</td>
+        <td>${ph ? `<img src="${ph.data}" alt="" style="width:66px;height:88px;object-fit:cover;border-radius:6px;border:1px solid var(--line)">` : '<span class="sub">—</span>'}${ph && ph.saved ? '<div class="sub" style="color:var(--good);font-weight:700">saved</div>' : ''}</td>
+        <td class="nw">${esc(x.s.roll)}<div class="sub">${esc(x.s.pcs)}</div></td><td>${esc(x.s.name)}<div class="sub">d/o ${esc(x.s.father)}</div></td><td>${esc(x.b.sno)}<div class="sub">page ${x.b.page}</div></td></tr>`; }).join('') || '<tr><td colspan="5" class="sub">✓ Every matched student has a picture.</td></tr>'}</tbody></table>`
+    : bzF === 'nf'
+    ? `<table><thead><tr><th>Board S.No</th><th>Group</th><th>Student (as in the board report)</th><th>DOB</th><th>Mobile #</th><th>Pre: Rec</th></tr></thead><tbody>
+      ${BZ.nf.map(x => `<tr><td>${esc(x.b.sno)}<div class="sub">page ${x.b.page}</div></td><td>${esc(x.b.group)}</td><td>${esc(x.b.name)}<div class="sub">d/o ${esc(x.b.father)}${x.b.mroll ? ' · Matric ' + esc(x.b.mroll + '/' + x.b.myear) : ''}${x.many ? ' · ' + x.many + ' students with this name + father: open her in Find &amp; edit' : ''}</div></td><td class="nw">${esc(bzD(x.b.dob))}</td><td class="nw">${esc(x.b.mobile)}</td><td class="nw">${esc(x.b.prerec)}</td></tr>`).join('')}</tbody></table>`
+    : bzF === 'miss'
+    ? `<table><thead><tr><th>Enroll#</th><th>Student (strength sheet)</th><th>Section</th><th>DOB</th><th>Mobile #</th></tr></thead><tbody>
+      ${BZ.miss.map(o => `<tr><td class="nw">${esc(o.roll)}</td><td>${esc(o.name)}<div class="sub">d/o ${esc(o.father)}</div></td><td class="nw">${esc(o.pcs)}</td><td class="nw">${esc(bzD(o.dob))}</td><td class="nw">${esc(o.contact)}</td></tr>`).join('')}</tbody></table>`
+    : `<table><thead><tr><th>Board S.No</th><th>Enroll#</th><th>Student</th><th>DOB: sheet → board</th><th>Mobile #: sheet → board</th><th>Matric Roll No / year: sheet → board</th><th>Subjects</th></tr></thead><tbody>
+      ${L.map(x => `<tr${x.how === 'near' ? ' style="background:var(--mid-bg)"' : ''}><td>${esc(x.b.sno)}<div class="sub">page ${x.b.page}</div></td><td class="nw">${esc(x.s.roll)}<div class="sub">${esc(x.s.pcs)}</div></td>
+        <td>${esc(x.s.name)}<div class="sub">d/o ${esc(x.s.father)}</div>${x.how === 'near' ? `<div class="sub" style="color:var(--mid);font-weight:700">Board: ${esc(x.b.name)} d/o ${esc(x.b.father)} (${Math.round(x.sc * 100)}% alike: is it her? then tick)</div>` : x.how === 'roll' ? `<div class="sub" style="color:var(--mid);font-weight:700">Board: ${esc(x.b.name)} d/o ${esc(x.b.father)} (same Matric Roll No + year, name spelled differently)</div>` : ''}</td>
+        <td>${dobCell(x)}</td><td>${mobCell(x)}</td><td>${rollCell(x)}</td><td>${subCell(x)}</td></tr>`).join('') || '<tr><td colspan="7" class="sub">✓ Nothing different here.</td></tr>'}</tbody></table>`;
+  return head + `<section class="card">
+    <div class="acts" style="flex-wrap:wrap">${fb('diff', 'All differences', BZ.list.length)}${fb('dob', 'DOB', nDob)}${fb('mob', 'Mobile #', nMob)}${fb('roll', 'Matric Roll No / year', nRoll)}${fb('sub', 'Subjects', nSub)}${fb('pic', 'Picture missing', BZ.nopic.length)}${fb('near', 'Name spelled differently', nNear)}${fb('nf', 'Not in strength sheet', BZ.nf.length)}${fb('miss', 'Not in board report', BZ.miss.length)}</div>
+    ${bzF === 'nf' ? '<div class="sub" style="margin-top:6px">In the board report but no student with this name + father name in the strength sheet (left the college, or the name is spelled very differently).</div>' : bzF === 'miss' ? `<div class="sub" style="margin-top:6px">${esc(bzYear)} students of the strength sheet who are <b>not</b> in this board report: check that they are registered with the board.</div>` : ''}
+    <div style="max-height:62vh;overflow:auto;margin-top:8px">${body}</div>
+    ${bzF === 'nf' || bzF === 'miss' || bzF === 'pic' ? '' : `<div class="acts" style="margin-top:10px;flex-wrap:wrap"><button class="btn small" id="bzAllD">Tick all DOB</button><button class="btn small" id="bzAllM">Tick all mobile #</button><button class="btn small" id="bzAllR">Tick all Matric Roll No / year</button><button class="btn small" id="bzNone">Untick all</button></div>`}
+    <div class="acts" style="margin-top:10px"><button class="btn" id="bzSubSave" ${bzBusy ? 'disabled' : ''}>Save board subjects in column "BISE Subjects" (${BZ.rows.filter(b => b.subjects).length ? (BZ.subN || 0) : 0})</button></div>
+    <div class="acts" style="margin-top:10px"><button class="btn" id="bzOut">PDF / Excel</button><button class="btn primary" id="bzGo" ${n && !bzBusy ? '' : 'disabled'}>${bzBusy ? 'Working…' : 'Replace ' + n + ' in Transform'}</button></div>
+    <div class="sub" style="margin-top:6px">Ticked = the board's value goes into Transform-ALL-COLLEGE-STRENGTH. Rows spelled differently are never ticked by themselves. If the board is wrong (not the sheet), leave the row unticked and get it corrected at the board.</div></section>`;
+}
+const bzPicN = () => BZ ? Object.keys(BZ.pics).filter(r => BZ.pics[r].on && !BZ.pics[r].saved).length : 0;
+/** photos of the students without a picture: the PHOTO cell of her row, cut from the page drawn at 4x */
+async function bzPicGet(){
+  if(!BZ_DOC) return toast('Choose the board PDF again (the file is not in memory any more).');
+  const want = BZ.nopic.filter(x => !BZ.pics[x.s.roll]), pages = [...new Set(want.map(x => x.b.page))];
+  const O = window.pdfjsLib.OPS, mul = (m, n) => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]];
+  let got = 0;
+  for(let k = 0; k < pages.length; k++){
+    bzBusy = 'Cutting pictures: page ' + (k + 1) + ' of ' + pages.length; const b = $('#bzBusy'); if(b) b.textContent = bzBusy; else render();
+    const pg = await BZ_DOC.getPage(pages[k]), ol = await pg.getOperatorList(), boxes = []; let ctm = [1, 0, 0, 1, 0, 0]; const st = [];
+    ol.fnArray.forEach((f, i) => { const a = ol.argsArray[i];
+      if(f === O.save) st.push(ctm.slice()); else if(f === O.restore) ctm = st.pop() || ctm; else if(f === O.transform) ctm = mul(ctm, a);
+      else if(f === O.paintFormXObjectBegin){ st.push(ctm.slice()); if(a && a[0]) ctm = mul(ctm, a[0]); } else if(f === O.paintFormXObjectEnd) ctm = st.pop() || ctm;
+      else if(f === O.paintImageXObject || f === O.paintJpegXObject || f === O.paintInlineImageXObject) boxes.push({ x:ctm[4], y:ctm[5], w:ctm[0], h:ctm[3] }); });
+    const vp = pg.getViewport({ scale:4 }), cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height;
+    await pg.render({ canvasContext:cv.getContext('2d'), viewport:vp }).promise;
+    want.filter(x => x.b.page === pages[k]).forEach(x => {
+      const bx = boxes.filter(q => q.w > 20 && q.h > 20 && q.x + q.w / 2 > x.b.px).sort((p, q) => Math.abs(p.y + p.h / 2 - x.b.ay) - Math.abs(q.y + q.h / 2 - x.b.ay))[0];
+      if(!bx || Math.abs(bx.y + bx.h / 2 - x.b.ay) > 30) return;
+      const r = vp.convertToViewportRectangle([bx.x, bx.y, bx.x + bx.w, bx.y + bx.h]), X = Math.min(r[0], r[2]), Y = Math.min(r[1], r[3]), W = Math.abs(r[2] - r[0]), Hh = Math.abs(r[3] - r[1]);
+      const c2 = document.createElement('canvas'); c2.width = Math.round(W); c2.height = Math.round(Hh);
+      c2.getContext('2d').drawImage(cv, X, Y, W, Hh, 0, 0, c2.width, c2.height);
+      BZ.pics[x.s.roll] = { data:c2.toDataURL('image/jpeg', 0.88), on:true }; got++;
+    });
+  }
+  bzBusy = ''; bzMsg = got + ' pictures found in the board PDF' + (want.length - got ? ' (' + (want.length - got) + ' students have no picture there)' : '') + '. Check them, untick a wrong one, then press Save pictures.'; render();
+}
+function bzPicSave(){
+  const L = BZ.nopic.filter(x => BZ.pics[x.s.roll] && BZ.pics[x.s.roll].on && !BZ.pics[x.s.roll].saved);
+  if(!L.length) return;
+  dlgOpen(`<h2>Save ${L.length} pictures?</h2><div class="sub">Each picture is saved in Drive (JCW ID Cards › Student photos, like a photo changed on the ID cards page) and its link goes into <b>Pic URL</b> of Transform-ALL-COLLEGE-STRENGTH, only where Pic URL is still empty. Written in the Admission Log.</div>
+    <div class="acts"><button class="btn" id="dBack">Back</button><button class="btn primary" id="dGo">Save ${L.length}</button></div>`);
+  $('#dBack').onclick = dlgClose;
+  $('#dGo').onclick = async () => { dlgClose(); bzErr = ''; bzMsg = ''; let ok = 0; const skip = [];
+    const pi = idx.cols.indexOf('pic'), ri = idx.cols.indexOf('roll');
+    try{
+      for(let i = 0; i < L.length; i += 5){
+        bzBusy = 'Saving pictures ' + (i + 1) + '-' + Math.min(i + 5, L.length) + ' of ' + L.length; render();
+        const r = await api({ action:'adm_bise_photos', items:L.slice(i, i + 5).map(x => ({ roll:x.s.roll, data:BZ.pics[x.s.roll].data })) }, 300000);
+        if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'The server is not updated yet (Admissions.gs).' : r.error);
+        (r.done || []).forEach(d => { ok++; BZ.pics[d.roll].saved = true; const row = idx.rows.find(z => nroll(z[ri]) === nroll(d.roll)); if(row && pi >= 0) row[pi] = d.url; });
+        (r.skipped || []).forEach(d => skip.push(d.roll + ': ' + d.msg));
+      }
+    }catch(e){ bzErr = e.message; }
+    idbSet('index', idx);
+    bzBusy = ''; bzMsg = ok + ' pictures saved (Drive + Pic URL)' + (skip.length ? '; ' + skip.length + ' skipped (' + skip.slice(0, 3).join('; ') + ')' : '') + '.'; render(); };
+}
+/** the board's subject codes, as printed, into the column "BISE Subjects" of Transform (made at the end when missing) for every matched student */
+function bzSaveSubjects(){
+  const items = [];
+  BZ_M.filter(x => x.s).forEach(x => { if(x.s.roll && x.b.subjects && x.how !== 'near') items.push({ roll:x.s.roll, v:x.b.subjects }); });
+  if(!items.length) return toast('No matched student with subjects.');
+  dlgOpen(`<h2>Save board subjects?</h2><div class="sub">The subject codes of <b>${items.length}</b> students (e.g. <b>${esc(items[0].v)}</b>) are written in the column <b>BISE Subjects</b> of Transform-ALL-COLLEGE-STRENGTH (a new column at the end if it is not there). Students matched only by a close spelling are left out. Nothing else is changed.</div>
+    <div class="acts"><button class="btn" id="dBack">Back</button><button class="btn primary" id="dGo">Save ${items.length}</button></div>`);
+  $('#dBack').onclick = dlgClose;
+  $('#dGo').onclick = async () => { dlgClose(); bzBusy = 'Saving board subjects…'; bzErr = ''; bzMsg = ''; render();
+    try{ const r = await api({ action:'adm_bise_subjects', items }, 300000);
+      if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'The server is not updated yet (Admissions.gs).' : r.error);
+      bzMsg = r.written + ' students: board subjects saved in "BISE Subjects"' + (r.changed ? ' (' + r.changed + ' different from what was there before)' : '') + (r.newCol ? '; the column was added at the end of the sheet' : '') + ((r.skipped || []).length ? '; ' + r.skipped.length + ' Enroll# not found' : '') + '.';
+    }catch(e){ bzErr = e.message; }
+    bzBusy = ''; render(); };
+}
+function wireBz(){
+  const y = $('#bzYear'); if(y) y.onchange = () => { bzYear = y.value; if(BZ) bzCheck(BZ.rows); render(); };
+  const f = $('#bzFile'); if(f) f.onchange = async () => {
+    const file = f.files[0]; if(!file) return;
+    if(!idx || !idx.rows || !idx.rows.length){ bzErr = 'The student list is not downloaded yet: connect to the internet and open this page again.'; render(); return; }
+    if(/part[\s\-_]*(ii|2)\b/i.test(file.name)) bzYear = '2nd Year'; else if(/part[\s\-_]*(i|1)\b/i.test(file.name)) bzYear = '1st Year';
+    bzErr = ''; bzMsg = ''; bzBusy = 'Reading ' + file.name + '…'; render();
+    try{
+      const rows = await bzRead(file);
+      if(!rows.length) throw new Error('No students found. Is this the board\'s "Registration Report for College Record" (columns S.NO, NAME, FATHER NAME, DATE OF BIRTH, MOBILE #)?');
+      BZ = { file:file.name }; bzF = 'diff'; bzCheck(rows);
+    }catch(e){ bzErr = e.message; }
+    bzBusy = ''; render();
+  };
+  document.querySelectorAll('[data-bzf]').forEach(b => b.onclick = () => { bzF = b.dataset.bzf; render(); });
+  document.querySelectorAll('[data-bz]').forEach(c => c.onchange = () => { bzSel[c.dataset.bz] = c.checked; const g = $('#bzGo'); if(g){ const n = bzCount(); g.textContent = 'Replace ' + n + ' in Transform'; g.disabled = !n; } });
+  const tick = (f, on) => { bzList().forEach(x => { if(!x.s.roll) return;
+    if(f === 'dob' || !on) bzSel[x.s.roll + '|dob'] = on && x.dobDiff;
+    if(f === 'contact' || !on) bzSel[x.s.roll + '|contact'] = on && x.mobFix;
+    if(f === 'roll' || !on){ bzSel[x.s.roll + '|matricRoll'] = on && x.rollDiff; bzSel[x.s.roll + '|passYear'] = on && x.yearDiff; } }); render(); };
+  const a = $('#bzAllD'); if(a) a.onclick = () => tick('dob', true);
+  const b = $('#bzAllM'); if(b) b.onclick = () => tick('contact', true);
+  const c = $('#bzNone'); if(c) c.onclick = () => tick('', false);
+  const rr = $('#bzAllR'); if(rr) rr.onclick = () => tick('roll', true);
+  const sv = $('#bzSubSave'); if(sv) sv.onclick = bzSaveSubjects;
+  const pg = $('#bzPicGet'); if(pg) pg.onclick = bzPicGet;
+  const ps = $('#bzPicSave'); if(ps) ps.onclick = bzPicSave;
+  document.querySelectorAll('[data-bzpic]').forEach(c => c.onchange = () => { BZ.pics[c.dataset.bzpic].on = c.checked; const b = $('#bzPicSave'); if(b){ b.textContent = 'Save ' + bzPicN() + ' pictures'; b.disabled = !bzPicN(); } });
+  const o = $('#bzOut'); if(o) o.onclick = () => { if(!window.JCWOUT || !BZ) return toast('Reload the page once.');
+    if(bzF === 'nf') return JCWOUT.list({ title:'In the board report, not in the strength sheet', sub:BZ.nf.length + ' students · ' + (BZ.file || ''), head:['Board S.No', 'Group', 'Student Name', 'Father Name', 'DOB', 'Mobile #', 'Pre: Rec', 'Subjects'],
+      rows:BZ.nf.map(x => [x.b.sno, x.b.group, x.b.name, x.b.father, bzD(x.b.dob), x.b.mobile, x.b.prerec, x.b.subjects]), file:'Board check - not in strength sheet' });
+    if(bzF === 'miss') return JCWOUT.list({ title:'Not in the board registration report (' + bzYear + ')', sub:BZ.miss.length + ' students · ' + (BZ.file || ''), head:['#', 'Enroll#', 'Student Name', 'Father Name', 'Section', 'DOB', 'Mobile #'],
+      rows:BZ.miss.map((s, i) => [i + 1, s.roll, s.name, s.father, s.pcs, bzD(s.dob), s.contact]), file:'Board check - not in board report' });
+    const L = bzList();
+    JCWOUT.list({ title:'Board registration check', sub:L.length + ' students · ' + (BZ.file || ''), head:['Board S.No', 'Enroll#', 'Student Name', 'Father Name', 'Section', 'DOB (sheet)', 'DOB (board)', 'Mobile # (sheet)', 'Mobile # (board)', 'Matric Roll/Year (sheet)', 'Matric Roll/Year (board)', 'Subjects: board has, sheet not', 'Subjects: sheet has, board not'],
+      rows:L.map(x => [x.b.sno, x.s.roll, x.s.name, x.s.father, x.s.pcs, bzD(x.s.dob), x.dobDiff ? bzD(x.b.dob) : 'same', x.s.contact || '', x.mobDiff ? x.b.mobile : 'same',
+        (x.s.matricRoll || '') + ' / ' + (x.s.passYear || ''), x.rollDiff || x.yearDiff ? x.b.mroll + ' / ' + x.b.myear : 'same', x.sub.miss.join(', '), x.sub.extra.join(', ')]), file:'Board registration check' }); };
+  const g = $('#bzGo'); if(g) g.onclick = () => {
+    const items = []; BZ.list.forEach(x => { const r = x.s.roll; if(!r) return;
+      if(bzSel[r + '|dob'] && x.dobDiff) items.push({ roll:r, name:x.s.name, f:'dob', from:x.s.dob || '', to:x.b.dob });
+      if(bzSel[r + '|contact'] && x.mobFix) items.push({ roll:r, name:x.s.name, f:'contact', from:x.s.contact || '', to:x.mobNew });
+      if(bzSel[r + '|matricRoll'] && x.rollDiff) items.push({ roll:r, name:x.s.name, f:'matricRoll', from:x.s.matricRoll || '', to:x.b.mroll });
+      if(bzSel[r + '|passYear'] && x.yearDiff) items.push({ roll:r, name:x.s.name, f:'passYear', from:x.s.passYear || '', to:x.b.myear }); });
+    if(!items.length) return;
+    const LBL = { dob:'DOB', contact:'Mobile', matricRoll:'Matric Roll No', passYear:'Passing Year' }, cnt = {}; items.forEach(i => cnt[i.f] = (cnt[i.f] || 0) + 1);
+    dlgOpen(`<h2>Replace in Transform?</h2><div class="sub">${Object.keys(cnt).map(k => '<b>' + cnt[k] + '</b> × ' + LBL[k]).join(', ')} in Transform-ALL-COLLEGE-STRENGTH are replaced with the board's values. The old values are kept in the Admission Log.</div>
+      <div style="max-height:40vh;overflow:auto;margin-top:8px"><table><tbody>${items.map(i => `<tr><td class="nw">${esc(i.roll)}</td><td>${esc(i.name)}</td><td class="nw">${LBL[i.f]}: ${esc(i.f === 'dob' ? bzD(i.from) : i.from) || '(empty)'} → <b>${esc(i.f === 'dob' ? bzD(i.to) : i.f === 'contact' ? bzFmtMob(i.to) : i.to)}</b></td></tr>`).join('')}</tbody></table></div>
+      <div class="acts"><button class="btn" id="dBack">Back</button><button class="btn primary" id="dGo">Replace ${items.length}</button></div>`);
+    $('#dBack').onclick = dlgClose;
+    $('#dGo').onclick = async () => { dlgClose(); bzBusy = 'Saving in Transform…'; bzErr = ''; bzMsg = ''; render();
+      try{
+        const r = await api({ action:'adm_bise_fix', items:items.map(i => ({ roll:i.roll, f:i.f, from:i.from, to:i.to })) }, 300000);
+        if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'The server is not updated yet (Admissions.gs).' : r.error);
+        const ci = { dob:idx.cols.indexOf('dob'), contact:idx.cols.indexOf('contact'), matricRoll:idx.cols.indexOf('matricRoll'), passYear:idx.cols.indexOf('passYear') }, ri = idx.cols.indexOf('roll');
+        (r.done || []).forEach(d => { const row = idx.rows.find(z => nroll(z[ri]) === nroll(d.roll)); if(row && ci[d.f] >= 0) row[ci[d.f]] = d.to; });
+        idbSet('index', idx); bzCheck(BZ.rows);
+        bzMsg = (r.done || []).length + ' replaced in Transform' + ((r.skipped || []).length ? '; ' + r.skipped.length + ' skipped (' + r.skipped.slice(0, 3).map(s => s.roll + ': ' + s.msg).join('; ') + ')' : '') + '.';
+      }catch(e){ bzErr = e.message; }
+      bzBusy = ''; render(); };
+  };
 }
 /* ---------- v8.5 Seat settings: seats per program + quota (more / fewer), new quotas, shared (floating) seats ---------- */
 let SS = null, ssBusy = false, ssDirty = false, ssMsg = '';

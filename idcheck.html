@@ -112,7 +112,7 @@ function cardData(R){
   const cy = Number(cfg.year) || y;
   return { roll: st.roll, name: String(st.name || '').toUpperCase(), father: String(st.father || '').toUpperCase(), cls: mp.cls || progKey(st.program),
     section: secOf(st), group: mp.group || progKey(st.program), photo: R.photo || '', session: cy + '-' + String(cy + 2).slice(-2),
-    valid: (cfg.valid || {})[cy] || ('31-08-' + (cy + 2)), sign: R.sign || (cy === 2026 ? 'idcard/principal-sign.png' : '') };
+    valid: (cfg.valid || {})[cy] || ('31-08-' + (cy + 2)), sign: R.sign || '' };
 }
 const FRAME_AR = 45.5139 / 66.0289;
 const loadImg = src => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('bad')); im.src = src; });

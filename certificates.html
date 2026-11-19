@@ -288,7 +288,7 @@ async function quickFill(){
   S.busy = 'qfill'; paintList();
   try{
     const x = await api({ action:'pc_link', sheet:S.data.sheet, items }, 300000);
-    (x.rows || []).forEach(upsert);
+    upsertMany(x.rows);
     S.picks = {};
     S.msg = esc(x.done.length + ' students filled in the sheet' + (x.skipped.length ? '; ' + x.skipped.length + ' skipped (' + x.skipped[0].msg + ')' : '') + '.');
   }catch(e){ S.err = e.message; }
@@ -355,6 +355,12 @@ function paintEd(){
   </div>`;
 }
 function readEd(){ document.querySelectorAll('#ed input[data-k]').forEach(i => { E.v[i.dataset.k] = i.value.trim(); }); }
+/** many rows from the server at once: one recalculation instead of one per row (that is what froze the page) */
+function upsertMany(rows){
+  const R = S.data.rows, at = {}; R.forEach((x, i) => { at[x.row] = i; });
+  (rows || []).forEach(row => { if(at[row.row] !== undefined) R[at[row.row]] = row; else R.push(row); });
+  prep(); findAuto();
+}
 function upsert(row){
   const R = S.data.rows, i = R.findIndex(x => x.row === row.row);
   if(i >= 0) R[i] = row; else R.push(row);
@@ -506,7 +512,7 @@ async function applyReview(){
       ? await api({ action:'pc_link', sheet:S.data.sheet, items:picked.map(p => ({ row:p.r.row, roll:p.r.roll, name:p.r.name, father:p.r.father, id:p.opts[p.sel].s.id, by:'Chosen by hand (ticked list)' })) }, 300000)
       : await api({ action:'pc_strikes', sheet:S.data.sheet, on:true, items:picked.map(p => ({ row:p.r.row, roll:p.r.roll, name:p.r.name, father:p.r.father })) }, 300000);
   }catch(e){ R.busy = false; R.err = e.message; paintEd(); return; }
-  (x.rows || []).forEach(upsert);
+  upsertMany(x.rows);
   S.msg = esc((R.review === 'link' ? x.done.length + ' students filled in the sheet' : x.done.length + ' students struck through as left students') + (x.skipped && x.skipped.length ? '; ' + x.skipped.length + ' skipped (' + x.skipped[0].msg + ')' : '') + '.');
   E = null; paintEd(); paintStats();
 }

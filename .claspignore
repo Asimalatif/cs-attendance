@@ -1,7 +1,0 @@
-# Only the backend .gs files in the repo root go to Apps Script.
-# Everything else (index.html, *.js, images, userscripts) is the GitHub Pages front end.
-**/**
-!*.gs
-!appsscript.json
-backend-patch.gs
-workbook-scripts/**

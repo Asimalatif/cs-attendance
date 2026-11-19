@@ -4138,7 +4138,7 @@ const baseOpenSync = window.openSync;
 window.openSync = function(){
   baseOpenSync.apply(this, arguments);
   const a = $q('#dlgBody .acts'); if(a && !$q('#dlgBody .tsz')) a.insertAdjacentHTML('beforebegin', '<div class="lb2">Text size</div>' + tsHtml());
-  const m = $q('#dlgBody .meta'); if(m && !$q('#dlgBody .appver')) m.insertAdjacentHTML('beforeend', '<br><span class="appver">App version: ' + APP_BUILD + '</span> · <button class="lnk" type="button" id="xUpd">Check for update</button><br><a class="lnk" href="manual.html" target="_blank" rel="noopener">Illustrated manual</a>' + (scope || isCP || isAdmin ? ' · <a class="lnk" href="admin-manual.html" target="_blank" rel="noopener">Admin &amp; developer manual</a>' : ''));
+  const m = $q('#dlgBody .meta'); if(m && !$q('#dlgBody .appver')) m.insertAdjacentHTML('beforeend', '<br><span class="appver">App version: ' + APP_BUILD + '</span> · <button class="lnk" type="button" id="xUpd">Check for update</button><br><a class="lnk" href="manual.html" target="_blank" rel="noopener">Illustrated manual</a>');
 };
 
 /* ======================= self-update =======================
