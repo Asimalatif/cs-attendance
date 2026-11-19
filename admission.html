@@ -1412,22 +1412,27 @@ function bzCheck(rows){
   const st = idx.rows.map(recOf).filter(o => o.name && (bzYear === '2nd Year' ? isMig(o.year) : !isMig(o.year)));
   const grpOk = (b, o) => { const g = BZ_GROUP[String(b.group).toLowerCase()]; return !g || g.includes(o.key); };
   const by = new Map(); st.forEach(o => { const k = bzC(o.name) + '|' + bzC(o.father); (by.get(k) || by.set(k, []).get(k)).push(o); });
-  const used = new Set(), M = rows.map(b => {
+  const used = new Set(), took = new Map(), M = rows.map(b => {
     let c = (by.get(bzC(b.name) + '|' + bzC(b.father)) || []).filter(o => !used.has(bzKey(o)));
     if(c.length > 1){ const g = c.filter(o => grpOk(b, o)); if(g.length) c = g; }
-    if(c.length === 1){ used.add(bzKey(c[0])); return { b, s:c[0], how:'exact' }; }
+    if(c.length === 1){ used.add(bzKey(c[0])); took.set(bzKey(c[0]), b); return { b, s:c[0], how:'exact' }; }
     return { b, s:null, many:c.length };
   });
   const bm = new Map(); st.forEach(o => { const r = String(o.matricRoll || '').replace(/\D/g, ''); if(r) (bm.get(r + '|' + o.passYear) || bm.set(r + '|' + o.passYear, []).get(r + '|' + o.passYear)).push(o); });
   M.filter(x => !x.s && x.b.mroll).forEach(x => {                    // same Matric Roll No + passing year = the same girl, even if the name is spelled differently
     const c = (bm.get(x.b.mroll + '|' + x.b.myear) || []).filter(o => !used.has(bzKey(o)));
-    if(c.length === 1){ used.add(bzKey(c[0])); x.s = c[0]; x.how = 'roll'; }
+    if(c.length === 1){ used.add(bzKey(c[0])); took.set(bzKey(c[0]), x.b); x.s = c[0]; x.how = 'roll'; }
   });
   M.filter(x => !x.s && !x.many).forEach(x => {                      // close spelling: name and father both close, clearly the best one
     const bn = bzC(x.b.name), bf = bzC(x.b.father); let best = null, bs = 0, second = 0;
     st.forEach(o => { if(used.has(bzKey(o))) return; const n = bzDice(bn, bzC(o.name)), f = bzDice(bf, bzC(o.father)); if(n < .7 || f < .6) return;
       const sc = (n + f) / 2 + (grpOk(x.b, o) ? .03 : -.1); if(sc > bs){ second = bs; bs = sc; best = o; } else if(sc > second) second = sc; });
-    if(best && bs >= .8 && bs - second > .05){ used.add(bzKey(best)); x.s = best; x.how = 'near'; x.sc = Math.min(.99, bs); }
+    if(best && bs >= .8 && bs - second > .05){ used.add(bzKey(best)); took.set(bzKey(best), x.b); x.s = best; x.how = 'near'; x.sc = Math.min(.99, bs); }
+  });
+  M.filter(x => !x.s).forEach(x => {                                  // the same girl registered twice in the board report: her student was taken by the other row
+    const k = bzC(x.b.name) + '|' + bzC(x.b.father), mr = x.b.mroll ? x.b.mroll + '|' + x.b.myear : '';
+    const o = (by.get(k) || []).find(z => used.has(bzKey(z))) || (mr && (bm.get(mr) || []).find(z => used.has(bzKey(z))));
+    if(o) x.dupOf = { s:o, b:took.get(bzKey(o)) };
   });
   const list = [];
   M.forEach(x => { if(!x.s) return;
@@ -1447,7 +1452,7 @@ function bzCheck(rows){
   const oldPh = BZ && BZ.pics || {};
   const pics = {}; M.forEach(x => { if(x.s && x.s.roll && x.how !== 'near' && noPic(x.s) && oldPh[x.s.roll]) pics[x.s.roll] = oldPh[x.s.roll]; });
   const subN = M.filter(x => x.s && x.s.roll && x.b.subjects && x.how !== 'near').length;
-  BZ = Object.assign(BZ || {}, { pics, nopic:M.filter(x => x.s && x.s.roll && x.how !== 'near' && noPic(x.s)), rows, list, subN, matched:M.filter(x => x.s).length, nf:M.filter(x => !x.s), miss:st.filter(o => !used.has(bzKey(o))) });
+  BZ = Object.assign(BZ || {}, { pics, nopic:M.filter(x => x.s && x.s.roll && x.how !== 'near' && noPic(x.s)), rows, list, subN, matched:M.filter(x => x.s).length, nf:M.filter(x => !x.s && !x.dupOf), dup:M.filter(x => x.dupOf), miss:st.filter(o => !used.has(bzKey(o))) });
 }
 const bzCount = () => Object.keys(bzSel).filter(k => bzSel[k]).length;
 function bzList(){
@@ -1480,7 +1485,12 @@ function bzHtml(){
   const mobCell = x => !x.mobDiff ? '<span class="sub">same</span>' : x.mobFix
     ? `<label class="nw">${ck(x, 'contact')} ${esc(x.s.contact || '(empty)')} → <b>${esc(bzFmtMob(x.mobNew))}</b></label>`
     : `<span class="nw">${esc(x.s.contact || '(empty)')} ≠ <b>${esc(x.b.mobile)}</b></span><div class="sub">Board printed it as +92 with a digit cut off: check by hand</div>`;
-  const body = bzF === 'pic'
+  const body = bzF === 'dup'
+    ? `<div class="sub">These students are registered <b>twice</b> in the board report (same name + father name, or same Matric Roll No). Only one registration should stay: tell the board which one to cancel.</div>
+      <table style="margin-top:8px"><thead><tr><th>Enroll#</th><th>Student</th><th>This entry</th><th>Other entry</th></tr></thead><tbody>
+      ${BZ.dup.map(x => { const d = x.dupOf, e = b => b ? `S.No ${esc(b.sno)} (page ${b.page})<div class="sub">${esc(b.group)} · ${esc(b.prerec)} · DOB ${esc(bzD(b.dob))} · ${esc(b.mobile)}</div>` : '—';
+        return `<tr><td class="nw">${esc(d.s.roll)}<div class="sub">${esc(d.s.pcs)}</div></td><td>${esc(x.b.name)}<div class="sub">d/o ${esc(x.b.father)}</div></td><td>${e(x.b)}</td><td>${e(d.b)}</td></tr>`; }).join('')}</tbody></table>`
+    : bzF === 'pic'
     ? `<div class="sub">Students with no picture in the strength sheet (Pic URL empty). Press <b>Get pictures from the board PDF</b>: her photo is cut from the board report and shown here. Nothing is saved until you press <b>Save pictures</b>.</div>
       <div class="acts" style="margin-top:8px;flex-wrap:wrap"><button class="btn" id="bzPicGet" ${bzBusy || !BZ.nopic.length ? 'disabled' : ''}>Get pictures from the board PDF</button>
         <button class="btn primary" id="bzPicSave" ${bzBusy || !bzPicN() ? 'disabled' : ''}>Save ${bzPicN()} pictures</button></div>
@@ -1501,7 +1511,7 @@ function bzHtml(){
         <td>${esc(x.s.name)}<div class="sub">d/o ${esc(x.s.father)}</div>${x.how === 'near' ? `<div class="sub" style="color:var(--mid);font-weight:700">Board: ${esc(x.b.name)} d/o ${esc(x.b.father)} (${Math.round(x.sc * 100)}% alike: is it her? then tick)</div>` : x.how === 'roll' ? `<div class="sub" style="color:var(--mid);font-weight:700">Board: ${esc(x.b.name)} d/o ${esc(x.b.father)} (same Matric Roll No + year, name spelled differently)</div>` : ''}</td>
         <td>${dobCell(x)}</td><td>${mobCell(x)}</td><td>${rollCell(x)}</td><td>${subCell(x)}</td></tr>`).join('') || '<tr><td colspan="7" class="sub">✓ Nothing different here.</td></tr>'}</tbody></table>`;
   return head + `<section class="card">
-    <div class="acts" style="flex-wrap:wrap">${fb('diff', 'All differences', BZ.list.length)}${fb('dob', 'DOB', nDob)}${fb('mob', 'Mobile #', nMob)}${fb('roll', 'Matric Roll No / year', nRoll)}${fb('sub', 'Subjects', nSub)}${fb('pic', 'Picture missing', BZ.nopic.length)}${fb('near', 'Name spelled differently', nNear)}${fb('nf', 'Not in strength sheet', BZ.nf.length)}${fb('miss', 'Not in board report', BZ.miss.length)}</div>
+    <div class="acts" style="flex-wrap:wrap">${fb('diff', 'All differences', BZ.list.length)}${fb('dob', 'DOB', nDob)}${fb('mob', 'Mobile #', nMob)}${fb('roll', 'Matric Roll No / year', nRoll)}${fb('sub', 'Subjects', nSub)}${fb('pic', 'Picture missing', BZ.nopic.length)}${fb('near', 'Name spelled differently', nNear)}${BZ.dup.length ? fb('dup', 'Twice in board report', BZ.dup.length) : ''}${fb('nf', 'Not in strength sheet', BZ.nf.length)}${fb('miss', 'Not in board report', BZ.miss.length)}</div>
     ${bzF === 'nf' ? `<div class="sub" style="margin-top:6px">In the board report but no student with this name + father name in the strength sheet. Each one is looked up in the <b>Left Students</b> sheet too${LEFT && !leftBusy ? `: <b>${BZ.nf.filter(x => bzLeft(x.b)).length}</b> left the college, <b style="color:var(--bad)">${BZ.nf.filter(x => !bzLeft(x.b)).length}</b> found in neither sheet (red)` : ' (reading…)'}${LEFT && LEFT.err ? ' — Left Students sheet: ' + esc(LEFT.err) : ''}.</div>` : bzF === 'miss' ? `<div class="sub" style="margin-top:6px">${esc(bzYear)} students of the strength sheet who are <b>not</b> in this board report: check that they are registered with the board.</div>` : ''}
     <div style="max-height:62vh;overflow:auto;margin-top:8px">${body}</div>
     ${bzF === 'nf' || bzF === 'miss' || bzF === 'pic' ? '' : `<div class="acts" style="margin-top:10px;flex-wrap:wrap"><button class="btn small" id="bzAllD">Tick all DOB</button><button class="btn small" id="bzAllM">Tick all mobile #</button><button class="btn small" id="bzAllR">Tick all Matric Roll No / year</button><button class="btn small" id="bzNone">Untick all</button></div>`}
@@ -1611,6 +1621,8 @@ function wireBz(){
   const ps = $('#bzPicSave'); if(ps) ps.onclick = bzPicSave;
   document.querySelectorAll('[data-bzpic]').forEach(c => c.onchange = () => { BZ.pics[c.dataset.bzpic].on = c.checked; const b = $('#bzPicSave'); if(b){ b.textContent = 'Save ' + bzPicN() + ' pictures'; b.disabled = !bzPicN(); } });
   const o = $('#bzOut'); if(o) o.onclick = () => { if(!window.JCWOUT || !BZ) return toast('Reload the page once.');
+    if(bzF === 'dup') return JCWOUT.list({ title:'Registered twice in the board report', sub:BZ.dup.length + ' entries · ' + (BZ.file || ''), head:['Enroll#', 'Student Name', 'Father Name', 'This S.No', 'This Pre: Rec', 'Other S.No', 'Other Pre: Rec'],
+      rows:BZ.dup.map(x => [x.dupOf.s.roll, x.b.name, x.b.father, x.b.sno, x.b.prerec, x.dupOf.b ? x.dupOf.b.sno : '', x.dupOf.b ? x.dupOf.b.prerec : '']), file:'Board check - registered twice' });
     if(bzF === 'nf') return JCWOUT.list({ title:'In the board report, not in the strength sheet', sub:BZ.nf.length + ' students · ' + (BZ.file || ''), head:['Board S.No', 'Group', 'Student Name', 'Father Name', 'DOB', 'Mobile #', 'Pre: Rec', 'Subjects', 'Left Students sheet'],
       rows:BZ.nf.map(x => [x.b.sno, x.b.group, x.b.name, x.b.father, bzD(x.b.dob), x.b.mobile, x.b.prerec, x.b.subjects, bzLeftTxt(bzLeft(x.b)).replace(/^Left Students: /, 'Left: ') || 'NOT FOUND in either sheet']), file:'Board check - not in strength sheet' });
     if(bzF === 'miss') return JCWOUT.list({ title:'Not in the board registration report (' + bzYear + ')', sub:BZ.miss.length + ' students · ' + (BZ.file || ''), head:['#', 'Enroll#', 'Student Name', 'Father Name', 'Section', 'DOB', 'Mobile #', 'Left Students sheet'],
