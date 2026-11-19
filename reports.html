@@ -670,7 +670,7 @@ function renderOfficial(it, r) {
     const k = document.createElement('div'); k.className = 'kpis';
     k.innerHTML = '<div class="kpi"><div class="kpi-label">Total students processed</div><div class="kpi-value">' + esc(r.totalStudents) + '</div></div>';
     host.appendChild(k);
-    [['Class / Program / Category Strength', r.tables.classCategory, { mergeCols: [0, 1, 4, 5, 6] }],
+    [['Class / Program / Category Strength', r.tables.classCategory, { mergeCols: [0, 1, 4, 5, 6, 7], mergeScope: { 4: [0, 1], 5: [0, 1], 6: [0], 7: [] }, blankInto: { 4: 3 } }],
      ['Section (PCS) Level Strength', r.tables.pcsSection, { mergeCols: [0, 1, 2, 5, 6, 7] }],
      ['Seat Increase / Decrease', r.tables.seatIncreaseDecrease, { totalMarker: 'INCREASED SEATS' }],
      ['Year-Wise Quota Summary', r.tables.yearWise, { totalMarker: 'JCW Total:', mergeCols: [0, 4, 5, 6, 7] }]
@@ -688,6 +688,8 @@ function renderOfficial(it, r) {
     const totalMarker = options.totalMarker || null;
     const mergeCols = options.mergeCols || [];
     const highlightValue = options.highlightValue;
+    const mergeScope = options.mergeScope || {};   // col -> parent cols that must also match to merge
+    const blankInto = options.blankInto || {};     // col -> left neighbour that widens over it when blank
     const table = document.createElement('table');
     const numRows = data.length;
     const isTotalRow = row => totalMarker !== null && row.indexOf(totalMarker) !== -1;
@@ -698,8 +700,11 @@ function renderOfficial(it, r) {
       while (i < numRows) {
         if (isTotalRow(data[i])) { i++; continue; }
         const val = data[i][col];
+        if (blankInto[col] !== undefined && val === '') { i++; continue; }
+        const parents = mergeScope[col] || [];
         let j = i + 1;
-        while (j < numRows && !isTotalRow(data[j]) && data[j][col] === val) j++;
+        while (j < numRows && !isTotalRow(data[j]) && data[j][col] === val &&
+               parents.every(pc => data[j][pc] === data[i][pc])) j++;
         if (j - i > 1) { span[i + '_' + col] = j - i; for (let k = i + 1; k < j; k++) skip[k + '_' + col] = true; }
         i = j;
       }
@@ -712,8 +717,10 @@ function renderOfficial(it, r) {
       if (!isHeader && isTotalRow(row)) tr.classList.add('totalRow');
       row.forEach((cell, col) => {
         if (!isHeader && skip[i + '_' + col]) return;
+        if (blankInto[col] !== undefined && cell === '') return;
         const el = document.createElement(isHeader ? 'th' : 'td');
         el.innerText = cell;
+        Object.keys(blankInto).forEach(bc => { if (blankInto[bc] === col && row[bc] === '') el.colSpan = 2; });
         if (!isHeader && span[i + '_' + col]) el.rowSpan = span[i + '_' + col];
         if (!isHeader && highlightValue !== undefined && cell === highlightValue) el.classList.add('highlightX');
         tr.appendChild(el);
