@@ -435,6 +435,16 @@ function render(){
 }
 const opt = (v, cur, label) => `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(label == null ? v : label)}</option>`;
 
+/* v8.44 moving a student along the ladder: subsidized <-> Self Morning keeps her Enroll#; Evening -> Morning / subsidized gets a new one */
+const isEvening = key => { const p = prog(key) || {}; if(p.fee !== 'non') return false; const non = (init.programs || []).filter(x => x.classProgram === p.classProgram && x.fee === 'non'); return non.length > 1 && non[0].key !== key; };
+async function moveRoll(from, to){
+  const a = prog(from) || {}, b = prog(to) || {}; if(!from || from === to || a.classProgram !== b.classProgram) return;
+  if(!isEvening(from) && !isEvening(to)){ form.rollNo = form.ctx.orig.rollNo || form.rollNo; toast('Same Enroll# kept (' + form.rollNo + '): moving between ' + a.label + ' and ' + b.label + ' never changes it.', 5000); return; }
+  if(isEvening(from) && !isEvening(to)){
+    try{ const r = await api({ action:'adm_next_roll', program:to, year:form.year }); if(r.roll){ form.rollNo = r.roll; render(); toast('Evening → ' + b.label + ': new Enroll# ' + r.roll + ' (saved only when you press Save)', 6000); } }
+    catch(e){ toast('Could not get a new Enroll#: ' + e.message); }
+  }
+}
 function formHtml(){
   const f = form, pr = prog(f.program), mig = isMig(f.year), secs = sectionsOf(f.program, f.year);
   const st = seatText(f.program, f.quota, f.year), groups = groupsOf(f.program, f.year);
@@ -463,7 +473,7 @@ function formHtml(){
     <select id="fQuota" ${mig ? 'disabled' : ''}>${quotasOf(f.program).map(q => opt(q, f.quota)).join('')}${quotasOf(f.program).some(q => qk(q) === qk(f.quota)) ? '' : opt(f.quota, f.quota)}</select>
     ${st.t ? `<div class="seat ${esc(st.cls)}">${esc(st.t)}</div>` : ''}
     <label for="fRoll">Roll No / Enroll#</label>
-    <div class="rowi"><input id="fRoll" value="${esc(f.ctx || f.rollManual ? f.rollNo : '')}" placeholder="${esc(nr && nr.roll ? nr.roll + ' (automatic)' : 'Automatic')}" autocomplete="off" autocapitalize="characters">${f.ctx && pr && f.ctx.orig.program !== f.program ? '<button class="btn small" type="button" id="xNewRoll">New number for this program</button>' : ''}</div>
+    <div class="rowi"><input id="fRoll" value="${esc(f.ctx || f.rollManual ? f.rollNo : '')}" placeholder="${esc(nr && nr.roll ? nr.roll + ' (automatic)' : 'Automatic')}" autocomplete="off" autocapitalize="characters">${f.ctx && pr && f.ctx.orig.program !== f.program && (isEvening(f.ctx.orig.program) || isEvening(f.program) || (prog(f.ctx.orig.program) || {}).classProgram !== pr.classProgram) ? '<button class="btn small" type="button" id="xNewRoll">New number for this program</button>' : ''}</div>
     <div class="hint">${rollHint}</div>
   </section>
   <section class="card">
@@ -621,6 +631,7 @@ function wireForm(){
     if(!quotasOf(form.program).some(q => qk(q) === qk(form.quota))) form.quota = quotasOf(form.program)[0];
     const og = groupsOf(old, form.year).map(g => g.subjects.join('|')), cur = form.subjects.slice(4).join('|');
     if(!form.ctx || og.indexOf(cur) >= 0 || !cur.replace(/\|/g, '')) { const g = groupsOf(form.program, form.year); form.subjects = compulsory(form.program, form.year).concat(g.length === 1 ? g[0].subjects : ['', '', '']); form.group = ''; }
+    if(form.ctx) moveRoll(form.ctx.orig.program, form.program);
     fetchNext(); render();
   };
   document.querySelectorAll('[data-year]').forEach(b => b.onclick = () => {
@@ -837,7 +848,7 @@ function pnPlace(s, key, q){
   const last = mlLast(), lastK = last ? last.replace(/-/g, '') : '', paid = s.paidOn || '';
   const me = { _a:Math.round(mlAgg({ metric:s.metric, total:s.total, hq:s.hq }) * 100), _d:mlDob({ dob:s.dob }), _pk:mlDob({ dob:paid }), name:s.name };
   me._late = !!lastK && (me._pk === '99999999' || me._pk > lastK);
-  const cmp = (a, b) => (a._late ? 1 : 0) - (b._late ? 1 : 0) || (a._late && b._late ? String(a._pk).localeCompare(String(b._pk)) : 0) || b._a - a._a || a._d.localeCompare(b._d) || String(a.name).localeCompare(String(b.name));
+  const cmp = (a, b) => (a._late ? 1 : 0) - (b._late ? 1 : 0) || b._a - a._a || (a._late && b._late ? String(a._pk).localeCompare(String(b._pk)) : 0) || a._d.localeCompare(b._d) || String(a.name).localeCompare(String(b.name));
   const pos = m.rows.filter(r => cmp(r.o, me) < 0).length + 1, ls = m.rows[Math.min(m.seats, m.rows.length) - 1];
   return { m, me, pos, seats:m.seats, inside:pos <= m.seats, lastSeat:ls ? ls.o : null, paid, lastDate:last };
 }
@@ -1863,8 +1874,8 @@ function meritLists(){
     all.forEach(o => { if(o._mn == null){ o._mn = ''; o._aw = ''; } }); }
   const used = new Set(all.map(o => o.key)), fees = mlFees(all), out = [], s = init.seats;
   mlFeesNow = fees;
-  // v8.13: late students come after every on-time student, in the order they paid (first paid first; not paid last), then by Aggregate
-  const srt = (a, b) => (a._late ? 1 : 0) - (b._late ? 1 : 0) || (a._late && b._late ? String(a._pk).localeCompare(String(b._pk)) : 0) || b._a - a._a || a._d.localeCompare(b._d) || String(a.name).localeCompare(String(b.name));
+  // v8.44: late students come after every on-time student: by Aggregate, then the earlier fee date, then the older first
+  const srt = (a, b) => (a._late ? 1 : 0) - (b._late ? 1 : 0) || b._a - a._a || (a._late && b._late ? String(a._pk).localeCompare(String(b._pk)) : 0) || a._d.localeCompare(b._d) || String(a.name).localeCompare(String(b.name));
   s.programs.forEach(p => {
     if(!used.has(p.key)) return;                                       // e.g. Evening Pre-Medical: no 1st Year this year
     const pr = prog(p.key) || {}, lad = ladderOf(pr.classProgram), at = lad.findIndex(x => x.key === p.key), sib = at >= 0 && at < lad.length - 1 ? lad.slice(at + 1).map(x => x.key) : [];
@@ -1907,9 +1918,9 @@ function meritLists(){
         let state = here && should ? 'ok' : '', why = '';
         if(sib.length){
           if(here && !should){ state = 'bad'; why = 'Below the last seat of ' + pr.label + ': should be in ' + (prog(sib[0]) || {}).label; }
-          else if(!here && should && !emp && empty > 0){ state = 'next'; why = 'Next in line: a seat of ' + pr.label + ' is empty' + mlFeeDiff(o, p.key); empty--; }
-          else if(!here && should){ state = 'bad'; why = emp ? 'UoP Employee Quota is always subsidized: should be in ' + pr.label : 'Inside the ' + seats + ' seats of ' + pr.label + ': should move up' + (pl ? ' (this quota)' : '') + mlFeeDiff(o, p.key); }
-          else if(!here && nextLeft > 0){ state = 'next'; why = 'Next in line for ' + pr.label + mlFeeDiff(o, p.key); nextLeft--; }
+          else if(!here && should && !emp && empty > 0){ state = 'next'; why = 'Next in line: a seat of ' + pr.label + ' is empty'; empty--; }
+          else if(!here && should){ state = 'bad'; why = emp ? 'UoP Employee Quota is always subsidized: should be in ' + pr.label : 'Inside the ' + seats + ' seats of ' + pr.label + ': should move up' + (pl ? ' (this quota)' : ''); }
+          else if(!here && nextLeft > 0){ state = 'next'; why = 'Next in line for ' + pr.label; nextLeft--; }
         } else if(open){ /* every employee's daughter has a seat */ }
         else if(!should && !noSeats){ if(surplusOk) why = 'Over the seats (fine in Open Quota)'; else { state = 'surplus'; why = 'Surplus: over the ' + seats + ' seats of ' + q.name; } }
         else if(noSeats){ state = 'surplus'; why = 'No seats set for this quota in Quota Settings'; }
@@ -2127,9 +2138,9 @@ async function mlPushAlerts(){
     if(!online()) return;
     const M = meritLists(); if(!M.length) return;
     const items = M.filter(c => !c.open && !c.noSeats).map(c => { const empty = c.subs ? c.seats - c.inHome : c.seats - c.held, bad = c.rows.filter(r => r.state === 'bad').length;
-      const cand = c.rows.filter(r => r.cand).slice(0, 4).map(r => [r.o.name, r.o.roll || '', r.o._a / 100, (prog(r.o.key) || {}).label || r.o.key]);
-      const next = !cand.length && empty > 0 ? c.rows.filter(r => !r.here && r.state === 'next').slice(0, 3).map(r => [r.o.name, r.o.roll || '', r.o._a / 100, (prog(r.o.key) || {}).label || r.o.key]) : [];
-      return { l:c.label, q:c.quota, s:c.seats, e:Math.max(0, empty), b:bad, c:cand.length ? cand : next }; }).filter(x => x.e > 0 || x.b > 0);
+      // v8.44 every eligible student: the possible candidates for the empty seats and everyone next in line (to move up), in merit order
+      const el = c.rows.filter(r => !r.here && (r.cand || r.state === 'next')).map(r => [r.o.name, r.o.roll || '', r.o._a / 100, (prog(r.o.key) || {}).label || r.o.key, r.o._late ? 'late fee' : '']);
+      return { l:c.label, q:c.quota, s:c.seats, e:Math.max(0, empty), b:bad, c:el.slice(0, 60), n:el.length }; }).filter(x => x.e > 0 || x.b > 0 || x.n > 0);
     const sig = JSON.stringify(items), old = ls.get('mlAlertSig', '');
     if(sig === old && Date.now() - ls.get('mlAlertT', 0) < 6 * 3600000) return;     // nothing new (sent again every 6 hours)
     const r = await api({ action:'adm_alerts_save', items });
