@@ -992,7 +992,8 @@ function pnHtml(){
           <div class="sub">Portal: ${esc(s.programName || '-')} · ${esc(s.year)}${s.section ? ' · sec ' + esc(s.section) : ''}${s.quota ? ' · ' + esc(s.quota) : ''}${s.metric ? ' · ' + esc(s.metric) + '/' + esc(s.total) : ''}${s.batch ? ' · batch ' + esc(s.batch) : ''}</div>
           ${!s.progSure ? `<div class="warnp">Check the program: the portal does not say which ${esc((prog(s.program) || {}).classProgram || '')} program.</div>` : ''}
           ${!mig ? omlBadge(pnEntry(s).oml, s) : ''}
-          ${!mig && pnSeatFull(s) ? `<div class="warnp" style="color:var(--bad)">⚠ ${esc(pnSeatFull(s))}</div>` : ''}
+          ${!mig && pnQuotaFull(s) ? `<div style="margin-top:6px;padding:8px 10px;border:2px solid var(--bad);border-radius:10px;background:var(--bad-bg);color:var(--bad);font-weight:800">⚠ QUOTA FULL: ${esc(pnQuotaFull(s))}</div>`
+            : !mig && pnSeatFull(s) ? `<div class="warnp" style="color:var(--bad)">⚠ ${esc(pnSeatFull(s))}</div>` : ''}
           ${subFeeHint(s.challan, e.program, e.year) ? `<div class="warnp" style="color:var(--bad);font-weight:700">⚠ ${esc(subFeeHint(s.challan, e.program, e.year))}</div>` : ''}
           ${!s.quotaSure && !mig ? `<div class="warnp">Portal category "${esc(s.quota)}" is not a known quota: check it.</div>` : ''}
           ${!s.dob && !s.metric ? `<div class="sub">Details (DOB, marks, photo) fill in after the next Full sync.</div>` : ''}</div>
@@ -1006,7 +1007,7 @@ function pnHtml(){
           ${(() => { const r = e.section ? secRoom(e.section, secCount(e.section) + (extra[e.section] || 0)) : null; return r && r.cap != null && r.free < 0 ? `<div class="warnp" style="color:var(--bad)">⚠ ${esc(e.section)} is over its room's capacity: ${esc(r.room)} has ${r.cap} seats, ${r.n} students would sit there.</div>` : r && r.room ? `<div class="sub">Room ${esc(r.room)}${r.cap != null ? ' · ' + r.cap + ' seats' : ''}</div>` : ''; })()}</div>
         <div><label>Roll No${e.rollManual ? ' (typed)' : ''}</label><input type="text" data-k="rollNo" value="${esc(e.rollNo)}" placeholder="${pl && pl.range ? 'free in ' + pl.range[0] + '–' + pl.range[1] : ''}" autocomplete="off" style="text-transform:uppercase"></div>
       </div>
-      <label>Quota</label><select data-k="quota" ${mig ? 'disabled' : `style="${PN_HL}"`}>${qopts.map(q => opt(q, e.quota)).join('')}</select>`}
+      <label>Quota${!mig && pnQuotaFull(s) ? ' <span style="color:var(--bad)">· seats already filled</span>' : ''}</label><select data-k="quota" ${mig ? 'disabled' : `style="${pnQuotaFull(s) ? 'border:3px solid var(--bad);background:var(--bad-bg);font-weight:700' : PN_HL}"`}>${qopts.map(q => opt(q, e.quota)).join('')}</select>`}
     </section>`;
   }).join('');
   return head + bar + cards;
@@ -1045,6 +1046,20 @@ function pnSeatFull(s){
   for(const o of pnList()){ if(o.id === s.id) break; const oe = pnEntry(o); if(oe.on && !pnHide.includes(o.id) && !isMig(oe.year) && oe.program === e.program && qk(oe.quota) === qk(e.quota)) before++; }
   const used = st.filled + pendingFor(e.program, e.quota) + before;
   return used >= st.seats ? 'Seats full: "' + e.quota + '" has ' + used + ' of ' + st.seats + ' taken. You can still add her (you will be asked to confirm).' : '';
+}
+/** v8.42 she is on a quota (not Open Quota, not UoP Employee) whose seats are already all taken: in her program, or in the
+ *  subsidized program of her class (Pre-Medical Open (S)) when she was moved to non-subsidized. '' when fine. */
+function pnQuotaFull(s){
+  const e = pnEntry(s); if(!e.on || pnHide.includes(s.id) || isMig(e.year) || !e.quota) return '';
+  const q = e.quota, open = (init && init.cfg && init.cfg.openQuota) || 'Open Quota';
+  if(qk(q) === qk(open) || /\bu\.?\s*o\.?\s*p\b.*employ|universit\w*\s*employ/i.test(q)) return '';
+  const pr = prog(e.program) || {}, sub = pr.classProgram && init ? init.programs.find(x => x.classProgram === pr.classProgram && x.fee === 'sub') : null;
+  const keys = [e.program].concat(sub && sub.key !== e.program ? [sub.key] : []), out = [];
+  keys.forEach(k => { const st = seatFor(k, q); if(!st || st.seats === '' || st.seats == null) return;
+    let before = 0; if(k === e.program) for(const o of pnList()){ if(o.id === s.id) break; const oe = pnEntry(o); if(oe.on && !pnHide.includes(o.id) && !isMig(oe.year) && oe.program === k && qk(oe.quota) === qk(q)) before++; }
+    const used = st.filled + (k === e.program ? pendingFor(k, q) + before : 0);
+    if(used >= Number(st.seats)) out.push(((prog(k) || {}).label || k) + ': ' + used + ' of ' + st.seats + ' taken' + (st.pooled ? ' (shared pool)' : '')); });
+  return out.length ? '"' + q + '" seats are already FILLED (' + out.join('; ') + '). She gets a quota seat only if her merit is above the last one in that quota; otherwise admit her on ' + open + '.' : '';
 }
 function pnAddAsk(){
   const on = pnList().filter(s => pnEntry(s).on && !pnHide.includes(s.id));
