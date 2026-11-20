@@ -1429,14 +1429,25 @@ function bzSubs(str){
   return String(str || '').split(',').map(x => x.trim()).filter(Boolean).map(code => {
     const k = code.replace(/\(.*?\)/g, '').trim().split('-')[0].toUpperCase(), al = BZ_SUBJ[k];
     let name = al ? al[0] : code; if(k === 'BIO' && bzYear === '2nd Year') name = 'ZOOLOGY';
-    return { code, name, alias:al ? al.map(bzH) : [bzH(code)] };
+    return { code, k, name, alias:al ? al.map(bzH) : [bzH(code)] };
   });
 }
-/** board subjects vs the sheet's SUB1..SUB7: { miss: board subjects not in the sheet, extra: sheet subjects the board does not have } */
+/** board subjects vs the sheet's SUB1..SUB7: { miss: board subjects not in the sheet, extra: sheet subjects the board does not have, special }
+ *  v8.48 JCW rule: an ETHICS student (ETHN) sits in the ISLAMIYAT and MUTALIA QURAN classes, a PAKISTANI CULTURE student (PC) in the URDU class,
+ *  so the sheet lists those subjects for her; they are not differences. Exact names first, then a cut-off name in the sheet ("ISLAMIYAT ELE"). */
+const BZ_SPECIAL = { ETHN:{ subject:'ETHICS', instead:['ISLAMIYAT', 'MUTALIA QURAN'] }, PC:{ subject:'PAKISTANI CULTURE', instead:['URDU'] } };
 function bzSubDiff(o, str){
-  const left = [1, 2, 3, 4, 5, 6, 7].map(i => String(o['s' + i] || '').trim()).filter(Boolean), miss = [];
-  bzSubs(str).forEach(b => { const i = left.findIndex(t => b.alias.includes(bzH(t))); if(i >= 0) left.splice(i, 1); else miss.push(b.name + ' (' + b.code + ')'); });
-  return { miss, extra:left };
+  const left = [1, 2, 3, 4, 5, 6, 7].map(i => String(o['s' + i] || '').trim()).filter(Boolean), miss = [], special = [], todo = [];
+  const take = test => { const i = left.findIndex(t => test(bzH(t))); if(i >= 0){ left.splice(i, 1); return true; } return false; };
+  bzSubs(str).forEach(b => {
+    const sp = BZ_SPECIAL[b.k];
+    if(sp){ special.push({ subject:sp.subject, instead:sp.instead.join(', '), code:b.code });
+      if(!take(x => b.alias.includes(x))) sp.instead.forEach(n => { const al = Object.values(BZ_SUBJ).find(v => v[0] === n) || [n]; take(x => al.map(bzH).includes(x)); });
+      return; }
+    if(!take(x => b.alias.includes(x))) todo.push(b);
+  });
+  todo.forEach(b => { if(!take(x => x.length >= 8 && b.alias.some(a => a.startsWith(x) || (a.length >= 8 && x.startsWith(a))))) miss.push(b.name + ' (' + b.code + ')'); });
+  return { miss, extra:left, special };
 }
 /** same number? a cut board number counts as the same when it is her number with one digit missing */
 function bzSameMob(t, m){
@@ -1456,7 +1467,7 @@ function bzParse(pages){
     const mid = (a, b) => (H[a] + H[b]) / 2;
     const anchors = body.filter(i => /^\d{1,5}$/.test(i.s.trim()) && i.x + i.w / 2 < mid('S.NO', 'GROUP'));
     const cut = [['grp', mid('GROUP', 'GENDER')], ['', mid('GENDER', 'NAME')], ['name', mid('NAME', 'FATHER NAME')], ['father', mid('FATHER NAME', 'BIRTH')],
-      ['dob', mid('BIRTH', 'MOBILE #')], ['mob', mid('MOBILE #', 'PRE: REC')], ['pre', mid('PRE: REC', 'SUBJECTS')], ['subj', H['PHOTO'] != null ? mid('SUBJECTS', 'PHOTO') : 1e9]];
+      ['dob', mid('BIRTH', 'MOBILE #')], ['mob', mid('MOBILE #', 'PRE: REC')], ['pre', mid('PRE: REC', 'SUBJECTS')], ['subj', H['PHOTO'] != null ? H['PHOTO'] - 25 : 1e9]]   // the photo box starts ~28 pt left of its header's centre; a code at the cell's right edge stays in SUBJECTS;
     const rows = anchors.map(a => ({ sno:a.s.trim(), y:a.y, c:{ grp:[], name:[], father:[], dob:[], mob:[], pre:[], subj:[] } }));
     body.forEach(i => {
       if(anchors.includes(i)) return;
@@ -1538,7 +1549,7 @@ function bzCheck(rows){
     x.mobFix = x.mobDiff && !!m.full; x.mobNew = m.full;
     x.rollDiff = !!x.b.mroll && String(x.s.matricRoll || '').replace(/\D/g, '').replace(/^0+/, '') !== x.b.mroll.replace(/^0+/, '');
     x.yearDiff = !!x.b.myear && String(x.s.passYear || '').trim() !== x.b.myear;
-    x.sub = bzSubDiff(x.s, x.b.subjects); x.subDiff = !!(x.b.subjects && (x.sub.miss.length || x.sub.extra.length));
+    x.sub = bzSubDiff(x.s, x.b.subjects); x.subDiff = !!(x.b.subjects && (x.sub.miss.length || x.sub.extra.length)); x.spec = x.sub.special;
     if(x.dobDiff || x.mobDiff || x.rollDiff || x.yearDiff || x.subDiff || x.how !== 'exact') list.push(x);
   });
   bzSel = {}; list.forEach(x => { if(x.how === 'near' || !x.s.roll) return; const r = x.s.roll;
@@ -1548,7 +1559,8 @@ function bzCheck(rows){
   const oldPh = BZ && BZ.pics || {};
   const pics = {}; M.forEach(x => { if(x.s && x.s.roll && x.how !== 'near' && noPic(x.s) && oldPh[x.s.roll]) pics[x.s.roll] = oldPh[x.s.roll]; });
   const subN = M.filter(x => x.s && x.s.roll && x.b.subjects && x.how !== 'near').length;
-  BZ = Object.assign(BZ || {}, { pics, nopic:M.filter(x => x.s && x.s.roll && x.how !== 'near' && noPic(x.s)), rows, list, subN, matched:M.filter(x => x.s).length, nf:M.filter(x => !x.s && !x.dupOf), dup:M.filter(x => x.dupOf), miss:st.filter(o => !used.has(bzKey(o))) });
+  const spec = M.filter(x => x.s && x.s.roll && x.how !== 'near').flatMap(x => (x.spec || bzSubDiff(x.s, x.b.subjects).special).map(sp => ({ x, sp })));
+  BZ = Object.assign(BZ || {}, { spec, pics, nopic:M.filter(x => x.s && x.s.roll && x.how !== 'near' && noPic(x.s)), rows, list, subN, matched:M.filter(x => x.s).length, nf:M.filter(x => !x.s && !x.dupOf), dup:M.filter(x => x.dupOf), miss:st.filter(o => !used.has(bzKey(o))) });
 }
 const bzCount = () => Object.keys(bzSel).filter(k => bzSel[k]).length;
 function bzList(){
@@ -1581,7 +1593,12 @@ function bzHtml(){
   const mobCell = x => !x.mobDiff ? '<span class="sub">same</span>' : x.mobFix
     ? `<label class="nw">${ck(x, 'contact')} ${esc(x.s.contact || '(empty)')} → <b>${esc(bzFmtMob(x.mobNew))}</b></label>`
     : `<span class="nw">${esc(x.s.contact || '(empty)')} ≠ <b>${esc(x.b.mobile)}</b></span><div class="sub">Board printed it as +92 with a digit cut off: check by hand</div>`;
-  const body = bzF === 'dup'
+  const body = bzF === 'spec'
+    ? `<div class="sub">Students who take <b>ETHICS</b> (they sit in the ISLAMIYAT and MUTALIA QURAN classes) or <b>PAKISTANI CULTURE</b> (they sit in the URDU class). The strength sheet keeps those class subjects for them; this list is kept in the sheet <b>Pak-Culture Ethics</b> so the Detention exam can give them their real subject.</div>
+      <div class="acts" style="margin-top:8px"><button class="btn primary" type="button" id="bzSpecSave" ${bzBusy || !BZ.spec.length ? 'disabled' : ''}>Save ${BZ.spec.length} to the sheet "Pak-Culture Ethics"</button></div>
+      <table style="margin-top:8px"><thead><tr><th>Enroll#</th><th>Student</th><th>Section</th><th>Real subject</th><th>Sits in</th><th>Board</th></tr></thead><tbody>
+      ${BZ.spec.map(({ x, sp }) => `<tr><td class="nw">${esc(x.s.roll)}</td><td>${esc(x.s.name)}<div class="sub">d/o ${esc(x.s.father)}</div></td><td class="nw">${esc(x.s.pcs)}</td><td><b>${esc(sp.subject)}</b></td><td>${esc(sp.instead)}</td><td class="nw">${esc(sp.code)}<div class="sub">S.No ${esc(x.b.sno)}</div></td></tr>`).join('') || '<tr><td colspan="6" class="sub">Nobody takes Ethics or Pakistani Culture in this report.</td></tr>'}</tbody></table>`
+    : bzF === 'dup'
     ? `<div class="sub">These students are registered <b>twice</b> in the board report (same name + father name, or same Matric Roll No). Only one registration should stay: tell the board which one to cancel.</div>
       <table style="margin-top:8px"><thead><tr><th>Enroll#</th><th>Student</th><th>This entry</th><th>Other entry</th></tr></thead><tbody>
       ${BZ.dup.map(x => { const d = x.dupOf, e = b => b ? `S.No ${esc(b.sno)} (page ${b.page})<div class="sub">${esc(b.group)} · ${esc(b.prerec)} · DOB ${esc(bzD(b.dob))} · ${esc(b.mobile)}</div>` : '—';
@@ -1607,7 +1624,7 @@ function bzHtml(){
         <td>${esc(x.s.name)}<div class="sub">d/o ${esc(x.s.father)}</div>${x.how === 'near' ? `<div class="sub" style="color:var(--mid);font-weight:700">Board: ${esc(x.b.name)} d/o ${esc(x.b.father)} (${Math.round(x.sc * 100)}% alike: is it her? then tick)</div>` : x.how === 'roll' ? `<div class="sub" style="color:var(--mid);font-weight:700">Board: ${esc(x.b.name)} d/o ${esc(x.b.father)} (same Matric Roll No + year, name spelled differently)</div>` : ''}</td>
         <td>${dobCell(x)}</td><td>${mobCell(x)}</td><td>${rollCell(x)}</td><td>${subCell(x)}</td></tr>`).join('') || '<tr><td colspan="7" class="sub">✓ Nothing different here.</td></tr>'}</tbody></table>`;
   return head + `<section class="card">
-    <div class="acts" style="flex-wrap:wrap">${fb('diff', 'All differences', BZ.list.length)}${fb('dob', 'DOB', nDob)}${fb('mob', 'Mobile #', nMob)}${fb('roll', 'Matric Roll No / year', nRoll)}${fb('sub', 'Subjects', nSub)}${fb('pic', 'Picture missing', BZ.nopic.length)}${fb('near', 'Name spelled differently', nNear)}${BZ.dup.length ? fb('dup', 'Twice in board report', BZ.dup.length) : ''}${fb('nf', 'Not in strength sheet', BZ.nf.length)}${fb('miss', 'Not in board report', BZ.miss.length)}</div>
+    <div class="acts" style="flex-wrap:wrap">${fb('diff', 'All differences', BZ.list.length)}${fb('dob', 'DOB', nDob)}${fb('mob', 'Mobile #', nMob)}${fb('roll', 'Matric Roll No / year', nRoll)}${fb('sub', 'Subjects', nSub)}${fb('spec', 'Ethics / Pak Culture', BZ.spec.length)}${fb('pic', 'Picture missing', BZ.nopic.length)}${fb('near', 'Name spelled differently', nNear)}${BZ.dup.length ? fb('dup', 'Twice in board report', BZ.dup.length) : ''}${fb('nf', 'Not in strength sheet', BZ.nf.length)}${fb('miss', 'Not in board report', BZ.miss.length)}</div>
     ${bzF === 'nf' ? `<div class="sub" style="margin-top:6px">In the board report but no student with this name + father name in the strength sheet. Each one is looked up in the <b>Left Students</b> sheet too${LEFT && !leftBusy ? `: <b>${BZ.nf.filter(x => bzLeft(x.b)).length}</b> left the college, <b style="color:var(--bad)">${BZ.nf.filter(x => !bzLeft(x.b)).length}</b> found in neither sheet (red)` : ' (reading…)'}${LEFT && LEFT.err ? ' — Left Students sheet: ' + esc(LEFT.err) : ''}.</div>` : bzF === 'miss' ? `<div class="sub" style="margin-top:6px">${esc(bzYear)} students of the strength sheet who are <b>not</b> in this board report: check that they are registered with the board.</div>` : ''}
     <div style="max-height:62vh;overflow:auto;margin-top:8px">${body}</div>
     ${bzF === 'nf' || bzF === 'miss' || bzF === 'pic' ? '' : `<div class="acts" style="margin-top:10px;flex-wrap:wrap"><button class="btn small" id="bzAllD">Tick all DOB</button><button class="btn small" id="bzAllM">Tick all mobile #</button><button class="btn small" id="bzAllR">Tick all Matric Roll No / year</button><button class="btn small" id="bzNone">Untick all</button></div>`}
@@ -1719,6 +1736,17 @@ function wireBz(){
   const rr = $('#bzAllR'); if(rr) rr.onclick = () => tick('roll', true);
   const sv = $('#bzSubSave'); if(sv) sv.onclick = bzSaveSubjects;
   const pg = $('#bzPicGet'); if(pg) pg.onclick = bzPicGet;
+  const spb = $('#bzSpecSave'); if(spb) spb.onclick = () => {
+    const items = BZ.spec.map(({ x, sp }) => ({ roll:x.s.roll, name:x.s.name, father:x.s.father, pcs:x.s.pcs, subject:sp.subject, instead:sp.instead, code:sp.code, sno:x.b.sno }));
+    dlgOpen(`<h2>Save ${items.length} students?</h2><div class="sub">The sheet <b>Pak-Culture Ethics</b> (Users workbook, made if missing) gets one row per student and subject: Enroll#, name, father, section, real subject (ETHICS / PAKISTANI CULTURE), the class she sits in, board code. Rows of these students are replaced; other rows stay. Transform is not changed.</div>
+      <div class="acts"><button class="btn" id="dBack">Back</button><button class="btn primary" id="dGo">Save ${items.length}</button></div>`);
+    $('#dBack').onclick = dlgClose;
+    $('#dGo').onclick = async () => { dlgClose(); bzBusy = 'Saving the Pak-Culture Ethics sheet…'; bzErr = ''; bzMsg = ''; render();
+      try{ const r = await api({ action:'adm_bise_special', items }, 120000); if(!r.ok) throw new Error(r.error === 'UNKNOWN_ACTION' ? 'The server is not updated yet (Admissions.gs).' : r.error);
+        bzMsg = r.written + ' rows saved in "Pak-Culture Ethics" (' + r.ethics + ' Ethics, ' + r.pakcult + ' Pakistani Culture)' + (r.newSheet ? '; the sheet was made' : '') + '.'; }
+      catch(e){ bzErr = e.message; }
+      bzBusy = ''; render(); };
+  };
   const ps = $('#bzPicSave'); if(ps) ps.onclick = bzPicSave;
   document.querySelectorAll('[data-bzpic]').forEach(c => c.onchange = () => { BZ.pics[c.dataset.bzpic].on = c.checked; const b = $('#bzPicSave'); if(b){ b.textContent = 'Save ' + bzPicN() + ' pictures'; b.disabled = !bzPicN(); } });
   const o = $('#bzOut'); if(o) o.onclick = () => { if(!window.JCWOUT || !BZ) return toast('Reload the page once.');
