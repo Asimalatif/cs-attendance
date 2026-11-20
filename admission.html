@@ -828,6 +828,19 @@ function pnEntry(s){
    and gets the subsidized program only if her place is inside its seats. Default (no subsidized seats for the quota) = non-subsidized.
    The official merit list (OML) still wins when she is on it. A program you choose yourself is kept. */
 let pnNonCache = {};
+/** her place in the merit list of program key + quota, by the Merit-list rules: fee paid on time first (by the last date of admission),
+ *  then Aggregate, then the older first; late / unpaid after everyone, in the order paid. null when that quota has no seat list */
+function pnPlace(s, key, q){
+  const m = meritLists().find(x => x.home && x.home.includes(key) && qk(x.quota) === qk(q));
+  if(!m || m.noSeats || !m.seats) return null;
+  const last = mlLast(), lastK = last ? last.replace(/-/g, '') : '', paid = s.paidOn || '';
+  const me = { _a:Math.round(mlAgg({ metric:s.metric, total:s.total, hq:s.hq }) * 100), _d:mlDob({ dob:s.dob }), _pk:mlDob({ dob:paid }), name:s.name };
+  me._late = !!lastK && (me._pk === '99999999' || me._pk > lastK);
+  const cmp = (a, b) => (a._late ? 1 : 0) - (b._late ? 1 : 0) || (a._late && b._late ? String(a._pk).localeCompare(String(b._pk)) : 0) || b._a - a._a || a._d.localeCompare(b._d) || String(a.name).localeCompare(String(b.name));
+  const pos = m.rows.filter(r => cmp(r.o, me) < 0).length + 1, ls = m.rows[Math.min(m.seats, m.rows.length) - 1];
+  return { m, me, pos, seats:m.seats, inside:pos <= m.seats, lastSeat:ls ? ls.o : null, paid, lastDate:last };
+}
+const pnFeeTxt = P => P.me._late ? (P.paid ? 'fee paid ' + P.paid + ', after the last date of admission' + (P.lastDate ? ' (' + bzD(P.lastDate) + ')' : '') : 'fee not paid yet') : (P.paid ? 'fee paid on time (' + P.paid + ')' : 'fee on time');
 function pnRecommend(s, e){
   if(!init || !init.programs || isMig(e.year) || (e.oml && e.oml.key)) return;
   const pr = prog(e.program) || prog(s.program); if(!pr || !pr.classProgram) return;
@@ -841,14 +854,10 @@ function pnRecommend(s, e){
   let to = non.key, why = '';
   if(/\bu\.?\s*o\.?\s*p\b.*employ|universit\w*\s*employ/i.test(q)){ to = sub.key; why = 'UoP Employee Quota: always on a subsidized seat.'; }
   else {
-    const m = meritLists().find(x => x.home && x.home.includes(sub.key) && qk(x.quota) === qk(q));
-    if(!m || m.noSeats || !m.seats) why = '"' + q + '" has no subsidized seats in ' + sub.label + ': non-subsidized.';
+    const P = pnPlace(s, sub.key, q);
+    if(!P) why = '"' + q + '" has no subsidized seats in ' + sub.label + ': non-subsidized.';
     else {
-      const last = mlLast(), lastK = last ? last.replace(/-/g, '') : '', paid = s.paidOn || '';
-      const me = { _a:Math.round(mlAgg({ metric:s.metric, total:s.total, hq:s.hq }) * 100), _d:mlDob({ dob:s.dob }), _pk:mlDob({ dob:paid }), name:s.name };
-      me._late = !!lastK && (me._pk === '99999999' || me._pk > lastK);
-      const cmp = (a, b) => (a._late ? 1 : 0) - (b._late ? 1 : 0) || (a._late && b._late ? String(a._pk).localeCompare(String(b._pk)) : 0) || b._a - a._a || a._d.localeCompare(b._d) || String(a.name).localeCompare(String(b.name));
-      const pos = m.rows.filter(r => cmp(r.o, me) < 0).length + 1, lastSeat = m.rows[Math.min(m.seats, m.rows.length) - 1];
+      const m = P.m, me = P.me, pos = P.pos, paid = P.paid, lastSeat = m.rows[Math.min(m.seats, m.rows.length) - 1];
       const cut = lastSeat && !lastSeat.o._late ? ' (last subsidized seat: Aggregate ' + (lastSeat.o._a / 100) + ')' : '';
       const late = me._late ? (paid ? ' Fee paid ' + paid + ', after the last date of admission.' : ' Fee not paid yet.') : '';
       if(pos <= m.seats){ to = sub.key; why = 'Merit place ' + pos + ' of the ' + m.seats + ' subsidized seats of ' + q + ' (Aggregate ' + (me._a / 100) + '): subsidized.' + late; }
@@ -1058,8 +1067,14 @@ function pnQuotaFull(s){
   keys.forEach(k => { const st = seatFor(k, q); if(!st || st.seats === '' || st.seats == null) return;
     let before = 0; if(k === e.program) for(const o of pnList()){ if(o.id === s.id) break; const oe = pnEntry(o); if(oe.on && !pnHide.includes(o.id) && !isMig(oe.year) && oe.program === k && qk(oe.quota) === qk(q)) before++; }
     const used = st.filled + (k === e.program ? pendingFor(k, q) + before : 0);
-    if(used >= Number(st.seats)) out.push(((prog(k) || {}).label || k) + ': ' + used + ' of ' + st.seats + ' taken' + (st.pooled ? ' (shared pool)' : '')); });
-  return out.length ? '"' + q + '" seats are already FILLED (' + out.join('; ') + '). She gets a quota seat only if her merit is above the last one in that quota; otherwise admit her on ' + open + '.' : '';
+    if(used < Number(st.seats)) return;
+    const P = pnPlace(s, k, q), lo = P && P.lastSeat;
+    let v = '';
+    if(P) v = P.inside
+      ? ' Her merit place is ' + P.pos + ' of ' + P.seats + ' (' + pnFeeTxt(P) + ', Aggregate ' + (P.me._a / 100) + (lo ? '; last seat now ' + lo.name + ' ' + (lo._a / 100) + (lo._late ? ', late fee' : '') : '') + '): she DOES get the quota seat and the last student moves out of it.'
+      : ' Her merit place is ' + P.pos + ', after the ' + P.seats + ' seats (' + pnFeeTxt(P) + ', Aggregate ' + (P.me._a / 100) + (lo ? '; last seat ' + lo.name + ' ' + (lo._a / 100) : '') + ')' + (P.me._late && lo && !lo._late && P.me._a > lo._a ? ': her Aggregate is higher, but she paid after the last date, so on-time students come first' : '') + ': NO quota seat, admit her on ' + open + '.';
+    out.push(((prog(k) || {}).label || k) + ': ' + used + ' of ' + st.seats + ' taken' + (st.pooled ? ' (shared pool)' : '') + '.' + v); });
+  return out.length ? '"' + q + '" seats are already FILLED. ' + out.join(' ') + (out.some(x => /DOES get|NO quota seat/.test(x)) ? '' : ' She gets a quota seat only if her merit is above the last one in that quota; otherwise admit her on ' + open + '.') : '';
 }
 function pnAddAsk(){
   const on = pnList().filter(s => pnEntry(s).on && !pnHide.includes(s.id));
