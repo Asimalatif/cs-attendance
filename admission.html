@@ -1050,6 +1050,7 @@ function pnItems(list, force){
 /** seats full for her program + quota, counting the students ticked before her in this list */
 function pnSeatFull(s){
   const e = pnEntry(s); if(!e.on || pnHide.includes(s.id) || isMig(e.year)) return '';
+  if(qk(e.quota) === qk((init && init.cfg && init.cfg.openQuota) || 'Open Quota')) return '';   // v8.42 Open Quota takes as many as come
   const st = seatFor(e.program, e.quota); if(!st || st.seats === '' || st.seats == null) return '';
   let before = 0;
   for(const o of pnList()){ if(o.id === s.id) break; const oe = pnEntry(o); if(oe.on && !pnHide.includes(o.id) && !isMig(oe.year) && oe.program === e.program && qk(oe.quota) === qk(e.quota)) before++; }
