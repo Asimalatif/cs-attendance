@@ -175,6 +175,54 @@
     else if (print && isPhone) toast('Use the ⋮ menu → Print (or Share → Print) in the PDF that opened.');
     setTimeout(function () { URL.revokeObjectURL(u); }, 600000);
   }
+  /* v8.49 runs inside the opened table window: tap a column title to sort (again = reverse), a filter under every column
+     (a list of its values when it has up to 60 different ones, else a text box), the search box, row count, Clear */
+  function tableTools() {
+    var key = function (v) {
+      var t = String(v).trim(), m;
+      if ((m = t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/))) return [1, m[3] + ('0' + m[2]).slice(-2) + ('0' + m[1]).slice(-2)];
+      if ((m = t.match(/^(\d{4})-(\d{2})-(\d{2})/))) return [1, m[1] + m[2] + m[3]];
+      var n = t.replace(/,/g, ''); if (n !== '' && !isNaN(n)) return [0, Number(n)];
+      var d = t.match(/(\d+)\s*$/); return [2, t.toLowerCase().replace(/\d+\s*$/, ''), d ? Number(d[1]) : -1];
+    };
+    var cmp = function (a, b) { a = key(a); b = key(b); if (a[0] !== b[0]) return a[0] - b[0]; if (a[1] < b[1]) return -1; if (a[1] > b[1]) return 1; return (a[2] || 0) - (b[2] || 0); };
+    var q = document.getElementById('q'), cnt = document.getElementById('cnt'), T = [].slice.call(document.querySelectorAll('table'));
+    var apply = function () {
+      var v = (q.value || '').toLowerCase(), shown = 0, all = 0;
+      T.forEach(function (t) {
+        var f = [].slice.call(t.querySelectorAll('thead .flt [data-c]')).map(function (e) { return { c: +e.getAttribute('data-c'), v: e.value, sel: e.tagName === 'SELECT' }; }).filter(function (x) { return x.v !== ''; });
+        [].forEach.call(t.tBodies[0].rows, function (r) {
+          all++;
+          var ok = r.textContent.toLowerCase().indexOf(v) > -1 && f.every(function (x) { var c = (r.cells[x.c] || {}).textContent || ''; return x.sel ? c.trim() === x.v : c.toLowerCase().indexOf(x.v.toLowerCase()) > -1; });
+          r.style.display = ok ? '' : 'none'; if (ok) shown++;
+        });
+      });
+      cnt.textContent = shown === all ? all + ' rows' : shown + ' of ' + all + ' rows';
+    };
+    T.forEach(function (t) {
+      var hr = t.tHead && t.tHead.rows[0]; if (!hr) return;
+      var body = t.tBodies[0], rows = [].slice.call(body.rows), fr = document.createElement('tr'); fr.className = 'flt';
+      [].forEach.call(hr.cells, function (th, c) {
+        th.style.cursor = 'pointer'; th.title = 'Tap to sort'; th.insertAdjacentHTML('beforeend', '<span class="ar"></span>');
+        th.onclick = function () {
+          var dir = th.getAttribute('data-d') === 'a' ? 'd' : 'a';
+          [].forEach.call(hr.cells, function (x) { x.removeAttribute('data-d'); x.lastChild.textContent = ''; });
+          th.setAttribute('data-d', dir); th.lastChild.textContent = dir === 'a' ? ' ▲' : ' ▼';
+          [].slice.call(body.rows).sort(function (a, b) { var r = cmp((a.cells[c] || {}).textContent || '', (b.cells[c] || {}).textContent || ''); return dir === 'a' ? r : -r; }).forEach(function (r) { body.appendChild(r); });
+        };
+        var vals = {}; rows.forEach(function (r) { var x = ((r.cells[c] || {}).textContent || '').trim(); vals[x] = (vals[x] || 0) + 1; });
+        var list = Object.keys(vals).sort(cmp), td = document.createElement('th');
+        if (list.length <= 60 && list.length > 1) td.innerHTML = '<select data-c="' + c + '"><option value="">All</option>' + list.map(function (x) { return '<option value="' + x.replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '">' + (x === '' ? '(empty)' : x.replace(/&/g, '&amp;').replace(/</g, '&lt;')) + ' (' + vals[x] + ')</option>'; }).join('') + '</select>';
+        else if (list.length > 60) td.innerHTML = '<input data-c="' + c + '" placeholder="filter">';
+        fr.appendChild(td);
+      });
+      t.tHead.appendChild(fr);
+      [].forEach.call(fr.querySelectorAll('[data-c]'), function (e) { e.oninput = e.onchange = apply; });
+    });
+    q.oninput = apply;
+    document.getElementById('clr').onclick = function () { q.value = ''; [].forEach.call(document.querySelectorAll('.flt [data-c]'), function (e) { e.value = ''; }); apply(); };
+    apply();
+  }
   function openTable(o, print) {
     return sheetsOf(o).then(function (S) {
       var w = window.open('', '_blank');
@@ -184,13 +232,14 @@
         'body{font:14px system-ui,sans-serif;margin:14px;color:#111}h1{font-size:17px;margin:0 0 2px}.s{color:#555;font-size:12px;margin-bottom:8px}' +
         'table{border-collapse:collapse;width:100%;font-size:12.5px;margin-bottom:16px}th,td{border:1px solid #999;padding:4px 6px;text-align:left;vertical-align:top}th{background:#eee;position:sticky;top:0}' +
         '.bar{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.bar button,.bar input{height:36px;border-radius:9px;border:1.5px solid #999;background:#fff;padding:0 12px;font:inherit}.bar button{font-weight:700;cursor:pointer}' +
-        '@media print{.bar{display:none}th{position:static}}</style></head><body><h1>' + t + '</h1><div class="s">Jinnah College for Women, Peshawar · ' + new Date().toLocaleString('en-GB') + '</div>' +
-        '<div class="bar"><input id="q" placeholder="Filter rows…" oninput="var v=this.value.toLowerCase();[].forEach.call(document.querySelectorAll(\'tbody tr\'),function(r){r.style.display=r.textContent.toLowerCase().indexOf(v)>-1?\'\':\'none\'})"><button onclick="print()">Print</button><button onclick="close()">Close</button></div>' +
+        'tr.flt th{background:#f6f6f6;top:30px;padding:3px}tr.flt select,tr.flt input{width:100%;min-width:70px;height:28px;font:inherit;font-size:12px;border:1px solid #bbb;border-radius:6px;background:#fff}th[data-d]{background:#ddd}#cnt{align-self:center;color:#555;font-size:12.5px}' +
+        '@media print{.bar{display:none}th{position:static}tr.flt{display:none}}</style></head><body><h1>' + t + '</h1><div class="s">Jinnah College for Women, Peshawar · ' + new Date().toLocaleString('en-GB') + '</div>' +
+        '<div class="bar"><input id="q" placeholder="Search all columns…"><button id="clr">Clear filters</button><button onclick="print()">Print</button><button onclick="close()">Close</button><span id="cnt"></span></div>' +
         S.map(function (s) {
           return (S.length > 1 ? '<h1 style="font-size:14px">' + esc(s.name) + '</h1>' : '') + '<table><thead><tr>' + (s.rows[0] || []).map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>' +
             s.rows.slice(1, 20001).map(function (r) { return '<tr>' + r.map(function (v) { return '<td>' + esc(v) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table>' +
             (s.rows.length > 20001 ? '<div class="s">First 20,000 rows shown: download the Excel file for all ' + (s.rows.length - 1).toLocaleString() + '.</div>' : '');
-        }).join('') + (print ? '<script>setTimeout(print,400)<\/script>' : '') + '</body></html>');
+        }).join('') + '<script>(' + tableTools.toString() + ')()<\/script>' + (print ? '<script>setTimeout(print,400)<\/script>' : '') + '</body></html>');
       w.document.close();
     });
   }
