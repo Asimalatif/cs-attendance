@@ -1391,7 +1391,7 @@ function wireFx(){
 /* ---------- v8.40 Board check: DOB and mobile # in the BISE "Registration Report for College Record" (draft PDF) vs the strength sheet.
    Students are matched by name + father name (then by a close spelling, never ticked by itself). Nothing is written until you tick rows
    and press "Replace in Transform"; the server re-checks that the sheet still has the value you saw. ---------- */
-let BZ_M = [], BZ_DOC = null, BZ = null, bzBusy = '', bzErr = '', bzMsg = '', bzSel = {}, bzF = 'diff', bzYear = '1st Year';
+let BZ_M = [], BZ_DOC = null, BZ = null, bzBusy = '', bzErr = '', bzMsg = '', bzSel = {}, bzF = 'diff', bzYear = ls.get('bz_year', '1st Year'), bzRest = false;   // v8.47 class + last report remembered on this device
 const BZ_GROUP = { 'pre-medical':['Pre Medical Open', 'Self Morning Medical', 'Evening Pre Medical'], 'pre-engineering':['Pre Engg'], 'general / computer science':['FCS'], 'humanities':['FA'] };
 const BZ_MON = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
 const bzC = s => String(s || '').toUpperCase().replace(/\bM[OU]H[AU]MM[AE]D\b/g, 'MUHAMMAD').replace(/[^A-Z]/g, '');
@@ -1474,9 +1474,26 @@ function bzParse(pages){
   });
   return out;
 }
-async function bzRead(file){
+async function bzLib(){
   if(!window.pdfjsLib){ await new Promise((ok, no) => { const x = document.createElement('script'); x.src = PDFJS + 'pdf.min.js'; x.onload = ok; x.onerror = () => no(new Error('Could not load the PDF reader (internet?)')); document.head.appendChild(x); });
     window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js'; }
+}
+/** the last board report read on this device (rows + the PDF itself, for the pictures) */
+async function bzRestore(){
+  if(BZ || bzRest || !idx || !idx.rows || !idx.rows.length) return; bzRest = true;
+  const L = await idbGet('bz_last'); if(!L || !L.rows || !L.rows.length || BZ) return;
+  if(L.year) bzYear = L.year;
+  BZ = { file:L.file }; bzCheck(L.rows);
+  bzMsg = 'Last report on this device: ' + L.file + ' (read ' + new Date(L.at).toLocaleString('en-GB', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) + '). Choose another PDF to check a new one.';
+  render();
+}
+async function bzDoc(){
+  if(BZ_DOC) return BZ_DOC;
+  const blob = await idbGet('bz_pdf'); if(!blob) return null;
+  await bzLib(); BZ_DOC = await window.pdfjsLib.getDocument({ data:new Uint8Array(await blob.arrayBuffer()) }).promise; return BZ_DOC;
+}
+async function bzRead(file){
+  await bzLib();
   const doc = await window.pdfjsLib.getDocument({ data:new Uint8Array(await file.arrayBuffer()) }).promise, pages = [];
   BZ_DOC = doc;
   for(let p = 1; p <= doc.numPages; p++){
@@ -1548,7 +1565,7 @@ function bzHtml(){
     <div class="sub">Upload the BISE Peshawar <b>Registration Report for College Record</b> (the draft PDF). Every student in it is matched with the strength sheet by name + father name, and her <b>date of birth</b>, <b>mobile #</b>, <b>Matric Roll No + passing year</b> (Pre: Rec, e.g. 103901/A/2026) and <b>subjects</b> are compared. Students without a picture can get theirs from the board PDF. <b>Nothing is changed</b> until you tick rows and press <b>Replace in Transform</b>; every change is written in the Admission Log (old → new).</div>
     <div class="g2" style="margin-top:10px;align-items:end">
       <div><label for="bzYear">Class in the report</label><select id="bzYear">${['1st Year', '2nd Year'].map(y => `<option${y === bzYear ? ' selected' : ''}>${y}</option>`).join('')}</select></div>
-      <div><label class="btn primary" style="display:flex;align-items:center;justify-content:center;cursor:pointer">${BZ ? 'Choose another PDF' : 'Choose the board PDF'}<input type="file" id="bzFile" accept="application/pdf,.pdf" hidden></label></div>
+      <div><label class="btn primary" style="display:flex;align-items:center;justify-content:center;cursor:pointer">${BZ ? 'Choose another PDF' : 'Choose the board PDF'}<input type="file" id="bzFile" accept="application/pdf,.pdf" hidden></label>${BZ ? '<button class="btn small" type="button" id="bzForget" style="margin-top:6px">Forget this report</button>' : ''}</div>
     </div>
     ${bzBusy ? `<div class="sub" id="bzBusy" style="margin-top:8px">${esc(bzBusy)}</div>` : ''}${bzErr ? `<div class="err" style="margin-top:8px">${esc(bzErr)}</div>` : ''}${bzMsg ? `<div class="sub" style="margin-top:8px;color:var(--good);font-weight:700">${esc(bzMsg)}</div>` : ''}
     ${BZ ? `<div class="sub" style="margin-top:8px"><b>${esc(BZ.file || '')}</b>: ${BZ.rows.length} students in the report · ${BZ.matched} found in the strength sheet (${esc(bzYear)}).</div>` : ''}</section>`;
@@ -1601,7 +1618,8 @@ function bzHtml(){
 const bzPicN = () => BZ ? Object.keys(BZ.pics).filter(r => BZ.pics[r].on && !BZ.pics[r].saved).length : 0;
 /** photos of the students without a picture: the PHOTO cell of her row, cut from the page drawn at 4x */
 async function bzPicGet(){
-  if(!BZ_DOC) return toast('Choose the board PDF again (the file is not in memory any more).');
+  if(!BZ_DOC){ bzBusy = 'Opening the saved board PDF…'; render(); try{ await bzDoc(); }catch(e){} bzBusy = ''; }
+  if(!BZ_DOC){ render(); return toast('Choose the board PDF again (it is not saved on this device).'); }
   const want = BZ.nopic.filter(x => !BZ.pics[x.s.roll]), pages = [...new Set(want.map(x => x.b.page))];
   const O = window.pdfjsLib.OPS, mul = (m, n) => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]];
   let got = 0;
@@ -1672,16 +1690,20 @@ function bzSaveSubjects(){
 }
 function wireBz(){
   if(!LEFT && !leftBusy && online()) loadLeft();
-  const y = $('#bzYear'); if(y) y.onchange = () => { bzYear = y.value; if(BZ) bzCheck(BZ.rows); render(); };
+  const y = $('#bzYear'); if(y) y.onchange = () => { bzYear = y.value; ls.set('bz_year', bzYear); if(BZ){ bzCheck(BZ.rows); idbGet('bz_last').then(L => { if(L){ L.year = bzYear; idbSet('bz_last', L); } }); } render(); };
+  if(!BZ) bzRestore();
+  const fg = $('#bzForget'); if(fg) fg.onclick = () => { idbSet('bz_last', null); idbSet('bz_pdf', null); BZ = null; BZ_DOC = null; bzMsg = ''; bzRest = true; render(); toast('Board report removed from this device'); };
   const f = $('#bzFile'); if(f) f.onchange = async () => {
     const file = f.files[0]; if(!file) return;
     if(!idx || !idx.rows || !idx.rows.length){ bzErr = 'The student list is not downloaded yet: connect to the internet and open this page again.'; render(); return; }
     if(/part[\s\-_]*(ii|2)\b/i.test(file.name)) bzYear = '2nd Year'; else if(/part[\s\-_]*(i|1)\b/i.test(file.name)) bzYear = '1st Year';
+    ls.set('bz_year', bzYear);
     bzErr = ''; bzMsg = ''; bzBusy = 'Reading ' + file.name + '…'; render();
     try{
       const rows = await bzRead(file);
       if(!rows.length) throw new Error('No students found. Is this the board\'s "Registration Report for College Record" (columns S.NO, NAME, FATHER NAME, DATE OF BIRTH, MOBILE #)?');
       BZ = { file:file.name }; bzF = 'diff'; bzCheck(rows);
+      idbSet('bz_last', { file:file.name, rows, year:bzYear, at:Date.now() }); idbSet('bz_pdf', file);
     }catch(e){ bzErr = e.message; }
     bzBusy = ''; render();
   };
