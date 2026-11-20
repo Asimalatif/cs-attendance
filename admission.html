@@ -822,6 +822,42 @@ function pnEntry(s){
   }
   return e;
 }
+/* v8.41 Subsidized or non-subsidized? For a class with both (Pre-Medical: Pre-Medical Open (S) / Self Morning Medical (M)) the program is
+   worked out from the seat rules of her quota, the same as the Merit lists: UoP Employee Quota is always subsidized; otherwise she is
+   placed in her quota's merit list (on-time fee first, then Aggregate, then the older first; late fee after everyone, in the order paid)
+   and gets the subsidized program only if her place is inside its seats. Default (no subsidized seats for the quota) = non-subsidized.
+   The official merit list (OML) still wins when she is on it. A program you choose yourself is kept. */
+let pnNonCache = {};
+function pnRecommend(s, e){
+  if(!init || !init.programs || isMig(e.year) || (e.oml && e.oml.key)) return;
+  const pr = prog(e.program) || prog(s.program); if(!pr || !pr.classProgram) return;
+  const fam = init.programs.filter(x => x.classProgram === pr.classProgram), sub = fam.find(x => x.fee === 'sub'), nons = fam.filter(x => x.fee === 'non');
+  if(!sub || !nons.length) return;                                   // FCS, F.A, Pre-Engineering: no split
+  const ck = pr.classProgram + '|' + (idx ? idx.at + '|' + idx.rows.length : '');
+  let non = pnNonCache[ck];
+  if(!non){ const n = {}; if(idx) idx.rows.forEach(r => { const o = recOf(r); if(!isMig(o.year)) n[o.key] = (n[o.key] || 0) + 1; });
+    non = pnNonCache[ck] = nons.slice().sort((a, b) => (n[b.key] || 0) - (n[a.key] || 0))[0]; }
+  const q = e.quota || 'Open Quota';
+  let to = non.key, why = '';
+  if(/\bu\.?\s*o\.?\s*p\b.*employ|universit\w*\s*employ/i.test(q)){ to = sub.key; why = 'UoP Employee Quota: always on a subsidized seat.'; }
+  else {
+    const m = meritLists().find(x => x.home && x.home.includes(sub.key) && qk(x.quota) === qk(q));
+    if(!m || m.noSeats || !m.seats) why = '"' + q + '" has no subsidized seats in ' + sub.label + ': non-subsidized.';
+    else {
+      const last = mlLast(), lastK = last ? last.replace(/-/g, '') : '', paid = s.paidOn || '';
+      const me = { _a:Math.round(mlAgg({ metric:s.metric, total:s.total, hq:s.hq }) * 100), _d:mlDob({ dob:s.dob }), _pk:mlDob({ dob:paid }), name:s.name };
+      me._late = !!lastK && (me._pk === '99999999' || me._pk > lastK);
+      const cmp = (a, b) => (a._late ? 1 : 0) - (b._late ? 1 : 0) || (a._late && b._late ? String(a._pk).localeCompare(String(b._pk)) : 0) || b._a - a._a || a._d.localeCompare(b._d) || String(a.name).localeCompare(String(b.name));
+      const pos = m.rows.filter(r => cmp(r.o, me) < 0).length + 1, lastSeat = m.rows[Math.min(m.seats, m.rows.length) - 1];
+      const cut = lastSeat && !lastSeat.o._late ? ' (last subsidized seat: Aggregate ' + (lastSeat.o._a / 100) + ')' : '';
+      const late = me._late ? (paid ? ' Fee paid ' + paid + ', after the last date of admission.' : ' Fee not paid yet.') : '';
+      if(pos <= m.seats){ to = sub.key; why = 'Merit place ' + pos + ' of the ' + m.seats + ' subsidized seats of ' + q + ' (Aggregate ' + (me._a / 100) + '): subsidized.' + late; }
+      else why = 'Merit place ' + pos + ', below the ' + m.seats + ' subsidized seats of ' + q + cut + ' (her Aggregate ' + (me._a / 100) + '): non-subsidized.' + late;
+    }
+  }
+  if(to === non.key && typeof quotasOf === 'function' && !quotasOf(non.key).some(x => qk(x) === qk(q))) why += ' "' + q + '" is not a quota of ' + non.label + ': check the quota.';
+  e.program = to; e.rec = { key:to, why };
+}
 /** gives every ticked student a Roll No (next free numbers of her program, in portal order) and the section with fewest students */
 function pnSuggest(){
   if(!pnew || !pnew.list) return;
@@ -829,6 +865,8 @@ function pnSuggest(){
   const pool = e => pnew.pools[e.program + '|' + e.year];
   const counts = k => cnt[k] || (cnt[k] = Object.fromEntries((pnew.pools[k] ? pnew.pools[k].secs : []).map(x => [x.name, x.count])));
   const act = pnew.list.filter(s => !pnHide.includes(s.id)).map(s => [s, pnEntry(s)]);
+  act.forEach(([s, e]) => { if(e.progManual) return; const old = e.program; pnRecommend(s, e);
+    if(e.program !== old){ if(!e.rollManual) e.rollNo = ''; if(!e.secManual) e.section = ''; } });
   if(idx) idx.rows.forEach(r => { if(r[1]) used.add(nroll(r[1])); });
   // what you typed or chose yourself is kept and reserved first
   act.forEach(([s, e]) => {
@@ -920,6 +958,7 @@ function pnDetails(id){
     <div class="acts"><button class="btn primary" id="dOk">Close</button></div>`);
   $('#dOk').onclick = dlgClose;
 }
+const PN_HL = 'border:3px solid #e0a800;background:#fff6d1;font-weight:700';   // v8.41 program + quota: check these two by eye
 function pnHtml(){
   if(!pnew) return `<div class="card"><h2>${pnLoading ? 'Reading the portal list…' : 'From the portal'}</h2><div class="sub">${online() ? 'Looking for students who are Enrolled on the UOP portal but not yet in the strength sheet.' : 'Connect to the internet to see new admissions from the portal.'}</div></div>`;
   const list = pnList(), lbl = k => { const p = prog(k); return p ? p.label : 'Choose program'; };
@@ -960,13 +999,14 @@ function pnHtml(){
         <div style="display:flex;flex-direction:column;gap:6px"><button class="btn small" type="button" data-det="${esc(s.id)}">Full details</button><button class="btn small" type="button" data-hide="${esc(s.id)}">${hid ? 'Unhide' : 'Hide'}</button></div></div>
       ${pnFacts(s)}
       ${hid ? '' : `<div class="g2">
-        <div><label>Program</label><select data-k="program">${init.programs.map(p => opt(p.key, e.program, p.label)).join('')}${e.program ? '' : opt('', '', 'Choose…')}</select></div>
+        <div><label>Program${e.progManual ? ' (chosen by you)' : ''}</label><select data-k="program" style="${PN_HL}">${init.programs.map(p => opt(p.key, e.program, p.label)).join('')}${e.program ? '' : opt('', '', 'Choose…')}</select>
+          ${!mig && e.rec && !e.progManual ? `<div class="sub" style="font-weight:700;color:var(--ink)">Recommended: ${esc((prog(e.rec.key) || {}).label || e.rec.key)}. ${esc(e.rec.why)}</div>` : ''}</div>
         <div><label>Year</label><select data-k="year">${opt('1st Year', e.year)}${opt('2nd Year', e.year, '2nd Year (migration)')}</select></div>
         <div><label>Section</label><select data-k="section">${e.section ? '' : opt('', '', '–')}${secs.map(x => { const r = secRoom(x.name, secCount(x.name) + (extra[x.name] || 0)); return opt(x.name, e.section, x.name + ' · ' + secCount(x.name) + (extra[x.name] ? ' +' + extra[x.name] : '') + (r.cap != null ? ' / ' + r.cap + ' seats' + (r.free < 0 ? ' · FULL by ' + (-r.free) : r.free === 0 ? ' · full' : ' · ' + r.free + ' free') : r.room ? ' · room size not known' : ' · no room')); }).join('')}</select>
           ${(() => { const r = e.section ? secRoom(e.section, secCount(e.section) + (extra[e.section] || 0)) : null; return r && r.cap != null && r.free < 0 ? `<div class="warnp" style="color:var(--bad)">⚠ ${esc(e.section)} is over its room's capacity: ${esc(r.room)} has ${r.cap} seats, ${r.n} students would sit there.</div>` : r && r.room ? `<div class="sub">Room ${esc(r.room)}${r.cap != null ? ' · ' + r.cap + ' seats' : ''}</div>` : ''; })()}</div>
         <div><label>Roll No${e.rollManual ? ' (typed)' : ''}</label><input type="text" data-k="rollNo" value="${esc(e.rollNo)}" placeholder="${pl && pl.range ? 'free in ' + pl.range[0] + '–' + pl.range[1] : ''}" autocomplete="off" style="text-transform:uppercase"></div>
       </div>
-      <label>Quota</label><select data-k="quota" ${mig ? 'disabled' : ''}>${qopts.map(q => opt(q, e.quota)).join('')}</select>`}
+      <label>Quota</label><select data-k="quota" ${mig ? 'disabled' : `style="${PN_HL}"`}>${qopts.map(q => opt(q, e.quota)).join('')}</select>`}
     </section>`;
   }).join('');
   return head + bar + cards;
@@ -975,7 +1015,7 @@ function wirePn(){
   const R = $('#pnRef'); if(R) R.onclick = () => pnLoad(true);
   const SY = $('#pnSync'); if(SY) SY.onclick = pnPortalSync;
   const A = $('#pnAll'); if(A) A.onclick = () => { const vis = pnList().filter(s => !pnHide.includes(s.id)), all = vis.every(s => pnEntry(s).on); vis.forEach(s => pnEntry(s).on = !all); pnSuggest(); render(); };
-  const S = $('#pnRe'); if(S) S.onclick = () => { pnList().forEach(s => { const e = pnEntry(s); e.rollManual = false; e.secManual = false; }); pnSuggest(); render(); toast('Roll numbers and sections suggested again'); };
+  const S = $('#pnRe'); if(S) S.onclick = () => { pnList().forEach(s => { const e = pnEntry(s); e.rollManual = false; e.secManual = false; e.progManual = false; }); pnSuggest(); render(); toast('Roll numbers and sections suggested again'); };
   const H = $('#pnSh'); if(H) H.onclick = ev => { ev.preventDefault(); pnShowHidden = !pnShowHidden; render(); };
   const D = $('#pnAdd'); if(D) D.onclick = pnAddAsk;
   document.querySelectorAll('[data-det]').forEach(b => b.onclick = () => pnDetails(b.dataset.det));
@@ -986,7 +1026,7 @@ function wirePn(){
     card.querySelectorAll('[data-k]').forEach(el => el.onchange = () => {
       const e = pnEntry(s), k = el.dataset.k, y = window.scrollY;
       if(k === 'on') e.on = el.checked;
-      else if(k === 'program' || k === 'year'){ e[k] = el.value; e.rollManual = false; e.secManual = false; if(k === 'program' && !isMig(e.year)) { const q = quotasOf(e.program); if(!q.some(x => qk(x) === qk(e.quota))) e.quota = q[0] || 'Open Quota'; } }
+      else if(k === 'program' || k === 'year'){ e[k] = el.value; if(k === 'program') e.progManual = true; e.rollManual = false; e.secManual = false; if(k === 'program' && !isMig(e.year)) { const q = quotasOf(e.program); if(!q.some(x => qk(x) === qk(e.quota))) e.quota = q[0] || 'Open Quota'; } }
       else if(k === 'section'){ e.section = el.value; e.secManual = !!el.value; }
       else if(k === 'rollNo'){ e.rollNo = el.value.trim().toUpperCase(); e.rollManual = !!e.rollNo; }
       else e[k] = el.value;
@@ -1847,7 +1887,7 @@ function meritLists(){
           if(!r.here && !r.cand && !r.state){ r.state = 'next'; r.why = 'Next in line: same Aggregate (' + (t._a / 100) + ')' + (r.why ? ' · ' + r.why : ''); } } }
       out.push({ key:p.key, label:pl ? 'Shared pool: ' + home.map(k => (prog(k) || {}).label || k).join(', ') : pr.label || p.key, fee:fees[p.key] || 0,
         sibFee:sib.length ? fees[sib[0]] || 0 : 0, sibLabel:sib.map(k => (prog(k) || {}).label).join(', '), quota:q.name, seats, inHome, rows, leftTop, subs:!!sib.length, noSeats,
-        held:sib.length ? L.slice(0, seats).filter(o => home.includes(o.key)).length : inHome, open, group:pl ? 'Shared pools' : pr.label || p.key, qlabel:q.name });
+        held:sib.length ? L.slice(0, seats).filter(o => home.includes(o.key)).length : inHome, open, home, emp, group:pl ? 'Shared pools' : pr.label || p.key, qlabel:q.name });
     });
   });
   ML = { stamp, lists:out };
