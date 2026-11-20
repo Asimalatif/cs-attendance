@@ -1485,6 +1485,7 @@ function bzParse(pages){
   });
   return out;
 }
+const BZ_PARSE_VER = 2;   // v8.50 raise when bzParse changes: a saved report is read again from its saved PDF
 async function bzLib(){
   if(!window.pdfjsLib){ await new Promise((ok, no) => { const x = document.createElement('script'); x.src = PDFJS + 'pdf.min.js'; x.onload = ok; x.onerror = () => no(new Error('Could not load the PDF reader (internet?)')); document.head.appendChild(x); });
     window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js'; }
@@ -1494,6 +1495,14 @@ async function bzRestore(){
   if(BZ || bzRest || !idx || !idx.rows || !idx.rows.length) return; bzRest = true;
   const L = await idbGet('bz_last'); if(!L || !L.rows || !L.rows.length || BZ) return;
   if(L.year) bzYear = L.year;
+  if(L.ver !== BZ_PARSE_VER){                                         // read with older code: read the saved PDF again
+    const blob = await idbGet('bz_pdf');
+    if(blob){ try{ bzBusy = 'The PDF reader was improved: reading ' + L.file + ' again…'; render();
+        const rows = await bzRead(blob); if(rows.length){ L.rows = rows; L.ver = BZ_PARSE_VER; idbSet('bz_last', L); } }
+      catch(e){ bzErr = 'Could not read the saved PDF again: choose it once more. (' + e.message + ')'; }
+      bzBusy = ''; }
+    else bzErr = 'This report was read with older code: choose the board PDF again for correct subjects.';
+  }
   BZ = { file:L.file }; bzCheck(L.rows);
   bzMsg = 'Last report on this device: ' + L.file + ' (read ' + new Date(L.at).toLocaleString('en-GB', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) + '). Choose another PDF to check a new one.';
   render();
@@ -1720,7 +1729,7 @@ function wireBz(){
       const rows = await bzRead(file);
       if(!rows.length) throw new Error('No students found. Is this the board\'s "Registration Report for College Record" (columns S.NO, NAME, FATHER NAME, DATE OF BIRTH, MOBILE #)?');
       BZ = { file:file.name }; bzF = 'diff'; bzCheck(rows);
-      idbSet('bz_last', { file:file.name, rows, year:bzYear, at:Date.now() }); idbSet('bz_pdf', file);
+      idbSet('bz_last', { file:file.name, rows, year:bzYear, at:Date.now(), ver:BZ_PARSE_VER }); idbSet('bz_pdf', file);
     }catch(e){ bzErr = e.message; }
     bzBusy = ''; render();
   };
