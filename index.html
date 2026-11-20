@@ -6319,7 +6319,7 @@ function alertCard(){
     ${seatAl.stale ? `<div class="sub" style="color:var(--leave);font-weight:700">Changed since: ${esc(seatAl.stale)}. Open the merit lists to bring the alerts up to date.</div>` : ''}
     ${!d ? '<div class="sub">No alerts yet: open Admissions → Merit lists once.</div>' : !L.length ? '<div class="sub">✓ Every seat with a limit is filled and nobody is in the wrong place.</div>' :
       L.map(x => `<div class="li"><span class="tx"><b>${esc(x.l)} · ${esc(x.q)}</b><small>${x.e ? x.e + ' empty seat' + (x.e === 1 ? '' : 's') + ' of ' + x.s : ''}${x.e && x.b ? ' · ' : ''}${x.b ? x.b + ' in the wrong place' : ''}</small>
-        ${x.c && x.c.length ? `<small>Next: ${x.c.map(c => esc(c[0]) + ' (' + esc(c[1]) + ', ' + c[2] + ', ' + esc(c[3]) + ')').join(' · ')}</small>` : x.e ? '<small>No candidate in the list yet.</small>' : ''}</span></div>`).join('')}
+        ${x.c && x.c.length ? `<small><b>Eligible (${x.n || x.c.length}):</b> ${x.c.map((c, i) => (i + 1) + '. ' + esc(c[0]) + ' (' + esc(c[1]) + ', ' + c[2] + ', ' + esc(c[3]) + (c[4] ? ', ' + esc(c[4]) : '') + ')').join(' · ')}${x.n > x.c.length ? ' · … ' + (x.n - x.c.length) + ' more in the merit list' : ''}</small>` : x.e ? '<small>No candidate in the list yet.</small>' : ''}</span></div>`).join('')}
     ${d ? `<div class="sub">Worked out ${esc(d.at)}${d.by ? ' (' + esc(d.by) + ')' : ''}.</div>` : ''}
     <div class="acts2"><a class="btn primary" href="admission.html#merit" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open the merit lists</a><button class="btn" type="button" id="xAlRe">Refresh</button></div></section>`;
 }
