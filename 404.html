@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JCMS has moved</title>
+<script>
+  // JCMS (old JCW Daily Attendance) moved from /cs-attendance/ to /jcms/ : same page, same login
+  var to = location.href.replace(/\/cs-attendance(\/|$)/i, '/jcms/');
+  if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(function (r) { r.forEach(function (x) { x.unregister(); }); }).catch(function () {});
+  if (window.caches) caches.keys().then(function (k) { k.forEach(function (n) { caches.delete(n); }); }).catch(function () {});
+  setTimeout(function () { location.replace(to); }, 300);
+</script>
+<style>body{font:16px system-ui,sans-serif;background:#FBF3F1;color:#2a1a14;display:grid;place-items:center;min-height:90vh;margin:0;text-align:center;padding:20px}a{color:#6B3423;font-weight:700}</style>
+</head><body><div><h1 style="margin:0 0 6px">JCMS</h1><div>Jinnah College Management System has a new address.</div>
+<p>Opening <a id="to" href="https://asimalatif.github.io/jcms/">asimalatif.github.io/jcms</a> …</p><p style="font-size:14px">Please save the new link. Your login stays the same.</p></div>
+<script>document.getElementById('to').href = to;</script></body></html>
